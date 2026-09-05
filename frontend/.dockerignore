@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+*.md
+.env.local
+.env.*.local
+# 勿忽略 dist：Dockerfile.prod --target local 需要 COPY 本地 pnpm/npm 构建产物
+build

@@ -1,0 +1,333 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: minworkbuddy-postgres-prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-minworkbuddy}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./docs/sql:/docker-entrypoint-initdb.d:ro
+    networks:
+      - minworkbuddy-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: minworkbuddy-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    networks:
+      - minworkbuddy-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+# Celery Worker-1: high_priority + medium_priority (实时处理)
+  celery-worker-1:
+    profiles: ["celery"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-celery-worker-1
+    env_file:
+      - ./backend/.env
+    environment:
+      - CELERY_WORKER_NAME=worker-1
+      - CELERY_QUEUES=high_priority,medium_priority
+      - CELERY_CONCURRENCY=10
+    command: >
+      celery -A celery_worker worker
+      -Q high_priority,medium_priority
+      -c 10
+      -n worker1@%h
+      -l info
+      --prefetch-multiplier=1
+      --max-tasks-per-child=200
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Celery Worker-2: medium_priority + low_priority (兜底处理)
+  celery-worker-2:
+    profiles: ["celery"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-celery-worker-2
+    env_file:
+      - ./backend/.env
+    environment:
+      - CELERY_WORKER_NAME=worker-2
+      - CELERY_QUEUES=medium_priority,low_priority
+      - CELERY_CONCURRENCY=10
+    command: >
+      celery -A celery_worker worker
+      -Q medium_priority,low_priority
+      -c 10
+      -n worker2@%h
+      -l info
+      --prefetch-multiplier=1
+      --max-tasks-per-child=200
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Celery Worker-3: batch_ai (AI聚合处理，限流保护)
+  celery-worker-3:
+    profiles: ["celery"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-celery-worker-3
+    env_file:
+      - ./backend/.env
+    environment:
+      - CELERY_WORKER_NAME=worker-3
+      - CELERY_QUEUES=batch_ai
+      - CELERY_CONCURRENCY=5
+    command: >
+      celery -A celery_worker worker
+      -Q batch_ai
+      -c 5
+      -n worker3@%h
+      -l info
+      --prefetch-multiplier=1
+      --max-tasks-per-child=100
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Celery Worker-4: batch_ai + low_priority (兜底 + 定时任务)
+  celery-worker-4:
+    profiles: ["celery"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-celery-worker-4
+    env_file:
+      - ./backend/.env
+    environment:
+      - CELERY_WORKER_NAME=worker-4
+      - CELERY_QUEUES=batch_ai,low_priority
+      - CELERY_CONCURRENCY=5
+    command: >
+      celery -A celery_worker worker
+      -Q batch_ai,low_priority
+      -c 5
+      -n worker4@%h
+      -l info
+      --prefetch-multiplier=1
+      --max-tasks-per-child=100
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Celery Beat: 定时任务调度器（轻量，不计入Worker限制）
+  celery-beat:
+    profiles: ["celery"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-celery-beat
+    env_file:
+      - ./backend/.env
+    command: >
+      celery -A celery_beat_schedule beat
+      -l info
+      --scheduler celery.beat.PersistentScheduler
+      --schedulefile /app/celerybeat-schedule
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+      - celery_beat_data:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+
+  # ARQ Worker: 轻量异步任务队列（ARQ方案专用）
+  arq-worker:
+    profiles: ["arq"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-arq-worker
+    env_file:
+      - ./backend/.env
+    environment:
+      - TASK_QUEUE_PROVIDER=arq
+    command: arq app.arq_worker.WorkerSettings
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_skills_prod:/app/data/skills
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-backend-prod
+    env_file:
+      - ./backend/.env
+    environment:
+      - TASK_QUEUE_PROVIDER=${TASK_QUEUE_PROVIDER:-celery}
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_logs_prod:/app/logs
+      - backend_uploads_prod:/app/uploads
+      # 技能(skill)文件：映射到外挂命名卷，避免写入容器内可写层
+      # 默认解析路径 backend/data/skills(容器内 /app/data/skills)
+      # 多实例/共享存储场景：运维可将本卷替换为 NFS 或 MinIO 挂载点
+      - backend_skills_prod:/app/data/skills
+      - /home/tianque/shibing624_text2vec-base-chinese:/app/data/birt_rules/models/shibing624_text2vec-base-chinese:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+      replicas: 1
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: minworkbuddy-frontend-prod
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - minworkbuddy-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+networks:
+  minworkbuddy-network:
+    driver: bridge
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  backend_logs_prod:
+  backend_uploads_prod:
+  celery_beat_data:
+  backend_skills_prod:

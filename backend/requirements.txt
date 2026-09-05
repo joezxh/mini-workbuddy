@@ -1,0 +1,117 @@
+# FastAPI 核心
+fastapi==0.115.0
+uvicorn[standard]>=0.31.1
+python-multipart>=0.0.9
+python-dotenv>=1.0.1
+
+# 数据库
+sqlalchemy>=2.0.35
+psycopg2-binary>=2.9.10
+neo4j>=5.23,<6
+graphiti-core>=0.5
+alembic==1.13.1
+pgvector>=0.3.0
+
+# Redis
+redis==5.0.1
+
+# 认证与安全
+python-jose[cryptography]==3.3.0
+bcrypt>=4.0.0
+PyJWT[crypto]>=2.10.1
+
+# 数据验证
+pydantic>=2.7.4,<3.0.0
+pydantic-settings>=2.1.0
+
+# HTTP 客户端
+httpx>=0.26.0
+
+# LangChain & LangGraph
+# 已移除 - app/ai/langgraph/ 实验模块已删除
+# langchain-core, langchain-text-splitters, langchain-openai>=0.2.0,
+# langchain-community, langchain, langgraph>=0.2.0, langgraph-checkpoint,
+# langsmith
+
+# Embedding & NLP
+numpy>=1.24.0,<2.0.0
+# PyTorch 系列 - 必须从 PyTorch 官方源安装，否则会找不到 torchvision/torchaudio
+# CPU 版本: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# GPU 版本：pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+torch>=2.2.0
+torchvision>=0.17.0
+torchaudio>=2.2.0
+transformers>=4.40.0
+sentence-transformers>=2.7.0
+jieba>=0.42.0
+scikit-learn>=1.3.0,<2.0.0
+onnxruntime>=1.17.0
+
+# 任务调度
+apscheduler==3.10.4
+celery==5.3.6
+kombu==5.3.5
+
+# 工具库
+reportlab==4.0.9
+python-docx==1.1.0
+mistune==3.0.2
+pdfplumber>=0.10.0
+openpyxl==3.1.2  # 精确版本号，避免不同环境版本不一致
+python-pptx>=0.6.23
+playwright>=1.40.0
+markdown>=3.5.0
+
+# 日志
+loguru==0.7.2
+
+# ASGI 服务器（生产环境）
+gunicorn==21.2.0
+
+# ARQ 轻量异步任务队列
+arq>=0.25.0,<0.26.0
+
+# 缓存
+cachetools==5.5.0
+
+# 测试
+pytest==8.0.1
+pytest-asyncio==0.23.5
+
+# OpenTelemetry 可观测性
+opentelemetry-api>=1.39.0
+opentelemetry-sdk>=1.39.0
+# 以下 exporter 为可选（代码中已有 ImportError fallback 到 console）
+# 与 agentscope 要求的 sdk>=1.39.0 存在版本冲突，按需单独安装:
+#   pip install opentelemetry-exporter-otlp-proto-grpc>=1.39.0
+# opentelemetry-exporter-otlp-proto-grpc>=1.39.0
+# opentelemetry-exporter-jaeger-proto-grpc>=1.15.0
+opentelemetry-instrumentation-fastapi>=0.46b0
+opentelemetry-instrumentation-sqlalchemy>=0.46b0
+opentelemetry-instrumentation-httpx>=0.46b0
+opentelemetry-instrumentation-logging>=0.46b0
+
+# MCP 协议（知识库 MCP Server）
+# agentscope 2.0.4 需要 streamable_http_client（mcp>=1.15.0 引入）
+mcp>=1.15.0
+
+# AgentScope 2.x 运行时
+agentscope>=2.0.7,<3.0.0  # 升级以启用原生 Agent Team API（2.0.7 流式最完善，修复 O(n²) 拼接挂死 #2158）
+# Windows 无 ripgrep>=15 预编译 wheel（需 Rust 源码构建会挂起），本地 venv 已降级安装 14.1.0
+#ripgrep>=15.0.0
+
+# JSON Schema 校验（native 工具调用 repair 兜底后对参数做全量校验）
+jsonschema>=4.0
+
+# OWL Ontology
+owlready2>=0.46
+
+# 推理引擎（P1-P6 多范式推理）
+# owl: owlready2（已在上方声明）
+# prolog: pyswip（需要系统安装 SWI-Prolog 运行时）
+pyswip>=0.3.3
+# sparql: rdflib（RDF 三元组 + SPARQL 查询）
+rdflib>=7.0.0
+# fuzzy: scikit-fuzzy（Mamdani 模糊推理，不可用时降级为线性公式）
+scikit-fuzzy>=0.5.0
+# bayesian / fuzzy 依赖 numpy（已在上方声明）

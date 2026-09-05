@@ -1,0 +1,102 @@
+# 生产环境 Dockerfile - 多阶段构建
+FROM registry.cn-hangzhou.aliyuncs.com/tianque-cloud/python:3.11-slim as builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+# 安装构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖文件
+COPY requirements.txt .
+
+# 创建虚拟环境并安装依赖（版本统一以 requirements.txt 为准）
+RUN python -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
+    echo "🔧 Starting dependency installation..." && \
+    /opt/venv/bin/pip install --no-cache-dir \
+      -i https://pypi.org/simple \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      -r requirements.txt && \
+    echo "✅ Dependency installation completed" && \
+    /opt/venv/bin/pip list --format=freeze | grep -i openpyxl
+
+# 严格验证关键依赖已安装
+RUN set -e && \
+    OPENPYXL_VERSION=$(/opt/venv/bin/pip show openpyxl | grep Version | awk '{print $$2}') && \
+    echo "✅ openpyxl installed version: $$OPENPYXL_VERSION" && \
+    if [ -z "$$OPENPYXL_VERSION" ]; then echo "❌ ERROR: openpyxl is NOT installed!" && exit 1; fi
+
+# 最终镜像
+FROM python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 从构建阶段复制虚拟环境
+COPY --from=builder /opt/venv /opt/venv
+
+# 创建非 root 用户
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# 复制应用代码
+COPY --chown=appuser:appuser . .
+
+# 复制依赖检查脚本（需要 root 权限）
+COPY check_dependencies.py /app/
+RUN chmod +x /app/check_dependencies.py && \
+    chown appuser:appuser /app/check_dependencies.py
+
+# 创建必要的目录并设置权限
+RUN mkdir -p logs uploads && \
+    chown -R appuser:appuser logs uploads
+
+# 切换到非 root 用户
+USER appuser
+
+# 暴露端口
+EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# 使用 gunicorn 运行 FastAPI 应用
+# 添加健康检查步骤，确保依赖已安装
+cmd="set -e && \\
+    echo '🔍 Running dependency check...' && \\
+    python /app/check_dependencies.py && \\
+    echo '✅ Dependencies verified, starting gunicorn...' && \\
+    exec gunicorn app.main:app \\
+        --workers 4 \\
+        --worker-class uvicorn.workers.UvicornWorker \\
+        --bind 0.0.0.0:8000 \\
+        --access-logfile \"-\" \\
+        --error-logfile \"-\" \\
+        --log-level info"
+
+CMD ["/bin/sh", "-c", "$cmd"]
+

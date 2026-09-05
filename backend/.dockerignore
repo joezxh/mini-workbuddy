@@ -1,0 +1,90 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+dist
+build
+.eggs
+
+# Virtual environments
+.venv
+venv
+ENV
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Documentation
+docs
+*.md
+README*
+LICENSE
+
+# Tests
+tests
+test_*.py
+*_test.py
+coverage.xml
+.htmlcov
+
+# Logs
+logs
+*.log
+
+# Data and uploads
+data
+!data/skills
+uploads
+*.db
+*.sqlite
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Scripts and misc
+scripts
+*.sh
+*.bat
+*.ps1
+
+# Environment files (except .env.daily which we need)
+.env
+.env.local
+.env.production
+!.env.daily
+
+# Temporary files
+tmp
+temp
+*.tmp
+.DS_Store
+
+# AI related
+.qoder
+.cursorrules
+CLAUDE.md
+
+# Demo and other non-backend directories
+../demo
+../dify
+../frontend
+
+# Original requirements (we use requirements-dev.txt now)
+requirements.txt

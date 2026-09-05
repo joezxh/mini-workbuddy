@@ -1,0 +1,101 @@
+# =============================================================
+# 本地开发中间件：PostgreSQL 17 (pgvector) + Redis Stack Server
+#
+# 启动：docker compose -f docker-compose.infra.yml up -d
+# 停止：docker compose -f docker-compose.infra.yml down
+# 查看：docker compose -f docker-compose.infra.yml ps
+#
+# PostgreSQL：localhost:5432  账号 postgres / 密码 admin123
+# Redis     ：localhost:6379
+# Neo4j     ：localhost:7687  账号 neo4j / 密码 neo4j
+# =============================================================
+
+services:
+  # -----------------------------------------------------------
+  # PostgreSQL 17 + pgvector 向量扩展
+  # -----------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: mwb-postgres-pgvector
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # -----------------------------------------------------------
+  # Redis Stack Server 7.4.0-v8（含 Search / JSON / TimeSeries / Bloom 等模块）
+  # 注意：redis-stack-server 不含 RedisInsight Web UI，仅 6379 端口
+  # -----------------------------------------------------------
+  redis:
+    image: redis/redis-stack-server:7.4.0-v8-x86_64
+    container_name: mwb-redis-stack
+    environment:
+      REDIS_ARGS: "--appendonly yes"
+      TZ: Asia/Shanghai
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_stack_data:/data
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # -----------------------------------------------------------
+  # Neo4j 5 知识图谱数据库
+  # -----------------------------------------------------------
+  neo4j:
+    image: library/neo4j:5.26
+    container_name: mwb-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/neo4j
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      TZ: Asia/Shanghai
+    ports:
+      - "7474:7474"   # Browser UI
+      - "7687:7687"   # Bolt 协议
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+networks:
+  mwb-infra-network:
+    driver: bridge
+    name: mwb-infra-network
+
+volumes:
+  pgvector_data:
+  redis_stack_data:
+  neo4j_data:
+  neo4j_logs:

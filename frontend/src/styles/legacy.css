@@ -1,0 +1,250 @@
+/*
+ * legacy.css — 旧皮肤兼容桥
+ *
+ * MinWorkBuddy 的存量页面与通用组件仍在使用一批旧 CSS 变量（--text-primary、
+ * --accent-cyan、--border-glow …）和旧面板类（.card / .card-header /
+ * .card-title）。这里把它们统一重映射到 rcs 皮肤令牌上，使存量页面无需逐个
+ * 改写即可跟随新的深色 / 浅色皮肤。
+ *
+ * 必须在 tokens.css 与 global.css 之后加载：
+ *   * 依赖其中的令牌（--fg / --accent / --radius-* …）已经定义
+ *   * 需要覆盖 global.css 中同名的 .card-title 定义，保留 MinWorkBuddy
+ *     原有的“标题行”语义（左侧标题 + 右侧操作），避免存量页面布局被破坏
+ */
+
+/* ------------------------------------------------------------------ *
+ * 旧变量 → 新令牌
+ * ------------------------------------------------------------------ */
+:root {
+  /* 文字 */
+  --text-primary: var(--fg);
+  --text-secondary: var(--fg-secondary);
+  --text-dim: var(--fg-muted);
+  --text-disabled: var(--fg-muted);
+
+  /* 背景 */
+  --bg-color: var(--bg-page);
+  --bg-white: var(--bg-surface);
+  --bg-gray: var(--bg-hover);
+  --bg-card: var(--bg-surface);
+  --bg-card-hover: var(--bg-elevated);
+
+  /* 边框 */
+  --border-color: var(--border);
+  --border-light: var(--divider);
+  --border-glow: var(--border);
+  --border-bright: var(--border-strong);
+
+  /* 强调色 / 语义色 */
+  --accent-cyan: var(--accent);
+  --accent-blue: var(--accent-hover);
+  --accent-green: var(--ok);
+  --accent-yellow: var(--warn);
+  --accent-red: var(--err);
+  --accent-purple: var(--accent-2);
+  --accent-orange: var(--accent-2);
+
+  --primary-color: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --primary-active: var(--accent);
+  --success-color: var(--ok);
+  --success-hover: var(--ok);
+  --warning-color: var(--warn);
+  --warning-hover: var(--warn);
+  --error-color: var(--err);
+  --error-hover: var(--err);
+
+  /* 风险等级 */
+  --risk-high: var(--err);
+  --risk-mid: var(--warn);
+  --risk-medium: var(--warn);
+  --risk-low: var(--ok);
+
+  /* 圆角 / 阴影 / 间距 */
+  --border-radius-sm: var(--radius-sm);
+  --border-radius-base: var(--radius);
+  --border-radius-lg: var(--radius-lg);
+  --shadow-md: var(--shadow);
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+}
+
+/* ------------------------------------------------------------------ *
+ * 旧面板类 → 新表面语言
+ *
+ * 几何尺寸尽量保持原样（.card 本身不带内边距，.card-header 只做下分隔线），
+ * 只把配色、圆角、毛玻璃与顶部强调条换成新的皮肤语言。
+ * ------------------------------------------------------------------ */
+.card {
+  position: relative;
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  opacity: 0.85;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 8px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ *
+ * 弹窗：保留 MinWorkBuddy 的结构约定（顶部偏移、无内边距的 content、
+ * 可滚动弹窗 .scrollable-modal），配色改为跟随皮肤。
+ * ------------------------------------------------------------------ */
+.ant-modal-root .ant-modal-wrap {
+  overflow-y: hidden !important;
+}
+
+.ant-modal {
+  top: 60px !important;
+}
+
+.ant-modal-content {
+  padding: 0 !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.ant-modal-header {
+  padding: 14px 22px !important;
+  background: var(--bg-input) !important;
+  border-bottom: 1px solid var(--divider) !important;
+  margin-bottom: 0 !important;
+}
+
+.ant-modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.ant-modal-close {
+  color: var(--fg-secondary);
+}
+
+.ant-modal-close:hover {
+  color: var(--err);
+  background: var(--err-soft);
+}
+
+.ant-modal-footer {
+  border-top: 1px solid var(--divider);
+  padding: 14px 22px !important;
+}
+
+.scrollable-modal .ant-modal {
+  display: flex;
+  flex-direction: column;
+}
+
+.scrollable-modal .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scrollable-modal .ant-modal-header {
+  flex-shrink: 0;
+}
+
+.scrollable-modal .ant-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.scrollable-modal .ant-modal-footer {
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * 其余存量页面依赖的组件微调
+ * ------------------------------------------------------------------ */
+.ant-tag {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.ant-progress-bg {
+  background: var(--accent) !important;
+}
+
+.ant-progress-text {
+  color: var(--fg-secondary) !important;
+}
+
+.ant-form-item-label > label {
+  color: var(--fg-secondary) !important;
+}
+
+.ant-form-item-explain-error {
+  color: var(--err) !important;
+}
+
+.ant-descriptions-item-label {
+  color: var(--fg-secondary) !important;
+}
+
+.ant-descriptions-item-content {
+  color: var(--fg) !important;
+}
+
+.ant-list-item {
+  border-bottom-color: var(--divider) !important;
+}
+
+.ant-timeline-item-content {
+  color: var(--fg) !important;
+}
+
+.ant-badge-status-text {
+  color: var(--fg) !important;
+}
+
+.ant-empty-description {
+  color: var(--fg-muted) !important;
+}
+
+.ant-spin {
+  color: var(--accent) !important;
+}
+
+.ant-input::placeholder {
+  color: var(--fg-muted) !important;
+}
+
+.markdown-body {
+  color: var(--fg);
+}

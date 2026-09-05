@@ -1,0 +1,279 @@
+/*
+ * Design tokens for the RCS console.
+ *
+ * Two skins — `dark` (default) and `light` — are selected by a `data-theme`
+ * attribute on <html>. Every colour in the app (including the Ant Design Vue
+ * component palette, remapped further down) resolves through these variables,
+ * so switching skins never requires a component-level change.
+ *
+ * The palette, typography, radii and surface treatment follow the
+ * Semantica "explorer" reference skin: blue accent (#3b82f6 / #2563eb) with a
+ * warm amber (#f59e0b) companion, large radii (14–26px), frosted-glass panels
+ * and soft radial glows — a calm, product-grade instrument surface.
+ */
+
+:root {
+  /* Typography
+   * Orbitron     — geometric HUD face for display titles / numerals (latin)
+   * Chakra Petch — industrial tech face for labels and data readouts (latin)
+   * Both have no CJK coverage, so Chinese/Japanese glyphs fall through to the
+   * system stack below. Order matters: latin face first, CJK fallbacks last. */
+  --font-sans: 'IBM Plex Sans', 'Space Grotesk', 'HarmonyOS Sans SC',
+    'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', sans-serif;
+  --font-display: 'Orbitron', 'Space Grotesk', 'HarmonyOS Sans SC',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-tech: 'Chakra Petch', 'IBM Plex Sans', 'HarmonyOS Sans SC',
+    'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Geometry — generous radii for the frosted, rounded explorer look */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --header-h: 64px;
+  --sidebar-w: 240px;
+  --sidebar-w-collapsed: 68px;
+  --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* HUD garnish — the sci-fi accent layer.
+   * Consumed by .hud-grid / .clip-notch / .corner-tick / .stat-value in
+   * global.css. Kept inside the existing blue/amber hue family so the garnish
+   * never introduces a new colour to the palette. */
+  --hud-grid: rgba(140, 192, 255, 0.05);
+  --hud-grid-size: 24px;
+  --scanline: rgba(140, 192, 255, 0.08);
+  --neon-cyan: #4aa3ff;
+  --neon-amber: #f2b66d;
+  --glow-accent: 0 0 18px rgba(74, 163, 255, 0.35);
+  --glow-ok: 0 0 8px rgba(76, 195, 138, 0.55);
+  --corner-tick: 2px solid var(--accent);
+  --notch: 12px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Dark skin — deep navy with blue / amber accents
+ * ------------------------------------------------------------------ */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-base: #07111f;
+  --bg-page: #0b1322;
+  --bg-surface: rgba(9, 18, 32, 0.84);
+  --bg-elevated: rgba(11, 22, 38, 0.92);
+  --bg-hover: rgba(74, 163, 255, 0.08);
+  --bg-active: rgba(74, 163, 255, 0.14);
+  --bg-input: rgba(3, 8, 14, 0.55);
+
+  --fg: #ebf3ff;
+  --fg-secondary: #8fa8c6;
+  --fg-muted: #5a7a9a;
+  --fg-inverse: #050b15;
+
+  --border: rgba(140, 192, 255, 0.14);
+  --border-strong: rgba(140, 192, 255, 0.26);
+  --divider: rgba(140, 192, 255, 0.1);
+
+  --accent: #4aa3ff;
+  --accent-hover: #7fd0ff;
+  --accent-soft: rgba(74, 163, 255, 0.12);
+  --accent-2: #f2b66d;
+  --accent-2-soft: rgba(242, 182, 109, 0.12);
+
+  --ok: #4cc38a;
+  --ok-soft: rgba(76, 195, 138, 0.12);
+  --warn: #f2b66d;
+  --warn-soft: rgba(242, 182, 109, 0.12);
+  --err: #ff7b72;
+  --err-soft: rgba(255, 123, 114, 0.12);
+  --info: #4aa3ff;
+  --info-soft: rgba(74, 163, 255, 0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow: 0 18px 44px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 28px 64px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Soft radial glows used behind the page + login surfaces. */
+  --glow-a: radial-gradient(circle at top, rgba(103, 182, 255, 0.08), transparent 24%);
+  --glow-b: radial-gradient(circle at top right, rgba(242, 182, 109, 0.07), transparent 30%);
+  --glass: saturate(140%) blur(18px);
+}
+
+/* ------------------------------------------------------------------ *
+ * Light skin — cool paper white, same accent hue family
+ * ------------------------------------------------------------------ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-base: #eef2f7;
+  --bg-page: #f5f7fa;
+  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-elevated: rgba(255, 255, 255, 0.96);
+  --bg-hover: rgba(59, 130, 246, 0.06);
+  --bg-active: rgba(59, 130, 246, 0.1);
+  --bg-input: #ffffff;
+
+  --fg: #1f2937;
+  --fg-secondary: #5a6b80;
+  --fg-muted: #9ca3af;
+  --fg-inverse: #ffffff;
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(59, 130, 246, 0.3);
+  --divider: rgba(0, 0, 0, 0.07);
+
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-soft: rgba(59, 130, 246, 0.08);
+  --accent-2: #f59e0b;
+  --accent-2-soft: rgba(245, 158, 11, 0.08);
+
+  --ok: #10b981;
+  --ok-soft: rgba(16, 185, 129, 0.08);
+  --warn: #d97706;
+  --warn-soft: rgba(245, 158, 11, 0.08);
+  --err: #ef4444;
+  --err-soft: rgba(239, 68, 68, 0.08);
+  --info: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.08);
+
+  --shadow-sm: 0 1px 3px rgba(15, 28, 48, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow: 0 12px 32px rgba(15, 28, 48, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-lg: 0 22px 48px rgba(15, 28, 48, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  --glow-a: radial-gradient(circle at top, rgba(59, 130, 246, 0.06), transparent 24%);
+  --glow-b: radial-gradient(circle at top right, rgba(245, 158, 11, 0.05), transparent 30%);
+  --glass: saturate(140%) blur(18px);
+}
+
+/* ------------------------------------------------------------------ *
+ * Ant Design Vue token remap
+ *
+ * ant-design-vue exposes CSS variables when `cssVar` is enabled on the
+ * ConfigProvider theme. Overriding them here keeps every component in sync
+ * with the skin without duplicating a JS token object.
+ * ------------------------------------------------------------------ */
+:root[data-theme='dark'] .ant-app,
+:root[data-theme='dark'] {
+  --ant-color-primary: #4aa3ff;
+  --ant-color-primary-hover: #7fd0ff;
+  --ant-color-primary-active: #2b8be8;
+  --ant-color-success: #4cc38a;
+  --ant-color-warning: #f2b66d;
+  --ant-color-error: #ff7b72;
+  --ant-color-info: #4aa3ff;
+  --ant-color-text: #ebf3ff;
+  --ant-color-text-secondary: #8fa8c6;
+  --ant-color-text-tertiary: #5a7a9a;
+  --ant-color-border: rgba(140, 192, 255, 0.18);
+  --ant-color-border-secondary: rgba(140, 192, 255, 0.12);
+  --ant-color-bg-container: rgba(9, 18, 32, 0.84);
+  --ant-color-bg-elevated: rgba(11, 22, 38, 0.96);
+  --ant-color-bg-layout: #0b1322;
+  --ant-color-fill-tertiary: rgba(74, 163, 255, 0.1);
+  --ant-border-radius: 14px;
+  --ant-border-radius-lg: 20px;
+  --ant-border-radius-sm: 10px;
+}
+
+:root[data-theme='light'] .ant-app,
+:root[data-theme='light'] {
+  --ant-color-primary: #3b82f6;
+  --ant-color-primary-hover: #2563eb;
+  --ant-color-primary-active: #1d4ed8;
+  --ant-color-success: #10b981;
+  --ant-color-warning: #d97706;
+  --ant-color-error: #ef4444;
+  --ant-color-info: #3b82f6;
+  --ant-color-text: #1f2937;
+  --ant-color-text-secondary: #5a6b80;
+  --ant-color-text-tertiary: #9ca3af;
+  --ant-color-border: rgba(0, 0, 0, 0.1);
+  --ant-color-border-secondary: rgba(0, 0, 0, 0.06);
+  --ant-color-bg-container: rgba(255, 255, 255, 0.92);
+  --ant-color-bg-elevated: #ffffff;
+  --ant-color-bg-layout: #f5f7fa;
+  --ant-color-fill-tertiary: rgba(59, 130, 246, 0.06);
+  --ant-border-radius: 14px;
+  --ant-border-radius-lg: 20px;
+  --ant-border-radius-sm: 10px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Global resets shared by both skins
+ * ------------------------------------------------------------------ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background:
+    var(--glow-a),
+    var(--glow-b),
+    var(--bg-page);
+  background-attachment: fixed;
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--transition), color var(--transition);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Thin, unobtrusive scrollbars that follow the active skin. */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+/* Focus ring for accessibility */
+:focus-visible {
+  outline: 2px solid rgba(74, 163, 255, 0.55);
+  outline-offset: 2px;
+}

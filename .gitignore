@@ -1,0 +1,82 @@
+/logs/
+.venv
+node_modules
+dist
+.idea
+.jbeval
+.vscode
+/backend/data/
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 环境变量
+.env
+.env.local
+
+# 日志
+logs/
+*.log
+
+# 数据库
+*.db
+*.sqlite3
+
+# 上传文件
+uploads/
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 构建
+dist/
+build/
+*.egg-info/
+logs
+uploads
+
+# Workspace 运行时生成目录（skills 从 data/skills/ 复制而来）
+data/workspace/
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+node_modules
+/frontend/public/file-viewer/
+/frontend/dist-verify/

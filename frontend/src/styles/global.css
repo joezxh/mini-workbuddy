@@ -1,0 +1,738 @@
+/*
+ * Global utilities — workspace primitives shared across every page.
+ *
+ * Pattern language (after the explorer skin):
+ *   .app-page        — full-height content region with comfortable padding
+ *   .page-hero       — kicker + title + subtitle header that opens a page
+ *   .app-card        — frosted surface panel (the basic building block)
+ *   .toolbar / .toolbar-search — command bar above data tables
+ *   .seg             — segmented control (filters / view toggles)
+ *   .stat-grid       — metric tiles row
+ *   .data-panel      — card that wraps an Ant table
+ *
+ * The look: rounded (14–26px) translucent panels with a hairline border and a
+ * soft shadow, blue accent + amber companion, generous spacing. Dark skin is
+ * the default; light skin is selected via <html data-theme="light">.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Page scaffolding
+ * ------------------------------------------------------------------ */
+.app-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+  padding: 28px 40px 36px;
+  overflow: auto;
+}
+
+.page-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.page-hero .hero-text {
+  min-width: 0;
+}
+
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-tech);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.hero-kicker::before {
+  content: '';
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.hero-title {
+  margin: 10px 0 6px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.hero-sub {
+  margin: 0;
+  max-width: 640px;
+  font-size: 14px;
+  color: var(--fg-secondary);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Cards / surfaces
+ * ------------------------------------------------------------------ */
+.app-card {
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+}
+
+.app-card.flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.card-title {
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.card-subtitle {
+  margin: -10px 0 16px;
+  font-size: 13px;
+  color: var(--fg-secondary);
+}
+
+/* ------------------------------------------------------------------ *
+ * Stat tiles
+ * ------------------------------------------------------------------ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 18px;
+}
+
+.stat-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 22px;
+  /* Corner glow is folded into the background so the ::before / ::after slots
+   * stay free for the HUD garnish utilities (corner ticks etc.). */
+  background:
+    radial-gradient(circle at 100% 0%, var(--accent-soft), transparent 62%),
+    var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.stat-label {
+  font-family: var(--font-tech);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  /* Orbitron numerals are geometric — align them in a column and let them glow. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  text-shadow: 0 0 18px rgba(74, 163, 255, 0.25);
+}
+
+.stat-delta {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.stat-delta.up {
+  color: var(--ok);
+}
+
+.stat-delta.down {
+  color: var(--err);
+}
+
+/* ------------------------------------------------------------------ *
+ * Command bar / toolbar
+ * ------------------------------------------------------------------ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.toolbar-search {
+  width: 256px;
+  max-width: 100%;
+}
+
+.toolbar-search .ant-input-affix-wrapper,
+.toolbar-search .ant-input {
+  background: var(--bg-input);
+  border-color: var(--border);
+}
+
+/* ------------------------------------------------------------------ *
+ * Segmented control (filters / tabs)
+ * ------------------------------------------------------------------ */
+.seg {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--fg-secondary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--transition), background-color var(--transition);
+}
+
+.seg button:hover {
+  color: var(--fg);
+}
+
+.seg button.is-active {
+  color: var(--fg-inverse);
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme='light'] .seg button.is-active {
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ *
+ * Data panel wrapping Ant tables
+ * ------------------------------------------------------------------ */
+.data-panel {
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.data-panel .panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.data-panel .panel-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.empty-hint {
+  padding: 48px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Ant Design component overrides — keep them consistent with the skin.
+ * Additive only; the token remap in tokens.css does most of the work.
+ * ------------------------------------------------------------------ */
+.ant-table-wrapper .ant-table {
+  background: transparent;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: var(--bg-input) !important;
+  color: var(--fg-secondary) !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--divider) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--divider) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: var(--bg-hover) !important;
+}
+
+.ant-card {
+  background: var(--bg-surface) !important;
+  border-color: var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+.ant-modal .ant-modal-content,
+.ant-drawer .ant-drawer-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.ant-btn {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selector,
+.ant-picker {
+  border-radius: var(--radius-sm) !important;
+}
+
+/* Primary button uses the blue→cyan gradient of the skin. */
+.ant-btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover)) !important;
+  border-color: transparent !important;
+  color: var(--fg-inverse) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme='light'] .ant-btn-primary {
+  color: #fff !important;
+}
+
+.ant-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+/* ------------------------------------------------------------------ *
+ * HUD garnish — the sci-fi accent layer
+ *
+ * Opt-in utilities layered on top of the calm explorer base. They add texture
+ * and "instrument panel" cues without introducing new colours (everything
+ * resolves through --accent / --hud-grid / --scanline) and without changing
+ * layout flow.
+ * ------------------------------------------------------------------ */
+
+/* Fine engineering grid that fades out towards the bottom. */
+.hud-grid {
+  position: relative;
+}
+
+.hud-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--hud-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hud-grid) 1px, transparent 1px);
+  background-size: var(--hud-grid-size) var(--hud-grid-size);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 85%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), transparent 85%);
+}
+
+/* Keep real content above the grid overlay. */
+.hud-grid > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Horizontal scanline sweep — decorative, very low contrast. */
+.hud-scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--scanline) 0 1px,
+    transparent 1px 3px
+  );
+  opacity: 0.35;
+}
+
+/* Notched (cut-corner) panel — the hardware-instrument silhouette.
+ * Note: clip-path clips descendants, so pair this with the notch, not with
+ * .corner-tick (the ticks would be cut off). */
+.clip-notch {
+  clip-path: polygon(
+    var(--notch) 0,
+    calc(100% - var(--notch)) 0,
+    100% var(--notch),
+    100% calc(100% - var(--notch)),
+    calc(100% - var(--notch)) 100%,
+    var(--notch) 100%,
+    0 calc(100% - var(--notch)),
+    0 var(--notch)
+  );
+}
+
+/* L-shaped corner ticks on the top-left / bottom-right corners. */
+.corner-tick::before,
+.corner-tick::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.corner-tick::before {
+  top: -1px;
+  left: -1px;
+  border-top: var(--corner-tick);
+  border-left: var(--corner-tick);
+}
+
+.corner-tick::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: var(--corner-tick);
+  border-right: var(--corner-tick);
+}
+
+/* Accent glow ring for hover / active surfaces. */
+.glow-accent {
+  box-shadow: var(--glow-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-scanlines::after {
+    opacity: 0.18;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Generic helpers
+ * ------------------------------------------------------------------ */
+.text-muted {
+  color: var(--fg-secondary);
+}
+
+.text-faint {
+  color: var(--fg-muted);
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-24 { gap: 24px; }
+
+.mt-8 { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+
+/* Page transition — a short slide + fade so swapping views reads as a panel
+ * change rather than a plain cross-dissolve.
+ *
+ * These live in global.css (not scoped to ConsoleLayout) because the
+ * transitioning root element belongs to the routed page component, which does
+ * not carry the layout's scoped-style attribute. */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active {
+    transition: opacity 120ms linear;
+  }
+
+  .page-enter-from,
+  .page-leave-to {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Brand / marketing primitives
+ *
+ * Shared "dark-tech mission-control" building blocks used by RcsLandingView
+ * and available to any page that wants the same editorial, high-contrast
+ * treatment. Everything resolves through the explorer tokens, so these are
+ * automatically light/dark aware and consistent with .app-card / .data-panel.
+ * ------------------------------------------------------------------ */
+
+/* Frosted panel — same language as .app-card but with a stronger, larger
+ * radius for hero / feature blocks. */
+.glass-panel {
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel {
+    background: var(--bg-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Display heading using the HUD face. */
+.display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+}
+
+/* Tech label — uppercase, tracked-out monospace readouts. */
+.tech-label {
+  font-family: var(--font-tech);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: var(--fg-secondary);
+}
+
+/* Asymmetric editorial grid (the "bento" layout). 12-col base; spans are
+ * tuned so cards are deliberately uneven, avoiding the 3-equal-card trap. */
+.bento {
+  display: grid;
+  gap: clamp(12px, 1.4vw, 22px);
+  grid-template-columns: repeat(12, 1fr);
+}
+
+.bento > * {
+  grid-column: span 4;
+  min-width: 0;
+}
+
+.bento :nth-child(4n + 1) { grid-column: span 7; }
+.bento :nth-child(4n + 2) { grid-column: span 5; }
+.bento :nth-child(4n + 3) { grid-column: span 5; }
+.bento :nth-child(4n + 4) { grid-column: span 7; }
+
+@media (max-width: 720px) {
+  .bento > * { grid-column: span 12 !important; }
+}
+
+/* Pill / CTA buttons in the brand language. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-family: var(--font-tech);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--fg-inverse);
+  box-shadow: var(--glow-accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  color: var(--fg-inverse);
+  box-shadow: 0 0 26px rgba(74, 163, 255, 0.55);
+}
+
+.btn-ghost {
+  border: 1px solid var(--border-strong);
+  color: var(--fg);
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+/* Scroll-reveal hook. GSAP (or any observer) toggles .is-in; the rule below is
+ * the static fallback so content is always visible if motion never triggers. */
+.reveal {
+  opacity: 1;
+  transform: none;
+}
+
+.reveal:not(.is-in) {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Backward-compatible aliases
+ *
+ * Pre-existing pages (dashboard, system management, profile…) still use the
+ * older `.page` / `.page-header` / `.panel` / `.stat-card` class names. These
+ * aliases remap them onto the explorer primitives so every page shares one
+ * unified skin without rewriting each view.
+ * ------------------------------------------------------------------ */
+:root {
+  --glow: var(--shadow-sm);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+  padding: 28px 40px 36px;
+  overflow: auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.page-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--fg-secondary);
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card .stat-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  font-size: 20px;
+}
+
+.stat-card .stat-value {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--fg);
+}
+
+.stat-card .stat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.panel {
+  background: var(--bg-surface);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+}
+
+.panel-title {
+  margin: 0 0 16px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}

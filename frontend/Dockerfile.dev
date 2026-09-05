@@ -1,0 +1,28 @@
+# 开发环境 Dockerfile
+FROM registry.cn-hangzhou.aliyuncs.com/tianque-cloud/node:20-alpine
+
+# 设置工作目录
+WORKDIR /app
+
+# 使用 corepack 启用 pnpm（Node 20+ 内置 corepack，比 npm install 更可靠）
+# 构建环境无法访问 registry.npmjs.org，改用 npmmirror 镜像拉取 pnpm，并锁定与 lockfileVersion 9 匹配的 v9 版本
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+# 复制依赖文件
+COPY package.json pnpm-lock.yaml ./
+
+RUN pnpm config set registry https://registry.npmmirror.com
+
+# 安装依赖
+RUN pnpm install
+
+# 复制应用代码
+COPY . .
+
+# 暴露端口
+EXPOSE 3000
+
+# 开发环境使用 daily 模式（日常环境配置）
+CMD ["pnpm", "dev:daily", "--host", "0.0.0.0"]
+

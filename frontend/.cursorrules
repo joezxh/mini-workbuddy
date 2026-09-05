@@ -1,0 +1,218 @@
+# 前端开发规范
+
+> 本规范基于 `frontend/DESIGN.md` 自动生成，所有前端开发必须严格遵守。
+
+---
+
+## 1. 设计核心约束
+
+### 1.1 颜色系统（必须使用 CSS 变量）
+```css
+/* 主色 - 统一使用此变量体系 */
+--accent-cyan: #1677ff;   /* 默认态 */
+--accent-blue: #005cc5;   /* hover态 */
+
+/* 语义色 */
+--accent-green: #19be6b;  /* 成功/低风险 */
+--accent-yellow: #faad14; /* 警告/中风险 */
+--accent-red: #ed4014;    /* 错误/高风险 */
+--accent-purple: #722ed1;
+--accent-orange: #fa8c16;
+
+/* 文字色 */
+--text-primary: #1a1a1a;
+--text-secondary: #2d2d2d;
+--text-dim: #666666;
+
+/* 边框 */
+--border-glow: #e8e8e8;
+--border-bright: #d9d9d9;
+```
+
+### 1.2 组件变量（Ant Design 兼容）
+```css
+/* Ant Design 变量覆盖 */
+--primary-color: #1677ff;
+--success-color: #52c41a;
+--warning-color: #faad14;
+--error-color: #ff4d4f;
+--border-radius-base: 4px;
+```
+
+### 1.2 圆角规范
+- **允许值**: `2px` / `3px` / `4px` / `8px`
+- **禁止**: `12px` 及以上
+
+### 1.3 过渡时间
+- `0.2s` - 按钮、输入框
+- `0.25s` - 导航
+- `0.3s` - 卡片、表格行
+
+---
+
+## 2. 组件规范
+
+### 2.1 卡片 (Card)
+```vue
+<style scoped>
+@import '@/styles/variables.css';
+
+.card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  border-radius: 4px;
+  padding: 16px;
+}
+
+/* 顶部装饰条 - 必须包含 */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent-cyan);
+  border-radius: 4px 4px 0 0;
+}
+</style>
+```
+
+### 2.2 按钮 (Button)
+```vue
+<!-- 主要按钮 -->
+<a-button type="primary">确认</a-button>
+
+<!-- 自定义按钮 -->
+<button class="btn">自定义</button>
+
+<style scoped>
+.btn {
+  background: rgba(210, 230, 252, 0.85);
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  color: var(--accent-cyan);
+  padding: 4px 12px;
+  transition: all 0.2s;
+}
+.btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-blue);
+}
+</style>
+```
+
+### 2.3 表格 (Table)
+```vue
+<style scoped>
+:deep(.ant-table-thead > tr > th) {
+  background: rgba(24, 144, 255, 0.06) !important;
+  font-weight: 600;
+  color: #333;
+}
+:deep(.ant-table-tbody > tr:hover > td) {
+  background: rgba(24, 144, 255, 0.02) !important;
+}
+</style>
+```
+
+### 2.4 表单输入框
+```vue
+<style scoped>
+:deep(.ant-input),
+:deep(.ant-select-selector) {
+  height: 28px !important;
+  font-size: 12px;
+  border-color: var(--border-glow) !important;
+}
+:deep(.ant-input:hover),
+:deep(.ant-select-selector:hover) {
+  border-color: var(--border-bright) !important;
+}
+</style>
+```
+
+### 2.5 弹窗 (Modal)
+```vue
+<style scoped>
+:deep(.ant-modal-content) {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 80, 200, 0.12);
+}
+:deep(.ant-modal-header) {
+  background: rgba(22, 119, 255, 0.04);
+  border-bottom: 1px solid #e8e8e8;
+  padding: 10px 20px;
+}
+</style>
+```
+
+---
+
+## 3. 布局规范
+
+### 3.1 概览页三栏布局
+```css
+.overview-container {
+  padding: 8px 10px;
+  gap: 7px;
+}
+.content-row {
+  display: flex;
+  gap: 7px;
+}
+.content-row > * {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+```
+
+### 3.2 详情页三栏网格
+```css
+.detail-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 1400px) {
+  .detail-body {
+    grid-template-columns: 1fr;
+  }
+}
+```
+
+---
+
+## 4. 响应式断点
+
+- `@media (max-width: 1400px)` - 大屏适配
+- `@media (max-width: 768px)` - 平板/移动适配
+
+**禁止新增其他断点**
+
+---
+
+## 5. 代码审查清单
+
+在提交代码前自查：
+
+- [ ] 所有颜色使用 CSS 变量而非硬编码
+- [ ] 圆角使用 `2/3/4/8px` 规范值
+- [ ] 卡片包含 `::before` 顶部装饰条
+- [ ] 过渡时间符合 `0.2s/0.25s/0.3s`
+- [ ] 响应式仅使用 `1400px` 和 `768px` 断点
+- [ ] 使用 `scoped` 样式隔离
+- [ ] 字体使用 `PingFang SC, Microsoft YaHei`
+
+---
+
+## 6. 禁止事项
+
+- 禁止新增 CSS 变量（除非项目扩展）
+- 禁止硬编码色值（如 `#ff0000`）
+- 禁止 `border-radius: 12px` 及以上
+- 禁止引入外部字体
+- 禁止使用 GSAP/Framer Motion 等动画库
+- 禁止直接修改 Ant Design 源码

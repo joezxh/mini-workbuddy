@@ -1,0 +1,90 @@
+# 开发环境 Dockerfile - CPU 优化版
+FROM registry.cn-hangzhou.aliyuncs.com/tianque-cloud/python:3.11-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+
+# 安装系统依赖（包含常见编译依赖，避免部分包回退源码构建失败）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libpq-dev \
+    libffi-dev \
+    pkg-config \
+    curl \
+    gcc \
+    g++ \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# 创建虚拟环境
+RUN python -m venv /app/.venv
+
+# 复制依赖文件
+COPY requirements-dev.txt .
+
+# 合并所有 Python 依赖为单步安装（避免 .venv 在多层间重复膨胀 ~2.8GB）
+# PyTorch CPU + requirements-dev + 高风险包，一次完成
+RUN .venv/bin/pip install --upgrade pip setuptools wheel && \
+    echo "🔧 Starting dependency installation..." && \
+    .venv/bin/pip install \
+      -i https://download.pytorch.org/whl/cpu \
+      --trusted-host download.pytorch.org \
+      "torch>=2.2.0" && \
+    .venv/bin/pip install \
+      -i https://mirrors.aliyun.com/pypi/simple/ \
+      --extra-index-url https://pypi.org/simple/ \
+      --trusted-host mirrors.aliyun.com \
+      --trusted-host pypi.org \
+      --trusted-host files.pythonhosted.org \
+      --no-cache-dir \
+      -r requirements-dev.txt && \
+    echo "✅ Basic dependencies installed" && \
+    /app/.venv/bin/pip list --format=freeze | grep -i openpyxl && \
+    .venv/bin/pip install \
+      -i https://mirrors.aliyun.com/pypi/simple/ \
+      --extra-index-url https://pypi.org/simple/ \
+      --trusted-host mirrors.aliyun.com \
+      --trusted-host pypi.org \
+      --trusted-host files.pythonhosted.org \
+      "graphiti-core>=0.5.0" \
+      "mcp>=1.15.0" \
+      "agentscope>=2.0,<3.0" \
+      "ripgrep>=15.0.0"
+
+# 严格验证关键依赖已安装
+RUN set -e && \
+    OPENPYXL_VERSION=$(/app/.venv/bin/pip show openpyxl 2>/dev/null | grep Version | awk '{print $$2}') && \
+    echo "✅ openpyxl installed version: $$OPENPYXL_VERSION" && \
+    if [ -z "$$OPENPYXL_VERSION" ]; then echo "❌ ERROR: openpyxl is NOT installed!" && exit 1; fi
+
+
+# 清理 pip 缓存和临时文件
+RUN rm -rf /root/.cache/pip && \
+    find /app/.venv -type d -name __pycache__ -exec rm -rf {} + || true
+
+# 复制应用代码（排除不必要的文件）
+COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+COPY .env.daily .env
+COPY data/ ./data/
+
+# 创建必要的目录并设置权限
+RUN mkdir -p logs uploads && \
+    chmod -R 755 logs uploads
+
+# 暴露端口
+EXPOSE 8000
+
+# 开发环境使用 uvicorn 的热重载模式
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "debug"]
