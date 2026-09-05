@@ -64,7 +64,7 @@
           <a-space>
             <a @click="openForm('update', record)">编辑</a>
             <a-popconfirm title="确认删除该套餐吗？" @confirm="handleDelete(record.package_id)">
-              <a style="color: #ff4d4f">删除</a>
+              <a style="color: var(--err)">删除</a>
             </a-popconfirm>
           </a-space>
         </template>
@@ -106,7 +106,7 @@
               :tree-data="menuTreeData"
               checkable
               :field-names="{ key: 'id', title: 'name', children: 'children' }"
-              style="max-height: 300px; overflow-y: auto; border: 1px solid #d9d9d9; border-radius: 4px; padding: 8px;"
+              style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: 8px;"
             />
           </div>
         </a-form-item>
@@ -346,14 +346,14 @@ onMounted(() => {
   font-weight: 600;
 }
 .panel-header .description {
-  color: #888;
+  color: var(--fg-secondary);
   font-size: 13px;
   margin: 0;
 }
 .search-bar {
   margin-bottom: 16px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg-page);
   border-radius: 6px;
 }
 .menu-tree-container {

@@ -599,16 +599,16 @@ onMounted(() => {
 }
 .model-name {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--fg);
 }
 .muted {
-  color: #bbb;
+  color: var(--fg-muted);
 }
 .form-hint {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
 }
 .agent-management {
   display: flex;
@@ -628,7 +628,7 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
 }
 
 .header-actions {
@@ -641,7 +641,7 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #f6f8fc 0%, #ffffff 100%);
+  background: var(--bg-surface);
   border-radius: 8px;
 
   :deep(.ant-card-body) {
@@ -651,14 +651,14 @@ onMounted(() => {
 
 .stat-label {
   font-size: 13px;
-  color: #888;
+  color: var(--fg-secondary);
   margin-bottom: 6px;
 }
 
 .stat-value {
   font-size: 26px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
   line-height: 1.2;
   margin-bottom: 6px;
 }
@@ -667,12 +667,12 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
 
-  .success { color: #52c41a; }
-  .error { color: #ff4d4f; }
-  .active { color: #1677ff; }
-  .inactive { color: #999; }
+  .success { color: var(--ok); }
+  .error { color: var(--err); }
+  .active { color: var(--accent); }
+  .inactive { color: var(--fg-muted); }
 }
 
 .list-card {
@@ -688,7 +688,7 @@ onMounted(() => {
 .num-cell {
   font-family: monospace;
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
 }
 
 .agent-rule-toolbar {

@@ -231,12 +231,13 @@ async def health_check():
 API_V1_PREFIX = "/api/v1"
 
 # --- sys/ — 系统管理 ---
-from app.routers import auth, admin
-from app.routers.admin import sys_tenant as tenant_router
-from app.routers.admin import sys_tenant_package as tenant_package_router
+from app.routers import auth, sys
+from app.routers.sys import sys_tenant as tenant_router
+from app.routers.sys import sys_tenant_package as tenant_package_router
+from app.routers.sys import sys_dictionary as dictionary_router
 app.include_router(auth.router, prefix=f"{API_V1_PREFIX}/auth", tags=["认证"])
-app.include_router(admin.router, prefix=f"{API_V1_PREFIX}/admin", tags=["管理员"])
-app.include_router(dictionary.router, prefix=f"{API_V1_PREFIX}/dictionary", tags=["字典管理"])
+app.include_router(sys.router, prefix=f"{API_V1_PREFIX}/admin", tags=["管理员"])
+app.include_router(dictionary_router.router, prefix=f"{API_V1_PREFIX}/dictionary", tags=["字典管理"])
 app.include_router(tenant_router.router, prefix=f"{API_V1_PREFIX}/admin/tenant", tags=["租户管理"])
 app.include_router(tenant_package_router.router, prefix=f"{API_V1_PREFIX}/admin/tenant-package", tags=["租户套餐管理"])
 

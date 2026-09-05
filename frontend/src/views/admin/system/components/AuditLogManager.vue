@@ -223,7 +223,7 @@ onMounted(() => {
 <style scoped>
 .toolbar {
   margin-bottom: 24px;
-  background: #fbfbfb;
+  background: var(--bg-surface);
   padding: 16px;
   border-radius: 4px;
 }
@@ -234,7 +234,7 @@ onMounted(() => {
 
 .request-params {
   font-size: 12px;
-  background: #f8f9fa;
+  background: var(--bg-input);
   padding: 12px;
   border-radius: 4px;
   max-height: 260px;

@@ -94,7 +94,7 @@
                   placeholder="开始"
                   style="width: 120px"
                 />
-                <span style="color: #999">~</span>
+                <span style="color: var(--fg-muted)">~</span>
                 <a-time-picker
                   v-model:value="formData.conditions.time_end"
                   format="HH:mm"
@@ -333,8 +333,8 @@ function handleCancel() {
 
 <style scoped lang="less">
 .conditions-builder {
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 12px;
 }
@@ -342,7 +342,7 @@ function handleCancel() {
 .form-hint {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
   margin-top: 4px;
 }
 </style>

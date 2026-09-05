@@ -29,14 +29,14 @@ const renderedContent = computed(() => renderMarkdown(props.content || ''))
 .thinking-row { font-size: 13px; }
 .thinking-row-header {
   display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-  cursor: pointer; color: #666; &:hover { background: #fafafa; }
+  cursor: pointer; color: var(--fg-secondary); &:hover { background: var(--bg-input); }
 }
 .thinking-icon { color: #8b5cf6; }
 .thinking-label { font-weight: 500; color: #8b5cf6; }
-.thinking-preview { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #999; font-size: 12px; }
-.thinking-chevron { transition: transform 0.2s; color: #bbb; &.open { transform: rotate(90deg); } }
-.thinking-content { padding: 8px 10px 8px 30px; border-top: 1px solid #f0f0f0; }
-.thinking-text { color: #555; line-height: 1.6; font-size: 12px; white-space: pre-wrap; }
+.thinking-preview { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-muted); font-size: 12px; }
+.thinking-chevron { transition: transform 0.2s; color: var(--fg-muted); &.open { transform: rotate(90deg); } }
+.thinking-content { padding: 8px 10px 8px 30px; border-top: 1px solid var(--border); }
+.thinking-text { color: var(--fg-secondary); line-height: 1.6; font-size: 12px; white-space: pre-wrap; }
 .expand-enter-active, .expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }
 .expand-enter-to, .expand-leave-from { opacity: 1; max-height: 500px; }

@@ -1,6 +1,6 @@
 from app.middleware.audit_logger import AuditLogRoute
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
@@ -46,25 +46,44 @@ class StatusUpdate(BaseModel):
 
 @router.get("/dashboard/stats")
 def get_dashboard_stats(db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
-    """MinWorkBuddy 控制台统计 —— 通用 AI 工作台指标。"""
-    stats_sql = text("""
-                     SELECT (SELECT COUNT(*) FROM ai_chat_session WHERE is_deleted = FALSE) AS sessions_total,
-                            (SELECT COUNT(*) FROM agent_config WHERE is_deleted = FALSE)    AS agents_total,
-                            (SELECT COUNT(*) FROM tool_definition WHERE is_deleted = FALSE) AS tools_total,
-                            (SELECT COUNT(*) FROM skill_registry WHERE is_deleted = FALSE)  AS skills_total,
-                            (SELECT COUNT(*) FROM sys_user WHERE is_deleted = FALSE)        AS users_total
-                     """)
-    row = db.execute(stats_sql).mappings().one()
+    """MinWorkBuddy 控制台统计 —— 通用 AI 工作台指标。
+
+    各表软删除字段并不统一，故统一走 ORM 按模型字段统计，避免裸 SQL 与模型脱节
+    （旧实现引用了不存在的 tool_definition / skill_registry 表以及不存在的
+    is_deleted 列，会直接 500）：
+      * agent_config / agent_team / sys_user : is_deleted
+      * ai_tool_definition                   : status = 'enabled'
+      * ai_skill_package                     : enabled
+      * ai_chat_session                      : 无软删除字段（status: active/archived）
+      * agent_team_run.total_tokens          : Token 消耗累计
+    """
+    from app.models.ai.ai_chat import AiChatSession
+    from app.models.ai.ai_skill_package import AiSkillPackage
+    from app.models.ai.ai_tool_definition import AiToolDefinition
+    from app.models.agent.agent_config import AgentConfig
+    from app.models.agent.agent_team import AgentTeam
+    from app.models.agent.agent_team_run import AgentTeamRun
+
+    def count(column, *criteria) -> int:
+        query = db.query(func.count(column))
+        for criterion in criteria:
+            query = query.filter(criterion)
+        return int(query.scalar() or 0)
 
     return {
         "code": 0,
         "message": "success",
         "data": {
-            "sessions_total": row["sessions_total"],
-            "agents_total": row["agents_total"],
-            "tools_total": row["tools_total"],
-            "skills_total": row["skills_total"],
-            "users_total": row["users_total"],
+            "sessions_total": count(AiChatSession.session_id),
+            "agents_total": count(AgentConfig.id, AgentConfig.is_deleted == False),
+            "agent_teams_total": count(AgentTeam.id, AgentTeam.is_deleted == False),
+            "tools_total": count(AiToolDefinition.id, AiToolDefinition.status == "enabled"),
+            "skills_total": count(AiSkillPackage.id, AiSkillPackage.enabled == True),
+            "users_total": count(SysUser.user_id, SysUser.is_deleted == False),
+            # 目前仅 agent_team_run 记录了 token 消耗，作为全局用量的近似值
+            "token_total": int(
+                db.query(func.coalesce(func.sum(AgentTeamRun.total_tokens), 0)).scalar() or 0
+            ),
         }
     }
 

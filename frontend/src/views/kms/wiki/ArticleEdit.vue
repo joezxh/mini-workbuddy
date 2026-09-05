@@ -181,7 +181,7 @@ async function handleSave() {
 }
 .hint-text {
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
   margin-top: 4px;
 }
 </style>

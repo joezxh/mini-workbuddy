@@ -263,6 +263,6 @@ const handleSubmit = async () => {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
 }
 </style>

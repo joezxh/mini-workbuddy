@@ -51,8 +51,8 @@
           </template>
           <template v-else-if="column.key === 'is_default'">
             <a-tooltip :title="record.is_default ? '当前默认模型' : '设为默认'">
-              <StarFilled v-if="record.is_default" style="color: #faad14; font-size: 16px;" />
-              <StarOutlined v-else style="color: #d9d9d9; font-size: 16px; cursor: pointer;" @click="setDefault(record)" />
+              <StarFilled v-if="record.is_default" style="color: var(--warn); font-size: 16px;" />
+              <StarOutlined v-else style="color: var(--fg-muted); font-size: 16px; cursor: pointer;" @click="setDefault(record)" />
             </a-tooltip>
           </template>
           <template v-else-if="column.key === 'temperature'">
@@ -68,7 +68,7 @@
                 type="link"
                 size="small"
                 @click="setDefault(record)"
-                :style="{ color: record.is_default ? '#faad14' : '#1890ff' }"
+                :style="{ color: record.is_default ? 'var(--warn)' : 'var(--accent)' }"
                 :disabled="record.is_default"
               >
                 <StarFilled v-if="record.is_default" /> {{ record.is_default ? '默认' : '设为默认' }}
@@ -77,7 +77,7 @@
                 type="link"
                 size="small"
                 @click="toggleStatus(record)"
-                :style="{ color: record.status === 1 ? '#faad14' : '#52c41a' }"
+                :style="{ color: record.status === 1 ? 'var(--warn)' : 'var(--ok)' }"
               >
                 {{ record.status === 1 ? '禁用' : '启用' }}
               </a-button>
@@ -283,8 +283,8 @@ const setDefault = async (record: AiChatModel) => {
   .model-cell {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    color: #595959;
-    background: #f5f5f5;
+    color: var(--fg-secondary);
+    background: var(--bg-input);
     padding: 2px 6px;
     border-radius: 4px;
   }

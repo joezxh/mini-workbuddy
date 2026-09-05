@@ -61,14 +61,14 @@ function credColor(c: number) {
 </script>
 
 <style scoped lang="less">
-.report { border: 1px solid #e6e8eb; border-radius: 10px; overflow: hidden; background: #fff; }
-.rp-section { border-top: 1px solid #f0f0f0; &:first-child { border-top: none; } }
+.report { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg-surface); }
+.rp-section { border-top: 1px solid var(--border); &:first-child { border-top: none; } }
 .rp-h {
   display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-  font-size: 14px; font-weight: 600; color: #1a1a1a; cursor: pointer; background: #fafbfc;
+  font-size: 14px; font-weight: 600; color: var(--fg); cursor: pointer; background: var(--bg-input);
 }
 .rp-caret { transition: transform .2s; &.collapsed { transform: rotate(-90deg); } }
-.rp-body { padding: 10px 14px; font-size: 13.5px; line-height: 1.7; color: #333; }
+.rp-body { padding: 10px 14px; font-size: 13.5px; line-height: 1.7; color: var(--fg); }
 .rp-body :deep(p) { margin: 0 0 8px; }
 .rp-findings, .rp-sources { margin: 0; padding-left: 18px; }
 .rp-findings li { margin-bottom: 6px; }

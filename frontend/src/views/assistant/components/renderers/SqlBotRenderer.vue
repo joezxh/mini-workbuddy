@@ -280,17 +280,17 @@ onBeforeUnmount(() => {
 
 <style scoped lang="less">
 .sqlbot-renderer { display: flex; flex-direction: column; gap: 12px; }
-.sqlbot-progress { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: #666; font-size: 13px; }
-.sql-block { border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; }
-.sql-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
-.sql-label { font-size: 12px; font-weight: 600; color: #555; }
-.sql-code { margin: 0; padding: 12px; font-size: 12px; background: #f8f9fa; overflow-x: auto; code { font-family: 'Fira Code', monospace; } }
-.data-table-wrap { border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; }
-.table-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
-.table-label { font-size: 12px; font-weight: 600; color: #555; }
+.sqlbot-progress { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--fg-secondary); font-size: 13px; }
+.sql-block { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.sql-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-input); border-bottom: 1px solid var(--border); }
+.sql-label { font-size: 12px; font-weight: 600; color: var(--fg-secondary); }
+.sql-code { margin: 0; padding: 12px; font-size: 12px; background: var(--bg-input); overflow-x: auto; code { font-family: 'Fira Code', monospace; } }
+.data-table-wrap { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.table-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-input); border-bottom: 1px solid var(--border); }
+.table-label { font-size: 12px; font-weight: 600; color: var(--fg-secondary); }
 .s2-container { min-height: 200px; max-height: 400px; overflow: auto; padding: 4px; }
-.chart-area { border: 1px solid #e8e8e8; border-radius: 6px; padding: 12px; }
-.chart-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #555; margin-bottom: 8px; }
+.chart-area { border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+.chart-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--fg-secondary); margin-bottom: 8px; }
 .chart-container { min-height: 280px; }
 .sqlbot-error { margin-top: 8px; }
 </style>

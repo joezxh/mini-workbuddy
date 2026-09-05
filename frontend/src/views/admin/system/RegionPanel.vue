@@ -61,7 +61,7 @@
         <!-- 右侧详情 -->
         <div class="detail-panel">
           <div v-if="!selectedRegion" class="detail-empty">
-            <ApartmentOutlined style="font-size:48px;color:#d9d9d9" />
+            <ApartmentOutlined style="font-size:48px;color:var(--fg-muted)" />
             <p>点击左侧区域查看详情</p>
           </div>
           <div v-else class="detail-content">
@@ -500,8 +500,8 @@ onMounted(() => {
 
 .panel-header {
   margin-bottom: 16px;
-  h2 { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0 0 6px 0; }
-  .description { color: #8c8c8c; margin: 0; font-size: 13px; }
+  h2 { font-size: 20px; font-weight: 600; color: var(--fg); margin: 0 0 6px 0; }
+  .description { color: var(--fg-secondary); margin: 0; font-size: 13px; }
 }
 
 .region-content {
@@ -522,7 +522,7 @@ onMounted(() => {
 .stat-card {
   flex: 1;
   min-width: 90px;
-  background: rgba(255,255,255,0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   padding: 12px 16px;
@@ -537,7 +537,7 @@ onMounted(() => {
     background: var(--accent-cyan);
   }
   .stat-value { font-size: 24px; font-weight: 700; color: var(--accent-cyan); line-height: 1.2; }
-  .stat-label { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
+  .stat-label { font-size: 12px; color: var(--fg-secondary); margin-top: 2px; }
 }
 
 .main-body {
@@ -551,7 +551,7 @@ onMounted(() => {
 .tree-panel {
   width: 300px;
   flex-shrink: 0;
-  background: rgba(255,255,255,0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   display: flex;
@@ -575,15 +575,15 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  .node-icon { font-size: 13px; color: #888; }
-  .node-name { font-size: 13px; color: #1a1a1a; }
+  .node-icon { font-size: 13px; color: var(--fg-muted); }
+  .node-name { font-size: 13px; color: var(--fg); }
   .node-tag { font-size: 10px; transform: scale(0.9); }
-  &.loading .node-name { color: #aaa; }
+  &.loading .node-name { color: var(--fg-muted); }
 }
 
 .detail-panel {
   flex: 1;
-  background: rgba(255,255,255,0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   overflow-y: auto;
@@ -596,7 +596,7 @@ onMounted(() => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   gap: 12px;
   p { font-size: 14px; margin: 0; }
 }
@@ -609,7 +609,7 @@ onMounted(() => {
     align-items: center;
     gap: 10px;
     .detail-icon { font-size: 22px; color: var(--accent-cyan); }
-    h3 { font-size: 20px; font-weight: 600; color: #1a1a1a; margin: 0; }
+    h3 { font-size: 20px; font-weight: 600; color: var(--fg); margin: 0; }
   }
   display: flex;
   justify-content: space-between;
@@ -624,23 +624,23 @@ onMounted(() => {
 .detail-desc { margin-top: 4px; }
 
 .code-text {
-  background: #f5f5f5;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 3px;
   padding: 1px 6px;
   font-size: 12px;
   font-family: 'Courier New', monospace;
-  color: #d46b08;
+  color: var(--accent-2);
 }
 
 .children-section {
   .children-title {
     font-size: 14px;
     font-weight: 600;
-    color: #595959;
+    color: var(--fg-secondary);
     margin-bottom: 10px;
     padding-bottom: 6px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--divider);
   }
 }
 
@@ -655,7 +655,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -663,10 +663,10 @@ onMounted(() => {
     border-color: var(--accent-cyan);
     background: rgba(24,144,255,0.05);
   }
-  .child-name { font-size: 13px; color: #1a1a1a; flex: 1; }
+  .child-name { font-size: 13px; color: var(--fg); flex: 1; }
   .child-code {
     font-size: 10px;
-    color: #aaa;
+    color: var(--fg-muted);
     font-family: 'Courier New', monospace;
   }
 }
@@ -677,15 +677,15 @@ onMounted(() => {
 :deep(.ant-tree-node-selected) { background: rgba(24,144,255,0.12) !important; }
 
 :deep(.ant-table) {
-  background: #fff;
+  background: var(--bg-surface);
   .ant-table-thead > tr > th {
-    background: #fafafa;
+    background: var(--bg-base);
   }
   .ant-table-tbody > tr > td {
-    background: #fff;
+    background: var(--bg-surface);
   }
   .ant-table-tbody > tr:hover > td {
-    background: #f5f5f5 !important;
+    background: var(--bg-hover) !important;
   }
 }
 </style>

@@ -17,7 +17,11 @@ export const usePermissionStore = defineStore('permission', () => {
       if (!userStore.userInfo) return false
       
       const permissions = userStore.userInfo.permissions || []
-      
+      const roles = userStore.userInfo.roles || []
+
+      // 超级管理员角色拥有全部权限（后端已不再下发 '*:*' 通配符）
+      if (roles.includes('super_admin')) return true
+
       if (Array.isArray(permission)) {
         return permission.some(p => permissions.includes(p))
       }

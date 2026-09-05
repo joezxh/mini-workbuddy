@@ -28,7 +28,7 @@
 
     <!-- KPI 卡片 -->
     <div v-if="metrics && metrics.length" class="metric-grid">
-      <div v-for="(m, idx) in metrics" :key="idx" class="metric-card" :style="{ borderLeftColor: m.color || '#1677ff' }">
+      <div v-for="(m, idx) in metrics" :key="idx" class="metric-card" :style="{ borderLeftColor: m.color || 'var(--accent)' }">
         <div class="metric-label">{{ m.label }}</div>
         <div class="metric-value">{{ m.value }}</div>
         <div v-if="m.delta !== undefined" class="metric-delta" :class="m.delta >= 0 ? 'up' : 'down'">
@@ -263,8 +263,8 @@ function formatJson(data: any): string {
 <style scoped lang="less">
 .data-analysis-card {
   border-radius: 8px;
-  border: 1px solid #e8eaed;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
   margin: 8px 0;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -275,8 +275,8 @@ function formatJson(data: any): string {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef7 100%);
-  border-bottom: 1px solid #f0f0f0;
+  background: linear-gradient(135deg, var(--bg-input) 0%, var(--bg-input) 100%);
+  border-bottom: 1px solid var(--border);
 }
 
 .header-left {
@@ -292,7 +292,7 @@ function formatJson(data: any): string {
 .header-title {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: var(--fg);
 }
 
 .header-right {
@@ -304,10 +304,10 @@ function formatJson(data: any): string {
 .analysis-summary {
   padding: 10px 14px;
   font-size: 13px;
-  color: #444;
+  color: var(--fg);
   line-height: 1.6;
-  background: #fafbfc;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 }
 
 .metric-grid {
@@ -319,20 +319,20 @@ function formatJson(data: any): string {
 
 .metric-card {
   padding: 10px 12px;
-  background: #fafbfc;
-  border-left: 3px solid #1677ff;
+  background: var(--bg-input);
+  border-left: 3px solid var(--accent);
   border-radius: 4px;
 
   .metric-label {
     font-size: 11px;
-    color: #888;
+    color: var(--fg-secondary);
     margin-bottom: 4px;
   }
 
   .metric-value {
     font-size: 18px;
     font-weight: 700;
-    color: #333;
+    color: var(--fg);
     line-height: 1.2;
   }
 
@@ -341,8 +341,8 @@ function formatJson(data: any): string {
     margin-top: 4px;
     font-weight: 500;
 
-    &.up { color: #52c41a; }
-    &.down { color: #ff4d4f; }
+    &.up { color: var(--ok); }
+    &.down { color: var(--err); }
   }
 }
 
@@ -356,7 +356,7 @@ function formatJson(data: any): string {
 
 .detail-label {
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
   margin-bottom: 6px;
   display: flex;
   align-items: center;
@@ -365,7 +365,7 @@ function formatJson(data: any): string {
 
 .node-outputs {
   font-size: 12px;
-  background: #f8f9fa;
+  background: var(--bg-input);
   padding: 8px 10px;
   border-radius: 4px;
   overflow-x: auto;
@@ -396,18 +396,18 @@ function formatJson(data: any): string {
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 4px;
 }
 
 .tool-call-name {
   font-size: 12px;
-  color: #555;
+  color: var(--fg-secondary);
 }
 
 :deep(.ant-collapse-header) {
   padding: 6px 10px !important;
   font-size: 12px;
-  background: #fafafa;
+  background: var(--bg-input);
 }
 </style>

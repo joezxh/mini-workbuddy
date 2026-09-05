@@ -92,7 +92,7 @@
                 type="link"
                 size="small"
                 @click="toggleStatus(record)"
-                :style="{ color: record.status === 1 ? '#faad14' : '#52c41a' }"
+                :style="{ color: record.status === 1 ? 'var(--warn)' : 'var(--ok)' }"
               >
                 {{ record.status === 1 ? '禁用' : '启用' }}
               </a-button>
@@ -495,13 +495,13 @@ const onTestSuccess = () => {
   h2 {
     font-size: 20px;
     font-weight: 700;
-    color: #1a1a1a;
+    color: var(--fg);
     margin: 0 0 4px 0;
   }
 
   .sub {
     font-size: 13px;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     margin: 0;
   }
 }
@@ -511,7 +511,7 @@ const onTestSuccess = () => {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  background: #fff;
+  background: var(--bg-surface);
   padding: 16px;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -520,8 +520,8 @@ const onTestSuccess = () => {
 .api-key-cell {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  color: #595959;
-  background: #f5f5f5;
+  color: var(--fg-secondary);
+  background: var(--bg-input);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -529,7 +529,7 @@ const onTestSuccess = () => {
 .quota-text {
   display: block;
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   margin-top: 2px;
 }
 
@@ -538,32 +538,32 @@ const onTestSuccess = () => {
 }
 
 .web-search-management .ant-table-wrapper {
-  background: #fff !important;
+  background: var(--bg-surface) !important;
 }
 
 .web-search-management .ant-table {
-  background: #fff !important;
+  background: var(--bg-surface) !important;
 }
 
 .web-search-management .ant-table-container {
-  background: #fff !important;
+  background: var(--bg-surface) !important;
 }
 
 .web-search-management .ant-table-thead > tr > th {
-  background: #fafafa !important;
+  background: var(--bg-base) !important;
 }
 
 .web-search-management .ant-table-tbody > tr {
-  background: #fff !important;
+  background: var(--bg-surface) !important;
 }
 
 .web-search-management .ant-table-tbody > tr > td {
-  background: #fff !important;
+  background: var(--bg-surface) !important;
 }
 
 .web-search-management .ant-table-tbody > tr:hover,
 .web-search-management .ant-table-tbody > tr:hover > td,
 .web-search-management .ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-row-hover {
-  background: #f5f5f5 !important;
+  background: var(--bg-hover) !important;
 }
 </style>

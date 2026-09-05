@@ -43,15 +43,15 @@ const elapsed = computed(() => {
 .agent-section { margin-bottom: 12px; }
 .agent-section-header {
   display: flex; align-items: center; gap: 6px; padding: 6px 0;
-  border-bottom: 1px solid #f0f0f0; margin-bottom: 6px; font-size: 13px;
+  border-bottom: 1px solid var(--border); margin-bottom: 6px; font-size: 13px;
 }
-.agent-name { font-weight: 600; color: #333; }
-.agent-role { color: #999; font-size: 12px; }
-.agent-elapsed { margin-left: auto; font-size: 11px; color: #999; font-variant-numeric: tabular-nums; }
-.icon-success { color: #52c41a; }
-.icon-error { color: #ff4d4f; }
-.icon-loading { color: #1677ff; animation: spin 1s linear infinite; }
-.icon-pending { color: #d9d9d9; }
+.agent-name { font-weight: 600; color: var(--fg); }
+.agent-role { color: var(--fg-muted); font-size: 12px; }
+.agent-elapsed { margin-left: auto; font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.icon-success { color: var(--ok); }
+.icon-error { color: var(--err); }
+.icon-loading { color: var(--accent); animation: spin 1s linear infinite; }
+.icon-pending { color: var(--border); }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .agent-section-body { padding-left: 4px; }
 </style>

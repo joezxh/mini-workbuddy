@@ -17,15 +17,22 @@ const emit = defineEmits<{ (e: 'select', path: string): void }>()
 
 const route = useRoute()
 const { t } = useI18n()
-const open = ref(false)
+const open = ref(true)
 
 /**
  * 展示文案：`titleKey` 走 vue-i18n（本地静态菜单），否则退回后端菜单自带的
  * `i18n` 语言映射。
  */
-const label = computed(() =>
-  props.node.titleKey ? String(t(props.node.titleKey)) : localise(props.node.i18n, props.node.name),
-)
+const label = computed(() => {
+  // 优先使用后端菜单配置的 i18n_key（sys_menu.i18n_key）进行国际化
+  const key = props.node.i18nKey || props.node.titleKey
+  if (key) {
+    const translated = String(t(key))
+    // 翻译不存在时 vue-i18n 会原样返回 key，此时回退到各语言映射 / 默认 name
+    if (translated && translated !== key) return translated
+  }
+  return localise(props.node.i18n, props.node.name)
+})
 
 function isActive(node: MenuNode): boolean {
   if (node.path) return route.path === node.path || route.path.startsWith(node.path + '/')

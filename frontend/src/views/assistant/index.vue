@@ -49,7 +49,7 @@ onUnmounted(() => clearInterval(timeInterval))
 .ai-assistant-page {
   width: 100%;
   height: 100%;
-  background: #f0f4f8;
+  background: var(--bg-base);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -57,8 +57,8 @@ onUnmounted(() => clearInterval(timeInterval))
 
 .ai-page-header {
   height: 54px;
-  background: #fff;
-  border-bottom: 1px solid #e8eaed;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -68,10 +68,10 @@ onUnmounted(() => clearInterval(timeInterval))
 }
 
 .header-logo { display: flex; align-items: center; gap: 10px; }
-.logo-text { font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 0; }
+.logo-text { font-size: 18px; font-weight: 700; color: var(--fg); margin: 0; }
 
 .header-right { display: flex; align-items: center; }
-.header-time { font-size: 13px; color: #666; font-variant-numeric: tabular-nums; }
+.header-time { font-size: 13px; color: var(--fg-secondary); font-variant-numeric: tabular-nums; }
 
 .ai-page-body {
   flex: 1;

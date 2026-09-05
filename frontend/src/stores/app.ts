@@ -1,11 +1,12 @@
 // 控制台级 UI 偏好：皮肤（深色 / 浅色）、侧栏状态与当前语言镜像。
 //
 // 语言本身由 vue-i18n 持有（@/i18n），这里只做镜像，让组件能响应语言变化。
-// 皮肤默认深色，与 rcs Console 一致；选择持久化到 localStorage。
+// 皮肤默认浅色；选择持久化到 localStorage。
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import i18n, { getLocale, isSupportedLocale, setLocale } from '@/i18n'
 import type { LocaleKey } from '@/i18n'
+import dayjs from 'dayjs'
 
 const THEME_KEY = 'app-theme'
 const SIDEBAR_KEY = 'app-sidebar-collapsed'
@@ -22,10 +23,15 @@ function readStored<T extends string>(key: string, allowed: readonly T[], fallba
   return fallback
 }
 
+function syncDayjs(locale: LocaleKey) {
+  // 让日期 / 时间格式化跟随界面语言（en 为 dayjs 内置，zh-cn 已在 main.ts 引入）
+  dayjs.locale(locale === 'zh-CN' || locale === 'zh-TW' ? 'zh-cn' : 'en')
+}
+
 export const useAppStore = defineStore('app', () => {
   const THEMES = ['dark', 'light'] as const
 
-  const theme = ref<ThemeName>(readStored(THEME_KEY, THEMES, 'dark'))
+  const theme = ref<ThemeName>(readStored(THEME_KEY, THEMES, 'light'))
   const locale = ref<LocaleKey>(getLocale())
   const sidebarCollapsed = ref(readStored(SIDEBAR_KEY, ['true', 'false'], 'false') === 'true')
 
@@ -62,6 +68,7 @@ export const useAppStore = defineStore('app', () => {
     if (!isSupportedLocale(next)) return
     locale.value = next
     setLocale(next)
+    syncDayjs(next)
   }
 
   function toggleSidebar() {
@@ -90,6 +97,7 @@ export const useAppStore = defineStore('app', () => {
   function hydrate() {
     applyTheme()
     locale.value = getLocale()
+    syncDayjs(locale.value)
   }
 
   // 当语言在别处被切换时同步镜像值

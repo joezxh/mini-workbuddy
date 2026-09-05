@@ -13,7 +13,7 @@
       <CaretRightOutlined class="expand-arrow" :class="{ expanded: !collapsed }" />
       <FileSearchOutlined class="execution-icon" />
       <span class="execution-label">深度研究</span>
-      <a-badge :count="allEvents.length" :number-style="{ backgroundColor: '#13c2c2', fontSize: '10px' }" />
+      <a-badge :count="allEvents.length" :number-style="{ backgroundColor: 'var(--info)', fontSize: '10px' }" />
       <span v-if="sourceList.length" class="exec-source-indicator">{{ sourceList.length }} 个来源</span>
       <span v-if="streaming" class="exec-running-indicator"><LoadingOutlined spin /> 研究中...</span>
     </div>
@@ -45,7 +45,7 @@
           <!-- 引用来源清单（深度研究专属） -->
           <div v-if="sourceList.length" class="research-sources">
             <div class="exec-section-header">
-              <LinkOutlined style="color: #13c2c2" /><span>引用来源（{{ sourceList.length }}）</span>
+              <LinkOutlined style="color: var(--info)" /><span>引用来源（{{ sourceList.length }}）</span>
             </div>
             <div v-for="(s, i) in sourceList" :key="'src' + i" class="source-item">
               <span class="source-index">{{ i + 1 }}</span>
@@ -59,11 +59,11 @@
         <!-- Tab 2: 执行事件 -->
         <a-tab-pane key="events">
           <template #tab>
-            <ToolOutlined style="color: #fa8c16" />
+            <ToolOutlined style="color: var(--accent-2)" />
             <span>执行事件</span>
           </template>
           <div v-if="toolCallEvents.length || toolResultEvents.length" class="exec-section">
-            <div class="exec-section-header"><ToolOutlined style="color: #fa8c16" /><span>工具调用</span></div>
+            <div class="exec-section-header"><ToolOutlined style="color: var(--accent-2)" /><span>工具调用</span></div>
             <template v-for="(evt, idx) in allToolEvents" :key="'tc' + idx">
               <div class="exec-item exec-tool-entry">
                 <span class="exec-time">{{ formatTime(evt.time) }}</span>
@@ -83,14 +83,14 @@
             </template>
           </div>
           <div v-if="progressEvents.length" class="exec-section">
-            <div class="exec-section-header"><LoadingOutlined style="color: #1890ff" /><span>执行步骤</span></div>
+            <div class="exec-section-header"><LoadingOutlined style="color: var(--accent)" /><span>执行步骤</span></div>
             <div v-for="(evt, idx) in progressEvents" :key="'p' + idx" class="exec-item">
               <span class="exec-time">{{ formatTime(evt.time) }}</span>
               <span class="exec-text progress-text">{{ evt.message }}</span>
             </div>
           </div>
           <div v-if="artifactEvents.length" class="exec-section">
-            <div class="exec-section-header"><FileOutlined style="color: #13c2c2" /><span>生成产物</span></div>
+            <div class="exec-section-header"><FileOutlined style="color: var(--info)" /><span>生成产物</span></div>
             <div v-for="(evt, idx) in artifactEvents" :key="'a' + idx" class="exec-item">
               <span class="exec-time">{{ formatTime(evt.time) }}</span>
               <span class="exec-text">{{ evt.message }}</span>
@@ -103,7 +103,7 @@
         <!-- Tab 3: 时间线 -->
         <a-tab-pane key="timeline" class="timeline-pane">
           <template #tab>
-            <HistoryOutlined style="color: #13c2c2" />
+            <HistoryOutlined style="color: var(--info)" />
             <span>时间线</span>
           </template>
           <TimelineFlowPlayer
@@ -348,7 +348,7 @@ function formatJson(data: any): string {
     color: #5cdbd3;
   }
   .expand-arrow.expanded { transform: rotate(90deg); }
-  .execution-icon { font-size: 13px; color: #13c2c2; }
+  .execution-icon { font-size: 13px; color: var(--info); }
   .execution-label { font-weight: 500; font-size: 12px; }
 
   .exec-source-indicator {
@@ -416,7 +416,7 @@ function formatJson(data: any): string {
     gap: 5px;
     font-size: 11px;
     font-weight: 500;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     margin-bottom: 4px;
   }
 
@@ -429,7 +429,7 @@ function formatJson(data: any): string {
   }
 
   .exec-time {
-    color: #bbb;
+    color: var(--fg-muted);
     font-size: 10px;
     flex-shrink: 0;
     min-width: 56px;
@@ -443,15 +443,15 @@ function formatJson(data: any): string {
     flex-shrink: 0;
     line-height: 18px;
 
-    &.call { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
-    &.result { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+    &.call { background: var(--warn-soft); color: var(--accent-2); border: 1px solid #ffd591; }
+    &.result { background: var(--ok-soft); color: var(--ok); border: 1px solid #b7eb8f; }
   }
 
   .exec-text {
     color: #595959;
     word-break: break-all;
     white-space: pre-wrap;
-    &.progress-text { color: #1890ff; }
+    &.progress-text { color: var(--accent); }
   }
 
   .exec-tool-entry { align-items: center; }
@@ -466,13 +466,13 @@ function formatJson(data: any): string {
       gap: 4px;
       cursor: pointer;
       font-size: 11px;
-      color: #8c8c8c;
+      color: var(--fg-secondary);
       padding: 2px 6px;
       border-radius: 3px;
-      background: #fafafa;
+      background: var(--bg-input);
       transition: background 0.2s;
 
-      &:hover { background: #f0f0f0; }
+      &:hover { background: var(--border); }
       .anticon { font-size: 9px; transition: transform 0.2s; }
       .expanded { transform: rotate(90deg); }
     }
@@ -512,7 +512,7 @@ function formatJson(data: any): string {
 
     .exec-result-toggle {
       font-size: 11px;
-      color: #1890ff;
+      color: var(--accent);
       cursor: pointer;
       &:hover { color: #40a9ff; }
     }
@@ -549,7 +549,7 @@ function formatJson(data: any): string {
 
     .thinking-step-no {
       font-size: 10px;
-      color: #fff;
+      color: var(--fg-inverse);
       background: #b37feb;
       border-radius: 3px;
       padding: 0 5px;
@@ -625,14 +625,14 @@ function formatJson(data: any): string {
     .source-cred {
       flex-shrink: 0;
       font-size: 10px;
-      color: #8c8c8c;
+      color: var(--fg-secondary);
     }
   }
 }
 
 .exec-empty {
   text-align: center;
-  color: #bfbfbf;
+  color: var(--fg-muted);
   font-size: 12px;
   padding: 16px 0;
 }

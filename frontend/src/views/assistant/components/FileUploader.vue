@@ -364,9 +364,9 @@ defineExpose({
 
 <style scoped lang="less">
 .file-uploader {
-  border: 1px solid #e8eaed;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-surface);
   overflow: hidden;
 }
 
@@ -376,13 +376,13 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 }
 
 .uploader-label {
   font-size: 13px;
-  color: #555;
+  color: var(--fg-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -395,9 +395,9 @@ defineExpose({
   transition: all 0.2s;
 
   &:hover, &.drag-over {
-    background: #f0f7ff;
-    .drop-icon { color: #1677ff; transform: translateY(-4px); }
-    .drop-zone-content { border-color: #1677ff; }
+    background: var(--accent-soft);
+    .drop-icon { color: var(--accent); transform: translateY(-4px); }
+    .drop-zone-content { border-color: var(--accent); }
   }
 }
 
@@ -407,30 +407,30 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 16px;
-  border: 2px dashed #d9d9d9;
+  border: 2px dashed var(--border);
   border-radius: 8px;
   transition: border-color 0.2s;
 }
 
 .drop-icon {
   font-size: 32px;
-  color: #bbb;
+  color: var(--fg-muted);
   transition: all 0.2s;
 }
 
 .drop-text {
   font-size: 13px;
-  color: #666;
+  color: var(--fg-secondary);
 }
 
 .drop-link {
-  color: #1677ff;
+  color: var(--accent);
   &:hover { text-decoration: underline; }
 }
 
 .drop-hint {
   font-size: 11px;
-  color: #aaa;
+  color: var(--fg-muted);
 }
 
 // ── 文件列表 ────────────────────────────────────────────────────────────────
@@ -446,24 +446,24 @@ defineExpose({
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 6px;
   border: 1px solid transparent;
   transition: all 0.15s;
 
   &:hover {
-    background: #f5f7ff;
-    border-color: #e0e4ec;
+    background: var(--accent-soft);
+    border-color: var(--border);
     .file-actions { opacity: 1; }
   }
 
   &.uploading { opacity: 0.7; }
-  &.error { background: #fff2f0; border-color: #ffccc7; }
+  &.error { background: var(--err-soft); border-color: var(--err); }
 }
 
 .file-icon {
   font-size: 20px;
-  color: #52c41a;
+  color: var(--ok);
   flex-shrink: 0;
 }
 
@@ -474,7 +474,7 @@ defineExpose({
 
 .file-name {
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -483,15 +483,15 @@ defineExpose({
 
 .file-meta {
   font-size: 11px;
-  color: #888;
+  color: var(--fg-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
   margin-top: 2px;
 }
 
-.meta-sep { color: #ccc; }
-.upload-error { color: #ff4d4f; }
+.meta-sep { color: var(--fg-muted); }
+.upload-error { color: var(--err); }
 
 // ── 操作按钮 ────────────────────────────────────────────────────────────────
 .file-actions {
@@ -504,14 +504,14 @@ defineExpose({
 
 .action-icon {
   font-size: 14px;
-  color: #888;
+  color: var(--fg-secondary);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
   transition: all 0.15s;
 
-  &:hover { color: #1677ff; background: #e6f7ff; }
-  &.danger:hover { color: #ff4d4f; background: #fff2f0; }
+  &:hover { color: var(--accent); background: #e6f7ff; }
+  &.danger:hover { color: var(--err); background: var(--err-soft); }
 }
 
 // ── 预览弹窗 ────────────────────────────────────────────────────────────────
@@ -535,7 +535,7 @@ defineExpose({
 
 .preview-label {
   font-size: 13px;
-  color: #666;
+  color: var(--fg-secondary);
 }
 
 .sheet-tag {
@@ -555,13 +555,13 @@ defineExpose({
 // ── Skill 快捷选择区 ────────────────────────────────────────────────────────
 .skill-shortcuts {
   padding: 10px 12px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafbfc;
+  border-top: 1px solid var(--border);
+  background: var(--bg-input);
 }
 
 .skill-shortcuts-label {
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
   margin-bottom: 8px;
   display: flex;
   align-items: center;
@@ -582,9 +582,9 @@ defineExpose({
   transition: all 0.15s;
 
   &:hover {
-    background: #1677ff;
+    background: var(--accent);
     color: #fff;
-    border-color: #1677ff;
+    border-color: var(--accent);
   }
 }
 </style>

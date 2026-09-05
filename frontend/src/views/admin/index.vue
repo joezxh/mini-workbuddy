@@ -1,44 +1,6 @@
 <template>
   <div class="admin-page">
-    <!-- 左侧菜单 -->
-    <div class="admin-sidebar">
-      <div class="sidebar-header">
-        <SettingOutlined style="font-size: 20px; color: var(--accent-cyan)" />
-        <span class="sidebar-title">管理控制台</span>
-      </div>
-      <a-menu
-        v-model:selectedKeys="selectedKeys"
-        v-model:openKeys="openKeys"
-        mode="inline"
-        :style="{ border: 'none', background: 'transparent' }"
-      >
-        <a-sub-menu v-for="group in menuTree" :key="group.menuKey">
-          <template #icon><component v-if="iconMap[group.icon]" :is="iconMap[group.icon]" /></template>
-          <template #title>{{ resolveMenuLabel(group) }}</template>
-          <template v-for="item in group.children" :key="item.menuKey">
-            <!-- 三级菜单：有子项的渲染为 sub-menu -->
-            <a-sub-menu v-if="item.children && item.children.length > 0" :key="item.menuKey">
-              <template #icon><component v-if="iconMap[item.icon]" :is="iconMap[item.icon]" /></template>
-              <template #title>{{ resolveMenuLabel(item) }}</template>
-              <a-menu-item
-                v-for="subItem in item.children"
-                :key="subItem.menuKey"
-              >
-                <component v-if="iconMap[subItem.icon]" :is="iconMap[subItem.icon]" />
-                <span>{{ resolveMenuLabel(subItem) }}</span>
-              </a-menu-item>
-            </a-sub-menu>
-            <!-- 二级菜单：叶子节点渲染为 menu-item -->
-            <a-menu-item v-else :key="item.menuKey">
-              <component v-if="iconMap[item.icon]" :is="iconMap[item.icon]" />
-              <span>{{ resolveMenuLabel(item) }}</span>
-            </a-menu-item>
-          </template>
-        </a-sub-menu>
-      </a-menu>
-    </div>
-
-    <!-- 右侧内容区 -->
+    <!-- 内容区：仅保留 Tab 方式展示页面；菜单导航统一由左侧全局 rail（AppSidebar）承担，避免重复 -->
     <div class="admin-content">
       <!-- Tab 页签栏 -->
       <div class="tab-bar" v-if="openTabs.length > 0">
@@ -119,31 +81,12 @@ import {
   CloudSyncOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
-import DashboardPanel from '@/views/admin/system/DashboardPanel.vue'
-import SystemManagement from '@/views/admin/system/SystemManagement.vue'
-import AiSessionPanel from '@/views/assistant/AiSessionPanel.vue'
-import ProfilePanel from '@/views/admin/system/ProfilePanel.vue'
-import DictionaryPanel from '@/views/admin/system/DictionaryPanel.vue'
-import RegionPanel from '@/views/admin/system/RegionPanel.vue'
-import AgentManagement from '@/views/admin/agent/AgentManagement.vue'
-import ApiKeyManagement from '@/views/admin/ai/apikey/ApiKeyManagement.vue'
-import WebSearchManagement from '@/views/admin/ai/websearch/WebSearchManagement.vue'
-import ToolManagement from '@/views/admin/ai/tool/ToolManagement.vue'
-import McpServiceManagement from '@/views/admin/ai/mcp/McpServiceManagement.vue'
-import AgentExecutionManagement from '@/views/admin/agent/AgentExecutionManagement.vue'
-import SkillManagement from '@/views/admin/ai/skill/SkillManagement.vue'
-import AssistantPanel from '@/views/assistant/components/AssistantPanel.vue'
-import AsyncTaskManage from '@/views/assistant/AsyncTaskManage.vue'
-import TenantPanel from '@/views/admin/system/TenantPanel.vue'
-import TenantPackagePanel from '@/views/admin/system/TenantPackagePanel.vue'
-import TeamList from '@/views/admin/agent-team/TeamList.vue'
-import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
+import DashboardPanel from '@/views/Dashboard.vue' // 默认门户占位（登录后首页，合并自原 dashboard/index + DashboardPanel）
+import { componentMap } from './componentMap'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const selectedKeys = ref(['dashboard'])
-const openKeys = ref<string[]>([])
 
 // ---- Tab 管理 ----
 interface TabItem {
@@ -156,31 +99,7 @@ interface TabItem {
 const openTabs = ref<TabItem[]>([])
 const activeTab = ref('')
 
-// menuKey -> 组件映射表
-const componentMap: Record<string, Component> = {
-  'dashboard': markRaw(DashboardPanel),
-  'ai-chat': markRaw(AssistantPanel),
-  'ai-sessions': markRaw(AiSessionPanel),
-  'async-task-manage': markRaw(AsyncTaskManage),
-  'system-management': markRaw(SystemManagement),
-  'profile': markRaw(ProfilePanel),
-  'dictionary': markRaw(DictionaryPanel),
-  'region': markRaw(RegionPanel),
-  'skill-management': markRaw(SkillManagement),
-  'session-agent': markRaw(AgentExecutionManagement),
-  'agent-management': markRaw(AgentManagement),
-  'apikey': markRaw(ApiKeyManagement),
-  'web-search': markRaw(WebSearchManagement),
-  'tool-management': markRaw(ToolManagement),
-  'mcp-service': markRaw(McpServiceManagement),
-  'agent-team': markRaw(TeamList),
-  'agent-team-editor': markRaw(TeamEditor),
-  'tenant-management': markRaw(TenantPanel),
-  'tenant-package-management': markRaw(TenantPackagePanel),
-}
-
-
-
+// 组件映射表已抽到 ./componentMap，供本控制台的 Tab 使用
 function getTabComponent(key: string): Component | undefined {
   return componentMap[key]
 }
@@ -239,7 +158,6 @@ function openOrActivateTab(key: string, options?: { name?: string; icon?: string
 /** 激活指定 Tab */
 function activateTab(key: string) {
   activeTab.value = key
-  selectedKeys.value = [key]
 }
 
 // 提供给子组件的调用链路过滤器（来自 AgentManagement「链路」按钮跳转）
@@ -266,7 +184,6 @@ function closeTab(key: string) {
     } else {
       const newIdx = Math.min(idx, openTabs.value.length - 1)
       activeTab.value = openTabs.value[newIdx].key
-      selectedKeys.value = [activeTab.value]
     }
   }
 }
@@ -354,39 +271,13 @@ const iconMap: Record<string, any> = {
   QuestionCircleOutlined: QuestionCircleOutlined,
 }
 
-// 每个 tab 需要展开的父级菜单链（用于自动展开侧边栏）
-const tabOpenChainMap = ref<Record<string, string[]>>({})
-
 /**
- * 从后端获取菜单树并构建 tabGroupMap
+ * 从后端获取菜单树（仅用于解析 Tab 的名称/图标；导航菜单由全局 rail 承担）
  */
 async function fetchMenus() {
   try {
     const res = await getUserMenus()
-    const data = res.data?.data || res.data || []
-    menuTree.value = data
-    // 构建 tabOpenChainMap: menuKey -> 需要展开的父级菜单链（支持三级嵌套）
-    const map: Record<string, string[]> = {}
-    for (const group of data) {
-      if (group.children) {
-        for (const child of group.children) {
-          // 二级菜单项：需要展开 [group.menuKey]
-          map[child.menuKey] = [group.menuKey]
-          // 如果有三级子菜单
-          if (child.children) {
-            for (const subChild of child.children) {
-              // 三级菜单项：需要展开 [group.menuKey, child.menuKey]
-              map[subChild.menuKey] = [group.menuKey, child.menuKey]
-            }
-          }
-        }
-      }
-    }
-    tabOpenChainMap.value = map
-    // 设置默认展开第一个菜单组
-    if (data.length > 0 && openKeys.value.length === 0) {
-      openKeys.value = [data[0].menuKey]
-    }
+    menuTree.value = (res.data?.data || res.data || []) as MenuItem[]
   } catch (e) {
     console.error('获取菜单失败', e)
   }
@@ -394,21 +285,10 @@ async function fetchMenus() {
 
 onMounted(async () => {
   await fetchMenus()
-  // 根据URL参数设置初始tab
+  // 根据 URL 参数（来自左侧 rail 的点击）打开初始 Tab
   const tab = route.query.tab as string
-  const validTabs = Object.keys(tabOpenChainMap.value)
-  if (tab && validTabs.includes(tab)) {
-    selectedKeys.value = [tab]
+  if (tab && componentMap[tab]) {
     openOrActivateTab(tab)
-    const openChain = tabOpenChainMap.value[tab]
-    if (openChain) {
-      // 展开所有父级菜单
-      for (const key of openChain) {
-        if (!openKeys.value.includes(key)) {
-          openKeys.value.push(key)
-        }
-      }
-    }
   }
 
   // 监听来自子组件的“打开技能管理”事件（如推理规则页点击 skill_code）
@@ -427,15 +307,6 @@ function handleOpenSkillTab(e: Event) {
   router.replace({ query: { ...route.query, package_id: detail.packageId } })
   // 打开或激活技能管理标签页
   openOrActivateTab('skill-management')
-  // 展开父菜单
-  const openChain = tabOpenChainMap.value['skill-management']
-  if (openChain) {
-    for (const key of openChain) {
-      if (!openKeys.value.includes(key)) {
-        openKeys.value.push(key)
-      }
-    }
-  }
 }
 
 function handleOpenAgentTeamEditor(e: Event) {
@@ -467,37 +338,11 @@ onUnmounted(() => {
   window.removeEventListener('open-async-task-manage', handleOpenAsyncTaskManage)
 })
 
-// 监听菜单选择：打开/激活对应 Tab，并展开父级菜单
-watch(selectedKeys, (keys) => {
-  const key = keys[0]
-  if (!key) return
-  openOrActivateTab(key)
-  // 自动展开该菜单项的所有父级菜单
-  const openChain = tabOpenChainMap.value[key]
-  if (openChain) {
-    for (const parentKey of openChain) {
-      if (!openKeys.value.includes(parentKey)) {
-        openKeys.value.push(parentKey)
-      }
-    }
-  }
-})
-
+// 监听 URL 参数（来自左侧 rail 的点击）：打开/激活对应 Tab
 watch(() => route.query.tab, (newTab) => {
   const tab = newTab as string
-  const validTabs = Object.keys(tabOpenChainMap.value)
-  if (tab && validTabs.includes(tab)) {
-    selectedKeys.value = [tab]
+  if (tab && componentMap[tab]) {
     openOrActivateTab(tab)
-    const openChain = tabOpenChainMap.value[tab]
-    if (openChain) {
-      // 展开所有父级菜单
-      for (const key of openChain) {
-        if (!openKeys.value.includes(key)) {
-          openKeys.value.push(key)
-        }
-      }
-    }
   }
 })
 </script>
@@ -511,50 +356,10 @@ watch(() => route.query.tab, (newTab) => {
   background: transparent;
 }
 
-.admin-sidebar {
-  width: 240px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(2px);
-  border: 1px solid var(--border-glow);
-  border-radius: 4px;
-  margin: 20px 0 20px 20px;
-  padding: 20px 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow-y: auto;
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--accent-cyan);
-    opacity: 0.9;
-  }
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 20px 20px;
-  border-bottom: 1px solid var(--border-glow);
-  margin-bottom: 10px;
-}
-
-.sidebar-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1a1a1a;
-}
-
 .admin-content {
   flex: 1;
   overflow: hidden;
-  padding: 20px 20px 20px 0;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -564,9 +369,9 @@ watch(() => route.query.tab, (newTab) => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 0 0 8px 20px;
-  border-bottom: 1px solid var(--border-glow);
-  margin-bottom: 12px;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
   min-height: 36px;
   align-items: center;
 }
@@ -579,21 +384,21 @@ watch(() => route.query.tab, (newTab) => {
   border-radius: 6px 6px 0 0;
   border: 1px solid var(--border-glow);
   border-bottom: none;
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--bg-surface);
   cursor: pointer;
   font-size: 13px;
-  color: #555;
+  color: var(--fg-secondary);
   transition: all 0.2s;
   user-select: none;
   max-width: 180px;
 
   &:hover {
-    background: rgba(24, 144, 255, 0.06);
+    background: var(--bg-hover);
     color: var(--accent-cyan);
   }
 
   &.active {
-    background: rgba(24, 144, 255, 0.1);
+    background: var(--bg-active);
     color: var(--accent-cyan);
     border-color: var(--accent-cyan);
     font-weight: 600;
@@ -621,12 +426,12 @@ watch(() => route.query.tab, (newTab) => {
   font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
-  color: #999;
+  color: var(--fg-muted);
   transition: all 0.15s;
 
   &:hover {
-    background: rgba(255, 77, 79, 0.15);
-    color: #ff4d4f;
+    background: var(--err-soft);
+    color: var(--err);
   }
 }
 
@@ -634,7 +439,6 @@ watch(() => route.query.tab, (newTab) => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  margin-left: 20px;
 }
 
 .tab-content > .content-section {
@@ -648,23 +452,4 @@ watch(() => route.query.tab, (newTab) => {
   overflow: auto;
 }
 
-:deep(.ant-menu-item) {
-  color: #2d2d2d;
-  margin: 4px 8px;
-  border-radius: 4px;
-
-  &:hover {
-    background: rgba(24, 144, 255, 0.08);
-    color: var(--accent-cyan);
-  }
-
-  &.ant-menu-item-selected {
-    background: rgba(24, 144, 255, 0.12);
-    color: var(--accent-cyan);
-  }
-}
-
-:deep(.ant-menu-item-icon) {
-  font-size: 16px;
-}
 </style>

@@ -123,7 +123,7 @@ const batchSummary = computed(() => {
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
   padding: 10px 12px;
-  background: var(--panel-bg, #fafafa);
+  background: var(--panel-bg, var(--bg-input));
   margin-bottom: 10px;
 }
 .tt-header {
@@ -153,7 +153,7 @@ const batchSummary = computed(() => {
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--border-color, #e5e7eb);
-  background: #fff;
+  background: var(--bg-surface);
   cursor: pointer;
   font-size: 12px;
   transition: all 0.15s ease;

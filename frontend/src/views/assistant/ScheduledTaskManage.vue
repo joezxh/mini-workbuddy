@@ -479,8 +479,8 @@ onMounted(() => {
 
 <style scoped>
 .stm-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.stm-schedule { font-size: 13px; color: #555; }
-.stm-fail { color: #f5222d; }
+.stm-schedule { font-size: 13px; color: var(--fg-secondary); }
+.stm-fail { color: var(--err); }
 .stm-form { margin-top: 8px; }
-.stm-hint { font-size: 12px; color: #999; margin-top: 4px; }
+.stm-hint { font-size: 12px; color: var(--fg-muted); margin-top: 4px; }
 </style>

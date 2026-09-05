@@ -79,7 +79,7 @@
       <!-- 初始状态 -->
       <a-empty v-if="!hasResult && !loading" description="输入关键词开始搜索">
         <template #image>
-          <SearchOutlined style="font-size: 48px; color: #d9d9d9" />
+          <SearchOutlined style="font-size: 48px; color: var(--fg-muted)" />
         </template>
       </a-empty>
     </div>
@@ -187,14 +187,14 @@ const handleSearch = async () => {
 
 .provider-info {
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
 
   .url-text {
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    color: #595959;
+    color: var(--fg-secondary);
   }
 }
 
@@ -211,7 +211,7 @@ const handleSearch = async () => {
 
     .meta {
       font-size: 13px;
-      color: #8c8c8c;
+      color: var(--fg-secondary);
     }
   }
 }
@@ -228,8 +228,8 @@ const handleSearch = async () => {
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   transition: box-shadow 0.2s;
 
@@ -243,11 +243,11 @@ const handleSearch = async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f0f0f0;
+    background: var(--bg-hover);
     border-radius: 50%;
     font-size: 12px;
     font-weight: 600;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     flex-shrink: 0;
   }
 
@@ -261,7 +261,7 @@ const handleSearch = async () => {
       margin-bottom: 4px;
 
       a {
-        color: #1890ff;
+        color: var(--accent);
         text-decoration: none;
 
         &:hover {
@@ -272,7 +272,7 @@ const handleSearch = async () => {
 
     .result-url {
       font-size: 12px;
-      color: #52c41a;
+      color: var(--ok);
       margin-bottom: 6px;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -281,7 +281,7 @@ const handleSearch = async () => {
 
     .result-snippet {
       font-size: 13px;
-      color: #595959;
+      color: var(--fg-secondary);
       line-height: 1.5;
       display: -webkit-box;
       -webkit-line-clamp: 3;

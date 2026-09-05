@@ -620,8 +620,8 @@ const removeMember = async (record: AiTool) => {
   padding: 4px 0 12px;
   flex-shrink: 0;
 
-  h2 { font-size: 20px; font-weight: 700; color: #1a1a1a; margin: 0 0 4px 0; }
-  .sub { font-size: 13px; color: #8c8c8c; margin: 0; }
+  h2 { font-size: 20px; font-weight: 700; color: var(--fg); margin: 0 0 4px 0; }
+  .sub { font-size: 13px; color: var(--fg-secondary); margin: 0; }
   .header-actions { display: flex; gap: 10px; }
 }
 
@@ -630,7 +630,7 @@ const removeMember = async (record: AiTool) => {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  background: #fff;
+  background: var(--bg-surface);
   padding: 16px;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -654,7 +654,7 @@ const removeMember = async (record: AiTool) => {
   overflow: hidden;
 }
 
-.muted { color: #bfbfbf; }
+.muted { color: var(--fg-muted); }
 
 .member-toolbar {
   display: flex;

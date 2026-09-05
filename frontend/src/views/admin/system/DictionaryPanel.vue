@@ -31,7 +31,7 @@
                 <a-tag :color="dict.dict_type === 'system' ? 'blue' : 'green'" size="small">
                   {{ dict.dict_type === 'system' ? '系统' : '业务' }}
                 </a-tag>
-                <a-badge :count="dict.items?.length || 0" :number-style="{ backgroundColor: '#52c41a' }" />
+                <a-badge :count="dict.items?.length || 0" :number-style="{ backgroundColor: 'var(--ok)' }" />
                 <a-space size="small" @click.stop>
                   <a-button type="link" size="small" @click.stop="showEditDictModal(dict)">编辑</a-button>
                   <a-popconfirm
@@ -70,7 +70,7 @@
       <!-- 右侧字典项管理 -->
       <div class="dictionary-items">
         <div v-if="!selectedDict" class="empty-state">
-          <DatabaseOutlined style="font-size: 48px; color: #d9d9d9" />
+          <DatabaseOutlined style="font-size: 48px; color: var(--fg-muted)" />
           <p>请选择左侧字典查看详情</p>
         </div>
 
@@ -515,12 +515,12 @@ onMounted(() => {
   h2 {
     font-size: 20px;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--fg);
     margin: 0 0 8px 0;
   }
 
   .description {
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     margin: 0;
   }
 }
@@ -536,7 +536,7 @@ onMounted(() => {
 .dictionary-list {
   width: 320px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   display: flex;
@@ -555,7 +555,7 @@ onMounted(() => {
   .title {
     font-size: 16px;
     font-weight: 600;
-    color: #1a1a1a;
+    color: var(--fg);
   }
 }
 
@@ -577,7 +577,7 @@ onMounted(() => {
 .dict-item {
   padding: 12px;
   margin-bottom: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
@@ -603,13 +603,13 @@ onMounted(() => {
   .dict-name {
     font-size: 14px;
     font-weight: 500;
-    color: #1a1a1a;
+    color: var(--fg);
     margin-bottom: 4px;
   }
 
   .dict-code {
     font-size: 12px;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     font-family: 'Courier New', monospace;
   }
 }
@@ -622,7 +622,7 @@ onMounted(() => {
 
 .dictionary-items {
   flex: 1;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 8px;
   display: flex;
@@ -636,7 +636,7 @@ onMounted(() => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
 
   p {
     margin-top: 16px;
@@ -661,13 +661,13 @@ onMounted(() => {
     h3 {
       font-size: 18px;
       font-weight: 600;
-      color: #1a1a1a;
+      color: var(--fg);
       margin: 0 0 4px 0;
     }
 
     .dict-description {
       font-size: 13px;
-      color: #8c8c8c;
+      color: var(--fg-secondary);
       margin: 0;
     }
   }
@@ -696,7 +696,7 @@ onMounted(() => {
 }
 
 .text-muted {
-  color: #d9d9d9;
+  color: var(--fg-muted);
 }
 
 :deep(.ant-table-wrapper) {
@@ -706,15 +706,15 @@ onMounted(() => {
 }
 
 :deep(.ant-table) {
-  background: #fff;
+  background: var(--bg-surface);
   .ant-table-thead > tr > th {
-    background: #fafafa;
+    background: var(--bg-base);
   }
   .ant-table-tbody > tr > td {
-    background: #fff;
+    background: var(--bg-surface);
   }
   .ant-table-tbody > tr:hover > td {
-    background: #f5f5f5 !important;
+    background: var(--bg-hover) !important;
   }
 }
 </style>

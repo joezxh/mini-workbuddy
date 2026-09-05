@@ -155,15 +155,15 @@ function handleDownload() {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: #f8f9fb;
-  border: 1px solid #e8eaed;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 8px;
   max-width: 480px;
   transition: all 0.2s;
 
   &:hover {
-    background: #f0f5ff;
-    border-color: #d6e4ff;
+    background: var(--accent-soft);
+    border-color: var(--accent-soft);
     box-shadow: 0 2px 8px rgba(22, 119, 255, 0.1);
   }
 
@@ -175,7 +175,7 @@ function handleDownload() {
 // ── 文件图标 ─────────────────────────────────────────────────────────────────
 .card-icon {
   font-size: 24px;
-  color: #52c41a;
+  color: var(--ok);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -189,7 +189,7 @@ function handleDownload() {
 .card-title {
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -198,7 +198,7 @@ function handleDownload() {
 
 .card-meta {
   font-size: 11px;
-  color: #888;
+  color: var(--fg-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -206,7 +206,7 @@ function handleDownload() {
 }
 
 .meta-sep {
-  color: #ccc;
+  color: var(--fg-muted);
 }
 
 // ── 工作表标签 ───────────────────────────────────────────────────────────────
@@ -220,28 +220,28 @@ function handleDownload() {
 .sheet-tag {
   font-size: 10px;
   padding: 1px 6px;
-  background: #e6f7ff;
-  color: #1677ff;
+  background: var(--accent-soft);
+  color: var(--accent);
   border-radius: 3px;
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover, &.active {
-    background: #1677ff;
+    background: var(--accent);
     color: #fff;
   }
 }
 
 .sheet-more {
   font-size: 10px;
-  color: #aaa;
+  color: var(--fg-muted);
   padding: 1px 4px;
 }
 
 // ── 数据预览 ─────────────────────────────────────────────────────────────────
 .card-preview {
   margin-top: 8px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -254,7 +254,7 @@ function handleDownload() {
   th, td {
     padding: 4px 8px;
     text-align: left;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -262,23 +262,23 @@ function handleDownload() {
   }
 
   th {
-    background: #f5f7fa;
+    background: var(--bg-input);
     font-weight: 500;
-    color: #555;
+    color: var(--fg-secondary);
   }
 
   td {
-    color: #666;
+    color: var(--fg-secondary);
   }
 }
 
 .preview-more {
   font-size: 10px;
-  color: #aaa;
+  color: var(--fg-muted);
   text-align: center;
   padding: 4px;
-  background: #fafafa;
-  border-top: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-top: 1px solid var(--border);
 }
 
 // ── 操作按钮 ─────────────────────────────────────────────────────────────────
@@ -296,20 +296,20 @@ function handleDownload() {
 
 .action-btn {
   font-size: 13px;
-  color: #888;
+  color: var(--fg-secondary);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
   transition: all 0.15s;
 
   &:hover {
-    color: #1677ff;
-    background: #e6f7ff;
+    color: var(--accent);
+    background: var(--accent-soft);
   }
 
   &.danger:hover {
-    color: #ff4d4f;
-    background: #fff2f0;
+    color: var(--err);
+    background: var(--err-soft);
   }
 }
 </style>

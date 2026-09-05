@@ -44,7 +44,7 @@
                 :description="item.summary || '暂无摘要'"
               >
                 <template #avatar>
-                  <a-avatar style="background-color: #1890ff">
+                  <a-avatar style="background-color: var(--accent)">
                     {{ (item.title || '?')[0] }}
                   </a-avatar>
                 </template>
@@ -254,7 +254,7 @@ function formatDate(dateStr: string) {
   margin-top: 8px;
 }
 .meta-text {
-  color: #999;
+  color: var(--fg-muted);
   font-size: 12px;
   margin-left: 8px;
 }

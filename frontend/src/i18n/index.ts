@@ -7,12 +7,12 @@ import jaJP from './locales/ja-JP'
 
 export type LocaleKey = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP'
 
-const savedLocale = (localStorage.getItem('app-locale') || 'zh-CN') as LocaleKey
+const savedLocale = (localStorage.getItem('app-locale') || 'en-US') as LocaleKey
 
 const i18n = createI18n({
   legacy: false,
   locale: savedLocale,
-  fallbackLocale: 'zh-CN',
+  fallbackLocale: 'en-US',
   messages: {
     'zh-CN': zhCN,
     'zh-TW': zhTW,
@@ -34,7 +34,7 @@ export function setLocale(locale: LocaleKey) {
 }
 
 export function getLocale(): LocaleKey {
-  return (localStorage.getItem('app-locale') as LocaleKey) || 'zh-CN'
+  return (localStorage.getItem('app-locale') as LocaleKey) || 'en-US'
 }
 
 export const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP'] as const

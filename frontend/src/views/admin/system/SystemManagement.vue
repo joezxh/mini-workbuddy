@@ -7,22 +7,22 @@
 
     <div class="content-wrapper">
       <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
-        <a-tab-pane key="users" tab="用户管理">
+        <a-tab-pane key="users" :tab="t('sys.systemTabs.users')">
           <UserManager @view-logs="handleViewLogs" />
         </a-tab-pane>
-        <a-tab-pane key="roles" tab="角色管理">
+        <a-tab-pane key="roles" :tab="t('sys.systemTabs.roles')">
           <RoleManager />
         </a-tab-pane>
-        <a-tab-pane key="permissions" tab="菜单管理">
+        <a-tab-pane key="permissions" :tab="t('sys.systemTabs.permissions')">
           <PermissionManager />
         </a-tab-pane>
-        <a-tab-pane key="tenants" tab="租户管理">
+        <a-tab-pane key="tenants" :tab="t('sys.systemTabs.tenants')">
           <TenantPanel />
         </a-tab-pane>
-        <a-tab-pane key="tenant-packages" tab="租户套餐">
+        <a-tab-pane key="tenant-packages" :tab="t('sys.systemTabs.tenantPackages')">
           <TenantPackagePanel />
         </a-tab-pane>
-        <a-tab-pane key="audit-logs" tab="审查日志管理">
+        <a-tab-pane key="audit-logs" :tab="t('sys.systemTabs.auditLogs')">
           <AuditLogManager :filter-user-id="selectedUserId" />
         </a-tab-pane>
       </a-tabs>
@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import UserManager from './components/UserManager.vue'
 import RoleManager from './components/RoleManager.vue'
 import PermissionManager from './components/PermissionManager.vue'
@@ -39,6 +40,7 @@ import AuditLogManager from './components/AuditLogManager.vue'
 import TenantPanel from './TenantPanel.vue'
 import TenantPackagePanel from './TenantPackagePanel.vue'
 
+const { t } = useI18n()
 const activeTab = ref('users')
 const selectedUserId = ref<number | null>(null)
 
@@ -69,23 +71,35 @@ const onTabChange = () => {
 .panel-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
   margin: 0 0 8px 0;
 }
 
 .panel-subtitle {
   font-size: 14px;
-  color: #555555;
+  color: var(--fg-secondary);
 }
 
 .content-wrapper {
   flex: 1;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   backdrop-filter: blur(2px);
-  border: 1px solid var(--border-glow);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
   overflow: auto;
+}
+
+/* 深色皮肤下，选中 Tab 仅加粗并使用主题强调色，避免深色配色导致白字不可读 */
+.system-management-container :deep(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  font-weight: 700;
+  color: var(--accent);
+}
+.system-management-container :deep(.ant-tabs-tab-btn) {
+  color: var(--fg-secondary);
+}
+.system-management-container :deep(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn):hover {
+  color: var(--accent);
 }
 </style>

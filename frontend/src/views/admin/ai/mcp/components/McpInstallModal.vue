@@ -191,7 +191,7 @@ function handleCancel() {
   font-weight: 600;
 }
 .template-desc {
-  color: #666;
+  color: var(--fg-secondary);
   font-size: 13px;
   margin: 0;
   line-height: 1.5;

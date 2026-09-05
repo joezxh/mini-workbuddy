@@ -51,29 +51,29 @@ function getTaskIcon(status: string) {
 
 <style scoped lang="less">
 .task-panel {
-  border: 1px solid #f0f0f0; border-radius: 8px; background: #fafafa;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input);
   min-width: 200px; max-width: 260px;
 }
 .task-panel-header {
   display: flex; align-items: center; gap: 6px; padding: 8px 12px;
-  cursor: pointer; font-size: 13px; font-weight: 600; color: #333;
-  &:hover { background: #f5f5f5; }
+  cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg);
+  &:hover { background: var(--bg-input); }
 }
 .task-panel-title { flex: 1; }
-.task-panel-count { font-size: 11px; color: #999; font-weight: 400; }
-.task-panel-chevron { transition: transform 0.2s; color: #bbb; &.open { transform: rotate(90deg); } }
+.task-panel-count { font-size: 11px; color: var(--fg-muted); font-weight: 400; }
+.task-panel-chevron { transition: transform 0.2s; color: var(--fg-muted); &.open { transform: rotate(90deg); } }
 .task-panel-body { padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
 .task-item {
   display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px;
-  &.task-done .task-name { color: #52c41a; }
-  &.task-error .task-name { color: #ff4d4f; }
-  &.task-running .task-name { color: #1677ff; }
+  &.task-done .task-name { color: var(--ok); }
+  &.task-error .task-name { color: var(--err); }
+  &.task-running .task-name { color: var(--accent); }
 }
 .task-icon { flex-shrink: 0; }
-.task-icon-done { color: #52c41a; }
+.task-icon-done { color: var(--ok); }
 .task-info { flex: 1; min-width: 0; }
 .task-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task-message { font-size: 11px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-message { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .expand-enter-active, .expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }
 .expand-enter-to, .expand-leave-from { opacity: 1; max-height: 600px; }

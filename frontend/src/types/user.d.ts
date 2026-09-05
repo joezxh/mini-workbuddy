@@ -1,6 +1,7 @@
 /**
  * 用户相关类型定义
  */
+import type { MenuNode } from './menu'
 
 // 用户信息
 export interface UserInfo {
@@ -12,6 +13,8 @@ export interface UserInfo {
   avatar?: string
   roles: string[]
   permissions: string[]
+  /** 后端按当前用户权限下发的菜单树（由 /me 一并返回，避免额外调用） */
+  menus?: MenuNode[]
   regionCode: string
   regionName: string
   regionLevel: string

@@ -273,30 +273,30 @@ defineExpose({ getFileIds, getFileList })
 </script>
 
 <style scoped lang="less">
-.chat-input-area { flex-shrink: 0; padding: 2px 16px 2px; background: #fff; border-top: 1px solid #e8eaed; }
+.chat-input-area { flex-shrink: 0; padding: 2px 16px 2px; background: var(--bg-surface); border-top: 1px solid var(--border); }
 .input-toolbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 8px; margin-bottom: 7px; overflow: hidden; }
-.input-hint { font-size: 11px; color: #bbb; }
+.input-hint { font-size: 11px; color: var(--fg-muted); }
 .input-row { display: flex; gap: 8px; align-items: flex-end; }
 .chat-textarea { flex: 1; border-radius: 8px; font-size: 14px; }
 .send-btn { height: 54px; width: 72px; border-radius: 8px; font-size: 14px; flex-shrink: 0; }
 .toolbar-spacer { flex: 1; }
-.toolbar-icon-btn { padding: 0 4px; color: #666; transition: color 0.2s; &:hover { color: #1677ff; } }
+.toolbar-icon-btn { padding: 0 4px; color: var(--fg-secondary); transition: color 0.2s; &:hover { color: var(--accent); } }
 .file-context {
-  font-size: 11px; color: #1677ff; display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 2px; background: #e6f7ff; border-radius: 10px;
+  font-size: 11px; color: var(--accent); display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 2px; background: var(--accent-soft); border-radius: 10px;
 }
 .file-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-remove-btn { padding: 0 2px; color: #999; transition: color 0.2s; &:hover { color: #ff4d4f; } }
+.file-remove-btn { padding: 0 2px; color: var(--fg-muted); transition: color 0.2s; &:hover { color: var(--err); } }
 .skill-context {
-  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #52c41a;
-  padding: 2px 8px; background: #f6ffed; border-radius: 10px; border: 1px solid #b7eb8f;
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ok);
+  padding: 2px 8px; background: var(--ok-soft); border-radius: 10px; border: 1px solid #b7eb8f;
 }
 .skill-icon { font-size: 12px; }
 .skill-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skill-tip-icon { color: #999; font-size: 11px; cursor: help; }
+.skill-tip-icon { color: var(--fg-muted); font-size: 11px; cursor: help; }
 .file-uploader-section {
-  margin-bottom: 6px; border: 1px solid #e8e8e8; border-radius: 6px; padding: 6px 10px;
-  background: #fafafa; max-height: 100px; overflow-y: auto;
+  margin-bottom: 6px; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px;
+  background: var(--bg-input); max-height: 100px; overflow-y: auto;
 }
 .file-uploader-section :deep(.file-uploader) {
   .uploader-header { display: none; }
@@ -308,5 +308,5 @@ defineExpose({ getFileIds, getFileList })
   .file-list { max-height: 50px; overflow-y: auto; .file-item { padding: 4px 0; } }
 }
 .file-uploader-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.file-uploader-title { font-size: 12px; color: #666; font-weight: 500; }
+.file-uploader-title { font-size: 12px; color: var(--fg-secondary); font-weight: 500; }
 </style>

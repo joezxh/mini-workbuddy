@@ -83,10 +83,10 @@
           <a-space v-if="!isSystemTenant(record)">
             <a @click="openForm('update', record)">编辑</a>
             <a-popconfirm title="确认删除该租户吗？" @confirm="handleDelete(record.tenant_id)">
-              <a style="color: #ff4d4f">删除</a>
+              <a style="color: var(--err)">删除</a>
             </a-popconfirm>
           </a-space>
-          <span v-else style="color: #999">只读</span>
+          <span v-else style="color: var(--fg-muted)">只读</span>
         </template>
       </template>
     </a-table>
@@ -385,14 +385,14 @@ onMounted(() => {
   font-weight: 600;
 }
 .panel-header .description {
-  color: #888;
+  color: var(--fg-secondary);
   font-size: 13px;
   margin: 0;
 }
 .search-bar {
   margin-bottom: 16px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg-page);
   border-radius: 6px;
 }
 </style>

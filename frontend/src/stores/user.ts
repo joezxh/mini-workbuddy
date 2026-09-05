@@ -4,6 +4,7 @@ import { getToken, setToken, removeToken, setTenantId, removeTenantId } from '@/
 import { getUserInfo, login as loginApi, logout as logoutApi, changePassword as changePasswordApi } from '@/api/auth'
 import { batchGetDictItems, saveDictToStorage, clearDictStorage } from '@/api/common'
 import type { UserInfo } from '@/types/user'
+import { useMenuStore } from './menu'
 
 const BATCH_DICT_CODES = [
   'disposal_status',
@@ -68,8 +69,11 @@ export const useUserStore = defineStore('user', () => {
       userInfo.value = res as any
       permissions.value = (res as any).permissions || []
       roles.value = (res as any).roles || []
+      // 菜单树随 /me 一并返回，缓存到 menu store，避免重复请求
+      useMenuStore().setMenus((res as any).menus)
       return res
     } catch (error) {
+      useMenuStore().setMenus(undefined)
       throw error
     }
   }
@@ -100,6 +104,7 @@ export const useUserStore = defineStore('user', () => {
     regions.value = []
     permissions.value = []
     roles.value = []
+    useMenuStore().clear()
     removeToken()
     removeTenantId()
   }

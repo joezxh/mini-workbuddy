@@ -64,18 +64,18 @@ function handleDownload(art: ArtifactItem) {
 
 <style scoped>
 .artifact-card {
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
   margin: 8px 0;
-  background: #fafafa;
+  background: var(--bg-input);
 }
 .artifact-header {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #666;
+  color: var(--fg-secondary);
   margin-bottom: 8px;
 }
 .artifact-list { display: flex; flex-direction: column; gap: 6px; }
@@ -85,14 +85,14 @@ function handleDownload(art: ArtifactItem) {
   gap: 10px;
   padding: 6px 8px;
   border-radius: 4px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
 }
-.artifact-icon { color: #1890ff; flex-shrink: 0; }
+.artifact-icon { color: var(--accent); flex-shrink: 0; }
 .artifact-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .artifact-name {
-  font-size: 13px; color: #333;
+  font-size: 13px; color: var(--fg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.artifact-size { font-size: 11px; color: #999; }
+.artifact-size { font-size: 11px; color: var(--fg-muted); }
 </style>

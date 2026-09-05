@@ -720,7 +720,7 @@ onMounted(() => {
 
 .search-bar {
   padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   border: 1px solid var(--border-glow);
   border-radius: 4px;
 }
@@ -739,12 +739,12 @@ onMounted(() => {
 }
 
 .icon-grid::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
+  background: var(--border-strong);
   border-radius: 3px;
 }
 
 .icon-grid::-webkit-scrollbar-track {
-  background: #fafafa;
+  background: var(--bg-page);
 }
 
 .icon-item {
@@ -757,16 +757,16 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s;
   font-size: 16px;
-  color: #595959;
+  color: var(--fg-secondary);
 }
 
 .icon-item:hover {
-  background: #e6f7ff;
-  color: var(--accent-cyan, #1890ff);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .icon-item.selected {
-  background: var(--accent-cyan, #1890ff);
-  color: #fff;
+  background: var(--accent);
+  color: var(--fg-inverse);
 }
 </style>

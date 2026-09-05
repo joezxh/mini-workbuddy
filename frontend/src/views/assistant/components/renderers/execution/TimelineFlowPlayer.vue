@@ -722,7 +722,7 @@ function dotPercent(i: number): string {
   border: none;
   border-radius: 50%;
   background: #722ed1;
-  color: #fff;
+  color: var(--fg-inverse);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -737,7 +737,7 @@ function dotPercent(i: number): string {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #1890ff;
+  color: var(--accent);
 }
 .fp-progress {
   font-size: 11px;
@@ -752,7 +752,7 @@ function dotPercent(i: number): string {
   min-width: 0;
   text-align: right;
   font-size: 11px;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -774,7 +774,7 @@ function dotPercent(i: number): string {
   border: none;
   border-radius: 50%;
   background: #722ed1;
-  color: #fff;
+  color: var(--fg-inverse);
   cursor: pointer;
   font-size: 12px;
   line-height: 1;
@@ -800,7 +800,7 @@ function dotPercent(i: number): string {
   gap: 8px;
   margin-left: 6px;
   font-size: 10px;
-  color: #999;
+  color: var(--fg-muted);
 }
 .fp-legend-item { display: inline-flex; align-items: center; gap: 3px; }
 .fp-legend-dot {
@@ -809,10 +809,10 @@ function dotPercent(i: number): string {
   border-radius: 50%;
   display: inline-block;
 }
-.fp-legend-dot.lg-running { background: #1890ff; }
-.fp-legend-dot.lg-done { background: #52c41a; }
-.fp-legend-dot.lg-failed { background: #f5222d; }
-.fp-legend-dot.lg-warn { background: #faad14; }
+.fp-legend-dot.lg-running { background: var(--accent); }
+.fp-legend-dot.lg-done { background: var(--ok); }
+.fp-legend-dot.lg-failed { background: var(--err); }
+.fp-legend-dot.lg-warn { background: var(--warn); }
 
 /* ── 横向流程图 ── */
 .fp-flow {
@@ -857,8 +857,8 @@ function dotPercent(i: number): string {
   gap: 3px;
   width: 108px;
   padding: 8px 6px;
-  border: 1px solid #eee;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
   text-align: center;
 }
 .fp-card.lit { border-color: #d3adf7; background: #faf5ff; }
@@ -872,14 +872,14 @@ function dotPercent(i: number): string {
   align-items: center;
   justify-content: center;
   font-size: 11px;
-  background: #fff;
-  border: 2px solid #d9d9d9;
-  color: #999;
+  background: var(--bg-surface);
+  border: 2px solid var(--border);
+  color: var(--fg-muted);
 }
-.fp-node-icon.ic-running { border-color: #1890ff; color: #1890ff; }
-.fp-node-icon.ic-done { border-color: #52c41a; color: #52c41a; }
-.fp-node-icon.ic-failed { border-color: #f5222d; color: #f5222d; }
-.fp-node-icon.ic-warn { border-color: #faad14; color: #faad14; }
+.fp-node-icon.ic-running { border-color: var(--accent); color: var(--accent); }
+.fp-node-icon.ic-done { border-color: var(--ok); color: var(--ok); }
+.fp-node-icon.ic-failed { border-color: var(--err); color: var(--err); }
+.fp-node-icon.ic-warn { border-color: var(--warn); color: var(--warn); }
 /* 当前推进节点：脉冲光晕 */
 .fp-node.current .fp-node-icon {
   border-color: #722ed1;
@@ -894,13 +894,13 @@ function dotPercent(i: number): string {
 .fp-node-seq { font-size: 10px; line-height: 1; }
 .fp-node-elapsed {
   font-size: 10px;
-  color: #999;
+  color: var(--fg-muted);
   font-family: monospace;
   line-height: 1;
 }
 .fp-branch-elapsed {
   font-size: 10px;
-  color: #999;
+  color: var(--fg-muted);
   font-family: monospace;
   margin-left: auto;
   flex-shrink: 0;
@@ -919,7 +919,7 @@ function dotPercent(i: number): string {
 }
 .fp-node-title {
   font-size: 11px;
-  color: #333;
+  color: var(--fg);
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -949,7 +949,7 @@ function dotPercent(i: number): string {
 /* 连接箭头 */
 .fp-arrow {
   flex-shrink: 0;
-  color: #d9d9d9;
+  color: var(--border);
   font-size: 13px;
   line-height: 1;
   padding: 0 1px;
@@ -995,7 +995,7 @@ function dotPercent(i: number): string {
   height: 18px;
   border-radius: 50%;
   border: 2px solid #b37feb;
-  background: #fff;
+  background: var(--bg-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1012,8 +1012,8 @@ function dotPercent(i: number): string {
   stroke-linejoin: round;
   transition: stroke 0.2s;
 }
-.fp-fork-merge { border-color: #52c41a; }
-.fp-fork-merge .fp-fork-glyph { stroke: #389e0d; }
+.fp-fork-merge { border-color: var(--ok); }
+.fp-fork-merge .fp-fork-glyph { stroke: var(--ok); }
 /* 树形连线列：SVG 主干脊线 + 横向分流短线（确定性绘制，无需测量 DOM） */
 .fp-tree-col { display: flex; align-items: stretch; position: relative; }
 .fp-tree-svg {
@@ -1042,37 +1042,37 @@ function dotPercent(i: number): string {
   padding: 4px 6px;
 }
 /* 并发执行窗口：分叉/汇聚节点与脊线同步发光，强调这些分支正一起运行 */
-.fp-pgroup.concurrent-active .fp-fork-node { border-color: #1890ff; }
-.fp-pgroup.concurrent-active .fp-fork-glyph { stroke: #1890ff; }
+.fp-pgroup.concurrent-active .fp-fork-node { border-color: var(--accent); }
+.fp-pgroup.concurrent-active .fp-fork-glyph { stroke: var(--accent); }
 .fp-branch-node {
   position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 3px 6px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: #fff;
+  background: var(--bg-surface);
   max-width: 150px;
   cursor: pointer;
   transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
 }
 /* 横向分流短线已交由 SVG 绘制，此处不再用伪元素 */
-.fp-branch-node.nd-done { border-color: #b7eb8f; background: #f6ffed; }
-.fp-branch-node.nd-running { border-color: #91d5ff; background: #e6f7ff; }
-.fp-branch-node.nd-failed { border-color: #ffa39e; background: #fff1f0; }
-.fp-branch-node.nd-warn { border-color: #ffe58f; background: #fffbe6; }
+.fp-branch-node.nd-done { border-color: #b7eb8f; background: var(--ok-soft); }
+.fp-branch-node.nd-running { border-color: #91d5ff; background: var(--accent-soft); }
+.fp-branch-node.nd-failed { border-color: #ffa39e; background: var(--err-soft); }
+.fp-branch-node.nd-warn { border-color: #ffe58f; background: var(--warn-soft); }
 
 /* 同步高亮：并发组内仍执行的分支在同一渲染帧内统一发光（无逐一点亮、无闪烁） */
 .fp-branch-node.nd-glow {
-  border-color: #1890ff;
-  background: #e6f7ff;
-  box-shadow: 0 0 0 1px #1890ff, 0 0 10px 1px rgba(24, 144, 255, 0.55);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 10px 1px rgba(24, 144, 255, 0.55);
   animation: branchGlow 1.3s ease-in-out infinite;
 }
 @keyframes branchGlow {
-  0%, 100% { box-shadow: 0 0 0 1px #1890ff, 0 0 8px 0 rgba(24, 144, 255, 0.4); }
-  50% { box-shadow: 0 0 0 1px #1890ff, 0 0 14px 3px rgba(24, 144, 255, 0.7); }
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent), 0 0 8px 0 rgba(24, 144, 255, 0.4); }
+  50% { box-shadow: 0 0 0 1px var(--accent), 0 0 14px 3px rgba(24, 144, 255, 0.7); }
 }
 .fp-branch-node.nd-glow .fp-branch-dot { box-shadow: 0 0 6px rgba(24, 144, 255, 0.8); }
 /* 状态一致性：同组仍在跑、本分支已提前完成/提醒 → 相对收敛，与发光同伴形成对比 */
@@ -1089,16 +1089,16 @@ function dotPercent(i: number): string {
   align-items: center;
   justify-content: center;
   font-size: 8px;
-  background: #f5f5f5;
-  color: #999;
+  background: var(--bg-input);
+  color: var(--fg-muted);
 }
-.fp-branch-dot.ic-done { background: #52c41a; color: #fff; }
-.fp-branch-dot.ic-running { background: #1890ff; color: #fff; }
-.fp-branch-dot.ic-failed { background: #f5222d; color: #fff; }
-.fp-branch-dot.ic-warn { background: #faad14; color: #fff; }
+.fp-branch-dot.ic-done { background: var(--ok); color: var(--fg-inverse); }
+.fp-branch-dot.ic-running { background: var(--accent); color: var(--fg-inverse); }
+.fp-branch-dot.ic-failed { background: var(--err); color: var(--fg-inverse); }
+.fp-branch-dot.ic-warn { background: var(--warn); color: var(--fg-inverse); }
 .fp-branch-label {
   font-size: 11px;
-  color: #333;
+  color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1109,13 +1109,13 @@ function dotPercent(i: number): string {
   font-family: monospace;
 }
 /* 并发执行中：caption 实时点亮脉冲点 */
-.fp-pgroup-caption.cap-live { color: #1890ff; }
+.fp-pgroup-caption.cap-live { color: var(--accent); }
 .fp-cap-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #1890ff;
+  background: var(--accent);
   margin-right: 2px;
   vertical-align: middle;
   animation: capPulse 1.2s ease-in-out infinite;
@@ -1124,12 +1124,12 @@ function dotPercent(i: number): string {
   0%, 100% { opacity: 0.4; box-shadow: 0 0 0 0 rgba(24, 144, 255, 0.5); }
   50% { opacity: 1; box-shadow: 0 0 0 4px rgba(24, 144, 255, 0); }
 }
-.fp-cap-conc { color: #1890ff; }
+.fp-cap-conc { color: var(--accent); }
 .fp-cap-done { color: #b37feb; }
 
 .fp-empty {
   text-align: center;
-  color: #bfbfbf;
+  color: var(--fg-muted);
   padding: 24px 0;
   width: 100%;
 }
@@ -1138,8 +1138,8 @@ function dotPercent(i: number): string {
 .fp-detail {
   flex-shrink: 0;
   font-size: 11px;
-  color: #888;
-  background: #f7f7f7;
+  color: var(--fg-secondary);
+  background: var(--bg-input);
   border-radius: 4px;
   padding: 4px 8px;
   max-height: 44px;
@@ -1157,7 +1157,7 @@ function dotPercent(i: number): string {
   position: relative;
   height: 2px;
   border-radius: 1px;
-  background: #eee;
+  background: var(--border);
   margin: 8px 10px 4px;
 }
 .fp-axis-fill {
@@ -1176,17 +1176,17 @@ function dotPercent(i: number): string {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #d9d9d9;
+  background: var(--border);
   border: 2px solid #fff;
-  box-shadow: 0 0 0 1px #e0e0e0;
+  box-shadow: 0 0 0 1px var(--border);
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
 }
 .fp-axis-dot:hover { transform: translate(-50%, -50%) scale(1.25); }
 .fp-axis-dot.lit { background: #722ed1; box-shadow: 0 0 0 1px #b37feb; }
-.fp-axis-dot.ax-failed.lit { background: #f5222d; box-shadow: 0 0 0 1px #ff7875; }
-.fp-axis-dot.ax-running.lit { background: #1890ff; box-shadow: 0 0 0 1px #69c0ff; }
-.fp-axis-dot.ax-warn.lit { background: #faad14; box-shadow: 0 0 0 1px #ffd666; }
+.fp-axis-dot.ax-failed.lit { background: var(--err); box-shadow: 0 0 0 1px #ff7875; }
+.fp-axis-dot.ax-running.lit { background: var(--accent); box-shadow: 0 0 0 1px #69c0ff; }
+.fp-axis-dot.ax-warn.lit { background: var(--warn); box-shadow: 0 0 0 1px #ffd666; }
 /* 当前聚焦刻度：放大 + 光晕 */
 .fp-axis-dot.active {
   background: #722ed1;
@@ -1197,7 +1197,7 @@ function dotPercent(i: number): string {
   display: flex;
   justify-content: space-between;
   font-size: 10px;
-  color: #bbb;
+  color: var(--fg-muted);
   padding: 0 2px;
 }
 
@@ -1208,14 +1208,14 @@ function dotPercent(i: number): string {
   max-width: 280px;
   padding: 8px 10px;
   background: #1f1f2e;
-  color: #fff;
+  color: var(--fg-inverse);
   border-radius: 8px;
   font-size: 11px;
   line-height: 1.5;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   pointer-events: none;
 }
-.fp-tip-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; color: #fff; }
+.fp-tip-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--fg-inverse); }
 .fp-tip-row { display: flex; gap: 6px; margin: 1px 0; }
 .fp-tip-k { color: #b0a8c8; flex-shrink: 0; width: 32px; }
 .fp-tip-status { font-weight: 600; }
@@ -1227,7 +1227,7 @@ function dotPercent(i: number): string {
 .fp-tip-detail {
   margin-top: 5px;
   padding-top: 5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: 1px solid var(--bg-surface);
   color: #d6d3e0;
   white-space: pre-wrap;
   word-break: break-all;

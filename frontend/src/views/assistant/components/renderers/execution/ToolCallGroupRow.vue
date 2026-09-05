@@ -33,18 +33,18 @@ const summaryText = computed(() => summarizeToolGroup(props.pairs))
 
 <style scoped lang="less">
 .tool-call-group-row {
-  margin: 4px 0; border: 1px solid #f0f0f0; border-radius: 6px;
-  background: #fafafa; overflow: hidden;
+  margin: 4px 0; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-input); overflow: hidden;
 }
 .group-summary {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px; cursor: pointer; font-size: 12px; color: #666;
-  &:hover { background: #f5f5f5; }
-  &.shimmer { background: linear-gradient(90deg, #fafafa 25%, #f0f0f0 50%, #fafafa 75%);
+  padding: 6px 10px; cursor: pointer; font-size: 12px; color: var(--fg-secondary);
+  &:hover { background: var(--bg-input); }
+  &.shimmer { background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%);
     background-size: 200% 100%; animation: shimmer 1.5s infinite; }
 }
 .group-summary-text { flex: 1; }
-.group-chevron { transition: transform 0.2s; color: #bbb; &.open { transform: rotate(90deg); } }
+.group-chevron { transition: transform 0.2s; color: var(--fg-muted); &.open { transform: rotate(90deg); } }
 .group-body { padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 2px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .expand-enter-active, .expand-leave-active { transition: all 0.2s ease; overflow: hidden; }

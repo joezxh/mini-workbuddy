@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Any
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +28,8 @@ class UserInfoResponse(BaseModel):
     avatar: Optional[str] = None
     roles: List[str] = []
     permissions: List[str] = []
+    # 按当前用户权限下发的菜单树（嵌套结构，含 id/name/path/icon/i18nKey/children 等）
+    menus: List[Any] = []
     regionCode: str = ""
     regionName: str = ""
     regionLevel: str = ""

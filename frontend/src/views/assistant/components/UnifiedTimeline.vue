@@ -157,51 +157,51 @@ function handleDownload(a: UnifiedArtifact) {
 .ut-section { margin-bottom: 10px; }
 .ut-section-title {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px;
+  font-size: 13px; font-weight: 600; color: var(--fg-secondary); margin-bottom: 6px;
 }
 .ut-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.ut-dot-steps { background: #1890ff; }
-.ut-dot-arts { background: #52c41a; }
+.ut-dot-steps { background: var(--accent); }
+.ut-dot-arts { background: var(--ok); }
 
 .ut-steps { list-style: none; margin: 0; padding: 0 0 0 4px; }
 .ut-step { position: relative; padding: 0 0 10px 18px; }
 .ut-step-bar {
   position: absolute; left: 4px; top: 4px; bottom: -4px;
-  width: 2px; background: #e8e8e8;
+  width: 2px; background: var(--border);
 }
 .ut-step:last-child .ut-step-bar { display: none; }
 .ut-step-body { position: relative; }
 .ut-step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ut-step-phase {
-  font-size: 11px; color: #fff; background: #1890ff;
+  font-size: 11px; color: #fff; background: var(--accent);
   border-radius: 3px; padding: 0 6px; line-height: 18px;
 }
-.ut-step-title { font-size: 13px; color: #333; }
+.ut-step-title { font-size: 13px; color: var(--fg); }
 .ut-step-status { font-size: 11px; margin-left: auto; }
-.st-done { color: #52c41a; }
-.st-running { color: #1890ff; }
-.st-failed { color: #f5222d; }
-.st-warn { color: #faad14; }
+.st-done { color: var(--ok); }
+.st-running { color: var(--accent); }
+.st-failed { color: var(--err); }
+.st-warn { color: var(--warn); }
 .ut-step-detail {
-  font-size: 12px; color: #888; margin-top: 2px;
-  background: #f7f7f7; border-radius: 4px; padding: 4px 8px;
+  font-size: 12px; color: var(--fg-secondary); margin-top: 2px;
+  background: var(--bg-input); border-radius: 4px; padding: 4px 8px;
   max-height: 80px; overflow: auto; white-space: pre-wrap;
 }
 
 .ut-artifacts { display: flex; flex-direction: column; gap: 8px; }
 .ut-artifact {
-  border: 1px solid #eef0f2; border-radius: 6px; padding: 8px 10px; background: #fafcff;
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--accent-soft);
 }
 .ut-artifact-head { display: flex; align-items: center; gap: 8px; }
-.ut-artifact-icon { color: #1890ff; flex-shrink: 0; }
+.ut-artifact-icon { color: var(--accent); flex-shrink: 0; }
 .ut-artifact-title {
-  font-size: 13px; color: #333; flex: 1;
+  font-size: 13px; color: var(--fg); flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ut-artifact-table { margin-top: 6px; overflow: auto; max-height: 220px; }
 .ut-artifact-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .ut-artifact-table th, .ut-artifact-table td {
-  border: 1px solid #eee; padding: 3px 6px; text-align: left; max-width: 200px;
+  border: 1px solid var(--border); padding: 3px 6px; text-align: left; max-width: 200px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ut-artifact-sql {
@@ -209,11 +209,11 @@ function handleDownload(a: UnifiedArtifact) {
   border-radius: 4px; padding: 6px 8px; font-size: 11px; overflow: auto;
 }
 .ut-artifact-sql pre { margin: 0; white-space: pre-wrap; }
-.ut-artifact-meta { font-size: 11px; color: #999; margin-left: 6px; }
+.ut-artifact-meta { font-size: 11px; color: var(--fg-muted); margin-left: 6px; }
 .ut-artifact-report { margin-top: 6px; }
 .ut-artifact-md {
-  background: #fff; border: 1px solid #f0f0f0; border-radius: 4px;
-  padding: 8px; font-size: 12px; color: #444; max-height: 200px; overflow: auto;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 8px; font-size: 12px; color: var(--fg); max-height: 200px; overflow: auto;
   white-space: pre-wrap; margin: 0;
 }
 .ut-artifact-actions { margin-top: 6px; }

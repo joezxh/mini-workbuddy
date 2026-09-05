@@ -23,14 +23,14 @@ const expanded = ref(false)
 .error-row { font-size: 13px; }
 .error-row-header {
   display: flex; align-items: center; gap: 6px; padding: 6px 10px;
-  cursor: pointer; color: #ff4d4f; &:hover { background: #fff2f0; }
+  cursor: pointer; color: var(--err); &:hover { background: var(--err-soft); }
 }
 .error-icon { flex-shrink: 0; }
 .error-label { flex: 1; font-weight: 500; }
-.error-chevron { transition: transform 0.2s; color: #bbb; &.open { transform: rotate(90deg); } }
+.error-chevron { transition: transform 0.2s; color: var(--fg-muted); &.open { transform: rotate(90deg); } }
 .error-traceback {
-  margin: 0 10px 8px 30px; padding: 8px; background: #fff2f0; border: 1px solid #ffccc7;
-  border-radius: 4px; font-size: 11px; color: #cf1322; overflow-x: auto; white-space: pre-wrap;
+  margin: 0 10px 8px 30px; padding: 8px; background: var(--err-soft); border: 1px solid #ffccc7;
+  border-radius: 4px; font-size: 11px; color: var(--err); overflow-x: auto; white-space: pre-wrap;
 }
 .expand-enter-active, .expand-leave-active { transition: all 0.2s ease; overflow: hidden; }
 .expand-enter-from, .expand-leave-to { opacity: 0; max-height: 0; }

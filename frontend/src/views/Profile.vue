@@ -180,7 +180,7 @@ onMounted(loadNotifications)
         <a-card title="偏好设置" :bordered="false" class="mt-16">
           <a-form layout="vertical">
             <a-form-item label="界面语言">
-              <a-select default-value="zh-CN">
+              <a-select default-value="en-US">
                 <a-select-option value="zh-CN">简体中文</a-select-option>
                 <a-select-option value="en-US">English</a-select-option>
               </a-select>

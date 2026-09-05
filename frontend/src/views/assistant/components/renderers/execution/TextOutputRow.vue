@@ -13,9 +13,9 @@ const renderedContent = computed(() => renderMarkdown(props.content || ''))
 </script>
 
 <style scoped lang="less">
-.text-output-row { padding: 4px 10px; font-size: 13px; line-height: 1.7; color: #333; }
+.text-output-row { padding: 4px 10px; font-size: 13px; line-height: 1.7; color: var(--fg); }
 .text-output-content {
   :deep(p) { margin: 0 0 8px; }
-  :deep(pre) { background: #f5f5f5; padding: 8px; border-radius: 4px; overflow-x: auto; }
+  :deep(pre) { background: var(--bg-input); padding: 8px; border-radius: 4px; overflow-x: auto; }
 }
 </style>

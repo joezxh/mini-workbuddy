@@ -160,9 +160,9 @@ function formatSize(bytes: number): string {
 .uuid-chip {
   display: inline-block;
   font-size: 10px;
-  background: #f0f5ff;
-  border: 1px solid #d6e4ff;
-  color: #1677ff;
+  background: var(--accent-soft);
+  border: 1px solid var(--border-strong);
+  color: var(--accent);
   padding: 1px 6px;
   border-radius: 3px;
   margin-right: 4px;

@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
     .section-title {
       font-weight: 600;
       font-size: 14px;
-      color: #1a1a1a;
+      color: var(--fg);
     }
   }
 }
@@ -407,9 +407,9 @@ onBeforeUnmount(() => {
   max-height: 120px;
   overflow-y: auto;
   padding: 8px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
 }
 
 .model-checkbox {
@@ -428,8 +428,8 @@ onBeforeUnmount(() => {
   .model-id {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: #8c8c8c;
-    background: #f0f0f0;
+    color: var(--fg-secondary);
+    background: var(--bg-hover);
     padding: 1px 4px;
     border-radius: 3px;
   }
@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
   :deep(.ant-collapse-header) {
     padding: 4px 0 !important;
     font-size: 13px;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
   }
 }
 
@@ -470,10 +470,10 @@ onBeforeUnmount(() => {
 }
 
 .result-card {
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-surface);
 }
 
 .result-header {
@@ -481,8 +481,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 
   .result-model-name {
     font-weight: 600;
@@ -492,7 +492,7 @@ onBeforeUnmount(() => {
 
   .result-meta {
     font-size: 11px;
-    color: #8c8c8c;
+    color: var(--fg-secondary);
     font-family: monospace;
   }
 }
@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
     }
 
     :deep(.inline-code) {
-      background: #f0f0f0;
+      background: var(--bg-hover);
       padding: 2px 4px;
       border-radius: 3px;
       font-size: 12px;
@@ -527,7 +527,7 @@ onBeforeUnmount(() => {
 
 .cursor-blink {
   animation: blink 1s step-end infinite;
-  color: #1890ff;
+  color: var(--accent);
   font-weight: bold;
 }
 
@@ -536,13 +536,13 @@ onBeforeUnmount(() => {
 }
 
 .reasoning-block {
-  background: #f6f8fa;
-  border-left: 3px solid #d1d5db;
+  background: var(--bg-input);
+  border-left: 3px solid var(--border-strong);
   padding: 8px 12px;
   margin-bottom: 12px;
   border-radius: 0 4px 4px 0;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--fg-muted);
 
   .reasoning-label {
     font-weight: 600;
@@ -576,7 +576,7 @@ onBeforeUnmount(() => {
     gap: 4px;
     max-height: 200px;
     overflow-y: auto;
-    background: #f9f9f9;
+    background: var(--bg-input);
     padding: 8px;
     border-radius: 4px;
   }
@@ -584,11 +584,11 @@ onBeforeUnmount(() => {
   .embedding-val {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
-    color: #595959;
-    background: #fff;
+    color: var(--fg-secondary);
+    background: var(--bg-surface);
     padding: 2px 6px;
     border-radius: 3px;
-    border: 1px solid #e8e8e8;
+    border: 1px solid var(--border);
   }
 }
 </style>

@@ -1483,7 +1483,7 @@ onMounted(() => { loadSessions(); loadSessionTypes(); loadDatasourceOptions(); l
 <style scoped lang="less">
 .ai-dispute-panel {
   display: flex; flex: 1; min-width: 0; width: 100%; height: 100%; min-height: 0;
-  background: #f7f8fc; border-radius: 8px; overflow: hidden; border: 1px solid #e8eaed;
+  background: var(--bg-input); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
 }
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 
@@ -1494,13 +1494,13 @@ onMounted(() => { loadSessions(); loadSessionTypes(); loadDatasourceOptions(); l
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  border-bottom: 1px solid #e8eaed;
-  background: #fff;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
 }
 .chat-main-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1f2329;
+  color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

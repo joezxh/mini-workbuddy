@@ -106,10 +106,10 @@ function formatCapital(val: number): string {
   z-index: 1050;
   max-width: 400px;
   min-width: 260px;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   padding: 0;
   pointer-events: auto;
   overflow: hidden;
@@ -120,14 +120,14 @@ function formatCapital(val: number): string {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #fafbfc;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 }
 
 .entity-popover-title {
   font-size: 14px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -142,18 +142,18 @@ function formatCapital(val: number): string {
   flex-shrink: 0;
 }
 
-.entity-badge { background: #e6f4ff; color: #1677ff; }
-.person-badge { background: #f6ffed; color: #52c41a; }
-.location-badge { background: #fff7e6; color: #fa8c16; }
+.entity-badge { background: var(--accent-soft); color: var(--accent); }
+.person-badge { background: var(--ok-soft); color: var(--ok); }
+.location-badge { background: var(--warn-soft); color: var(--accent-2); }
 
 .risk-tag {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
   flex-shrink: 0;
-  &.risk-high { background: #fff1f0; color: #f5222d; }
-  &.risk-medium { background: #fffbe6; color: #faad14; }
-  &.risk-low { background: #f6ffed; color: #52c41a; }
+  &.risk-high { background: var(--err-soft); color: var(--err); }
+  &.risk-medium { background: var(--warn-soft); color: var(--warn); }
+  &.risk-low { background: var(--ok-soft); color: var(--ok); }
 }
 
 .entity-popover-body {
@@ -171,25 +171,25 @@ function formatCapital(val: number): string {
   line-height: 1.6;
 
   &:not(:last-child) {
-    border-bottom: 1px dashed #f5f5f5;
+    border-bottom: 1px dashed var(--divider);
   }
 }
 
 .entity-row .label {
-  color: #888;
+  color: var(--fg-secondary);
   flex-shrink: 0;
   width: 70px;
   text-align: right;
 }
 
 .entity-row .value {
-  color: #333;
+  color: var(--fg);
   flex: 1;
   word-break: break-all;
 
   &.address, &.scope {
     font-size: 11px;
-    color: #666;
+    color: var(--fg-secondary);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -203,7 +203,7 @@ function formatCapital(val: number): string {
   }
 
   &.key-person {
-    color: #f5222d;
+    color: var(--err);
     font-weight: 600;
   }
 }

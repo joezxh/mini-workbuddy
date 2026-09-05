@@ -15,6 +15,6 @@ defineProps<{ stage: string; progress: number; message: string }>()
 <style scoped lang="less">
 .progress-tracker { padding: 6px 10px; }
 .progress-info { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; }
-.progress-stage { font-weight: 600; color: #1677ff; }
-.progress-message { color: #666; }
+.progress-stage { font-weight: 600; color: var(--accent); }
+.progress-message { color: var(--fg-secondary); }
 </style>

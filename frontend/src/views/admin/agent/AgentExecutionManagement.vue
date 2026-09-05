@@ -715,7 +715,7 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
 }
 
 .header-actions {
@@ -730,7 +730,7 @@ onMounted(() => {
 .session-title {
   margin-left: 6px;
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
 }
 
 .text-mono {
@@ -740,21 +740,21 @@ onMounted(() => {
 }
 
 .text-muted {
-  color: #ccc;
+  color: var(--fg-muted);
 }
 
 .divider-hint {
   font-size: 12px;
   font-weight: 400;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .topo-wrap {
   position: relative;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
-  background: #fafafa;
+  background: var(--bg-input);
 }
 
 .topo-chart {
@@ -782,24 +782,24 @@ onMounted(() => {
 
 .evt-name {
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--fg);
 }
 
 .evt-latency {
   font-size: 12px;
-  color: #1677ff;
+  color: var(--accent);
 }
 
 .evt-time {
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .evt-content {
   margin-top: 4px;
   font-size: 12px;
-  color: #555;
-  background: #f6f8fa;
+  color: var(--fg-secondary);
+  background: var(--bg-input);
   border-radius: 4px;
   padding: 6px 8px;
   white-space: pre-wrap;
@@ -808,32 +808,32 @@ onMounted(() => {
 
 .hitl-stage {
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
 }
 
 .hitl-row {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
   margin-top: 2px;
 }
 
 .hitl-reason {
   font-size: 12px;
-  color: #cf1322;
+  color: var(--err);
   margin-top: 2px;
 }
 
 .hitl-time {
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
   margin-top: 2px;
 }
 
 .code-block {
-  background: #f6f8fa;
-  border: 1px solid #eaecef;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 4px;
   padding: 10px 12px;
   font-size: 12px;
@@ -871,8 +871,8 @@ onMounted(() => {
 }
 
 .error-block {
-  background: #fff1f0;
-  border-color: #ffccc7;
-  color: #cf1322;
+  background: var(--err-soft);
+  border-color: var(--err);
+  color: var(--err);
 }
 </style>

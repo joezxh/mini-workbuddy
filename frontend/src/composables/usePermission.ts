@@ -4,8 +4,10 @@ export function usePermission() {
   const hasPermission = (value: string | string[], mode: 'AND' | 'OR' = 'OR') => {
     const userStore = useUserStore()
     const permissions = userStore.permissions || []
-    
-    if (permissions.includes('*:*')) return true
+    const roles = userStore.roles || []
+
+    // 超级管理员角色拥有全部权限（原通配符 '*:*' 已由后端改为真实菜单权限）
+    if (permissions.includes('*:*') || roles.includes('super_admin')) return true
     if (!value) return true
 
     const required = Array.isArray(value) ? value : [value]

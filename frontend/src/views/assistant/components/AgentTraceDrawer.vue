@@ -202,7 +202,7 @@ async function copyText(text: string) {
 .trace-id {
   font-family: monospace;
   font-size: 12px;
-  background: #f5f5f5;
+  background: var(--bg-input);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -210,8 +210,8 @@ async function copyText(text: string) {
 .copy-icon {
   margin-left: 6px;
   cursor: pointer;
-  color: #1677ff;
-  &:hover { color: #4096ff; }
+  color: var(--accent);
+  &:hover { color: var(--accent-hover); }
 }
 
 .span-item {
@@ -227,13 +227,13 @@ async function copyText(text: string) {
 
 .span-name {
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--fg);
   font-size: 13px;
 }
 
 .span-duration {
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
   font-family: monospace;
 }
 
@@ -246,12 +246,12 @@ async function copyText(text: string) {
 
 .span-time {
   font-size: 11px;
-  color: #999;
+  color: var(--fg-muted);
   font-family: monospace;
 }
 
 .span-attrs {
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 4px;
   padding: 6px 8px;
   margin-top: 4px;
@@ -260,16 +260,16 @@ async function copyText(text: string) {
 .attr-item {
   font-size: 11px;
   line-height: 1.6;
-  color: #666;
+  color: var(--fg-secondary);
 }
 
 .attr-key {
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   margin-right: 4px;
 }
 
 .attr-val {
-  color: #333;
+  color: var(--fg);
   word-break: break-all;
 }
 
@@ -280,12 +280,12 @@ async function copyText(text: string) {
 
 .event-item {
   font-size: 11px;
-  color: #888;
+  color: var(--fg-secondary);
   line-height: 1.6;
 }
 
 .trace-overview-card :deep(.ant-descriptions-item-label) {
-  color: #888;
+  color: var(--fg-secondary);
   font-size: 12px;
 }
 

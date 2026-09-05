@@ -306,7 +306,7 @@ onMounted(() => loadSessions())
 .panel-title {
   font-size: 18px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
   margin: 0;
 }
 
@@ -389,12 +389,12 @@ onMounted(() => loadSessions())
 
 .msg-time {
   font-size: 11px;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .msg-content {
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;

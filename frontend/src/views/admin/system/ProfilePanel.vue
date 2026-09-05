@@ -8,7 +8,7 @@
     <div class="profile-content">
       <!-- 头像区域 -->
       <div class="avatar-section">
-        <a-avatar :size="100" :style="{ backgroundColor: '#1677ff', fontSize: '36px' }">
+        <a-avatar :size="100" :style="{ backgroundColor: 'var(--accent)', fontSize: '36px' }">
           {{ userInfo?.realName?.charAt(0) || 'U' }}
         </a-avatar>
         <a-button type="link" @click="handleUploadAvatar">更换头像</a-button>
@@ -209,17 +209,17 @@ const handleChangePassword = async () => {
 .panel-title {
   font-size: 24px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--fg);
   margin: 0 0 8px 0;
 }
 
 .panel-subtitle {
   font-size: 14px;
-  color: #555555;
+  color: var(--fg-secondary);
 }
 
 .profile-content {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--bg-surface);
   backdrop-filter: blur(2px);
   border: 1px solid var(--border-glow);
   border-radius: 4px;
@@ -249,7 +249,7 @@ const handleChangePassword = async () => {
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--fg);
   margin: 0 0 24px 0;
 }
 </style>

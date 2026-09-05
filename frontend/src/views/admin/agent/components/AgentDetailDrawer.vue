@@ -278,7 +278,7 @@ function truncateId(id: string): string {
 }
 
 .config-json {
-  background: #f5f5f5;
+  background: var(--bg-input);
   border-radius: 4px;
   padding: 10px 12px;
   font-size: 12px;
@@ -288,7 +288,7 @@ function truncateId(id: string): string {
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
-  color: #333;
+  color: var(--fg);
 }
 
 .metric {
@@ -298,19 +298,19 @@ function truncateId(id: string): string {
 
 .metric-label {
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
   margin-bottom: 4px;
 }
 
 .metric-value {
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--fg);
 }
 
 .trace-item {
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--divider);
 
   &:last-child { border-bottom: none; }
 }
@@ -318,13 +318,13 @@ function truncateId(id: string): string {
 .trace-id {
   font-family: monospace;
   font-size: 12px;
-  background: #f5f5f5;
+  background: var(--bg-input);
   padding: 1px 6px;
   border-radius: 3px;
 }
 
 .trace-meta {
   font-size: 11px;
-  color: #999;
+  color: var(--fg-muted);
 }
 </style>

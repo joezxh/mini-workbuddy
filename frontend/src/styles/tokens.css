@@ -32,7 +32,7 @@
   --radius: 14px;
   --radius-lg: 20px;
   --radius-xl: 26px;
-  --header-h: 64px;
+  --header-h: 72px;
   --sidebar-w: 240px;
   --sidebar-w-collapsed: 68px;
   --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -99,6 +99,17 @@
   --glow-a: radial-gradient(circle at top, rgba(103, 182, 255, 0.08), transparent 24%);
   --glow-b: radial-gradient(circle at top right, rgba(242, 182, 109, 0.07), transparent 30%);
   --glass: saturate(140%) blur(18px);
+
+  /* 左侧菜单（rail）与顶部标题栏：深色皮肤下在浅色基础上做轻度差异化，保持整体一致 */
+  --rail-bg: #0e1726;
+  --rail-fg: #e5e7eb;
+  --rail-fg-muted: #93a4b8;
+  --rail-border: rgba(255, 255, 255, 0.08);
+  --rail-hover: rgba(255, 255, 255, 0.06);
+  --rail-active-bg: rgba(74, 163, 255, 0.16);
+  --rail-active-fg: #ffffff;
+  --rail-brand-fg: #f9fafb;
+  --topbar-bg: rgba(13, 22, 38, 0.9);
 }
 
 /* ------------------------------------------------------------------ *
@@ -146,6 +157,17 @@
   --glow-a: radial-gradient(circle at top, rgba(59, 130, 246, 0.06), transparent 24%);
   --glow-b: radial-gradient(circle at top right, rgba(245, 158, 11, 0.05), transparent 30%);
   --glass: saturate(140%) blur(18px);
+
+  /* 左侧菜单（rail）与顶部标题栏：浅色皮肤采用 WorkBuddy 风格浅灰色 */
+  --rail-bg: #f1f3f7;
+  --rail-fg: #1f2937;
+  --rail-fg-muted: #6b7280;
+  --rail-border: rgba(15, 23, 42, 0.08);
+  --rail-hover: rgba(59, 130, 246, 0.06);
+  --rail-active-bg: rgba(59, 130, 246, 0.1);
+  --rail-active-fg: #1d4ed8;
+  --rail-brand-fg: #1f2937;
+  --topbar-bg: rgba(241, 243, 247, 0.92);
 }
 
 /* ------------------------------------------------------------------ *

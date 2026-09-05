@@ -111,7 +111,7 @@
                   :label="`${m.platform} / ${m.model}`"
                 >
                   <span>{{ m.platform }}</span>
-                  <span style="color: #999; margin-left: 8px">{{ m.model }}</span>
+                  <span style="color: var(--fg-muted); margin-left: 8px">{{ m.model }}</span>
                   <a-tag v-if="m.key_name" color="green" style="margin-left: 8px">
                     密钥: {{ m.key_name }}
                   </a-tag>
@@ -239,7 +239,7 @@
             <a-tag :color="srv.source === 'builtin' ? 'gold' : 'blue'" style="margin-left: 8px">
               {{ srv.source === 'builtin' ? '内置' : srv.service_type }}
             </a-tag>
-            <span v-if="srv.source === 'builtin'" style="color: #999; margin-left: 8px">系统内置服务</span>
+            <span v-if="srv.source === 'builtin'" style="color: var(--fg-muted); margin-left: 8px">系统内置服务</span>
           </a-select-option>
         </a-select>
         <span class="form-hint">从 MCP 服务管理中选择已创建的服务，可多选</span>
@@ -627,7 +627,7 @@ onMounted(() => {
 .form-hint {
   display: block;
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
   margin-top: 4px;
 }
 </style>

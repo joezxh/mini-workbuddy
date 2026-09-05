@@ -153,7 +153,7 @@ function handleCancel() {
 .title-text {
   font-size: 16px;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--fg);
 }
 .detail-subtitle {
   display: flex;
@@ -165,22 +165,22 @@ function handleCancel() {
   word-break: break-all;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
-  color: #444;
+  color: var(--fg-secondary);
 }
 .description-text {
   white-space: pre-wrap;
   word-break: break-word;
-  color: #444;
+  color: var(--fg-secondary);
   line-height: 1.6;
 }
 .json-block {
-  background: #f5f5f5;
+  background: var(--bg-input);
   border-radius: 4px;
   padding: 8px 10px;
   margin: 0;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
-  color: #222;
+  color: var(--fg);
   max-height: 200px;
   overflow: auto;
   white-space: pre-wrap;

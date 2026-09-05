@@ -571,25 +571,25 @@ defineExpose({ scrollToBottom })
   flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: center; padding: 40px 20px; text-align: center;
 }
-.empty-icon { font-size: 52px; color: #1677ff; margin-bottom: 16px; opacity: .7; }
-.empty-title { font-size: 20px; font-weight: 700; color: #1a1a1a; margin: 0 0 8px; }
-.empty-desc { color: #666; margin: 0 0 28px; font-size: 14px; }
+.empty-icon { font-size: 52px; color: var(--accent); margin-bottom: 16px; opacity: .7; }
+.empty-title { font-size: 20px; font-weight: 700; color: var(--fg); margin: 0 0 8px; }
+.empty-desc { color: var(--fg-secondary); margin: 0 0 28px; font-size: 14px; }
 .quick-questions { width: 100%; max-width: 560px; }
-.quick-label { font-size: 13px; color: #666; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
+.quick-label { font-size: 13px; color: var(--fg-secondary); margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
 .quick-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; width: 100%; }
 .quick-btn {
-  font-size: 13px; border-radius: 18px; border-color: #d0d7e8; color: #333;
+  font-size: 13px; border-radius: 18px; border-color: var(--border); color: var(--fg);
   height: auto; padding: 5px 14px; white-space: normal; text-align: left;
   width: 100%; max-width: 100%; line-height: 1.5;
-  &:hover { border-color: #1677ff; color: #1677ff; background: #eff6ff; }
+  &:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 }
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; border-bottom: 1px solid #e8eaed; background: #fff; flex-shrink: 0;
+  padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-surface); flex-shrink: 0;
 }
 .chat-header-left { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.chat-header-icon { font-size: 18px; color: #1677ff; }
-.chat-header-title { font-size: 15px; font-weight: 700; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px; }
+.chat-header-icon { font-size: 18px; color: var(--accent); }
+.chat-header-title { font-size: 15px; font-weight: 700; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 380px; }
 .chat-header-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .chat-messages {
   flex: 1; overflow-y: auto; padding: 16px 18px;
@@ -598,40 +598,40 @@ defineExpose({ scrollToBottom })
 .load-more { text-align: center; margin-bottom: 8px; }
 .msg-row { display: flex; align-items: flex-start; gap: 10px; &.user { flex-direction: row-reverse; } }
 .msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-.user-avatar { background: #1677ff; color: #fff; }
-.ai-avatar { background: #f0f5ff; color: #1677ff; border: 1px solid #d6e4ff; }
+.user-avatar { background: var(--accent); color: #fff; }
+.ai-avatar { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft); }
 .msg-bubble { max-width: 72%; border-radius: 12px; padding: 10px 14px; }
-.user-bubble { background: #1677ff; color: #fff; border-bottom-right-radius: 3px; }
-.ai-bubble { background: #fff; border: 1px solid #e8eaed; border-bottom-left-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.user-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+.ai-bubble { background: var(--bg-surface); border: 1px solid var(--border); border-bottom-left-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
 .msg-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .msg-footer { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .msg-footer-row { padding: 0 2px; }
 .msg-time { font-size: 11px; opacity: .55; }
 .copy-btn { font-size: 12px; cursor: pointer; opacity: .5; &:hover { opacity: 1; } }
 .suggested-questions { margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; }
-.suggested-label { font-size: 12px; color: #888; display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.suggested-label { font-size: 12px; color: var(--fg-secondary); display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
 .suggested-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .suggested-btn {
-  font-size: 12px; border-radius: 14px; border-color: #d0d7e8; color: #1677ff;
-  background: #eff6ff; height: auto; padding: 3px 10px;
-  &:hover:not(:disabled) { background: #1677ff; color: #fff; border-color: #1677ff; }
+  font-size: 12px; border-radius: 14px; border-color: var(--border); color: var(--accent);
+  background: var(--accent-soft); height: auto; padding: 3px 10px;
+  &:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
 }
 .msg-ai-wrap { flex: 1; min-width: 0; max-width: calc(100% - 52px); display: flex; flex-direction: column; gap: 8px; }
 .msg-ai-wrap-user { flex: 1; min-width: 0; max-width: calc(100% - 52px); display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .msg-attachments { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; align-items: flex-end; }
-.analysis-progress { margin-top: 8px; padding: 8px 12px; background: #f0f7ff; border: 1px solid #d6e4ff; border-radius: 6px; max-width: 480px; width: 100%; }
-.progress-info { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #1677ff; margin-top: 4px; }
+.analysis-progress { margin-top: 8px; padding: 8px 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft); border-radius: 6px; max-width: 480px; width: 100%; }
+.progress-info { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--accent); margin-top: 4px; }
 // ── 技能执行进度卡片 ──
 .skill-progress-card {
-  padding: 12px 16px; background: linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%);
-  border: 1px solid #91caff; border-radius: 10px; max-width: 360px;
+  padding: 12px 16px; background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-soft) 100%);
+  border: 1px solid var(--accent-soft); border-radius: 10px; max-width: 360px;
 }
-.skill-progress-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #1677ff; }
-.skill-progress-message { font-size: 12px; color: #555; margin-top: 6px; }
+.skill-progress-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent); }
+.skill-progress-message { font-size: 12px; color: var(--fg-secondary); margin-top: 6px; }
 .skill-progress-dots {
   display: flex; gap: 4px; margin-top: 8px;
   span {
-    width: 6px; height: 6px; border-radius: 50%; background: #1677ff;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
     animation: dotBlink 1.2s infinite;
     &:nth-child(2) { animation-delay: .2s; }
     &:nth-child(3) { animation-delay: .4s; }

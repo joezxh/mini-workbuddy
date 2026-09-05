@@ -1,255 +1,169 @@
 <script setup lang="ts">
-// 左侧导航栏。
-//
-// 与 rcs Console 一致的 explorer "rail" 皮肤：毛玻璃侧栏、可折叠、当前项
-// 左侧高亮条。菜单来自本地静态配置（MinWorkBuddy 的路由是静态注册的），
-// 文案通过 vue-i18n 的 `titleKey` 解析。
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import { useMenuStore } from '@/stores/menu'
 import type { MenuNode } from '@/types/menu'
 import SidebarItem from './SidebarItem.vue'
+import AppLogo from './AppLogo.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 const app = useAppStore()
 const user = useUserStore()
+const menuStore = useMenuStore()
+const { sidebarCollapsed: collapsed } = storeToRefs(app)
 
-function leaf(id: number, path: string, icon: string, titleKey: string): MenuNode {
-  return {
-    id,
-    name: '',
-    path,
-    icon,
-    titleKey,
-    type: 2,
-    sort: 0,
-    status: 1,
-    visible: 1,
-    keepAlive: 0,
-    alwaysShow: 0,
-    children: [],
-  }
-}
-
-function group(
-  id: number,
-  path: string,
-  icon: string,
-  titleKey: string,
-  children: MenuNode[],
-): MenuNode {
-  return {
-    id,
-    name: '',
-    path,
-    icon,
-    titleKey,
-    type: 1,
-    sort: 0,
-    status: 1,
-    visible: 1,
-    keepAlive: 0,
-    alwaysShow: 1,
-    children,
-  }
-}
-
-const menus = computed<MenuNode[]>(() => [
-  leaf(1, '/dashboard', 'DashboardOutlined', 'sys.menu.dashboard'),
-  group(2, '/ai-assistant', 'MessageOutlined', 'sys.menu.assistant', [
-    leaf(21, '/ai-assistant', 'CommentOutlined', 'sys.menu.assistant'),
-    leaf(22, '/ai-assistant/skills', 'ApiOutlined', 'sys.menu.skills'),
-  ]),
-  leaf(3, '/wiki', 'BookOutlined', 'sys.menu.wiki'),
-  group(4, '/admin', 'SettingOutlined', 'sys.menu.admin', [
-    leaf(41, '/admin', 'ControlOutlined', 'sys.menu.admin'),
-    leaf(42, '/admin/agent-team', 'ApartmentOutlined', 'sys.menu.agentTeam'),
-  ]),
-])
-
-const collapsed = computed(() => app.sidebarCollapsed)
-
-const roleText = computed(() => user.roles?.[0] ?? 'user')
+// 菜单完全来自后端权限数据，缓存在 menu store（由 /me 一并返回，避免重复请求）
+const menus = computed<MenuNode[]>(() => menuStore.menus)
+// 已登录但菜单尚未加载完成（fetchUserInfo 进行中）时显示加载态
+const loading = computed(() => !!user.userInfo && !menuStore.loaded)
 
 function toggle() {
   app.toggleSidebar()
 }
-
 function onSelect(path: string) {
-  if (path) router.push(path)
+  if (!path) return
+  // 在控制台（/admin）中以 Tab 形式打开对应页面；菜单导航统一由左侧 rail 承担，不再重复菜单层
+  const m = path.match(/^\/admin\/([^/]+)/)
+  if (m) {
+    router.push({ path: '/admin', query: { tab: m[1] } })
+  } else {
+    router.push(path)
+  }
 }
 </script>
 
 <template>
   <aside class="rail" :class="{ 'rail--collapsed': collapsed }">
-    <!-- Brand -->
     <div class="rail-brand" @click="router.push('/dashboard')">
-      <div class="rail-logo">
-        <span class="rail-logo-mark">M</span>
-      </div>
-      <div class="rail-brand-text" v-show="!collapsed">
-        <div class="rail-brand-name">MiniWorkBuddy</div>
-        <div class="rail-brand-sub">开源 · AgentScope</div>
+      <AppLogo :size="26" class="rail-brand__logo" />
+      <div class="rail-brand__text">
+        <span class="rail-brand__kicker">{{ t('sys.brandKicker') }}</span>
+        <span class="rail-brand__name">{{ t('sys.brand') }}</span>
       </div>
     </div>
 
-    <!-- Nav -->
     <nav class="rail-nav">
-      <SidebarItem
-        v-for="m in menus"
-        :key="m.id"
-        :node="m"
-        :collapsed="collapsed"
-        @select="onSelect"
-      />
+      <template v-if="loading">
+        <div class="rail-loading">…</div>
+      </template>
+      <template v-else>
+        <template v-if="menus.length">
+          <SidebarItem
+            v-for="m in menus"
+            :key="m.id"
+            :node="m"
+            :collapsed="collapsed"
+            @select="onSelect"
+          />
+        </template>
+        <div v-else class="rail-empty">暂无可用菜单</div>
+      </template>
     </nav>
 
-    <!-- Footer / status -->
-    <div class="rail-foot" v-show="!collapsed">
-      <div class="rail-status">
-        <span class="dot" />
-        <span>{{ roleText }}</span>
-      </div>
-      <button class="rail-collapse" :title="collapsed ? 'Expand' : 'Collapse'" @click="toggle">
-        {{ collapsed ? '»' : '«' }}
-      </button>
-    </div>
-    <button
-      v-show="collapsed"
-      class="rail-collapse rail-collapse--mini"
-      title="Expand"
-      @click="toggle"
-    >
-      »
+    <button class="rail-collapse" @click="toggle">
+      {{ collapsed ? '»' : '«' }}
     </button>
   </aside>
 </template>
 
 <style scoped>
 .rail {
-  position: relative;
-  width: var(--sidebar-w);
-  flex: 0 0 var(--sidebar-w);
-  height: 100vh;
+  width: 220px;
+  height: 100%;
+  background: var(--rail-bg);
+  color: var(--rail-fg);
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
-  -webkit-backdrop-filter: var(--glass);
-  backdrop-filter: var(--glass);
-  border-right: 1px solid var(--border);
-  transition: width var(--transition), flex-basis var(--transition);
+  overflow: hidden;
+  transition: width 0.2s, background-color var(--transition), color var(--transition);
 }
-
 .rail--collapsed {
-  width: var(--sidebar-w-collapsed);
-  flex-basis: var(--sidebar-w-collapsed);
+  width: 64px;
 }
-
+.rail--collapsed .rail-brand__text {
+  display: none;
+}
+.rail--collapsed .rail-brand {
+  justify-content: center;
+  padding: 0;
+}
 .rail-brand {
+  /* 与右侧主窗体顶部标题栏（--header-h）等高，保证左右顶部齐平 */
+  height: var(--header-h);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 18px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.rail-logo {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: var(--shadow-sm);
-}
-
-.rail-logo-mark {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--fg-inverse);
-}
-
-:root[data-theme='light'] .rail-logo-mark {
-  color: #fff;
-}
-
-.rail-brand-name {
-  font-family: var(--font-display);
+  gap: 10px;
+  padding: 0 16px;
   font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px solid var(--rail-border);
+}
+.rail-brand__logo {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.rail-brand__name {
+  font-family: var(--font-display);
   font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   color: var(--fg);
-  line-height: 1.2;
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.rail-brand-sub {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+.rail-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+.rail-brand__kicker {
+  font-family: var(--font-tech);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--fg-muted);
+  color: var(--accent);
+  white-space: nowrap;
 }
-
 .rail-nav {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  padding: 8px 0;
 }
-
-.rail-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-top: 1px solid var(--divider);
+.rail-loading {
+  padding: 16px;
+  color: var(--rail-fg-muted);
+  text-align: center;
 }
-
-.rail-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.rail-empty {
+  padding: 24px 16px;
+  color: var(--rail-fg-muted);
   font-size: 13px;
-  color: var(--fg-secondary);
-  text-transform: capitalize;
+  text-align: center;
 }
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--ok);
-  box-shadow: 0 0 0 3px var(--ok-soft);
-}
-
 .rail-collapse {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--bg-input);
-  color: var(--fg-secondary);
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--rail-fg-muted);
   cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  transition: color var(--transition), border-color var(--transition);
+  border-top: 1px solid var(--rail-border);
+  transition: color var(--transition);
 }
-
 .rail-collapse:hover {
-  color: var(--accent);
-  border-color: var(--border-strong);
+  color: var(--rail-fg);
 }
 
-.rail-collapse--mini {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-}
 </style>

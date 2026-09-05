@@ -683,7 +683,7 @@
                 title="确认删除该仓库？"
                 @confirm="deleteRepo(item)"
               >
-                <a style="color:#ff4d4f">删除</a>
+                <a style="color:var(--err)">删除</a>
               </a-popconfirm>
               <span v-if="item.is_official" class="text-disabled">不可删除</span>
             </template>
@@ -1566,7 +1566,7 @@ function iconLabel(icon?: string) {
   flex-direction: column;
   min-height: 100vh;
   height: 100vh;
-  background: #f5f5f5;
+  background: var(--bg-input);
 }
 
 .page-header {
@@ -1575,8 +1575,8 @@ function iconLabel(icon?: string) {
   justify-content: space-between;
   padding: 0 24px;
   height: 56px;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .header-main {
@@ -1606,20 +1606,20 @@ function iconLabel(icon?: string) {
   padding: 0 4px;
   margin-right: 20px;
   font-size: 14px;
-  color: #666;
+  color: var(--fg-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color 0.2s, border-color 0.2s;
 }
 
 .top-tab:hover {
-  color: #1890ff;
+  color: var(--accent);
 }
 
 .top-tab.active {
-  color: #1890ff;
+  color: var(--accent);
   font-weight: 600;
-  border-bottom-color: #1890ff;
+  border-bottom-color: var(--accent);
 }
 
 .header-actions {
@@ -1646,8 +1646,8 @@ function iconLabel(icon?: string) {
 /* 左侧 */
 .left-panel {
   width: 280px;
-  background: #fff;
-  border-right: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1655,7 +1655,7 @@ function iconLabel(icon?: string) {
 
 .search-box {
   padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .loading-wrap {
@@ -1666,7 +1666,7 @@ function iconLabel(icon?: string) {
 .empty-hint {
   padding: 24px;
   text-align: center;
-  color: #999;
+  color: var(--fg-muted);
   font-size: 13px;
 }
 
@@ -1687,13 +1687,13 @@ function iconLabel(icon?: string) {
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--fg-secondary);
   cursor: pointer;
   user-select: none;
 }
 
 .cat-header:hover {
-  background: #f5f5f5;
+  background: var(--bg-input);
 }
 
 .cat-packages {
@@ -1707,18 +1707,18 @@ function iconLabel(icon?: string) {
   padding: 7px 12px 7px 20px;
   cursor: pointer;
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
   border-radius: 0;
 }
 
 .package-item:hover {
-  background: #f0f7ff;
+  background: var(--accent-soft);
 }
 
 .package-item.active {
-  background: #e6f4ff;
-  color: #1677ff;
-  border-right: 2px solid #1677ff;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-right: 2px solid var(--accent);
 }
 
 .pkg-icon {
@@ -1736,7 +1736,7 @@ function iconLabel(icon?: string) {
 .right-panel {
   flex: 1;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--bg-input);
 }
 
 .detail-placeholder {
@@ -1744,7 +1744,7 @@ function iconLabel(icon?: string) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
+  color: var(--fg-muted);
   font-size: 14px;
 }
 
@@ -1777,7 +1777,7 @@ function iconLabel(icon?: string) {
 }
 
 .detail-meta {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 16px;
@@ -1797,10 +1797,10 @@ function iconLabel(icon?: string) {
 .conditions-preview {
   font-family: monospace;
   font-size: 12px;
-  background: #f5f5f5;
+  background: var(--bg-input);
   padding: 1px 6px;
   border-radius: 3px;
-  color: #333;
+  color: var(--fg);
 }
 
 .script-list {
@@ -1811,9 +1811,9 @@ function iconLabel(icon?: string) {
 
 .script-empty {
   text-align: center;
-  color: #999;
+  color: var(--fg-muted);
   padding: 16px;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 6px;
 }
 
@@ -1822,9 +1822,9 @@ function iconLabel(icon?: string) {
   align-items: flex-start;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   gap: 12px;
 }
 
@@ -1842,20 +1842,20 @@ function iconLabel(icon?: string) {
 }
 
 .script-name .text-disabled {
-  color: #bbb;
+  color: var(--fg-muted);
   text-decoration: line-through;
 }
 
 .script-cmd {
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
   font-family: monospace;
   margin-top: 2px;
 }
 
 .script-desc {
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
   margin-top: 2px;
 }
 
@@ -1872,9 +1872,9 @@ function iconLabel(icon?: string) {
 
 /* SKILL.md Tab */
 .markdown-container {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   min-height: 300px;
   max-height: calc(100vh - 320px);
   overflow-y: auto;
@@ -1888,7 +1888,7 @@ function iconLabel(icon?: string) {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #333;
+  color: var(--fg);
 }
 
 .markdown-error {
@@ -1901,14 +1901,14 @@ function iconLabel(icon?: string) {
   gap: 12px;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 6px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
 }
 
 .markdown-source-tag {
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
 }
 
 .markdown-editor {
@@ -1921,7 +1921,7 @@ function iconLabel(icon?: string) {
 .evo-metrics {
   margin-bottom: 16px;
   padding: 16px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 6px;
 }
 
@@ -1940,7 +1940,7 @@ function iconLabel(icon?: string) {
 }
 
 .text-disabled {
-  color: #999;
+  color: var(--fg-muted);
   font-size: 12px;
 }
 
@@ -1954,8 +1954,8 @@ function iconLabel(icon?: string) {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
   margin-bottom: 8px;
   border-radius: 4px 4px 0 0;
 }
@@ -1966,9 +1966,9 @@ function iconLabel(icon?: string) {
 }
 
 .session-list-panel {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 4px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   height: calc(100vh - 380px);
   overflow-y: auto;
 }
@@ -1980,7 +1980,7 @@ function iconLabel(icon?: string) {
 .session-item {
   padding: 10px 12px;
   margin-bottom: 6px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -1988,13 +1988,13 @@ function iconLabel(icon?: string) {
 }
 
 .session-item:hover {
-  background: #e6f7ff;
-  border-color: #91d5ff;
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .session-item.active {
-  background: #e6f7ff;
-  border-color: #1890ff;
+  background: var(--accent-soft);
+  border-color: var(--accent);
   box-shadow: 0 2px 4px rgba(24, 144, 255, 0.2);
 }
 
@@ -2008,7 +2008,7 @@ function iconLabel(icon?: string) {
 .session-title {
   font-weight: 600;
   font-size: 13px;
-  color: #333;
+  color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2017,14 +2017,14 @@ function iconLabel(icon?: string) {
 
 .session-time {
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .session-info {
   display: flex;
   gap: 8px;
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
 }
 
 .session-user, .session-msg-count {
@@ -2034,13 +2034,13 @@ function iconLabel(icon?: string) {
 .pagination-wrapper {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border);
 }
 
 .messages-panel {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 4px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--border);
   height: calc(100vh - 380px);
   display: flex;
   flex-direction: column;
@@ -2055,17 +2055,17 @@ function iconLabel(icon?: string) {
 .message-item {
   margin-bottom: 16px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg-input);
   border-radius: 4px;
-  border-left: 3px solid #f0f0f0;
+  border-left: 3px solid var(--border);
 }
 
 .message-item.user {
-  border-left-color: #1890ff;
+  border-left-color: var(--accent);
 }
 
 .message-item.assistant {
-  border-left-color: #52c41a;
+  border-left-color: var(--ok);
 }
 
 .message-header {
@@ -2077,13 +2077,13 @@ function iconLabel(icon?: string) {
 
 .message-time {
   font-size: 12px;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .message-content {
   font-size: 13px;
   line-height: 1.6;
-  color: #333;
+  color: var(--fg);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2093,7 +2093,7 @@ function iconLabel(icon?: string) {
 }
 
 .json-preview {
-  background: #f5f5f5;
+  background: var(--bg-input);
   padding: 8px;
   border-radius: 4px;
   font-family: 'Consolas', 'Monaco', monospace;
@@ -2105,7 +2105,7 @@ function iconLabel(icon?: string) {
 
 .load-more-wrapper {
   padding: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border);
 }
 
 .messages-placeholder {
@@ -2113,7 +2113,7 @@ function iconLabel(icon?: string) {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
+  color: var(--fg-muted);
   font-size: 13px;
 }
 
@@ -2154,31 +2154,31 @@ function iconLabel(icon?: string) {
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--border);
   border-radius: 16px;
   font-size: 13px;
-  color: #555;
+  color: var(--fg-secondary);
   cursor: pointer;
-  background: #fafafa;
+  background: var(--bg-input);
   transition: all 0.2s;
   white-space: nowrap;
 }
 
 .hub-repo-tab:hover {
-  color: #1890ff;
-  border-color: #91d5ff;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .hub-repo-tab.active {
-  color: #fff;
-  background: #1890ff;
-  border-color: #1890ff;
+  color: var(--fg-inverse);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .hub-repo-tab.active .ant-tag {
   background: rgba(255, 255, 255, 0.25);
   border-color: rgba(255, 255, 255, 0.4);
-  color: #fff;
+  color: var(--fg-inverse);
 }
 
 .hub-repo-name {
@@ -2208,8 +2208,8 @@ function iconLabel(icon?: string) {
 .hub-cats {
   width: 200px;
   flex-shrink: 0;
-  background: #fafafa;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
   max-height: 100%;
@@ -2221,17 +2221,17 @@ function iconLabel(icon?: string) {
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
-  color: #555;
+  color: var(--fg-secondary);
   transition: all 0.2s;
 }
 
 .hub-cat-item:hover {
-  background: #e6f7ff;
+  background: var(--accent-soft);
 }
 
 .hub-cat-item.active {
-  background: #1890ff;
-  color: #fff;
+  background: var(--accent);
+  color: var(--fg-inverse);
   font-weight: 600;
 }
 
@@ -2252,12 +2252,12 @@ function iconLabel(icon?: string) {
 }
 
 .hub-card {
-  background: #fff;
+  background: var(--bg-surface);
 }
 
 .hub-card-desc {
   font-size: 12px;
-  color: #666;
+  color: var(--fg-secondary);
   line-height: 1.6;
   max-height: 60px;
   overflow: hidden;

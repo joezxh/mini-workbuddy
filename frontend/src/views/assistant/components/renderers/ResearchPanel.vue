@@ -6,7 +6,7 @@
       <span class="rp-stage">{{ stageLabel }}</span>
       <span class="rp-percent">{{ progress }}%</span>
     </div>
-    <a-progress :percent="progress" :show-info="false" size="small" stroke-color="#1677ff" />
+    <a-progress :percent="progress" :show-info="false" size="small" stroke-color="var(--accent)" />
     <div class="rp-list">
       <div v-for="q in plan" :key="q.id" class="rp-item" :class="'st-'+q.status">
         <span class="rp-dot">
@@ -60,20 +60,20 @@ function credColor(c: number) {
 
 <style scoped lang="less">
 .research-panel {
-  border: 1px solid #e6e8eb; border-radius: 10px; background: #fff; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface); padding: 12px 14px;
 }
-.rp-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; }
-.rp-icon { color: #1677ff; }
-.rp-stage { color: #888; font-weight: 400; }
-.rp-percent { margin-left: auto; color: #1677ff; }
+.rp-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg); margin-bottom: 8px; }
+.rp-icon { color: var(--accent); }
+.rp-stage { color: var(--fg-secondary); font-weight: 400; }
+.rp-percent { margin-left: auto; color: var(--accent); }
 .rp-list { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
 .rp-item { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
-.rp-dot { margin-top: 2px; color: #999; }
-.rp-item.st-searching .rp-dot { color: #1677ff; }
-.rp-item.st-done .rp-dot { color: #52c41a; }
-.rp-item.st-failed .rp-dot { color: #ff4d4f; }
-.rp-q-text { color: #333; line-height: 1.5; }
+.rp-dot { margin-top: 2px; color: var(--fg-muted); }
+.rp-item.st-searching .rp-dot { color: var(--accent); }
+.rp-item.st-done .rp-dot { color: var(--ok); }
+.rp-item.st-failed .rp-dot { color: var(--err); }
+.rp-q-text { color: var(--fg); line-height: 1.5; }
 .rp-q-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; align-items: center; }
-.rp-src-count { font-size: 11px; color: #999; }
+.rp-src-count { font-size: 11px; color: var(--fg-muted); }
 .rp-src { font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
 </style>

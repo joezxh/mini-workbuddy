@@ -181,8 +181,8 @@ fetchTimeline()
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: #fff;
-  border-bottom: 1px solid #eef0f3;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
 }
 .replay-header .title { font-weight: 700; font-size: 16px; }
 .replay-body {
@@ -197,17 +197,17 @@ fetchTimeline()
 .stage {
   grid-row: 1;
   grid-column: 1;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 16px;
   overflow: auto;
-  border: 1px solid #eef0f3;
+  border: 1px solid var(--border);
 }
 .stage-msg {
   margin-bottom: 12px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: #f5f9ff;
+  background: var(--accent-soft);
   border-left: 3px solid var(--accent-cyan);
   animation: fadein 0.3s;
 }
@@ -219,13 +219,13 @@ fetchTimeline()
 .player-bar {
   grid-row: 2;
   grid-column: 1 / span 2;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 8px 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid #eef0f3;
+  border: 1px solid var(--border);
 }
 .progress { flex: 1; margin: 0 8px; }
 .time-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
@@ -233,11 +233,11 @@ fetchTimeline()
 .timeline-list {
   grid-row: 1;
   grid-column: 2;
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 10px;
   padding: 8px;
   overflow: auto;
-  border: 1px solid #eef0f3;
+  border: 1px solid var(--border);
 }
 .tl-item {
   display: flex;
@@ -254,8 +254,8 @@ fetchTimeline()
 .tl-seq {
   width: 22px; height: 22px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #eef0f3; border-radius: 50%; font-size: 11px;
+  background: var(--border); border-radius: 50%; font-size: 11px;
 }
 .tl-title { flex: 1; }
-.tl-time { color: #9aa7b8; font-size: 11px; font-family: monospace; }
+.tl-time { color: var(--fg-muted); font-size: 11px; font-family: monospace; }
 </style>

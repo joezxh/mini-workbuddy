@@ -226,23 +226,23 @@ onMounted(() => {
   user-select: none;
   font-size: 12.5px;
   font-weight: 600;
-  color: #555;
+  color: var(--fg-secondary);
 
   &:hover {
-    color: #1677ff;
+    color: var(--accent);
   }
 }
 
 .skill-icon { font-size: 13px; }
 .skill-title { flex: 1; }
-.expand-icon { font-size: 10px; color: #999; }
+.expand-icon { font-size: 10px; color: var(--fg-muted); }
 
 .selected-badge {
   flex: 1;
   font-size: 11px;
   font-weight: 500;
-  color: #52c41a;
-  background: #f6ffed;
+  color: var(--ok);
+  background: var(--ok-soft);
   border: 1px solid #b7eb8f;
   border-radius: 10px;
   padding: 1px 8px;
@@ -258,9 +258,9 @@ onMounted(() => {
 .selected-remove {
   cursor: pointer;
   font-size: 13px;
-  color: #999;
+  color: var(--fg-muted);
   line-height: 1;
-  &:hover { color: #ff4d4f; }
+  &:hover { color: var(--err); }
 }
 
 .skill-content {
@@ -277,10 +277,10 @@ onMounted(() => {
   gap: 6px;
   padding: 8px 4px;
   font-size: 12px;
-  color: #888;
+  color: var(--fg-secondary);
 }
 
-.skill-error { color: #ff4d4f; }
+.skill-error { color: var(--err); }
 
 .skill-list {
   display: flex;
@@ -289,8 +289,8 @@ onMounted(() => {
 }
 
 .skill-category {
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -300,23 +300,23 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 5px 8px;
-  background: #fafafa;
+  background: var(--bg-input);
   font-size: 11.5px;
   font-weight: 600;
-  color: #666;
+  color: var(--fg-secondary);
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .cat-header:hover {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--bg-hover);
+  color: var(--fg);
 }
 
 .cat-arrow {
   font-size: 9px;
-  color: #999;
+  color: var(--fg-muted);
 }
 
 .cat-packages {
@@ -324,8 +324,8 @@ onMounted(() => {
 }
 
 .skill-package {
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -335,15 +335,15 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: var(--bg-input);
+  border-bottom: 1px solid var(--border);
 }
 
 .package-icon { font-size: 13px; }
 .package-name {
   font-size: 12px;
   font-weight: 600;
-  color: #444;
+  color: var(--fg);
 }
 
 .script-list {
@@ -359,19 +359,19 @@ onMounted(() => {
   padding: 5px 10px;
   cursor: pointer;
   font-size: 11.5px;
-  color: #333;
+  color: var(--fg);
   transition: background 0.15s, color 0.15s;
 
   &:hover {
-    background: #eff6ff;
-    color: #1677ff;
+    background: var(--accent-soft);
+    color: var(--accent);
   }
 
   &.script-selected {
-    background: #f6ffed;
-    color: #52c41a;
+    background: var(--ok-soft);
+    color: var(--ok);
     font-weight: 600;
-    border-left: 2px solid #52c41a;
+    border-left: 2px solid var(--ok);
   }
 }
 
@@ -384,13 +384,13 @@ onMounted(() => {
 
 .file-badge {
   font-size: 11px;
-  color: #52c41a;
+  color: var(--ok);
 }
 
 .package-empty {
   padding: 6px 10px;
   font-size: 11px;
-  color: #bbb;
+  color: var(--fg-muted);
   font-style: italic;
 }
 
@@ -400,11 +400,11 @@ onMounted(() => {
   gap: 5px;
   padding: 4px 6px;
   margin-bottom: 6px;
-  background: #f0f7ff;
-  border: 1px solid #d6e4ff;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
   border-radius: 4px;
   font-size: 11px;
-  color: #1677ff;
+  color: var(--accent);
 }
 
 .file-icon { font-size: 12px; }

@@ -197,7 +197,7 @@ function extractLabel(uri: string) {
   margin-bottom: 8px;
 }
 .meta-info {
-  color: #999;
+  color: var(--fg-muted);
   font-size: 12px;
 }
 .markdown-body {

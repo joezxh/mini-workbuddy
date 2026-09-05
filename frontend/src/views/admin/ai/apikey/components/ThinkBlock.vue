@@ -57,15 +57,15 @@ function renderMd(text: string): string {
 
 <style lang="less" scoped>
 .think-block {
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--bg-input);
   transition: border-color 0.2s;
 
   &.thinking {
-    border-color: #91caff;
-    background: linear-gradient(135deg, #f0f7ff 0%, #fafafa 100%);
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
 }
 
@@ -77,7 +77,7 @@ function renderMd(text: string): string {
   cursor: pointer;
   user-select: none;
   font-size: 13px;
-  color: #595959;
+  color: var(--fg-secondary);
   transition: background 0.15s;
 
   &:hover {
@@ -107,7 +107,7 @@ function renderMd(text: string): string {
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: #1677ff;
+    background: var(--accent);
     animation: dot-bounce 1.2s ease-in-out infinite;
 
     &:nth-child(1) { animation-delay: 0s; }
@@ -124,12 +124,12 @@ function renderMd(text: string): string {
 .think-label {
   flex: 1;
   font-weight: 500;
-  color: #434343;
-  .thinking & { color: #1677ff; }
+  color: var(--fg);
+  .thinking & { color: var(--accent); }
 }
 
 .think-toggle {
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   display: flex;
   align-items: center;
   transition: color 0.15s;
@@ -140,15 +140,15 @@ function renderMd(text: string): string {
 }
 
 .think-body {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--divider);
   padding: 10px 14px 12px;
-  .thinking & { border-top-color: #bae0ff; }
+  .thinking & { border-top-color: var(--accent); }
 }
 
 .think-content {
   font-size: 13px;
   line-height: 1.75;
-  color: #8c8c8c;
+  color: var(--fg-secondary);
   word-break: break-word;
   font-style: italic;
 
@@ -162,14 +162,14 @@ function renderMd(text: string): string {
     font-size: 12px;
     font-style: normal;
   }
-  :deep(strong) { color: #595959; font-weight: 600; font-style: normal; }
+  :deep(strong) { color: var(--fg); font-weight: 600; font-style: normal; }
 }
 
 .think-cursor {
   display: inline-block;
   width: 2px;
   height: 13px;
-  background: #1677ff;
+  background: var(--accent);
   margin-left: 2px;
   vertical-align: text-bottom;
   animation: blink 0.8s step-end infinite;

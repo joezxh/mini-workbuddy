@@ -595,7 +595,7 @@ onMounted(() => {
 }
 .panel-header .sub {
   margin: 0;
-  color: #999;
+  color: var(--fg-muted);
   font-size: 13px;
 }
 .search-bar {
@@ -625,7 +625,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 .card-desc {
-  color: #666;
+  color: var(--fg-secondary);
   font-size: 13px;
   margin-bottom: 8px;
   min-height: 38px;
@@ -642,7 +642,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .protocol-text {
-  color: #666;
+  color: var(--fg-secondary);
   font-size: 13px;
 }
 .square-pagination {

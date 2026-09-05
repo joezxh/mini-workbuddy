@@ -260,7 +260,7 @@ onMounted(() => {
 }
 .perm-code {
   font-size: 11px;
-  color: #999;
+  color: var(--fg-muted);
   margin-left: 6px;
 }
 </style>

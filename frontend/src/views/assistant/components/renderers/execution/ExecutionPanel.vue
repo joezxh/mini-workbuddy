@@ -196,20 +196,20 @@ defineExpose({ retry })
 
 <style scoped lang="less">
 .execution-panel {
-  border: 1px solid #e8e8e8; border-radius: 10px; overflow: hidden;
-  background: #fff; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  background: var(--bg-surface); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .panel-summary {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; cursor: pointer; background: #fafafa;
-  &:hover { background: #f5f5f5; }
+  padding: 10px 14px; cursor: pointer; background: var(--bg-input);
+  &:hover { background: var(--bg-input); }
 }
 .summary-left { display: flex; align-items: center; gap: 8px; }
-.summary-text { font-size: 13px; font-weight: 500; color: #333; }
+.summary-text { font-size: 13px; font-weight: 500; color: var(--fg); }
 .summary-right { display: flex; align-items: center; gap: 8px; }
-.summary-elapsed { font-size: 11px; color: #999; font-variant-numeric: tabular-nums; }
-.summary-chevron { transition: transform 0.2s; color: #bbb; &.open { transform: rotate(90deg); } }
-.panel-content { border-top: 1px solid #f0f0f0; }
+.summary-elapsed { font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.summary-chevron { transition: transform 0.2s; color: var(--fg-muted); &.open { transform: rotate(90deg); } }
+.panel-content { border-top: 1px solid var(--border); }
 .panel-main {
   display: flex; gap: 8px; padding: 0 8px 8px;
   @media (max-width: 640px) { flex-direction: column; }
@@ -217,10 +217,10 @@ defineExpose({ retry })
 .panel-error { padding: 8px; }
 
 .status-icon {
-  &.status-success { color: #52c41a; }
-  &.status-error { color: #ff4d4f; }
-  &.status-loading { color: #1677ff; animation: spin 1s linear infinite; }
-  &.status-pending { color: #d9d9d9; }
+  &.status-success { color: var(--ok); }
+  &.status-error { color: var(--err); }
+  &.status-loading { color: var(--accent); animation: spin 1s linear infinite; }
+  &.status-pending { color: var(--border); }
 }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 

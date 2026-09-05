@@ -406,6 +406,6 @@ onMounted(() => {
 .atm-detail-head { margin-bottom: 16px; }
 .atm-detail-ops { margin: 12px 0; }
 .atm-detail-body { margin-top: 16px; }
-.atm-section-title { font-weight: 600; margin: 12px 0 8px; color: #333; }
-.atm-answer .markdown-body { background: #fafafa; border: 1px solid #f0f0f0; border-radius: 8px; padding: 12px 16px; }
+.atm-section-title { font-weight: 600; margin: 12px 0 8px; color: var(--fg); }
+.atm-answer .markdown-body { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; }
 </style>

@@ -100,17 +100,17 @@ watch(() => props.task.status, (s) => { if (TERMINAL.includes(s)) stopPolling() 
 
 <style scoped lang="less">
 .task-card {
-  border: 1px solid #e6e8eb; border-radius: 10px; background: #fff; padding: 12px 14px;
-  &.st-running { border-color: #91caff; }
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface); padding: 12px 14px;
+  &.st-running { border-color: var(--accent-soft); }
   &.st-completed { border-color: #b7eb8f; }
-  &.st-failed { border-color: #ffccc7; }
+  &.st-failed { border-color: var(--err); }
 }
 .tk-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-.tk-icon { color: #1677ff; }
-.tk-name { flex: 1; color: #1a1a1a; }
-.tk-no { font-size: 11px; color: #bbb; }
-.tk-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: #999; margin-top: 6px; }
-.tk-error { margin-top: 6px; padding: 6px 10px; background: #fff1f0; border: 1px solid #ffccc7; border-radius: 6px; font-size: 12px; color: #cf1322; }
+.tk-icon { color: var(--accent); }
+.tk-name { flex: 1; color: var(--fg); }
+.tk-no { font-size: 11px; color: var(--fg-muted); }
+.tk-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--fg-muted); margin-top: 6px; }
+.tk-error { margin-top: 6px; padding: 6px 10px; background: var(--err-soft); border: 1px solid var(--err); border-radius: 6px; font-size: 12px; color: var(--err); }
 .tk-result { margin-top: 8px; }
 .tk-result-body { font-size: 13px; line-height: 1.6; }
 .tk-actions { margin-top: 8px; }

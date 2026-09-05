@@ -122,7 +122,7 @@ async function handleRefHover(event: MouseEvent) {
             detail.person_type ? `<p><b>人员类型：</b>${detail.person_type}</p>` : '',
             detail.occupation ? `<p><b>职业：</b>${detail.occupation}</p>` : '',
             detail.current_region_name ? `<p><b>管辖地区：</b>${detail.current_region_name}</p>` : '',
-            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? '#e53e3e' : detail.risk_level === 'medium' ? '#dd6b20' : '#38a169'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
+            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? 'var(--err)' : detail.risk_level === 'medium' ? 'var(--accent-2)' : 'var(--ok)'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
             detail.is_key_person ? '<p><b>⚠ 重点人员</b></p>' : '',
           ].filter(Boolean).join('')
         } else {
@@ -142,7 +142,7 @@ async function handleRefHover(event: MouseEvent) {
             detail.registered_capital ? `<p><b>注册资本：</b>${detail.registered_capital}万元</p>` : '',
             detail.industry ? `<p><b>行业：</b>${detail.industry}</p>` : '',
             detail.registered_address ? `<p><b>注册地址：</b>${detail.registered_address}</p>` : '',
-            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? '#e53e3e' : detail.risk_level === 'medium' ? '#dd6b20' : '#38a169'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
+            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? 'var(--err)' : detail.risk_level === 'medium' ? 'var(--accent-2)' : 'var(--ok)'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
           ].filter(Boolean).join('')
         } else {
           refPopover.title = '企业信息'
@@ -161,7 +161,7 @@ async function handleRefHover(event: MouseEvent) {
             detail.registered_capital ? `<p><b>注册资本：</b>${detail.registered_capital}万元</p>` : '',
             detail.industry ? `<p><b>行业：</b>${detail.industry}</p>` : '',
             detail.registered_address ? `<p><b>注册地址：</b>${detail.registered_address}</p>` : '',
-            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? '#e53e3e' : detail.risk_level === 'medium' ? '#dd6b20' : '#38a169'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
+            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? 'var(--err)' : detail.risk_level === 'medium' ? 'var(--accent-2)' : 'var(--ok)'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
           ].filter(Boolean).join('')
         } else {
           refPopover.title = '企业信息'
@@ -199,7 +199,7 @@ async function handleRefHover(event: MouseEvent) {
             detail.person_type ? `<p><b>人员类型：</b>${detail.person_type}</p>` : '',
             detail.occupation ? `<p><b>职业：</b>${detail.occupation}</p>` : '',
             detail.current_region_name ? `<p><b>管辖地区：</b>${detail.current_region_name}</p>` : '',
-            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? '#e53e3e' : detail.risk_level === 'medium' ? '#dd6b20' : '#38a169'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
+            `<p><b>风险等级：</b><span style="color:${detail.risk_level === 'high' ? 'var(--err)' : detail.risk_level === 'medium' ? 'var(--accent-2)' : 'var(--ok)'}">${riskLabel[detail.risk_level] || detail.risk_level}</span></p>`,
             detail.is_key_person ? '<p><b>⚠ 重点人员</b></p>' : '',
           ].filter(Boolean).join('')
         } else {
@@ -250,34 +250,34 @@ function handleCombinedLeave() {
 <style scoped lang="less">
 .thinking-block {
   margin-bottom: 8px;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--bg-input);
 
-  &.streaming { border-color: #91caff; background: #f0f7ff; }
+  &.streaming { border-color: var(--accent-soft); background: var(--accent-soft); }
 }
 .thinking-header {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 12px; cursor: pointer; user-select: none;
-  &:hover { background: #f0f0f0; }
+  &:hover { background: var(--bg-hover); }
 }
 .thinking-icon { font-size: 14px; }
-.thinking-title { font-size: 12px; font-weight: 600; color: #666; }
-.thinking-toggle-btn { font-size: 11px; color: #999; margin-left: auto; }
+.thinking-title { font-size: 12px; font-weight: 600; color: var(--fg-secondary); }
+.thinking-toggle-btn { font-size: 11px; color: var(--fg-muted); margin-left: auto; }
 .streaming-dots {
   margin-left: auto; display: flex; gap: 3px;
-  span { width: 5px; height: 5px; border-radius: 50%; background: #1677ff; animation: dotBlink 1.2s infinite; }
+  span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: dotBlink 1.2s infinite; }
   span:nth-child(2) { animation-delay: .2s; }
   span:nth-child(3) { animation-delay: .4s; }
 }
 @keyframes dotBlink { 0%,80%,100% { opacity: .3; } 40% { opacity: 1; } }
-.thinking-body { padding: 8px 12px; border-top: 1px solid #f0f0f0; max-height: 300px; overflow-y: auto; }
-.thinking-text { font-size: 13px; color: #555; line-height: 1.6; }
-.typing-cursor { animation: blink 1s step-end infinite; color: #1677ff; }
+.thinking-body { padding: 8px 12px; border-top: 1px solid var(--border); max-height: 300px; overflow-y: auto; }
+.thinking-text { font-size: 13px; color: var(--fg-secondary); line-height: 1.6; }
+.typing-cursor { animation: blink 1s step-end infinite; color: var(--accent); }
 @keyframes blink { 50% { opacity: 0; } }
 .msg-bubble { position: relative; }
-.streaming-bubble { border-color: #91caff; }
+.streaming-bubble { border-color: var(--accent-soft); }
 .collapse-enter-active, .collapse-leave-active { transition: all .2s ease; }
 .collapse-enter-from, .collapse-leave-to { max-height: 0; opacity: 0; padding: 0 12px; }
 
@@ -285,38 +285,38 @@ function handleCombinedLeave() {
 .ref-popover {
   position: fixed; z-index: 1050;
   max-width: 420px; min-width: 240px;
-  background: #fff; border-radius: 8px;
+  background: var(--bg-surface); border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0,0,0,.12);
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   padding: 12px 16px;
   pointer-events: auto;
 }
-.ref-popover-title { font-size: 13px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; border-bottom: 1px solid #f0f0f0; padding-bottom: 6px; }
-.ref-popover-body { font-size: 12px; color: #555; line-height: 1.7; max-height: 260px; overflow-y: auto; }
+.ref-popover-title { font-size: 13px; font-weight: 700; color: var(--fg); margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.ref-popover-body { font-size: 12px; color: var(--fg-secondary); line-height: 1.7; max-height: 260px; overflow-y: auto; }
 
 // ── 实体链接样式 ──
 :deep(.entity-link) {
-  color: #1677ff;
+  color: var(--accent);
   cursor: pointer;
-  border-bottom: 1px dashed #1677ff;
+  border-bottom: 1px dashed var(--accent);
   padding: 0 1px;
   transition: all 0.15s;
 
   &:hover {
-    background: #e6f4ff;
+    background: var(--accent-soft);
     border-bottom-style: solid;
   }
 
   &.entity-person {
-    color: #52c41a;
-    border-bottom-color: #52c41a;
-    &:hover { background: #f6ffed; }
+    color: var(--ok);
+    border-bottom-color: var(--ok);
+    &:hover { background: var(--ok-soft); }
   }
 
   &.entity-location {
-    color: #fa8c16;
-    border-bottom-color: #fa8c16;
-    &:hover { background: #fff7e6; }
+    color: var(--accent-2);
+    border-bottom-color: var(--accent-2);
+    &:hover { background: var(--warn-soft); }
   }
 }
 
@@ -337,19 +337,19 @@ function handleCombinedLeave() {
   &:hover { background: #f9f0ff; border-bottom-style: solid; }
 }
 :deep(a.ref-case) {
-  color: #1677ff; border-bottom-color: #1677ff;
-  &:hover { background: #e6f4ff; border-bottom-style: solid; }
+  color: var(--accent); border-bottom-color: var(--accent);
+  &:hover { background: var(--accent-soft); border-bottom-style: solid; }
 }
 :deep(a.ref-person) {
-  color: #52c41a; border-bottom-color: #52c41a;
-  &:hover { background: #f6ffed; border-bottom-style: solid; }
+  color: var(--ok); border-bottom-color: var(--ok);
+  &:hover { background: var(--ok-soft); border-bottom-style: solid; }
 }
 :deep(a.ref-entity) {
-  color: #fa8c16; border-bottom-color: #fa8c16;
-  &:hover { background: #fff7e6; border-bottom-style: solid; }
+  color: var(--accent-2); border-bottom-color: var(--accent-2);
+  &:hover { background: var(--warn-soft); border-bottom-style: solid; }
 }
 :deep(a.ref-law) {
-  color: #13c2c2; border-bottom-color: #13c2c2;
-  &:hover { background: #e6fffb; border-bottom-style: solid; }
+  color: var(--info); border-bottom-color: var(--info);
+  &:hover { background: var(--accent-soft); border-bottom-style: solid; }
 }
 </style>

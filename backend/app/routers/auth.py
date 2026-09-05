@@ -69,25 +69,25 @@ def get_current_user_info(
     db: Session = Depends(get_db)
 ):
     """获取当前用户信息"""
-    from app.models.sys.sys_user import SysRoleMenu, SysMenu
     # 获取用户角色
     roles = []
     if current_user.user_roles:
         roles = [ur.role.role_code for ur in current_user.user_roles if ur.role]
-    
-    # 获取用户权限（从数据库查询）
-    permissions = []
-    
-    # 如果是超级管理员，给予所有权限
-    if current_user.is_admin or 'super_admin' in roles:
-        permissions = ['*:*']
-    else:
-        role_ids = [ur.role_id for ur in current_user.user_roles]
-        if role_ids:
-            menu_ids = [rm.menu_id for rm in db.query(SysRoleMenu.menu_id).filter(SysRoleMenu.role_id.in_(role_ids)).all()]
-            if menu_ids:
-                db_perms = [m.permission for m in db.query(SysMenu.permission).filter(SysMenu.id.in_(menu_ids), SysMenu.permission.isnot(None)).all()]
-                permissions = list(set(db_perms))
+
+    # 菜单树与权限集合：与 /me/menus 共用同一份权限过滤逻辑，
+    # 不再下发通配符 '*:*'，权限从可访问菜单树中收集得到。
+    menu_tree = _get_user_menu_tree(current_user, db)
+
+    def _collect_perms(nodes: list) -> set:
+        perms: set = set()
+        for n in nodes:
+            if n.get('permission'):
+                perms.add(n['permission'])
+            if n.get('children'):
+                perms |= _collect_perms(n['children'])
+        return perms
+
+    permissions = sorted(_collect_perms(menu_tree))
     
     return {
         "userId": current_user.user_id,
@@ -98,6 +98,7 @@ def get_current_user_info(
         "avatar": current_user.avatar_url,
         "roles": roles,
         "permissions": permissions,
+        "menus": menu_tree,
         "regionCode": "",
         "regionName": "",
         "regionLevel": ""
@@ -126,23 +127,24 @@ def update_profile(
     db.refresh(current_user)
     
     # 获取用户角色
-    from app.models.sys.sys_user import SysRoleMenu, SysMenu
     roles = []
     if current_user.user_roles:
         roles = [ur.role.role_code for ur in current_user.user_roles if ur.role]
-    
-    # 获取用户权限
-    permissions = []
-    if current_user.is_admin or 'super_admin' in roles:
-        permissions = ['*:*']
-    else:
-        role_ids = [ur.role_id for ur in current_user.user_roles]
-        if role_ids:
-            menu_ids = [rm.menu_id for rm in db.query(SysRoleMenu.menu_id).filter(SysRoleMenu.role_id.in_(role_ids)).all()]
-            if menu_ids:
-                db_perms = [m.permission for m in db.query(SysMenu.permission).filter(SysMenu.id.in_(menu_ids), SysMenu.permission.isnot(None)).all()]
-                permissions = list(set(db_perms))
-    
+
+    # 菜单树与权限集合：与 /me/menus 共用同一份权限过滤逻辑
+    menu_tree = _get_user_menu_tree(current_user, db)
+
+    def _collect_perms(nodes: list) -> set:
+        perms: set = set()
+        for n in nodes:
+            if n.get('permission'):
+                perms.add(n['permission'])
+            if n.get('children'):
+                perms |= _collect_perms(n['children'])
+        return perms
+
+    permissions = sorted(_collect_perms(menu_tree))
+
     return {
         "userId": current_user.user_id,
         "username": current_user.username,
@@ -152,44 +154,41 @@ def update_profile(
         "avatar": current_user.avatar_url,
         "roles": roles,
         "permissions": permissions,
+        "menus": menu_tree,
         "regionCode": "",
         "regionName": "",
         "regionLevel": ""
     }
 
 
-@router.get("/me/menus")
-def get_user_menus(
-    current_user: SysUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """获取当前用户的菜单树"""
+def _get_user_menu_tree(current_user: SysUser, db: Session) -> list:
+    """按当前用户（角色）返回可访问的菜单树（已过滤停用/删除，仅目录与菜单类型）。"""
     from app.models.sys.sys_user import SysRoleMenu, SysMenu
-    
-    # 超级管理员返回所有菜单
-    if current_user.is_admin:
+
+    is_super = current_user.is_admin or any(
+        ur.role and ur.role.role_code == 'super_admin' for ur in current_user.user_roles
+    )
+
+    if is_super:
         menus = db.query(SysMenu).filter(
             SysMenu.is_deleted == False,
             SysMenu.status == 0,
-            SysMenu.type.in_([1, 2])  # 只返回目录和菜单，不返回按钮
+            SysMenu.type.in_([1, 2]),  # 只返回目录和菜单，不返回按钮
         ).order_by(SysMenu.sort.asc(), SysMenu.id.asc()).all()
     else:
         role_ids = [ur.role_id for ur in current_user.user_roles]
         if not role_ids:
-            return {"code": 0, "data": []}
-        
+            return []
         menu_ids = [rm.menu_id for rm in db.query(SysRoleMenu.menu_id).filter(SysRoleMenu.role_id.in_(role_ids)).all()]
         if not menu_ids:
-            return {"code": 0, "data": []}
-        
+            return []
         menus = db.query(SysMenu).filter(
             SysMenu.id.in_(menu_ids),
             SysMenu.is_deleted == False,
             SysMenu.status == 0,
-            SysMenu.type.in_([1, 2])  # 只返回目录和菜单，不返回按钮
+            SysMenu.type.in_([1, 2]),  # 只返回目录和菜单，不返回按钮
         ).order_by(SysMenu.sort.asc(), SysMenu.id.asc()).all()
-    
-    # 转换为字典列表
+
     menu_list = [{
         "id": m.id,
         "name": m.name,
@@ -201,11 +200,23 @@ def get_user_menus(
         "icon": m.icon,
         "component": m.component,
         "sortOrder": m.sort,
+        # 国际化翻译 key：前端据此通过 vue-i18n 渲染多语言菜单标题，缺失时回退到 name
+        "i18nKey": m.i18n_key,
+        "visible": m.visible,
+        "keepAlive": m.keep_alive,
+        "alwaysShow": m.always_show,
     } for m in menus]
-    
-    # 构建树形结构
-    tree = _build_menu_tree(menu_list)
-    return {"code": 0, "data": tree}
+
+    return _build_menu_tree(menu_list)
+
+
+@router.get("/me/menus")
+def get_user_menus(
+    current_user: SysUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户的菜单树"""
+    return {"code": 0, "data": _get_user_menu_tree(current_user, db)}
 
 
 @router.get("/regions")

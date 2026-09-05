@@ -93,10 +93,7 @@ function onQuickNav({ key }: { key: string | number }) {
       <MenuFoldOutlined v-else />
     </button>
 
-    <div class="topbar-title">
-      <span class="kicker">开源</span>
-      <h1 class="title">{{ t('sys.brand') }}</h1>
-    </div>
+
 
     <a-dropdown>
       <button class="portal-btn" type="button">
@@ -173,7 +170,7 @@ function onQuickNav({ key }: { key: string | number }) {
   align-items: center;
   gap: 12px;
   padding: 0 18px;
-  background: var(--bg-surface);
+  background: var(--topbar-bg);
   -webkit-backdrop-filter: var(--glass);
   backdrop-filter: var(--glass);
   border-bottom: 1px solid var(--border);

@@ -39,7 +39,7 @@
           >
             <div class="member-row">
               <span class="m-name">
-                <CrownOutlined v-if="m.is_leader" style="color:#faad14" />
+                <CrownOutlined v-if="m.is_leader" style="color:var(--warn)" />
                 {{ m.role_name }}
               </span>
               <a-tag v-if="m.agent_code" size="small">{{ m.agent_code }}</a-tag>
@@ -67,7 +67,7 @@
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
         >
-          <Background :gap="16" pattern-color="#c7d6e8" />
+          <Background :gap="16" pattern-color="var(--border-strong)" />
           <Controls />
           <MiniMap />
           <template #node-custom="props">
@@ -434,8 +434,8 @@ onMounted(fetchDetail)
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
-  background: #fff;
-  border-bottom: 1px solid #eef0f3;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
 }
 .editor-header .left {
   display: flex;
@@ -456,7 +456,7 @@ onMounted(fetchDetail)
     width: auto;
     align-items: center;
     justify-content: flex-start;
-    background: #f7fafd;
+    background: var(--bg-base);
     padding: 24px;
 
     .panel-title {
@@ -468,7 +468,7 @@ onMounted(fetchDetail)
     .property-form {
       width: 100%;
       max-width: 820px;
-      background: #fff;
+      background: var(--bg-surface);
       border-radius: 12px;
       padding: 24px;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -483,8 +483,8 @@ onMounted(fetchDetail)
 }
 .side-panel {
   width: 270px;
-  background: #fff;
-  border-right: 1px solid #eef0f3;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 12px;
@@ -492,7 +492,7 @@ onMounted(fetchDetail)
 }
 .side-panel.right {
   border-right: none;
-  border-left: 1px solid #eef0f3;
+  border-left: 1px solid var(--border);
 }
 .panel-title {
   font-weight: 600;
@@ -508,7 +508,7 @@ onMounted(fetchDetail)
 }
 .member-item {
   padding: 8px 10px;
-  border: 1px solid #eef0f3;
+  border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 8px;
   cursor: grab;
@@ -543,7 +543,7 @@ onMounted(fetchDetail)
 .canvas-wrap {
   flex: 1;
   position: relative;
-  background: #f7fafd;
+  background: var(--bg-base);
 }
 .canvas-tip {
   position: absolute;
@@ -561,12 +561,12 @@ onMounted(fetchDetail)
   min-width: 120px;
   padding: 8px 12px;
   border-radius: 10px;
-  border: 2px solid #4f9bff;
-  background: #eaf3ff;
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
   text-align: center;
   &.leader {
-    border-color: #faad14;
-    background: #fff7e6;
+    border-color: var(--warn);
+    background: var(--warn-soft);
   }
   &.active {
     box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3);
@@ -578,7 +578,7 @@ onMounted(fetchDetail)
 }
 .node-code {
   font-size: 11px;
-  color: #6b7a90;
+  color: var(--fg-muted);
   font-family: monospace;
 }
 </style>

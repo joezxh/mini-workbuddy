@@ -260,10 +260,10 @@ onUnmounted(() => {
 
 <style scoped>
 .deep-research-task-card {
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--bg-input);
 }
 .drt-head {
   display: flex;
@@ -271,14 +271,14 @@ onUnmounted(() => {
   gap: 8px;
   flex-wrap: wrap;
 }
-.drt-icon { color: #13c2c2; }
+.drt-icon { color: var(--info); }
 .drt-title { font-weight: 600; }
-.drt-progress-pct { font-size: 12px; color: #888; margin-left: auto; }
+.drt-progress-pct { font-size: 12px; color: var(--fg-secondary); margin-left: auto; }
 .drt-bar { flex: 1 1 120px; min-width: 100px; }
 .drt-result { margin-top: 12px; }
 .drt-answer {
-  background: #fff;
-  border: 1px solid #eee;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px;
   font-size: 13px;
@@ -288,5 +288,5 @@ onUnmounted(() => {
 .drt-error { margin-top: 10px; }
 .drt-detail-body { margin-top: 16px; }
 .drt-detail-extra { margin-top: 16px; }
-.drt-section-title { font-weight: 600; margin: 12px 0 8px; color: #333; }
+.drt-section-title { font-weight: 600; margin: 12px 0 8px; color: var(--fg); }
 </style>

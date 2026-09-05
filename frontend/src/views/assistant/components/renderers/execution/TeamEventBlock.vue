@@ -26,17 +26,17 @@ const statusText = computed(() => {
 
 <style scoped lang="less">
 .team-event-block {
-  padding: 10px 12px; background: #f0f7ff; border: 1px solid #d6e4ff;
+  padding: 10px 12px; background: var(--accent-soft); border: 1px solid var(--accent-soft);
   border-radius: 8px; margin-bottom: 8px;
-  &.is-done { background: #f6ffed; border-color: #b7eb8f; }
+  &.is-done { background: var(--ok-soft); border-color: #b7eb8f; }
 }
 .team-block-header { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
-.team-name { color: #1677ff; }
+.team-name { color: var(--accent); }
 .team-status-tag {
   font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 400;
-  &.status-running { background: #e6f7ff; color: #1677ff; }
-  &.status-done { background: #f6ffed; color: #52c41a; }
-  &.status-failed { background: #fff2f0; color: #ff4d4f; }
+  &.status-running { background: var(--accent-soft); color: var(--accent); }
+  &.status-done { background: var(--ok-soft); color: var(--ok); }
+  &.status-failed { background: var(--err-soft); color: var(--err); }
 }
-.team-block-meta { font-size: 12px; color: #666; margin-top: 4px; }
+.team-block-meta { font-size: 12px; color: var(--fg-secondary); margin-top: 4px; }
 </style>
