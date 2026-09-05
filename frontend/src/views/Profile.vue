@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
 import { BellOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import {
   getNotifications, markNotificationsRead, cleanExpiredNotifications,
   type NotificationItem,
 } from '@/api/notification'
+import { getAvailableModels, type AvailableModel } from '@/api/ai-apikey'
+import ApiKeyManagement from '@/views/admin/ai/apikey/ApiKeyManagement.vue'
 import { message } from 'ant-design-vue'
 
 const userStore = useUserStore()
+const { t } = useI18n()
+const activeTab = ref('profile')
 
 const loading = ref(false)
 const passwordFormRef = ref()
@@ -35,6 +40,27 @@ const handlePasswordChange = async () => {
     })
   } finally {
     loading.value = false
+  }
+}
+
+// ── 我的模型模块 ───────────────────────────────────────────
+const modelsLoading = ref(false)
+const availableModels = ref<AvailableModel[]>([])
+const modelColumns = [
+  { title: t('profile.colModelName'), dataIndex: 'name', key: 'name', width: 160, ellipsis: true },
+  { title: t('profile.colModelId'), dataIndex: 'model', key: 'model', width: 200, ellipsis: true },
+  { title: t('profile.colPlatform'), dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
+  { title: t('profile.colKeyName'), dataIndex: 'key_name', key: 'key_name', width: 160, ellipsis: true },
+  { title: t('profile.colType'), dataIndex: 'type', key: 'type', width: 80, align: 'center' as const },
+]
+async function loadModels() {
+  modelsLoading.value = true
+  try {
+    availableModels.value = await getAvailableModels()
+  } catch (e: any) {
+    message.error(e.message || '加载模型失败')
+  } finally {
+    modelsLoading.value = false
   }
 }
 
@@ -77,7 +103,10 @@ async function cleanExpired() {
   message.success(`已清理 ${res.removed} 条过期通知`)
   await loadNotifications()
 }
-onMounted(loadNotifications)
+onMounted(() => {
+  loadNotifications()
+  loadModels()
+})
 
 </script>
 
@@ -90,7 +119,9 @@ onMounted(loadNotifications)
       </a-badge>
     </div>
 
-    <a-row :gutter="[24, 24]">
+    <a-tabs v-model:activeKey="activeTab" class="profile-tabs">
+      <a-tab-pane key="profile" :tab="t('profile.tabProfile')">
+        <a-row :gutter="[24, 24]">
       <a-col :xs="24" :lg="8">
         <!-- User Info Card -->
         <a-card title="个人信息" :bordered="false">
@@ -196,7 +227,36 @@ onMounted(loadNotifications)
           </a-form>
         </a-card>
       </a-col>
-    </a-row>
+        </a-row>
+      </a-tab-pane>
+
+      <a-tab-pane key="models" :tab="t('profile.tabModels')">
+        <a-card :bordered="false" :title="t('profile.modelsTitle')">
+          <a-table
+            :columns="modelColumns"
+            :data-source="availableModels"
+            :loading="modelsLoading"
+            row-key="id"
+            size="small"
+            :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'type'">{{ record.type ?? '-' }}</template>
+              <template v-else-if="column.key === 'platform'">
+                <a-tag color="blue">{{ record.platform }}</a-tag>
+              </template>
+            </template>
+            <template #emptyText>
+              <a-empty :description="t('profile.modelsEmpty')" />
+            </template>
+          </a-table>
+        </a-card>
+      </a-tab-pane>
+
+      <a-tab-pane key="keys" :tab="t('profile.tabKeys')">
+        <ApiKeyManagement />
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 通知抽屉 -->
     <a-drawer
@@ -243,6 +303,11 @@ onMounted(loadNotifications)
 <style scoped>
 .profile-container {
   padding: 0;
+  position: relative;
+}
+
+.profile-tabs {
+  margin-top: 8px;
 }
 
 .user-info {

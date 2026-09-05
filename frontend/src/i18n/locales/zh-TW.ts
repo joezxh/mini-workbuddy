@@ -120,6 +120,18 @@ export default {
       auditLogs: '審查日誌管理',
     },
   },
+  profile: {
+    tabProfile: '個人資訊',
+    tabModels: '我的模型',
+    tabKeys: '我的密鑰',
+    modelsTitle: '我的模型',
+    modelsEmpty: '暫無可用模型',
+    colModelName: '模型名稱',
+    colModelId: '模型 ID',
+    colPlatform: '平台',
+    colKeyName: '所屬密鑰',
+    colType: '類型',
+  },
   lang: {
     zhCN: '简体中文',
     zhTW: '繁體中文',

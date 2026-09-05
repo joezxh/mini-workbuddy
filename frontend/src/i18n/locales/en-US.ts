@@ -120,6 +120,18 @@ export default {
       auditLogs: 'Audit Logs',
     },
   },
+  profile: {
+    tabProfile: 'Profile',
+    tabModels: 'My Models',
+    tabKeys: 'My API Keys',
+    modelsTitle: 'My Models',
+    modelsEmpty: 'No available models',
+    colModelName: 'Model Name',
+    colModelId: 'Model ID',
+    colPlatform: 'Platform',
+    colKeyName: 'API Key',
+    colType: 'Type',
+  },
   lang: {
     zhCN: '简体中文',
     zhTW: '繁體中文',

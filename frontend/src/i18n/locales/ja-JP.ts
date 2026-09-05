@@ -120,6 +120,18 @@ export default {
       auditLogs: '監査ログ管理',
     },
   },
+  profile: {
+    tabProfile: 'プロフィール',
+    tabModels: 'マイモデル',
+    tabKeys: 'マイAPIキー',
+    modelsTitle: 'マイモデル',
+    modelsEmpty: '利用可能なモデルはありません',
+    colModelName: 'モデル名',
+    colModelId: 'モデルID',
+    colPlatform: 'プラットフォーム',
+    colKeyName: '所属キー',
+    colType: 'タイプ',
+  },
   lang: {
     zhCN: '简体中文',
     zhTW: '繁體中文',
