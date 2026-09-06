@@ -360,8 +360,8 @@ export interface RoleForm {
   description?: string
 }
 
-export function getRoleList() {
-  return request.get<any>('/api/v1/admin/roles')
+export function getRoleList(params?: { tenant_id?: number | null }) {
+  return request.get<any>('/api/v1/admin/roles', { params })
 }
 export function createRole(data: RoleForm) {
   return request.post('/api/v1/admin/roles', data)
@@ -378,6 +378,7 @@ export interface AuditLogParams {
   limit?: number
   user_id?: number | string
   operation_type?: string
+  tenant_id?: number | null
 }
 
 export function getAuditLogs(params: AuditLogParams) {
@@ -430,7 +431,7 @@ export interface AuditLogItem {
 // ============================================================
 // 用户列表（兼容旧接口参数格式）
 // ============================================================
-export function getUserListBySkip(params: { skip?: number; limit?: number }) {
+export function getUserListBySkip(params: { skip?: number; limit?: number; tenant_id?: number | null }) {
   return request.get('/api/v1/admin/users', { params })
 }
 
@@ -452,6 +453,7 @@ export interface MenuItem {
   visible: number  // 1=显示 0=隐藏
   keepAlive: number  // 1=缓存 0=不缓存
   alwaysShow: number  // 1=总是 0=不是
+  i18nKey?: string  // 多语言翻译 key
   children?: MenuItem[]
 }
 
@@ -476,6 +478,7 @@ export interface MenuForm {
   visible: number
   keepAlive: number
   alwaysShow: number
+  i18nKey?: string  // 多语言翻译 key
 }
 
 export function getMenuList(params?: { name?: string; status?: number }) {

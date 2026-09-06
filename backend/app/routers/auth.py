@@ -225,7 +225,7 @@ def get_regions(
     db: Session = Depends(get_db)
 ):
     """获取用户可访问的地区树"""
-    from ..services.region_service import RegionService
+    from app.services.sys.region_service import RegionService
     
     region_service = RegionService(db)
     

@@ -14,9 +14,10 @@
           <component v-if="tab.icon && iconMap[tab.icon]" :is="iconMap[tab.icon]" class="tab-icon" />
           <span class="tab-title">{{ tab.name }}</span>
           <span
+            v-if="tab.closable !== false"
             class="tab-close"
             @click.stop="closeTab(tab.key)"
-            title="关闭"
+            :title="t('common.close')"
           >&times;</span>
         </div>
       </div>
@@ -26,11 +27,6 @@
         <div v-for="tab in openTabs" :key="tab.key" v-show="activeTab === tab.key" class="content-section">
             <component :is="getTabComponent(tab.key)" v-bind="getTabProps(tab.key)" />
         </div>
-      </div>
-
-      <!-- 无 Tab 时默认展示控制台门户 -->
-      <div v-if="openTabs.length === 0" class="content-section">
-        <DashboardPanel />
       </div>
     </div>
   </div>
@@ -95,6 +91,7 @@ interface TabItem {
   icon: string
   component: Component
   props?: Record<string, any>
+  closable?: boolean
 }
 const openTabs = ref<TabItem[]>([])
 const activeTab = ref('')
@@ -160,6 +157,21 @@ function activateTab(key: string) {
   activeTab.value = key
 }
 
+// 始终保留「控制台」页签（不可关闭），作为首页默认展示
+function openConsoleTab() {
+  if (openTabs.value.some(tab => tab.key === 'dashboard')) return
+  openTabs.value.push({
+    key: 'dashboard',
+    name: t('userMenu.dashboard'),
+    icon: 'DashboardOutlined',
+    component: markRaw(DashboardPanel),
+    closable: false,
+  })
+  if (!activeTab.value) activeTab.value = 'dashboard'
+}
+// 同步初始化「控制台」页签，确保首屏即带 Tab（与菜单打开行为一致）
+openConsoleTab()
+
 // 提供给子组件的调用链路过滤器（来自 AgentManagement「链路」按钮跳转）
 const executionFilter = reactive<{ mode?: string; targetId?: string; label?: string }>({})
 
@@ -174,6 +186,8 @@ provide('executionFilter', executionFilter)
 
 /** 关闭指定 Tab */
 function closeTab(key: string) {
+  const tab = openTabs.value.find(t => t.key === key)
+  if (tab?.closable === false) return // 不可关闭的页签（如控制台）禁止删除
   const idx = openTabs.value.findIndex(t => t.key === key)
   if (idx === -1) return
   openTabs.value.splice(idx, 1)
@@ -285,10 +299,14 @@ async function fetchMenus() {
 
 onMounted(async () => {
   await fetchMenus()
+  // 始终保留「控制台」页签（不可关闭）
+  openConsoleTab()
   // 根据 URL 参数（来自左侧 rail 的点击）打开初始 Tab
   const tab = route.query.tab as string
   if (tab && componentMap[tab]) {
     openOrActivateTab(tab)
+  } else if (!activeTab.value) {
+    activeTab.value = 'dashboard'
   }
 
   // 监听来自子组件的“打开技能管理”事件（如推理规则页点击 skill_code）

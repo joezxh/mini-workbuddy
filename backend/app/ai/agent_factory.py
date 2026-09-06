@@ -5,6 +5,9 @@ from typing import AsyncGenerator, Optional
 from sqlalchemy.orm import Session
 
 
+from app.ai.msg_utils import text_of
+
+
 class ResearchAgent:
     """深度研究 Agent 封装 — 将 ResearchOrchestrator 适配为 AgentScope Agent 接口。
 
@@ -23,7 +26,7 @@ class ResearchAgent:
         """运行 ResearchOrchestrator 并 yield 研究事件。"""
         from app.ai.research.orchestrator import ResearchOrchestrator
 
-        topic = getattr(user_msg, "content", str(user_msg))
+        topic = text_of(user_msg)
         orchestrator = ResearchOrchestrator(
             db=self._db,
             model_id=self._model_id,
@@ -49,7 +52,7 @@ class SkillAgent:
         """运行 SkillExecutionService 并 yield 技能执行事件。"""
         from app.ai.skills.execution import SkillExecutionService
 
-        topic = getattr(user_msg, "content", str(user_msg))
+        topic = text_of(user_msg)
         skill_name = (self._skill_config or {}).get("name", "general")
         service = SkillExecutionService()
         async for skill_event in service.execute(
@@ -74,7 +77,7 @@ class TeamAgent:
         """运行团队编排并 yield 执行事件。"""
         from app.ai.team_manager import TeamManager
 
-        topic = getattr(user_msg, "content", str(user_msg))
+        topic = text_of(user_msg)
         manager = TeamManager(self._db)
         async for event in manager.run_team(
             team_id=self._team_id,
@@ -116,25 +119,54 @@ class AgentFactory:
             case _:
                 raise ValueError(f"Unknown session_type: {session_type}")
 
+    # ── 公共构建（agentscope 2.x 契约）────────────────────────
+    def _build_model_and_toolkit(self, config: dict):
+        """构建 AgentScope 2.x 需要的 (model, toolkit)。
+
+        2.x 的 ``Agent`` 需要真实的 ChatModel 实例与 Toolkit，不再接受旧版的
+        ``model_config_name`` / ``tools`` 列表。model_id 为 DB 模型 ID 时走
+        DB 配置，否则（如 "default" 这类占位字符串）降级到 ENV 兜底模型。
+        """
+        from app.ai.strategy.factory_ext import (
+            build_default_model_config,
+            build_model,
+            resolve_model_config,
+        )
+        from app.ai.tool_manager.manager import build_toolkit
+
+        raw = config.get("model_id_db") or config.get("model_id")
+        cfg = {}
+        if isinstance(raw, int) or (isinstance(raw, str) and raw.isdigit()):
+            cfg = resolve_model_config(int(raw))
+        model = build_model(cfg or build_default_model_config())
+        # 工具注入：config["tools"] 为 tool_key 列表，按 DB 定义实例化
+        toolkit = build_toolkit(self._db, config.get("tools"))
+        return model, toolkit
+
     def _create_general_agent(self, config: dict):
         """通用对话 Agent"""
         from agentscope.agent import Agent
+        model, toolkit = self._build_model_and_toolkit(config)
         return Agent(
             name=config.get("name", "助手"),
-            model_config_name=config.get("model_id", "default"),
-            sys_prompt=config.get("sys_prompt", "你是一个智能助手，可以回答各种问题。"),
-            tools=config.get("tools", []),
+            system_prompt=config.get("sys_prompt", "你是一个智能助手，可以回答各种问题。"),
+            model=model,
+            toolkit=toolkit,
         )
 
     def _create_thinking_agent(self, config: dict):
-        """深度思考 Agent — 启用 thinking 模式进行逐步推理"""
+        """深度思考 Agent — 通过提示词引导逐步推理。
+
+        注：旧版 ``thinking=True`` 参数在 2.x 已移除；若底层模型原生支持思考，
+        可在模型配置的 ``parameters`` 中开启。
+        """
         from agentscope.agent import Agent
+        model, toolkit = self._build_model_and_toolkit(config)
         return Agent(
             name=config.get("name", "深度思考"),
-            model_config_name=config.get("model_id", "default"),
-            sys_prompt=config.get("sys_prompt", "你是一个深度思考助手，面对复杂问题时会逐步分解和推理。请先分析问题结构，然后一步步展开推理过程。"),
-            thinking=True,
-            tools=config.get("tools", []),
+            system_prompt=config.get("sys_prompt", "你是一个深度思考助手，面对复杂问题时会逐步分解和推理。请先分析问题结构，然后一步步展开推理过程。"),
+            model=model,
+            toolkit=toolkit,
         )
 
     def _create_research_agent(self, config: dict):
@@ -158,11 +190,12 @@ class AgentFactory:
     def _create_expert_agent(self, config: dict):
         """专家 Agent — 从 agent_config 表读取专家人设"""
         from agentscope.agent import Agent
+        model, toolkit = self._build_model_and_toolkit(config)
         return Agent(
             name=config.get("name", "专家"),
-            model_config_name=config.get("model_id", "default"),
-            sys_prompt=config.get("sys_prompt", "你是一位专业领域助手，在特定领域具有深入的专业知识和经验。"),
-            tools=config.get("tools", []),
+            system_prompt=config.get("sys_prompt", "你是一位专业领域助手，在特定领域具有深入的专业知识和经验。"),
+            model=model,
+            toolkit=toolkit,
         )
 
     def _create_team_agent(self, config: dict):

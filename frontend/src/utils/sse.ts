@@ -17,7 +17,6 @@ export function createSSEConnection(url: string, options: SSEOptions = {}) {
   const eventSource = new EventSource(fullUrl)
 
   eventSource.onopen = () => {
-    console.log('SSE 连接已建立')
     options.onOpen?.()
   }
 

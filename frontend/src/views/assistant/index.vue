@@ -4,11 +4,7 @@
     <div class="ai-page-header">
       <div class="header-logo">
         <div class="logo-icon">
-          <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-            <polygon points="14,2 26,8 26,20 14,26 2,20 2,8" fill="none" stroke="#1677ff" stroke-width="1.5" />
-            <polygon points="14,6 22,10 22,18 14,22 6,18 6,10" fill="rgba(22,119,255,0.12)" stroke="#4096ff" stroke-width="1" />
-            <circle cx="14" cy="14" r="3" fill="#1677ff" />
-          </svg>
+          <img src="/brand/logo-icon.svg" width="26" height="26" alt="" />
         </div>
         <h1 class="logo-text">智能调解</h1>
       </div>

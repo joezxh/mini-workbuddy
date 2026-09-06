@@ -9,18 +9,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 
 import numpy as np
 from loguru import logger
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.ai.embedding_client import get_embedding_client, EmbeddingClient
 from app.config import settings
 # TODO: 域特定模型已移除，Embedding 业务服务待适配
 # from app.models.risk_ext import RiskEventExt, RiskPersonExt
-from app.services.embedding_cache_service import EmbeddingCacheService
+from app.services.ai.embedding_cache_service import EmbeddingCacheService
 
 
 class EmbeddingService:

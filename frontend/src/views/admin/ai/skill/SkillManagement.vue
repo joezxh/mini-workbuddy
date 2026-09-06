@@ -941,7 +941,6 @@ async function loadHubRepos() {
   hubReposLoading.value = true
   try {
     const repos = await listHubRepos()
-    console.log('[hub-debug] loadHubRepos ->', repos)
     hubRepos.value = repos || []
     if (!hubActiveRepoId.value && hubRepos.value.length) {
       hubActiveRepoId.value = hubRepos.value[0].id
@@ -970,7 +969,6 @@ async function loadHubCategoriesAndSkills() {
     hubCategories.value = cats || []
     hubSkills.value = list.items || []
     hubSkillTotal.value = list.total || 0
-    console.log('[hub-debug] cats ->', cats, '| skills ->', list.items, '| total ->', list.total)
   } catch (e: any) {
     message.error('加载技能列表失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
   } finally {
@@ -1347,7 +1345,6 @@ async function handleDeleteScript(s: SkillScript) {
 async function loadSessions() {
   if (!selected.value?.package_id) return
   
-  console.log('开始加载会话列表:', selected.value.package_id)
   sessionsLoading.value = true
   messages.value = []
   currentSessionId.value = null
@@ -1358,12 +1355,9 @@ async function loadSessions() {
       page: sessionPage.value,
       page_size: sessionPageSize.value,
     }
-    console.log('请求参数:', req)
     const res = await postSessions(req)
-    console.log('响应结果:', res)
     sessions.value = res.sessions || []
     sessionPagination.value.total = res.total || 0
-    console.log(`成功加载 ${sessions.value.length} 条会话`)
   } catch (e: any) {
     console.error('加载会话列表失败:', e)
     message.error(e?.data?.detail || e?.message || String(e))

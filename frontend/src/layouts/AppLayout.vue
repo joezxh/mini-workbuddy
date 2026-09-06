@@ -25,7 +25,7 @@ import AppHeader from './components/AppHeader.vue'
 .workspace {
   display: flex !important;
   flex-direction: row !important;
-  height: 100vh;
+  height: 100dvh;
   background: transparent;
 }
 
@@ -34,7 +34,7 @@ import AppHeader from './components/AppHeader.vue'
   min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: transparent;
 }

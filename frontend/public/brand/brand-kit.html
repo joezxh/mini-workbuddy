@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MinWorkBuddy Brand Kit</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #070B14;
+  --bg-panel: #0D1321;
+  --bg-surface: #151D2E;
+  --bg-elevated: #1C2640;
+  --border: #1E2A42;
+  --fg: #E8ECF1;
+  --fg-secondary: #8892A4;
+  --fg-muted: #4A5568;
+  --accent-indigo: #4F6EF7;
+  --accent-teal: #22D3AE;
+  --accent-amber: #F5A623;
+  --accent-rose: #F472B6;
+  --gradient-brand: linear-gradient(135deg, #4F6EF7, #22D3AE);
+  --gutter: 12px;
+  --radius: 16px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg-deep);
+  color: var(--fg);
+  font-family: 'IBM Plex Sans', 'Space Grotesk', system-ui, sans-serif;
+  min-height: 100dvh;
+  padding: 40px;
+}
+.brand-board {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: auto;
+  gap: var(--gutter);
+}
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+}
+.panel-label {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--fg-muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+/* Panel 1: Logo Cover */
+.p-logo {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 60px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(79,110,247,0.08) 0%, var(--bg-panel) 70%);
+}
+.p-logo .logo-icon { width: 120px; height: 120px; margin-bottom: 32px; }
+.p-logo .wordmark {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--fg);
+}
+.p-logo .wordmark span { background: var(--gradient-brand); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.p-logo .tagline {
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--fg-secondary);
+  margin-top: 12px;
+  text-transform: uppercase;
+}
+
+/* Panel 2: Logo Construction */
+.p-construct {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(34,211,174,0.05) 0%, var(--bg-panel) 70%);
+}
+.p-construct svg { width: 100%; max-width: 180px; }
+
+/* Panel 3: Digital Application */
+.p-digital {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.browser-mock {
+  background: var(--bg-surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.browser-dot { width: 8px; height: 8px; border-radius: 50%; }
+.browser-dot:nth-child(1) { background: #F472B6; }
+.browser-dot:nth-child(2) { background: #F5A623; }
+.browser-dot:nth-child(3) { background: #22D3AE; }
+.browser-url {
+  flex: 1;
+  margin-left: 8px;
+  background: var(--bg-surface);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--fg-secondary);
+}
+.browser-content {
+  padding: 20px;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mock-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mock-logo-sm { width: 24px; height: 24px; }
+.mock-title { font-size: 13px; font-weight: 600; color: var(--fg); }
+.mock-nav { display: flex; gap: 12px; margin-left: auto; }
+.mock-nav-item { width: 32px; height: 6px; border-radius: 3px; background: var(--bg-elevated); }
+.mock-card {
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.mock-card-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--gradient-brand); opacity: 0.7; }
+.mock-card-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.mock-line { height: 5px; border-radius: 3px; background: var(--bg-surface); }
+.mock-line:nth-child(1) { width: 70%; }
+.mock-line:nth-child(2) { width: 50%; }
+
+/* Terminal mock */
+.term-mock {
+  background: #0A0E18;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.term-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.term-bar span { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--fg-muted); }
+.term-body {
+  padding: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--fg-secondary);
+}
+.term-body .prompt { color: var(--accent-teal); }
+.term-body .cmd { color: var(--fg); }
+.term-body .flag { color: var(--accent-indigo); }
+.term-body .str { color: var(--accent-amber); }
+
+/* Panel 4: Brand Essence */
+.p-essence {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 32px;
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 50%, rgba(79,110,247,0.06) 0%, var(--bg-panel) 70%);
+}
+.p-essence .big-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+  margin-bottom: 16px;
+}
+.p-essence .big-text em {
+  font-style: normal;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.p-essence .sub-text {
+  font-size: 12px;
+  color: var(--fg-muted);
+  letter-spacing: 1px;
+}
+
+/* Panel 5: Color System */
+.p-color {
+  grid-column: 2;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.p-color .section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.color-row { display: flex; gap: 10px; }
+.color-chip {
+  flex: 1;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px;
+  position: relative;
+  overflow: hidden;
+}
+.color-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.color-chip .hex {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: rgba(255,255,255,0.7);
+}
+.color-chip .name {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 2px;
+}
+
+/* Gradient strip */
+.grad-strip {
+  height: 48px;
+  border-radius: 10px;
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: 1px;
+}
+
+/* Panel 6: Typography */
+.p-type {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.type-specimen {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.type-specimen .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--fg-muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.type-specimen .sample-primary {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--fg);
+  line-height: 1.1;
+}
+.type-specimen .sample-secondary {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--fg-secondary);
+  line-height: 1.5;
+}
+.type-specimen .sample-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--accent-teal);
+  background: rgba(34,211,174,0.08);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(34,211,174,0.15);
+}
+
+/* Panel 7: Physical / Icon Applications */
+.p-physical {
+  grid-column: 1 / 2;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.icon-cell {
+  aspect-ratio: 1;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.icon-cell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.04);
+}
+.icon-cell svg { width: 60%; height: 60%; }
+.app-row {
+  display: flex;
+  gap: 12px;
+}
+.app-badge {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-badge svg { width: 28px; height: 28px; }
+
+/* Panel 8: Image Direction */
+.p-image {
+  padding: 0;
+  height: 100%;
+  min-height: 200px;
+  background:
+    radial-gradient(ellipse at 30% 30%, rgba(79,110,247,0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 70%, rgba(34,211,174,0.12) 0%, transparent 50%),
+    linear-gradient(180deg, #0A1628 0%, #0D1B2A 40%, #0B1A20 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.p-image .overlay-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  font-weight: 300;
+  color: rgba(255,255,255,0.15);
+  letter-spacing: 8px;
+  text-transform: uppercase;
+}
+.p-image .grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(79,110,247,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,110,247,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Panel 9: System Detail */
+.p-system {
+  grid-column: 2 / 4;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  color: var(--fg-secondary);
+  background: var(--bg-surface);
+}
+.chip.active {
+  background: var(--gradient-brand);
+  color: #fff;
+  border-color: transparent;
+}
+.input-mock {
+  display: flex;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  gap: 10px;
+}
+.input-mock .input-placeholder {
+  flex: 1;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.input-mock .send-btn {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--gradient-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-mock .send-btn svg { width: 14px; height: 14px; }
+
+.stat-row {
+  display: flex;
+  gap: 12px;
+}
+.stat-card {
+  flex: 1;
+  background: var(--bg-surface);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+.stat-card .stat-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.stat-card .stat-label {
+  font-size: 10px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Footer */
+.brand-footer {
+  max-width: 1200px;
+  margin: 24px auto 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.brand-footer span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--fg-muted);
+  letter-spacing: 1px;
+}
+</style>
+</head>
+<body>
+
+<div class="brand-board">
+
+  <!-- P1: Logo Cover -->
+  <div class="panel p-logo">
+    <svg class="logo-icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="p1-brandGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient>
+        <linearGradient id="p1-accentGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22D3AE"/><stop offset="100%" stop-color="#4F6EF7"/></linearGradient>
+        <filter id="p1-glow"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#p1-brandGrad)" stroke-width="2" stroke-linejoin="round" opacity="0.6"/>
+      <line x1="32" y1="20" x2="22" y2="40" stroke="url(#p1-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+      <line x1="32" y1="20" x2="42" y2="40" stroke="url(#p1-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+      <line x1="22" y1="40" x2="42" y2="40" stroke="url(#p1-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+      <circle cx="32" cy="33" r="3" fill="url(#p1-brandGrad)" filter="url(#p1-glow)" opacity="0.5"/>
+      <circle cx="32" cy="20" r="4.5" fill="url(#p1-brandGrad)" filter="url(#p1-glow)"/><circle cx="32" cy="20" r="2" fill="#fff" opacity="0.9"/>
+      <circle cx="22" cy="40" r="3.5" fill="url(#p1-accentGrad)" filter="url(#p1-glow)"/><circle cx="22" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+      <circle cx="42" cy="40" r="3.5" fill="url(#p1-accentGrad)" filter="url(#p1-glow)"/><circle cx="42" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+    </svg>
+    <div class="wordmark">Mini<span>Work</span>Buddy</div>
+    <div class="tagline">AI Workstation</div>
+    <span class="panel-label">01 — Logo</span>
+  </div>
+
+  <!-- P2: Logo Construction -->
+  <div class="panel p-construct">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="b2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient>
+      </defs>
+      <!-- Grid lines -->
+      <line x1="100" y1="20" x2="100" y2="180" stroke="#1E2A42" stroke-width="0.5"/>
+      <line x1="20" y1="100" x2="180" y2="100" stroke="#1E2A42" stroke-width="0.5"/>
+      <circle cx="100" cy="100" r="70" fill="none" stroke="#1E2A42" stroke-width="0.5" stroke-dasharray="3,3"/>
+      <circle cx="100" cy="100" r="45" fill="none" stroke="#1E2A42" stroke-width="0.5" stroke-dasharray="3,3"/>
+      <!-- Hexagon -->
+      <polygon points="100,25 163,62 163,138 100,175 37,138 37,62" fill="none" stroke="url(#b2)" stroke-width="1.5" opacity="0.5"/>
+      <!-- Construction lines -->
+      <line x1="100" y1="60" x2="70" y2="125" stroke="#4F6EF7" stroke-width="0.8" opacity="0.3"/>
+      <line x1="100" y1="60" x2="130" y2="125" stroke="#4F6EF7" stroke-width="0.8" opacity="0.3"/>
+      <line x1="70" y1="125" x2="130" y2="125" stroke="#4F6EF7" stroke-width="0.8" opacity="0.3"/>
+      <!-- Nodes -->
+      <circle cx="100" cy="100" r="8" fill="#4F6EF7" opacity="0.2"/>
+      <circle cx="100" cy="60" r="12" fill="#4F6EF7" opacity="0.8"/><circle cx="100" cy="60" r="5" fill="#fff" opacity="0.8"/>
+      <circle cx="70" cy="125" r="10" fill="#22D3AE" opacity="0.8"/><circle cx="70" cy="125" r="4" fill="#fff" opacity="0.8"/>
+      <circle cx="130" cy="125" r="10" fill="#22D3AE" opacity="0.8"/><circle cx="130" cy="125" r="4" fill="#fff" opacity="0.8"/>
+      <!-- Labels -->
+      <text x="100" y="48" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7" fill="#8892A4">AGENT</text>
+      <text x="55" y="140" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7" fill="#8892A4">TEAM</text>
+      <text x="145" y="140" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7" fill="#8892A4">SKILL</text>
+      <text x="100" y="190" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7" fill="#4A5568">CONSTRUCTION GRID</text>
+    </svg>
+    <span class="panel-label">02 — Construct</span>
+  </div>
+
+  <!-- P3: Digital Application -->
+  <div class="panel p-digital">
+    <div class="browser-mock">
+      <div class="browser-bar">
+        <div class="browser-dot"></div><div class="browser-dot"></div><div class="browser-dot"></div>
+        <div class="browser-url">localhost:3000</div>
+      </div>
+      <div class="browser-content">
+        <div class="mock-header">
+          <svg class="mock-logo-sm" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="p3-brandGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient>
+              <linearGradient id="p3-accentGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22D3AE"/><stop offset="100%" stop-color="#4F6EF7"/></linearGradient>
+              <filter id="p3-glow"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#p3-brandGrad)" stroke-width="2" stroke-linejoin="round" opacity="0.6"/>
+            <line x1="32" y1="20" x2="22" y2="40" stroke="url(#p3-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+            <line x1="32" y1="20" x2="42" y2="40" stroke="url(#p3-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+            <line x1="22" y1="40" x2="42" y2="40" stroke="url(#p3-brandGrad)" stroke-width="1.2" opacity="0.4"/>
+            <circle cx="32" cy="33" r="3" fill="url(#p3-brandGrad)" filter="url(#p3-glow)" opacity="0.5"/>
+            <circle cx="32" cy="20" r="4.5" fill="url(#p3-brandGrad)" filter="url(#p3-glow)"/><circle cx="32" cy="20" r="2" fill="#fff" opacity="0.9"/>
+            <circle cx="22" cy="40" r="3.5" fill="url(#p3-accentGrad)" filter="url(#p3-glow)"/><circle cx="22" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+            <circle cx="42" cy="40" r="3.5" fill="url(#p3-accentGrad)" filter="url(#p3-glow)"/><circle cx="42" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+          </svg>
+          <span class="mock-title">MinWorkBuddy</span>
+          <div class="mock-nav"><div class="mock-nav-item"></div><div class="mock-nav-item"></div><div class="mock-nav-item"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-icon"></div>
+          <div class="mock-card-lines"><div class="mock-line"></div><div class="mock-line"></div></div>
+        </div>
+        <div class="mock-card">
+          <div class="mock-card-icon" style="background:linear-gradient(135deg,#22D3AE,#4F6EF7)"></div>
+          <div class="mock-card-lines"><div class="mock-line"></div><div class="mock-line"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="term-mock">
+      <div class="term-bar"><span>Terminal</span></div>
+      <div class="term-body">
+        <span class="prompt">$</span> <span class="cmd">docker compose</span> <span class="flag">up -d</span><br>
+        <span style="color:#22D3AE">✓</span> <span class="str">postgres</span> started<br>
+        <span style="color:#22D3AE">✓</span> <span class="str">redis</span> started<br>
+        <span style="color:#22D3AE">✓</span> <span class="str">backend</span> running on <span class="flag">:8000</span><br>
+        <span style="color:#22D3AE">✓</span> <span class="str">frontend</span> running on <span class="flag">:3000</span>
+      </div>
+    </div>
+    <span class="panel-label">03 — Digital</span>
+  </div>
+
+  <!-- P4: Brand Essence -->
+  <div class="panel p-essence">
+    <div class="big-text">多智能体协作<br><em>一站式 AI 工作台</em></div>
+    <div class="sub-text">AgentScope 2.0.7 Powered</div>
+    <span class="panel-label">04 — Essence</span>
+  </div>
+
+  <!-- P5: Color System -->
+  <div class="panel p-color">
+    <div class="section-title">Color System</div>
+    <div class="color-row">
+      <div class="color-chip" style="background:#4F6EF7">
+        <div class="name">Indigo</div><div class="hex">#4F6EF7</div>
+      </div>
+      <div class="color-chip" style="background:#22D3AE">
+        <div class="name">Teal</div><div class="hex">#22D3AE</div>
+      </div>
+      <div class="color-chip" style="background:#F5A623">
+        <div class="name">Amber</div><div class="hex">#F5A623</div>
+      </div>
+    </div>
+    <div class="color-row">
+      <div class="color-chip" style="background:#0D1321">
+        <div class="name">Deep</div><div class="hex">#0D1321</div>
+      </div>
+      <div class="color-chip" style="background:#151D2E">
+        <div class="name">Surface</div><div class="hex">#151D2E</div>
+      </div>
+      <div class="color-chip" style="background:#1C2640">
+        <div class="name">Elevated</div><div class="hex">#1C2640</div>
+      </div>
+    </div>
+    <div class="grad-strip">Indigo → Teal / Brand Gradient</div>
+    <span class="panel-label">05 — Color</span>
+  </div>
+
+  <!-- P6: Typography -->
+  <div class="panel p-type">
+    <div class="type-specimen">
+      <div class="label">Display — Space Grotesk</div>
+      <div class="sample-primary">Aa Bb Cc</div>
+    </div>
+    <div class="type-specimen">
+      <div class="label">Body — IBM Plex Sans</div>
+      <div class="sample-secondary">多智能体协作，一站式 AI 工作台<br>The quick brown fox jumps over</div>
+    </div>
+    <div class="type-specimen">
+      <div class="label">Mono — JetBrains Mono</div>
+      <div class="sample-mono">docker compose up -d --build</div>
+    </div>
+    <span class="panel-label">06 — Type</span>
+  </div>
+
+  <!-- P7: Physical / Icon Applications -->
+  <div class="panel p-physical">
+    <div class="section-title" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--fg-muted);text-transform:uppercase;margin-bottom:4px;">Icon System</div>
+    <div class="icon-grid">
+      <div class="icon-cell" style="background:var(--bg-surface)">
+        <svg viewBox="0 0 64 64"><defs><linearGradient id="b7" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="none" stroke="url(#b7)" stroke-width="2.5"/></svg>
+      </div>
+      <div class="icon-cell" style="background:var(--gradient-brand)">
+        <svg viewBox="0 0 64 64"><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="none" stroke="#fff" stroke-width="2.5" opacity="0.9"/></svg>
+      </div>
+      <div class="icon-cell" style="background:var(--bg-surface)">
+        <svg viewBox="0 0 64 64"><defs><linearGradient id="b7b" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="url(#b7b)" opacity="0.2"/><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="none" stroke="url(#b7b)" stroke-width="2"/></svg>
+      </div>
+      <div class="icon-cell" style="background:#fff">
+        <svg viewBox="0 0 64 64"><defs><linearGradient id="b7c" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" fill="none" stroke="url(#b7c)" stroke-width="2.5"/></svg>
+      </div>
+    </div>
+    <div class="section-title" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--fg-muted);text-transform:uppercase;margin-top:8px;">App Icons</div>
+    <div class="app-row">
+      <div class="app-badge" style="background:var(--bg-surface);border-radius:14px">
+        <svg viewBox="0 0 64 64"><defs><linearGradient id="b7d" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#b7d)" stroke-width="2" opacity="0.6"/><circle cx="32" cy="20" r="4" fill="url(#b7d)"/><circle cx="22" cy="40" r="3" fill="url(#b7d)"/><circle cx="42" cy="40" r="3" fill="url(#b7d)"/></svg>
+      </div>
+      <div class="app-badge" style="background:var(--gradient-brand);border-radius:14px">
+        <svg viewBox="0 0 64 64"><polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="#fff" stroke-width="2" opacity="0.8"/><circle cx="32" cy="20" r="4" fill="#fff" opacity="0.9"/><circle cx="22" cy="40" r="3" fill="#fff" opacity="0.9"/><circle cx="42" cy="40" r="3" fill="#fff" opacity="0.9"/></svg>
+      </div>
+      <div class="app-badge" style="background:var(--bg-elevated);border-radius:50%;width:48px;height:48px">
+        <svg viewBox="0 0 64 64"><defs><linearGradient id="b7e" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#b7e)" stroke-width="2.5" opacity="0.7"/><circle cx="32" cy="20" r="4.5" fill="url(#b7e)"/><circle cx="22" cy="40" r="3.5" fill="url(#b7e)"/><circle cx="42" cy="40" r="3.5" fill="url(#b7e)"/></svg>
+      </div>
+    </div>
+    <span class="panel-label">07 — Icons</span>
+  </div>
+
+  <!-- P8: Image Direction -->
+  <div class="panel p-image">
+    <div class="grid-overlay"></div>
+    <div class="overlay-text">VISUAL</div>
+    <span class="panel-label" style="color:rgba(255,255,255,0.2)">08 — Image</span>
+  </div>
+
+  <!-- P9: System Detail -->
+  <div class="panel p-system">
+    <div class="section-title" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--fg-muted);text-transform:uppercase;margin-bottom:4px;">Component System</div>
+    <div class="chip-row">
+      <div class="chip active">AI 对话</div>
+      <div class="chip">深度思考</div>
+      <div class="chip">深度研究</div>
+      <div class="chip active">技能</div>
+      <div class="chip">Agent 专家</div>
+      <div class="chip">AgentTeam</div>
+      <div class="chip">知识库</div>
+      <div class="chip active">MCP</div>
+    </div>
+    <div class="input-mock">
+      <svg width="18" height="18" viewBox="0 0 64 64"><defs><linearGradient id="b9" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4F6EF7"/><stop offset="100%" stop-color="#22D3AE"/></linearGradient></defs><polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#b9)" stroke-width="3" opacity="0.5"/><circle cx="32" cy="22" r="5" fill="url(#b9)"/><circle cx="22" cy="40" r="4" fill="url(#b9)"/><circle cx="42" cy="40" r="4" fill="url(#b9)"/></svg>
+      <div class="input-placeholder">向 MinWorkBuddy 提问...</div>
+      <div class="send-btn">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value">10+</div>
+        <div class="stat-label">核心模块</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">∞</div>
+        <div class="stat-label">可扩展技能</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">24/7</div>
+        <div class="stat-label">自动化调度</div>
+      </div>
+    </div>
+    <span class="panel-label">09 — System</span>
+  </div>
+
+</div>
+
+<div class="brand-footer">
+  <span>MINWORKBUDDY BRAND KIT v1.0</span>
+  <span>2026-09-06 — AGENTSCOPE 2.0.7</span>
+  <span>PAGE 01 / 01</span>
+</div>
+
+</body>
+</html>

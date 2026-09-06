@@ -40,10 +40,10 @@ export const useUserStore = defineStore('user', () => {
       }
       token.value = accessToken
       setToken(accessToken)
-      // 存储租户 ID
-      const resTenantId = res?.tenantId as number | undefined
-      if (resTenantId) {
-        setTenantId(resTenantId)
+      // 存储租户 ID（超级管理员 tenantId=0 也必须写入，不能用真值判断）
+      const resTenantId = res?.tenantId
+      if (resTenantId !== undefined && resTenantId !== null) {
+        setTenantId(Number(resTenantId))
       }
       await fetchUserInfo()
       // 登录成功后批量拉取字典并写入 localStorage

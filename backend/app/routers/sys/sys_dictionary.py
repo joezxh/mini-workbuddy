@@ -10,7 +10,7 @@ from app.schemas.sys.sys_dictionary import (
     SysDictionaryItemCreate, SysDictionaryItemUpdate, SysDictionaryItemResponse,
     SysDictionaryTreeNode, DictType, RegionResponse, RegionTreeNode
 )
-from app.services.sys_dictionary_service import clear_dict_cache
+from app.services.sys.sys_dictionary_service import clear_dict_cache
 
 router = APIRouter(route_class=AuditLogRoute)
 
@@ -374,7 +374,7 @@ def get_regions(
     db: Session = Depends(get_db)
 ):
     """获取行政区域列表（从 sys_region 表查询，支持层级查询）"""
-    from app.services.region_service import RegionService
+    from app.services.sys.region_service import RegionService
     region_service = RegionService(db)
     return region_service.get_regions(parent_code=parent_code)
 
@@ -385,7 +385,7 @@ def get_regions_tree(
     db: Session = Depends(get_db)
 ):
     """获取行政区域树形结构（从 sys_region 表查询）"""
-    from app.services.region_service import RegionService
+    from app.services.sys.region_service import RegionService
     region_service = RegionService(db)
     return region_service.get_region_tree(parent_code=parent_code)
 
@@ -461,7 +461,7 @@ def create_region(
 ):
     """新增行政区域"""
     from app.models.sys.sys_user import SysRegion
-    from app.services.region_service import clear_region_cache
+    from app.services.sys.region_service import clear_region_cache
     # 检查编码唯一性
     if db.query(SysRegion).filter(SysRegion.region_code == data.get('region_code')).first():
         raise HTTPException(status_code=400, detail="区域编码已存在")
@@ -481,7 +481,7 @@ def update_region(
 ):
     """更新行政区域"""
     from app.models.sys.sys_user import SysRegion
-    from app.services.region_service import clear_region_cache
+    from app.services.sys.region_service import clear_region_cache
     region = db.query(SysRegion).filter(SysRegion.region_code == region_code).first()
     if not region:
         raise HTTPException(status_code=404, detail="区域不存在")
@@ -501,7 +501,7 @@ def delete_region(
     db: Session = Depends(get_db)
 ):
     """删除行政区域（同时删除所有子区域）"""
-    from app.services.region_service import clear_region_cache
+    from app.services.sys.region_service import clear_region_cache
     from sqlalchemy import text
     # 递归删除子区域（用递归 CTE）
     db.execute(text("""

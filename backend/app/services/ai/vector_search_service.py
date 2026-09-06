@@ -9,14 +9,12 @@ import hashlib
 from typing import Dict, Any, Optional, List
 
 import numpy as np
-from sqlalchemy import text
 from sqlalchemy.orm import Session
-from loguru import logger
 
 # TODO: 域特定模型已移除，向量检索服务待适配
 # from app.models.risk_event import RiskEvent
 # from app.models.risk_ext import RiskEventExt
-from app.services.embedding_service import EmbeddingService
+from app.services.ai.embedding_service import EmbeddingService
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

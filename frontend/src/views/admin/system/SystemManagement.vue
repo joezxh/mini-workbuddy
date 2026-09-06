@@ -1,29 +1,33 @@
 <template>
   <div class="system-management-container">
     <div class="panel-header">
-      <h2 class="panel-title">系统管理</h2>
-      <span class="panel-subtitle">集中管理系统权限架构与业务操作日志追溯</span>
+      <h2 class="panel-title">{{ t('sys.systemManagement.title') }}</h2>
+      <span class="panel-subtitle">{{ t('sys.systemManagement.subtitle') }}</span>
     </div>
 
     <div class="content-wrapper">
       <a-tabs v-model:activeKey="activeTab" @change="onTabChange">
         <a-tab-pane key="users" :tab="t('sys.systemTabs.users')">
-          <UserManager @view-logs="handleViewLogs" />
+          <UserManager :show-tenant="isSuper" @view-logs="handleViewLogs" />
         </a-tab-pane>
         <a-tab-pane key="roles" :tab="t('sys.systemTabs.roles')">
-          <RoleManager />
+          <RoleManager :show-tenant="isSuper" />
         </a-tab-pane>
-        <a-tab-pane key="permissions" :tab="t('sys.systemTabs.permissions')">
+        <!-- 以下模块仅超级管理员（租户id=0）可见 -->
+        <a-tab-pane v-if="isSuper" key="permissions" :tab="t('sys.systemTabs.permissions')">
           <PermissionManager />
         </a-tab-pane>
-        <a-tab-pane key="tenants" :tab="t('sys.systemTabs.tenants')">
+        <a-tab-pane v-if="isSuper" key="tenants" :tab="t('sys.systemTabs.tenants')">
           <TenantPanel />
         </a-tab-pane>
-        <a-tab-pane key="tenant-packages" :tab="t('sys.systemTabs.tenantPackages')">
+        <a-tab-pane v-if="isSuper" key="tenant-packages" :tab="t('sys.systemTabs.tenantPackages')">
           <TenantPackagePanel />
         </a-tab-pane>
         <a-tab-pane key="audit-logs" :tab="t('sys.systemTabs.auditLogs')">
-          <AuditLogManager :filter-user-id="selectedUserId" />
+          <AuditLogManager
+            :filter-user-id="selectedUserId"
+            :show-tenant="isSuper"
+          />
         </a-tab-pane>
       </a-tabs>
     </div>
@@ -31,8 +35,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getTenantId } from '@/utils/auth'
 import UserManager from './components/UserManager.vue'
 import RoleManager from './components/RoleManager.vue'
 import PermissionManager from './components/PermissionManager.vue'
@@ -41,6 +46,11 @@ import TenantPanel from './TenantPanel.vue'
 import TenantPackagePanel from './TenantPackagePanel.vue'
 
 const { t } = useI18n()
+
+// 当前登录用户所属租户（登录时写入 cookie）：0 = 超级管理员（平台）
+const currentTenantId = getTenantId()
+const isSuper = computed(() => currentTenantId === 0)
+
 const activeTab = ref('users')
 const selectedUserId = ref<number | null>(null)
 

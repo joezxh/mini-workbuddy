@@ -7,7 +7,7 @@ from app.models.sys.sys_user import SysUser
 from app.schemas.sys.sys_tenant import (
     SysTenantPackageCreate, SysTenantPackageUpdate, SysTenantPackageResp, SysTenantPackageSimple,
 )
-from app.services.tenant_service import TenantService
+from app.services.sys.tenant_service import TenantService
 
 router = APIRouter()
 

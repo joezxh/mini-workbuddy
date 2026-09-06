@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol
 
 from app.ai.knowledge.vector_store import BaseVectorStore
 
@@ -288,7 +288,7 @@ def build_default_pg_rag_pipeline(db, *, llm=None, config: Optional[RAGConfig] =
     - Embedder: project EmbeddingService (gpustack / dashscope)
     """
     from app.ai.knowledge.pg_vector_store import PGVectorStore, VectorCollection
-    from app.services.embedding_service import EmbeddingService
+    from app.services.ai.embedding_service import EmbeddingService
 
     store = PGVectorStore(db=db)
     # 通用知识文档 collection

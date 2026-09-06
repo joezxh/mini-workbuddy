@@ -129,7 +129,7 @@ function onLocale({ key }: { key: string }) {
       <!-- Form side -->
       <div class="panel">
         <div class="brand-row">
-          <span class="brand-mark">M</span>
+          <img src="/brand/logo-icon.svg" class="brand-mark" width="46" height="46" alt="MiniWorkBuddy" />
           <div>
             <h2 class="panel-title">{{ t('sys.login.signin') }}</h2>
             <p class="panel-sub">{{ t('sys.login.subtitle') }}</p>
@@ -349,19 +349,8 @@ function onLocale({ key }: { key: string }) {
 .brand-mark {
   width: 46px;
   height: 46px;
-  border-radius: var(--radius);
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 22px;
-  color: var(--fg-inverse);
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: var(--shadow-sm);
-}
-
-:root[data-theme='light'] .brand-mark {
-  color: #fff;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 
 .panel-title {

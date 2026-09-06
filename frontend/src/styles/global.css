@@ -614,26 +614,6 @@
   color: var(--accent-hover);
 }
 
-/* Scroll-reveal hook. GSAP (or any observer) toggles .is-in; the rule below is
- * the static fallback so content is always visible if motion never triggers. */
-.reveal {
-  opacity: 1;
-  transform: none;
-}
-
-.reveal:not(.is-in) {
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.reveal.is-in {
-  opacity: 1;
-  transform: none;
-}
-
 /* ------------------------------------------------------------------ *
  * Backward-compatible aliases
  *
@@ -735,4 +715,22 @@
   font-size: 16px;
   font-weight: 600;
   color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ *
+ * Accessibility: reduced transparency fallback
+ *
+ * When users prefer reduced transparency, disable backdrop-filter and
+ * use solid backgrounds instead of frosted glass.
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-transparency: reduce) {
+  .app-card,
+  .stat-tile,
+  .data-panel,
+  .stat-card,
+  .panel {
+    background: var(--bg-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

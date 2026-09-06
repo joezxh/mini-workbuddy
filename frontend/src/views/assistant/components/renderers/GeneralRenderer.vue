@@ -102,13 +102,13 @@ async function handleRefHover(event: MouseEvent) {
 
     try {
       if (refType === 'legal' && refId) {
-        // 法律法条 API 已移除，显示占位信息
+        // 法律法条数据源已下线：明确告知用户，而非返回占位假数据
         refPopover.title = refKeyword
-        refPopover.content = '法律法条模块已清理'
+        refPopover.content = '该引用类型（法律法条）暂未接入，无法展示详情'
       } else if (refType === 'case' && refId) {
-        // 案例 API 已移除，显示占位信息
+        // 案例数据源已下线：明确告知用户，而非返回占位假数据
         refPopover.title = refKeyword
-        refPopover.content = '案例模块已清理'
+        refPopover.content = '该引用类型（案例）暂未接入，无法展示详情'
       } else if (refType === 'person' && refId) {
         const { getPersonByIdCard } = await import('@/api/aiSession')
         const detail = await getPersonByIdCard(refId)

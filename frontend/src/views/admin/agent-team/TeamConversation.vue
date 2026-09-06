@@ -290,13 +290,9 @@ const fetchChat = async (payload: { message: string; conversation_id?: string })
     const reader = resp.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-    // eslint-disable-next-line no-console
-    console.log('[FETCH] SSE reader started, status=' + resp.status)
     while (true) {
       const { done, value } = await reader.read()
-      // eslint-disable-next-line no-console
-      if (value) console.log('[FETCH] raw chunk bytes=' + value.length + ' preview=' + new TextDecoder().decode(value).slice(0, 120))
-      if (done) { console.log('[FETCH] reader done'); break }
+      if (done) { break }
       buffer += decoder.decode(value, { stream: true })
       // SSE 以双换行分帧
       const frames = buffer.split('\n\n')
@@ -328,8 +324,6 @@ const handleChunk = (raw: string) => {
   const meta = data.metadata || {}
   // 调试：写入 eventLog（保证一定能看见，不依赖 console）
   eventLog.value.push({ event_type: 'DEBUG', text: `[${data.event_type}] streamingText=${streamingText.value.length} content前30=${String(data.content||data.answer||'').slice(0,30)}` })
-  // eslint-disable-next-line no-console
-  console.log('[CHUNK]', data.event_type, data.content ? String(data.content).slice(0, 60) : (data.answer ? 'answer:' + String(data.answer).slice(0, 60) : ''), 'streamingText=' + streamingText.value.length)
   // agent_status：构建/更新运行态拓扑
   if (data.event_type === 'agent_status') {
     upsertNode(meta.node_key || meta.agent_code, meta.role_name || meta.agent_code, meta.node_status || meta.status || 'running')

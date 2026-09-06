@@ -3,43 +3,43 @@
     <!-- 搜索栏 -->
     <div class="search-bar">
       <a-form layout="inline" :model="queryParams">
-        <a-form-item label="菜单名称">
+        <a-form-item :label="t('sys.permission.menuName')">
           <a-input
             v-model:value="queryParams.name"
-            placeholder="请输入菜单名称"
+            :placeholder="t('sys.permission.inputMenuName')"
             allow-clear
             style="width: 200px"
             @press-enter="handleQuery"
           />
         </a-form-item>
-        <a-form-item label="状态">
+        <a-form-item :label="t('sys.permission.status')">
           <a-select
             v-model:value="queryParams.status"
-            placeholder="请选择状态"
+            :placeholder="t('sys.permission.selectStatus')"
             allow-clear
             style="width: 150px"
           >
-            <a-select-option :value="0">开启</a-select-option>
-            <a-select-option :value="1">关闭</a-select-option>
+            <a-select-option :value="0">{{ t('sys.permission.statusOn') }}</a-select-option>
+            <a-select-option :value="1">{{ t('sys.permission.statusOff') }}</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item>
           <a-space>
             <a-button type="primary" @click="handleQuery">
               <template #icon><SearchOutlined /></template>
-              搜索
+              {{ t('sys.permission.search') }}
             </a-button>
             <a-button @click="handleReset">
               <template #icon><ReloadOutlined /></template>
-              重置
+              {{ t('sys.permission.reset') }}
             </a-button>
             <a-button type="primary" @click="openForm('create')">
               <template #icon><PlusOutlined /></template>
-              新增
+              {{ t('sys.permission.add') }}
             </a-button>
             <a-button @click="toggleExpandAll">
               <template #icon><SwapOutlined /></template>
-              {{ isExpandAll ? '折叠' : '展开' }}
+              {{ isExpandAll ? t('sys.permission.collapse') : t('sys.permission.expand') }}
             </a-button>
           </a-space>
         </a-form-item>
@@ -75,6 +75,24 @@
             <a-tag :color="typeColor(record.type)" style="margin-left: 8px">{{ typeName(record.type) }}</a-tag>
           </div>
         </template>
+        <template v-else-if="column.key === 'i18n'">
+          <a-popover v-if="record.i18nKey" trigger="click" placement="bottomLeft">
+            <span class="col-i18n-trigger">
+              <GlobalOutlined />
+              {{ getTranslationForLocale(record.i18nKey, 'zh-CN') || record.i18nKey }}
+              <DownOutlined style="font-size: 10px" />
+            </span>
+            <template #content>
+              <div class="col-i18n-popover">
+                <div v-for="locale in LOCALE_LABELS" :key="locale.key" class="col-i18n-popover-row">
+                  <span class="col-i18n-popover-lang">{{ locale.label }}</span>
+                  <span class="col-i18n-popover-text">{{ getTranslationForLocale(record.i18nKey, locale.key) || '-' }}</span>
+                </div>
+              </div>
+            </template>
+          </a-popover>
+          <span v-else style="color: var(--fg-secondary)">-</span>
+        </template>
         <template v-else-if="column.key === 'icon'">
           <span>{{ record.icon || '-' }}</span>
         </template>
@@ -82,22 +100,22 @@
           <a-switch
             :checked="record.status === 0"
             :loading="statusUpdating[record.id]"
-            checked-children="开"
-            un-checked-children="关"
+            :checked-children="t('sys.permission.statusOn')"
+            :un-checked-children="t('sys.permission.statusOff')"
             @change="(val: any) => handleStatusChange(record, val)"
           />
         </template>
         <template v-else-if="column.key === 'visible'">
           <a-tag :color="record.visible === 1 ? 'blue' : 'default'">
-            {{ record.visible === 1 ? '显示' : '隐藏' }}
+            {{ record.visible === 1 ? t('sys.permission.visibleShow') : t('sys.permission.visibleHide') }}
           </a-tag>
         </template>
         <template v-else-if="column.key === 'action'">
           <a-space :size="4">
-            <a-button type="link" size="small" @click="openForm('update', record.id)">修改</a-button>
-            <a-button type="link" size="small" @click="openForm('create', undefined, record.id)">新增</a-button>
-            <a-popconfirm title="确认删除该菜单？子菜单也将一并删除。" @confirm="handleDelete(record.id)">
-              <a-button type="link" size="small" danger>删除</a-button>
+            <a-button type="link" size="small" @click="openForm('update', record.id)">{{ t('sys.permission.edit') }}</a-button>
+            <a-button type="link" size="small" @click="openForm('create', undefined, record.id)">{{ t('sys.permission.addChild') }}</a-button>
+            <a-popconfirm :title="t('sys.permission.deleteConfirm')" @confirm="handleDelete(record.id)">
+              <a-button type="link" size="small" danger>{{ t('sys.permission.delete') }}</a-button>
             </a-popconfirm>
           </a-space>
         </template>
@@ -107,15 +125,15 @@
     <!-- 新增/编辑菜单弹窗 -->
     <a-modal
       v-model:open="formVisible"
-      :title="formType === 'update' ? '修改菜单' : '新增菜单'"
+      :title="formType === 'update' ? t('sys.permission.updateTitle') : t('sys.permission.createTitle')"
       :width="640"
       :confirm-loading="formLoading"
       :mask-closable="false"
       :destroy-on-close="true"
       @ok="submitForm"
       @cancel="formVisible = false"
-      ok-text="确定"
-      cancel-text="取消"
+      :ok-text="t('common.confirm')"
+      :cancel-text="t('common.cancel')"
     >
       <a-form
         ref="formRef"
@@ -124,33 +142,33 @@
         :label-col="{ style: { width: '100px' } }"
         layout="horizontal"
       >
-        <a-form-item label="上级菜单" name="parentId">
+        <a-form-item :label="t('sys.permission.parentMenu')" name="parentId">
           <a-tree-select
             v-model:value="formData.parentId"
             :tree-data="menuTree"
             :field-names="{ children: 'children', label: 'name', value: 'id' }"
             tree-default-expand-all
-            placeholder="请选择上级菜单"
+            :placeholder="t('sys.permission.selectParent')"
             allow-clear
           />
         </a-form-item>
 
-        <a-form-item label="菜单类型" name="type">
+        <a-form-item :label="t('sys.permission.menuType')" name="type">
           <a-radio-group v-model:value="formData.type">
-            <a-radio-button :value="1">目录</a-radio-button>
-            <a-radio-button :value="2">菜单</a-radio-button>
-            <a-radio-button :value="3">按钮</a-radio-button>
+            <a-radio-button :value="1">{{ t('sys.permission.typeDir') }}</a-radio-button>
+            <a-radio-button :value="2">{{ t('sys.permission.typeMenu') }}</a-radio-button>
+            <a-radio-button :value="3">{{ t('sys.permission.typeBtn') }}</a-radio-button>
           </a-radio-group>
         </a-form-item>
 
-        <a-form-item label="菜单名称" name="name">
-          <a-input v-model:value="formData.name" placeholder="请输入菜单名称" allow-clear />
+        <a-form-item :label="t('sys.permission.menuName')" name="name">
+          <a-input v-model:value="formData.name" :placeholder="t('sys.permission.inputMenuName')" allow-clear />
         </a-form-item>
 
-        <a-form-item v-show="formData.type !== 3" label="菜单图标" name="icon">
+        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.menuIcon')" name="icon">
           <a-select
             v-model:value="formData.icon"
-            placeholder="请选择菜单图标"
+            :placeholder="t('sys.permission.selectIcon')"
             allow-clear
             show-search
             :filter-option="filterIcon"
@@ -177,58 +195,72 @@
             <a-select-option :value="formData.icon" :disabled="true">
               <span style="display: flex; align-items: center">
                 <component :is="getIconComponent(formData.icon)" v-if="formData.icon" style="margin-right: 6px" />
-                {{ formData.icon || '请选择图标' }}
+                {{ formData.icon || t('sys.permission.selectIconPlaceholder') }}
               </span>
             </a-select-option>
           </a-select>
         </a-form-item>
 
-        <a-form-item v-show="formData.type !== 3" label="路由地址" name="path">
-          <a-input v-model:value="formData.path" placeholder="访问的路由地址，如 system/user" allow-clear />
+        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.routePath')" name="path">
+          <a-input v-model:value="formData.path" :placeholder="t('sys.permission.routePlaceholder')" allow-clear />
         </a-form-item>
 
-        <a-form-item v-show="formData.type === 2" label="组件路径" name="component">
-          <a-input v-model:value="formData.component" placeholder="例如：system/user/index" allow-clear />
+        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.componentPath')" name="component">
+          <a-input v-model:value="formData.component" :placeholder="t('sys.permission.componentPlaceholder')" allow-clear />
         </a-form-item>
 
-        <a-form-item v-show="formData.type === 2" label="组件名称" name="componentName">
-          <a-input v-model:value="formData.componentName" placeholder="例如：SystemUser" allow-clear />
+        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.componentName')" name="componentName">
+          <a-input v-model:value="formData.componentName" :placeholder="t('sys.permission.componentNamePlaceholder')" allow-clear />
         </a-form-item>
 
-        <a-form-item v-show="formData.type === 3" label="权限标识" name="permission">
-          <a-input v-model:value="formData.permission" placeholder="如：system:user:delete" allow-clear />
+        <a-form-item v-show="formData.type === 3" :label="t('sys.permission.permissionFlag')" name="permission">
+          <a-input v-model:value="formData.permission" :placeholder="t('sys.permission.permissionPlaceholder')" allow-clear />
         </a-form-item>
 
-        <a-form-item label="显示排序" name="sort">
+        <a-form-item :label="t('sys.permission.displaySort')" name="sort">
           <a-input-number v-model:value="formData.sort" :min="0" :max="9999" style="width: 100%" />
         </a-form-item>
 
-        <a-form-item label="菜单状态" name="status">
+        <a-form-item :label="t('sys.permission.menuStatus')" name="status">
           <a-radio-group v-model:value="formData.status">
-            <a-radio :value="0">开启</a-radio>
-            <a-radio :value="1">关闭</a-radio>
+            <a-radio :value="0">{{ t('sys.permission.statusOn') }}</a-radio>
+            <a-radio :value="1">{{ t('sys.permission.statusOff') }}</a-radio>
           </a-radio-group>
         </a-form-item>
 
-        <a-form-item v-show="formData.type !== 3" label="显示状态" name="visible">
+        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.colVisible')" name="visible">
           <a-radio-group v-model:value="formData.visible">
-            <a-radio :value="1">显示</a-radio>
-            <a-radio :value="0">隐藏</a-radio>
+            <a-radio :value="1">{{ t('sys.permission.visibleShow') }}</a-radio>
+            <a-radio :value="0">{{ t('sys.permission.visibleHide') }}</a-radio>
           </a-radio-group>
         </a-form-item>
 
-        <a-form-item v-show="formData.type !== 3" label="总是显示" name="alwaysShow">
+        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.alwaysShowLabel')" name="alwaysShow">
           <a-radio-group v-model:value="formData.alwaysShow">
-            <a-radio :value="1">总是</a-radio>
-            <a-radio :value="0">不是</a-radio>
+            <a-radio :value="1">{{ t('sys.permission.alwaysShowOn') }}</a-radio>
+            <a-radio :value="0">{{ t('sys.permission.alwaysShowOff') }}</a-radio>
           </a-radio-group>
         </a-form-item>
 
-        <a-form-item v-show="formData.type === 2" label="缓存状态" name="keepAlive">
+        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.keepAliveLabel')" name="keepAlive">
           <a-radio-group v-model:value="formData.keepAlive">
-            <a-radio :value="1">缓存</a-radio>
-            <a-radio :value="0">不缓存</a-radio>
+            <a-radio :value="1">{{ t('sys.permission.keepAliveOn') }}</a-radio>
+            <a-radio :value="0">{{ t('sys.permission.keepAliveOff') }}</a-radio>
           </a-radio-group>
+        </a-form-item>
+
+        <a-form-item :label="t('sys.permission.i18nKeyLabel')" name="i18nKey">
+          <a-input v-model:value="formData.i18nKey" :placeholder="t('sys.permission.i18nKeyPlaceholder')" allow-clear />
+        </a-form-item>
+
+        <!-- 4语言翻译预览 -->
+        <a-form-item v-if="formData.i18nKey" :label="t('sys.permission.i18nPreview')">
+          <div class="i18n-preview">
+            <div v-for="locale in LOCALE_LABELS" :key="locale.key" class="i18n-preview-row">
+              <span class="i18n-preview-label">{{ locale.label }}</span>
+              <span class="i18n-preview-value">{{ getTranslationForLocale(formData.i18nKey, locale.key) || '-' }}</span>
+            </div>
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -237,6 +269,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed, markRaw, type Component } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   SearchOutlined,
@@ -374,6 +407,30 @@ import {
 import { getMenuList, getMenuSimpleList, getMenuDetail, createMenu, updateMenu, deleteMenu } from '@/api/admin'
 import type { MenuItem, MenuForm } from '@/api/admin'
 
+const { t, messages } = useI18n()
+
+// ── 4语言翻译预览 ──────────────────────────────────────────
+const LOCALE_LABELS: { key: string; label: string }[] = [
+  { key: 'zh-CN', label: '简体中文' },
+  { key: 'zh-TW', label: '繁體中文' },
+  { key: 'en-US', label: 'English' },
+  { key: 'ja-JP', label: '日本語' },
+]
+
+/** 从全局 i18n messages 获取指定 locale 下某 key 的翻译 */
+function getTranslationForLocale(i18nKey: string, localeKey: string): string {
+  const msgs = messages.value as Record<string, any>
+  const localeMsgs = msgs[localeKey]
+  if (!localeMsgs || !i18nKey) return ''
+  const parts = i18nKey.split('.')
+  let val: any = localeMsgs
+  for (const p of parts) {
+    if (val && typeof val === 'object') val = val[p]
+    else return ''
+  }
+  return typeof val === 'string' ? val : ''
+}
+
 // ── 图标映射 ──────────────────────────────────────────────
 const allIconComponents = [
   SettingOutlined, DashboardOutlined, UserOutlined, DatabaseOutlined,
@@ -434,7 +491,7 @@ function typeColor(type: number) {
   return type === 1 ? 'blue' : type === 2 ? 'green' : 'orange'
 }
 function typeName(type: number) {
-  return type === 1 ? '目录' : type === 2 ? '菜单' : '按钮'
+  return type === 1 ? t('sys.permission.typeDir') : type === 2 ? t('sys.permission.typeMenu') : t('sys.permission.typeBtn')
 }
 
 // ── 查询 ──────────────────────────────────────────────
@@ -448,16 +505,16 @@ const queryParams = reactive<{ name?: string; status?: number }>({
   status: undefined,
 })
 
-const columns = [
-  { title: '菜单名称', dataIndex: 'name', key: 'name', width: 260, fixed: 'left' as const },
-  { title: '图标', dataIndex: 'icon', key: 'icon', width: 180, ellipsis: true },
-  { title: '排序', dataIndex: 'sort', key: 'sort', width: 70 },
-  { title: '权限标识', dataIndex: 'permission', key: 'permission', width: 200, ellipsis: true },
-  { title: '组件路径', dataIndex: 'component', key: 'component', width: 200, ellipsis: true },
-  { title: '显示', key: 'visible', width: 80 },
-  { title: '状态', key: 'status', width: 90 },
-  { title: '操作', key: 'action', width: 200, fixed: 'right' as const },
-]
+const columns = computed(() => [
+  { title: t('sys.permission.menuName'), dataIndex: 'name', key: 'name', width: 260, fixed: 'left' as const },
+  { title: t('sys.permission.colI18n'), key: 'i18n', width: 200 },
+  { title: t('sys.permission.colIcon'), dataIndex: 'icon', key: 'icon', width: 180, ellipsis: true },
+  { title: t('sys.permission.colSort'), dataIndex: 'sort', key: 'sort', width: 70 },
+  { title: t('sys.permission.colPermission'), dataIndex: 'permission', key: 'permission', width: 200, ellipsis: true },
+  { title: t('sys.permission.colVisible'), key: 'visible', width: 80 },
+  { title: t('sys.permission.colStatus'), key: 'status', width: 90 },
+  { title: t('sys.permission.colAction'), key: 'action', width: 200, fixed: 'right' as const },
+])
 
 async function loadData() {
   loading.value = true
@@ -470,7 +527,7 @@ async function loadData() {
       dataSource.value = res.data || []
     }
   } catch (e: any) {
-    message.error(`加载菜单失败：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.loadError')}：${e?.message || '未知错误'}`)
     dataSource.value = []
   } finally {
     loading.value = false
@@ -500,12 +557,12 @@ async function handleStatusChange(record: MenuItem, val: boolean | string | numb
     const res = await updateMenu(record.id, { status: newStatus })
     if (res.code === 0) {
       record.status = newStatus
-      message.success('状态已更新')
+      message.success(t('sys.permission.statusUpdated'))
     } else {
-      message.error(res.message || '状态更新失败')
+      message.error(res.message || t('sys.permission.statusUpdateError'))
     }
   } catch (e: any) {
-    message.error(`状态更新失败：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.statusUpdateError')}：${e?.message || '未知错误'}`)
   } finally {
     statusUpdating[record.id] = false
   }
@@ -515,13 +572,13 @@ async function handleDelete(id: number) {
   try {
     const res = await deleteMenu(id)
     if (res.code === 0) {
-      message.success('删除成功')
+      message.success(t('sys.permission.deleteSuccess'))
       loadData()
     } else {
-      message.error(res.message || '删除失败')
+      message.error(res.message || t('sys.permission.deleteError'))
     }
   } catch (e: any) {
-    message.error(`删除失败：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.deleteError')}：${e?.message || '未知错误'}`)
   }
 }
 
@@ -547,15 +604,16 @@ function createDefaultForm(): MenuForm {
     visible: 1,
     keepAlive: 0,
     alwaysShow: 0,
+    i18nKey: '',
   }
 }
 
 const formData = ref<MenuForm>(createDefaultForm())
 
 const formRules = computed(() => ({
-  name: [{ required: true, message: '菜单名称不能为空', trigger: 'blur' }],
-  type: [{ required: true, message: '菜单类型不能为空', trigger: 'change' }],
-  sort: [{ required: true, message: '排序不能为空', trigger: 'blur' }],
+  name: [{ required: true, message: t('sys.permission.nameRequired'), trigger: 'blur' }],
+  type: [{ required: true, message: t('sys.permission.typeRequired'), trigger: 'change' }],
+  sort: [{ required: true, message: t('sys.permission.sortRequired'), trigger: 'blur' }],
 }))
 
 async function loadMenuTree() {
@@ -567,7 +625,7 @@ async function loadMenuTree() {
       menuTree.value = buildTreeSelect(list)
     }
   } catch {
-    menuTree.value = [{ id: 0, name: '主类目', children: [] }]
+    menuTree.value = [{ id: 0, name: t('sys.permission.rootCategory'), children: [] }]
   }
 }
 
@@ -585,7 +643,7 @@ function buildTreeSelect(list: { id: number; parentId: number | null; name: stri
       map[pid].children.push(map[item.id])
     }
   }
-  return [{ id: 0, name: '主类目', children: roots }]
+  return [{ id: 0, name: t('sys.permission.rootCategory'), children: roots }]
 }
 
 async function openForm(type: 'create' | 'update', id?: number, parentId?: number) {
@@ -619,10 +677,11 @@ async function openForm(type: 'create' | 'update', id?: number, parentId?: numbe
           visible: d.visible ?? 1,
           keepAlive: d.keepAlive ?? 0,
           alwaysShow: d.alwaysShow ?? 0,
+          i18nKey: d.i18nKey || '',
         }
       }
     } catch (e: any) {
-      message.error(`加载菜单详情失败：${e?.message || '未知错误'}`)
+      message.error(`${t('sys.permission.loadDetailError')}：${e?.message || '未知错误'}`)
     } finally {
       formLoading.value = false
     }
@@ -648,6 +707,7 @@ function toApiData(data: MenuForm): any {
     visible: data.visible,
     keep_alive: data.keepAlive,
     always_show: data.alwaysShow,
+    i18n_key: data.i18nKey || null,
   }
 }
 
@@ -658,10 +718,10 @@ async function submitForm() {
     const errorFields = e?.errorFields || []
     if (errorFields.length > 0) {
       const firstError = errorFields[0]
-      const errorMsg = firstError.errors?.[0] || '表单验证失败'
-      message.error(`验证失败：${errorMsg}`)
+      const errorMsg = firstError.errors?.[0] || t('sys.permission.validateError')
+      message.error(`${t('sys.permission.validateErrorDetail')}：${errorMsg}`)
     } else {
-      message.error('表单验证失败，请检查输入')
+      message.error(t('sys.permission.validateError'))
     }
     return
   }
@@ -670,7 +730,7 @@ async function submitForm() {
   if (formData.value.type !== 3 && formData.value.path) {
     const isExternal = /^(https?:|mailto:|tel:)/.test(formData.value.path)
     if (!isExternal && formData.value.path.includes(' ')) {
-      message.error('路径不能包含空格')
+      message.error(t('sys.permission.pathNoSpace'))
       return
     }
   }
@@ -680,27 +740,27 @@ async function submitForm() {
     if (formType.value === 'create') {
       const res = await createMenu(toApiData(formData.value) as MenuForm)
       if (res.code === 0) {
-        message.success('新增成功')
+        message.success(t('sys.permission.createSuccess'))
         formVisible.value = false
         loadData()
       } else {
-        message.error(res.message || '新增失败')
+        message.error(res.message || t('sys.permission.createError'))
       }
     } else {
       const res = await updateMenu(formData.value.id!, toApiData(formData.value))
       if (res.code === 0) {
-        message.success('修改成功')
+        message.success(t('sys.permission.updateSuccess'))
         formVisible.value = false
         loadData()
       } else {
-        message.error(res.message || '修改失败')
+        message.error(res.message || t('sys.permission.updateError'))
       }
     }
   } catch (e: any) {
     const respData = e?.response?.data || {}
     const detail = respData.detail || respData.message || respData.msg
     const text = typeof detail === 'string' ? detail : (detail && detail.msg) || e?.message || '未知错误'
-    message.error(`${formType.value === 'create' ? '新增' : '修改'}失败：${text}`)
+    message.error(`${formType.value === 'create' ? t('sys.permission.createError') : t('sys.permission.updateError')}：${text}`)
   } finally {
     formLoading.value = false
   }
@@ -768,5 +828,91 @@ onMounted(() => {
 .icon-item.selected {
   background: var(--accent);
   color: var(--fg-inverse);
+}
+
+.i18n-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.i18n-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  background: var(--bg-page, #f5f5f5);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.i18n-preview-label {
+  flex-shrink: 0;
+  width: 70px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+}
+
+.i18n-preview-value {
+  flex: 1;
+  color: var(--fg);
+  word-break: break-all;
+}
+
+/* ── 表格 i18n 翻译列（Popover 下拉） ── */
+.col-i18n-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--accent, #1890ff);
+  background: var(--bg-page, #f5f5f5);
+  transition: background 0.2s;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-i18n-trigger:hover {
+  background: var(--accent-soft, #e6f7ff);
+}
+
+.col-i18n-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.col-i18n-popover-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border, #f0f0f0);
+}
+
+.col-i18n-popover-row:last-child {
+  border-bottom: none;
+}
+
+.col-i18n-popover-lang {
+  flex-shrink: 0;
+  width: 56px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg-secondary, #888);
+}
+
+.col-i18n-popover-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--fg, #333);
+  word-break: break-all;
 }
 </style>

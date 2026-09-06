@@ -1,8 +1,8 @@
 <template>
   <div class="region-panel">
     <div class="panel-header">
-      <h2>行政区域管理</h2>
-      <p class="description">浙江省行政区划数据，来源于 sys_region 表，支持逐级懒加载展开</p>
+      <h2>{{ t('sys.region.title') }}</h2>
+      <p class="description">{{ t('sys.region.subtitle') }}</p>
     </div>
 
     <div class="region-content">
@@ -21,7 +21,7 @@
           <div class="tree-toolbar">
             <a-input-search
               v-model:value="searchKeyword"
-              placeholder="搜索区域名称"
+              :placeholder="t('sys.region.searchPlaceholder')"
               allow-clear
               size="small"
               style="flex:1"
@@ -54,7 +54,7 @@
                 </div>
               </template>
             </a-tree>
-            <a-empty v-else description="暂无数据" />
+            <a-empty v-else :description="t('common.noData')" />
           </a-spin>
         </div>
 
@@ -62,7 +62,7 @@
         <div class="detail-panel">
           <div v-if="!selectedRegion" class="detail-empty">
             <ApartmentOutlined style="font-size:48px;color:var(--fg-muted)" />
-            <p>点击左侧区域查看详情</p>
+            <p>{{ t('sys.region.clickHint') }}</p>
           </div>
           <div v-else class="detail-content">
             <div class="detail-header">
@@ -76,53 +76,53 @@
               <div class="detail-actions">
                 <a-button size="small" type="primary" ghost @click="showEditModal">
                   <template #icon><EditOutlined /></template>
-                  编辑
+                  {{ t('sys.region.edit') }}
                 </a-button>
                 <a-button size="small" @click="showAddChildModal" :disabled="selectedRegion.region_level === 'street'">
                   <template #icon><PlusOutlined /></template>
-                  新增子区域
+                  {{ t('sys.region.addChild') }}
                 </a-button>
                 <a-popconfirm
-                  title="确定删除该区域及其所有子区域吗？"
-                  ok-text="确定删除"
-                  cancel-text="取消"
+                  :title="t('sys.region.deleteConfirm')"
+                  :ok-text="t('common.confirm')"
+                  :cancel-text="t('common.cancel')"
                   ok-type="danger"
                   @confirm="handleDelete"
                 >
                   <a-button size="small" danger>
                     <template #icon><DeleteOutlined /></template>
-                    删除
+                    {{ t('sys.region.delete') }}
                   </a-button>
                 </a-popconfirm>
               </div>
             </div>
             <a-descriptions :column="2" bordered size="small" class="detail-desc">
-              <a-descriptions-item label="区域编码">
+              <a-descriptions-item :label="t('sys.region.regionCode')">
                 <code class="code-text">{{ selectedRegion.region_code }}</code>
               </a-descriptions-item>
-              <a-descriptions-item label="上级编码">
+              <a-descriptions-item :label="t('sys.region.parentCode')">
                 <code class="code-text">{{ selectedRegion.parent_code || '-' }}</code>
               </a-descriptions-item>
-              <a-descriptions-item label="行政级别">
+              <a-descriptions-item :label="t('sys.region.regionLevel')">
                 {{ RegionLevelLabel[selectedRegion.region_level] || selectedRegion.region_level }}
               </a-descriptions-item>
-              <a-descriptions-item label="排序">
+              <a-descriptions-item :label="t('sys.region.sortOrder')">
                 {{ selectedRegion.sort_order }}
               </a-descriptions-item>
-              <a-descriptions-item label="完整路径" :span="2">
+              <a-descriptions-item :label="t('sys.region.fullPath')" :span="2">
                 {{ selectedRegion.full_path || '-' }}
               </a-descriptions-item>
-              <a-descriptions-item label="经度">
+              <a-descriptions-item :label="t('sys.region.longitude')">
                 {{ selectedRegion.longitude || '-' }}
               </a-descriptions-item>
-              <a-descriptions-item label="纬度">
+              <a-descriptions-item :label="t('sys.region.latitude')">
                 {{ selectedRegion.latitude || '-' }}
               </a-descriptions-item>
             </a-descriptions>
 
             <!-- 下级区域列表 -->
             <div class="children-section" v-if="selectedChildren.length > 0">
-              <div class="children-title">下级区域（{{ selectedChildren.length }}个）</div>
+              <div class="children-title">{{ t('sys.region.childrenTitle', { count: selectedChildren.length }) }}</div>
               <div class="children-grid">
                 <div
                   v-for="child in selectedChildren"
@@ -152,31 +152,31 @@
     @cancel="modalVisible = false"
   >
     <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }" autocomplete="off">
-      <a-form-item label="区域编码" required>
-        <a-input v-model:value="form.region_code" :disabled="modalMode === 'edit'" placeholder="如：330102001000" />
+      <a-form-item :label="t('sys.region.labelCode')" required>
+        <a-input v-model:value="form.region_code" :disabled="modalMode === 'edit'" :placeholder="t('sys.region.placeholderCode')" />
       </a-form-item>
-      <a-form-item label="区域名称" required>
-        <a-input v-model:value="form.region_name" placeholder="如：西湖街道" />
+      <a-form-item :label="t('sys.region.labelName')" required>
+        <a-input v-model:value="form.region_name" :placeholder="t('sys.region.placeholderName')" />
       </a-form-item>
-      <a-form-item label="上级编码">
-        <a-input v-model:value="form.parent_code" :disabled="modalMode === 'add-child'" placeholder="父级区域编码" />
+      <a-form-item :label="t('sys.region.labelParentCode')">
+        <a-input v-model:value="form.parent_code" :disabled="modalMode === 'add-child'" :placeholder="t('sys.region.placeholderParentCode')" />
       </a-form-item>
-      <a-form-item label="行政级别" required>
+      <a-form-item :label="t('sys.region.labelLevel')" required>
         <a-select v-model:value="form.region_level">
           <a-select-option v-for="(label, val) in RegionLevelLabel" :key="val" :value="val">{{ label }}</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="完整路径">
-        <a-input v-model:value="form.full_path" placeholder="如：浙江省/杭州市/西湖区/西湖街道" />
+      <a-form-item :label="t('sys.region.labelFullPath')">
+        <a-input v-model:value="form.full_path" :placeholder="t('sys.region.placeholderFullPath')" />
       </a-form-item>
-      <a-form-item label="排序">
+      <a-form-item :label="t('sys.region.labelSort')">
         <a-input-number v-model:value="form.sort_order" :min="0" style="width:100%" />
       </a-form-item>
-      <a-form-item label="经度">
-        <a-input v-model:value="form.longitude" placeholder="如：120.153576" />
+      <a-form-item :label="t('sys.region.labelLongitude')">
+        <a-input v-model:value="form.longitude" :placeholder="t('sys.region.placeholderLongitude')" />
       </a-form-item>
-      <a-form-item label="纬度">
-        <a-input v-model:value="form.latitude" placeholder="如：30.287459" />
+      <a-form-item :label="t('sys.region.labelLatitude')">
+        <a-input v-model:value="form.latitude" :placeholder="t('sys.region.placeholderLatitude')" />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -184,6 +184,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   ReloadOutlined,
@@ -200,6 +201,8 @@ import {
   getRegions, getRegionStats, createRegion, updateRegion, deleteRegion,
   RegionLevelLabel, type RegionItem
 } from '@/api/region'
+
+const { t } = useI18n()
 
 // ─── 类型扩展：带懒加载标记 ───────────────────────────────────────
 interface TreeNode extends RegionItem {
@@ -286,7 +289,7 @@ const initTree = async () => {
     treeData.value = [provinceNode]
     expandedKeys.value = ['330000']
   } catch (e: any) {
-    message.error(e.message || '加载区域数据失败')
+    message.error(e.message || t('sys.region.loadFail'))
   } finally {
     rootLoading.value = false
   }
@@ -326,7 +329,7 @@ const loadChildren = (node: any): Promise<void> => {
       }
       treeData.value = [...treeData.value]
     } catch (e: any) {
-      message.error(`加载 ${treeNode.region_name} 下级失败`)
+      message.error(t('sys.region.loadChildFail', { name: treeNode.region_name }))
     } finally {
       const next = new Set(loadingNodes.value)
       next.delete(code)
@@ -382,13 +385,13 @@ const handleSearch = async (val: string) => {
       r.region_name.includes(kw) || r.region_code.includes(kw)
     )
     if (matched.length === 0) {
-      message.info('未找到匹配的区域')
+      message.info(t('sys.region.noMatch'))
       return
     }
     treeData.value = matched.map(r => ({ ...r, isLeaf: r.region_level === 'street' }))
     expandedKeys.value = []
   } catch (e: any) {
-    message.error(e.message || '搜索失败')
+    message.error(e.message || t('sys.region.searchFail'))
   } finally {
     rootLoading.value = false
   }
@@ -403,7 +406,7 @@ const resetTree = () => {
 const showEditModal = () => {
   if (!selectedRegion.value) return
   modalMode.value = 'edit'
-  modalTitle.value = `编辑区域 - ${selectedRegion.value.region_name}`
+  modalTitle.value = t('sys.region.editTitle', { name: selectedRegion.value.region_name })
   const r = selectedRegion.value
   form.value = {
     region_code: r.region_code,
@@ -421,7 +424,7 @@ const showEditModal = () => {
 const showAddChildModal = () => {
   if (!selectedRegion.value) return
   modalMode.value = 'add-child'
-  modalTitle.value = `新增子区域 - 上级：${selectedRegion.value.region_name}`
+  modalTitle.value = t('sys.region.addChildTitle', { name: selectedRegion.value.region_name })
   const levelOrder = ['province', 'city', 'district', 'street']
   const currentIdx = levelOrder.indexOf(selectedRegion.value.region_level)
   const nextLevel = levelOrder[Math.min(currentIdx + 1, levelOrder.length - 1)]
@@ -442,45 +445,42 @@ const handleDelete = async () => {
   if (!selectedRegion.value) return
   try {
     await deleteRegion(selectedRegion.value.region_code)
-    message.success('删除成功')
+    message.success(t('sys.region.deleteSuccess'))
     selectedRegion.value = null
     selectedChildren.value = []
     selectedKeys.value = []
     await initTree()
     loadStats()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('sys.region.deleteFail'))
   }
 }
 
 const handleModalOk = async () => {
   if (!form.value.region_code.trim() || !form.value.region_name.trim()) {
-    message.warning('区域编码和名称为必填项')
+    message.warning(t('sys.region.codeRequired'))
     return
   }
   modalLoading.value = true
   try {
     if (modalMode.value === 'edit') {
       const updated = await updateRegion(form.value.region_code, form.value)
-      // 更新当前选中节点数据
       if (selectedRegion.value) {
         Object.assign(selectedRegion.value, updated)
       }
-      message.success('更新成功')
+      message.success(t('sys.region.updateSuccess'))
     } else {
       await createRegion(form.value)
-      message.success('新增成功')
-      // 刷新当前选中节点的子级
+      message.success(t('sys.region.createSuccess'))
       if (selectedRegion.value) {
         selectedChildren.value = await getRegions(selectedRegion.value.region_code)
       }
     }
     modalVisible.value = false
-    // 刷新树和统计
     await initTree()
     loadStats()
   } catch (e: any) {
-    message.error(e.message || '操作失败')
+    message.error(e.message || t('sys.region.opFail'))
   } finally {
     modalLoading.value = false
   }

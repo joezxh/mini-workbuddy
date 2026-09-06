@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
@@ -11,7 +10,6 @@ import SidebarItem from './SidebarItem.vue'
 import AppLogo from './AppLogo.vue'
 
 const router = useRouter()
-const { t } = useI18n()
 const app = useAppStore()
 const user = useUserStore()
 const menuStore = useMenuStore()
@@ -39,12 +37,9 @@ function onSelect(path: string) {
 
 <template>
   <aside class="rail" :class="{ 'rail--collapsed': collapsed }">
-    <div class="rail-brand" @click="router.push('/dashboard')">
-      <AppLogo :size="26" class="rail-brand__logo" />
-      <div class="rail-brand__text">
-        <span class="rail-brand__kicker">{{ t('sys.brandKicker') }}</span>
-        <span class="rail-brand__name">{{ t('sys.brand') }}</span>
-      </div>
+    <div class="rail-brand" @click="router.push('/admin?tab=dashboard')">
+      <img v-if="!collapsed" src="/brand/logo-full.svg" style="width: 100%; height: 100%; object-fit: contain; display: block;" alt="MiniWorkBuddy" />
+      <img v-else src="/brand/logo-icon.svg" class="rail-brand__icon" alt="MiniWorkBuddy" />
     </div>
 
     <nav class="rail-nav">
@@ -65,8 +60,20 @@ function onSelect(path: string) {
       </template>
     </nav>
 
-    <button class="rail-collapse" @click="toggle">
-      {{ collapsed ? '»' : '«' }}
+    <button class="rail-collapse" :title="collapsed ? '展开侧栏' : '收起侧栏'" @click="toggle">
+      <span class="rail-collapse__icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path
+            :d="collapsed
+              ? 'M6 3l5 5-5 5'
+              : 'M10 3L5 8l5 5'"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
     </button>
   </aside>
 </template>
@@ -74,72 +81,46 @@ function onSelect(path: string) {
 <style scoped>
 .rail {
   width: 220px;
+  min-width: 64px;
   height: 100%;
   background: var(--rail-bg);
   color: var(--rail-fg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
   transition: width 0.2s, background-color var(--transition), color var(--transition);
 }
 .rail--collapsed {
   width: 64px;
-}
-.rail--collapsed .rail-brand__text {
-  display: none;
 }
 .rail--collapsed .rail-brand {
   justify-content: center;
   padding: 0;
 }
 .rail-brand {
-  /* 与右侧主窗体顶部标题栏（--header-h）等高，保证左右顶部齐平 */
   height: var(--header-h);
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
+  align-items: stretch;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 1px solid var(--rail-border);
 }
 .rail-brand__logo {
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+}
+.rail-brand__icon {
   width: 26px;
   height: 26px;
   flex-shrink: 0;
-}
-.rail-brand__name {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: var(--fg);
-  margin: 2px 0 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail-brand__text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-  min-width: 0;
-}
-
-.rail-brand__kicker {
-  font-family: var(--font-tech);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  white-space: nowrap;
 }
 .rail-nav {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 0;
 }
 .rail-loading {
@@ -160,10 +141,22 @@ function onSelect(path: string) {
   color: var(--rail-fg-muted);
   cursor: pointer;
   border-top: 1px solid var(--rail-border);
-  transition: color var(--transition);
+  transition: color var(--transition), background-color var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .rail-collapse:hover {
-  color: var(--rail-fg);
+  color: var(--accent);
+  background: var(--rail-hover);
+}
+.rail-collapse__icon {
+  display: grid;
+  place-items: center;
+  transition: transform var(--transition);
+}
+.rail-collapse:hover .rail-collapse__icon {
+  transform: scale(1.1);
 }
 
 </style>

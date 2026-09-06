@@ -12,6 +12,24 @@ from app.services.auth_service import AuthService
 router = APIRouter(route_class=AuditLogRoute)
 
 
+def _tenant_name_map(db: Session) -> dict:
+    """一次性加载 租户ID -> 租户名称 映射，避免逐行查询。"""
+    from app.models.sys.sys_tenant import SysTenant
+    return {t.tenant_id: t.name for t in db.query(SysTenant).all()}
+
+
+def _effective_tenant_id(admin: "SysUser", requested: Optional[int]) -> Optional[int]:
+    """计算实际生效的租户过滤条件。
+
+    - 超级管理员（自身 tenant_id 为 0 或空）可查看全部租户，使用传入的 requested；
+    - 普通租户管理员强制只能查看自己所属租户，忽略传入参数。
+    """
+    admin_tenant = admin.tenant_id or 0
+    if admin_tenant != 0:
+        return admin_tenant
+    return requested
+
+
 class UserUpdate(BaseModel):
     realName: Optional[str] = None
     real_name: Optional[str] = None
@@ -30,6 +48,7 @@ class UserCreate(BaseModel):
     realName: str
     phone: Optional[str] = None
     email: Optional[str] = None
+    tenantId: Optional[int] = None
 
 
 class RoleAssignReq(BaseModel):
@@ -93,10 +112,18 @@ def get_dashboard_stats(db: Session = Depends(get_db), admin: SysUser = Depends(
 # ===========================================================
 
 @router.get("/users")
-def get_users(skip: int = 0, limit: int = 20, db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
-    total = db.query(SysUser).filter(SysUser.is_deleted == False).count()
-    users = db.query(SysUser).filter(SysUser.is_deleted == False).offset(skip).limit(limit).all()
+def get_users(
+        tenant_id: Optional[int] = None,
+        skip: int = 0, limit: int = 20,
+        db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
+    effective = _effective_tenant_id(admin, tenant_id)
+    query = db.query(SysUser).filter(SysUser.is_deleted == False)
+    if effective is not None:
+        query = query.filter(SysUser.tenant_id == effective)
+    total = query.count()
+    users = query.offset(skip).limit(limit).all()
 
+    tenant_map = _tenant_name_map(db)
     data = []
     for u in users:
         data.append({
@@ -106,6 +133,8 @@ def get_users(skip: int = 0, limit: int = 20, db: Session = Depends(get_db), adm
             "phone": u.phone,
             "email": u.email,
             "status": u.status,
+            "tenantId": u.tenant_id,
+            "tenantName": tenant_map.get(u.tenant_id) if u.tenant_id is not None else None,
             "createdAt": u.created_at.isoformat() if u.created_at else None
         })
     return {"code": 0, "message": "success", "data": data, "total": total}
@@ -274,6 +303,7 @@ def create_menu(menu_in: MenuCreate, db: Session = Depends(get_db), admin: SysUs
         visible=menu_in.visible,
         keep_alive=menu_in.keep_alive,
         always_show=menu_in.always_show,
+        i18n_key=menu_in.i18n_key,
     )
     db.add(new_menu)
     db.commit()
@@ -316,6 +346,8 @@ def update_menu(
         menu.keep_alive = menu_in.keep_alive
     if menu_in.always_show is not None:
         menu.always_show = menu_in.always_show
+    if menu_in.i18n_key is not None:
+        menu.i18n_key = menu_in.i18n_key
 
     db.commit()
     return {"code": 0, "message": "更新成功"}
@@ -411,6 +443,11 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db), admin: SysUs
     if exist:
         raise HTTPException(status_code=400, detail="用户名已存在")
 
+    # 普通租户管理员创建的用户强制归属自身租户；
+    # 超级管理员可显式指定租户，缺省归属平台租户 0。
+    admin_tenant = admin.tenant_id or 0
+    tenant_id = admin_tenant if admin_tenant != 0 else (user_in.tenantId or 0)
+
     hashed_password = AuthService.get_password_hash(user_in.password)
     new_user = SysUser(
         username=user_in.username,
@@ -418,6 +455,7 @@ def create_user(user_in: UserCreate, db: Session = Depends(get_db), admin: SysUs
         real_name=user_in.realName,
         phone=user_in.phone,
         email=user_in.email,
+        tenant_id=tenant_id,
         status="active"
     )
     db.add(new_user)
@@ -499,18 +537,28 @@ class RoleCreate(BaseModel):
     roleName: str
     roleCode: str
     description: Optional[str] = None
+    tenantId: Optional[int] = None
 
 
 @router.get("/roles")
-def get_roles(db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
+def get_roles(
+        tenant_id: Optional[int] = None,
+        db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
     from app.models.sys.sys_user import SysRole
-    roles = db.query(SysRole).filter(SysRole.is_deleted == False).all()
+    effective = _effective_tenant_id(admin, tenant_id)
+    query = db.query(SysRole).filter(SysRole.is_deleted == False)
+    if effective is not None:
+        query = query.filter(SysRole.tenant_id == effective)
+    roles = query.all()
+    tenant_map = _tenant_name_map(db)
     data = [{
         "roleId": r.role_id,
         "roleName": r.role_name,
         "roleCode": r.role_code,
         "description": r.description,
-        "status": r.status
+        "status": r.status,
+        "tenantId": r.tenant_id,
+        "tenantName": tenant_map.get(r.tenant_id) if r.tenant_id is not None else None,
     } for r in roles]
     return {"code": 0, "message": "success", "data": data}
 
@@ -518,7 +566,10 @@ def get_roles(db: Session = Depends(get_db), admin: SysUser = Depends(require_ad
 @router.post("/roles")
 def create_role(role_in: RoleCreate, db: Session = Depends(get_db), admin: SysUser = Depends(require_admin)):
     from app.models.sys.sys_user import SysRole
-    new_role = SysRole(role_name=role_in.roleName, role_code=role_in.roleCode, description=role_in.description)
+    admin_tenant = admin.tenant_id or 0
+    tenant_id = admin_tenant if admin_tenant != 0 else (role_in.tenantId or 0)
+    new_role = SysRole(role_name=role_in.roleName, role_code=role_in.roleCode,
+                       description=role_in.description, tenant_id=tenant_id)
     db.add(new_role)
     db.commit()
     return {"code": 0, "message": "创建成功"}
@@ -545,6 +596,7 @@ def update_role(role_id: int, role_in: RoleCreate, db: Session = Depends(get_db)
 
 @router.get("/audit-logs")
 def get_audit_logs(
+        tenant_id: Optional[int] = None,
         user_id: Optional[int] = None,
         operation_type: Optional[str] = None,
         skip: int = 0,
@@ -553,8 +605,11 @@ def get_audit_logs(
         admin: SysUser = Depends(require_admin)
 ):
     from app.models.sys.sys_user import SysAuditLog
+    effective = _effective_tenant_id(admin, tenant_id)
     query = db.query(SysAuditLog)
 
+    if effective is not None:
+        query = query.filter(SysAuditLog.tenant_id == effective)
     if user_id:
         query = query.filter(SysAuditLog.user_id == user_id)
     if operation_type:
@@ -562,6 +617,7 @@ def get_audit_logs(
 
     total = query.count()
     logs = query.order_by(SysAuditLog.created_at.desc()).offset(skip).limit(limit).all()
+    tenant_map = _tenant_name_map(db)
 
     data = []
     for log in logs:
@@ -578,6 +634,8 @@ def get_audit_logs(
             "newData": log.new_data,  # 附件详情等扩展数据
             "userAgent": log.user_agent,
             "responseTimeMs": log.response_time_ms,
+            "tenantId": log.tenant_id,
+            "tenantName": tenant_map.get(log.tenant_id) if log.tenant_id is not None else None,
             "createdAt": log.created_at.isoformat() if log.created_at else None,
             "status": log.response_status,
         })

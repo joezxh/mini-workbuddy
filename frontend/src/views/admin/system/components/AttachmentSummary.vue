@@ -2,7 +2,7 @@
   <div class="attachment-summary" :class="{ detailed }">
     <!-- 无附件 -->
     <a-tag v-if="!hasAny" color="default" size="small">
-      <PaperClipOutlined /> 无
+      <PaperClipOutlined /> {{ t('sys.attachment.no') }}
     </a-tag>
 
     <!-- db_id + uuid 都有 -->
@@ -11,7 +11,7 @@
         <a-tag color="blue" size="small">
           <FileTextOutlined /> DB ID × {{ dbIds.length }}
         </a-tag>
-        <a-tooltip v-if="detailed" title="复制 db_id 列表">
+        <a-tooltip v-if="detailed" :title="t('sys.attachment.copyDbId')">
           <a-tag
             v-for="id in dbIds"
             :key="id"
@@ -28,7 +28,7 @@
         <a-tag color="purple" size="small">
           <LinkOutlined /> UUID × {{ uuidIds.length }}
         </a-tag>
-        <a-tooltip v-if="detailed" title="UUID 字符串">
+        <a-tooltip v-if="detailed" :title="t('sys.attachment.uuidString')">
           <code
             v-for="u in uuidIds.slice(0, 3)"
             :key="u"
@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   PaperClipOutlined,
   FileTextOutlined,

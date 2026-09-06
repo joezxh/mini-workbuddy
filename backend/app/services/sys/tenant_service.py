@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.sys.sys_tenant import SysTenant, SysTenantPackage
-from app.models.sys.sys_user import SysUser
+from app.models.sys.sys_user import SysUser, SysRole, SysRoleMenu, SysUserRole
 from app.services.auth_service import AuthService
 from app.schemas.sys.sys_tenant import SysTenantCreate, SysTenantUpdate, TenantPageQuery
 
@@ -29,6 +29,53 @@ class TenantService:
                 resolver.refresh_domain_map()
         except Exception as e:
             logger.warning(f"刷新域名缓存失败(可忽略): {e}")
+
+    def sync_tenant_role_permissions(self, tenant_id: int, package_menu_ids: list[int]) -> None:
+        """同步租户下所有角色的菜单权限，使其与套餐配置严格一致。
+
+        规则：
+        - 租户管理员角色（role_code 包含 'tenant_admin'）：获得套餐全部菜单 ID
+        - 普通用户角色（非管理员）：仅保留属于套餐 menu_ids 的菜单项，移除其余
+        """
+        if not package_menu_ids:
+            package_menu_ids = []
+        package_menu_set = set(package_menu_ids)
+
+        # 查询该租户下所有角色
+        roles = self.db.query(SysRole).filter(
+            SysRole.tenant_id == tenant_id,
+            SysRole.is_deleted == False,
+        ).all()
+
+        for role in roles:
+            # 判断是否为管理员角色（role_code 包含 tenant_admin）
+            is_admin_role = role.role_code and 'tenant_admin' in role.role_code
+
+            if is_admin_role:
+                # 管理员角色：替换为套餐全部菜单 ID
+                self.db.query(SysRoleMenu).filter(
+                    SysRoleMenu.role_id == role.role_id
+                ).delete(synchronize_session=False)
+                for menu_id in package_menu_ids:
+                    self.db.add(SysRoleMenu(role_id=role.role_id, menu_id=menu_id))
+                logger.info(
+                    f"租户 {tenant_id} 管理员角色 {role.role_code} "
+                    f"权限已同步为套餐 {len(package_menu_ids)} 个菜单"
+                )
+            else:
+                # 普通角色：删除不在套餐 menu_ids 中的权限记录
+                q = self.db.query(SysRoleMenu).filter(
+                    SysRoleMenu.role_id == role.role_id,
+                )
+                if package_menu_set:
+                    q = q.filter(~SysRoleMenu.menu_id.in_(package_menu_set))
+                q.delete(synchronize_session=False)
+                logger.info(
+                    f"租户 {tenant_id} 普通角色 {role.role_code} "
+                    f"已清理超出套餐范围的菜单权限"
+                )
+
+        self.db.flush()
 
     # ── 租户管理 ─────────────────────────────────────────────────────────
 
@@ -68,6 +115,13 @@ class TenantService:
             status="active",
         )
         self.db.add(admin_user)
+
+        # 5. 同步套餐权限到租户角色
+        if req.package_id:
+            package = self.get_package(req.package_id)
+            if package and package.menu_ids:
+                self.sync_tenant_role_permissions(tenant.tenant_id, package.menu_ids)
+
         self.db.commit()
         self.db.refresh(tenant)
         self._refresh_domain_cache()
@@ -82,8 +136,16 @@ class TenantService:
             raise ValueError("租户不存在")
 
         update_data = req.model_dump(exclude_unset=True)
+        old_package_id = tenant.package_id
         for key, value in update_data.items():
             setattr(tenant, key, value)
+
+        # 套餐变更时同步角色权限
+        new_package_id = update_data.get("package_id")
+        if new_package_id is not None and new_package_id != old_package_id:
+            package = self.get_package(new_package_id)
+            menu_ids = package.menu_ids if package and package.menu_ids else []
+            self.sync_tenant_role_permissions(tenant.tenant_id, menu_ids)
 
         self.db.commit()
         self.db.refresh(tenant)

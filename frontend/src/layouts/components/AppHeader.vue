@@ -93,7 +93,10 @@ function onQuickNav({ key }: { key: string | number }) {
       <MenuFoldOutlined v-else />
     </button>
 
-
+    <!-- 移动端品牌标识：仅在小屏幕显示 -->
+    <span class="topbar-brand-mobile">
+      <img src="/brand/logo-icon.svg" width="22" height="22" alt="" aria-hidden="true" />
+    </span>
 
     <a-dropdown>
       <button class="portal-btn" type="button">
@@ -339,4 +342,35 @@ function onQuickNav({ key }: { key: string | number }) {
     display: none;
   }
 }
+
+/* 移动端品牌标识：默认隐藏，小屏幕显示 */
+.topbar-brand-mobile {
+  display: none;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .topbar-brand-mobile {
+    display: flex;
+  }
+
+  .portal-btn span {
+    display: none;
+  }
+
+  .portal-btn .caret {
+    display: none;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .topbar {
+    gap: 8px;
+    padding: 0 12px;
+  }
+}
+
 </style>

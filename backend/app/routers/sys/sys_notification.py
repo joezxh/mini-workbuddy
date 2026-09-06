@@ -11,7 +11,7 @@ from app.db.database import get_db
 from app.models.sys.sys_user import SysUser
 from app.deps import get_current_user_or_api_key
 from app.schemas.sys.sys_user_notification import SysUserNotificationOut, SysUserNotificationListResp, SysUserNotificationMarkReadReq
-from app.services.sys_notification_service import (
+from app.services.sys.sys_notification_service import (
     list_notifications, mark_read, clean_expired, )
 
 router = APIRouter(prefix="/notifications", tags=["站内通知"])

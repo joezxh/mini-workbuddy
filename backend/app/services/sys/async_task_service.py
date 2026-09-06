@@ -329,7 +329,7 @@ async def _finalize(
     db.commit()
     # 站内通知
     try:
-        from app.services.sys_notification_service import notify_user
+        from app.services.sys.sys_notification_service import notify_user
         _notify_title = {
             "completed": f"异步任务完成：{task.task_name}",
             "failed": f"异步任务失败：{task.task_name}",
@@ -442,7 +442,7 @@ def cancel_task(task_id: int, user_id: Optional[int] = None) -> bool:
             db.commit()
             _inc_stat("cancelled")
             try:
-                from app.services.sys_notification_service import notify_user
+                from app.services.sys.sys_notification_service import notify_user
                 notify_user(
                     user_id=task.user_id,
                     ntype="async_task",

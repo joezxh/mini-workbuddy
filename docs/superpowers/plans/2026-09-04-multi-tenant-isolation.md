@@ -1065,7 +1065,7 @@ from app.models.user import SysUser
 from app.schemas.tenant import (
     TenantCreate, TenantUpdate, TenantResp, TenantSimple, TenantPageQuery,
 )
-from app.services.tenant_service import TenantService
+from app.services.sys.tenant_service import TenantService
 from app.core.tenant_decorators import tenant_ignore
 
 router = APIRouter()
@@ -1073,14 +1073,14 @@ router = APIRouter()
 
 @router.get("/page", response_model=dict)
 def get_tenant_page(
-    name: str = Query(None),
-    contact_name: str = Query(None),
-    contact_mobile: str = Query(None),
-    status: str = Query(None),
-    page_no: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        name: str = Query(None),
+        contact_name: str = Query(None),
+        contact_mobile: str = Query(None),
+        status: str = Query(None),
+        page_no: int = Query(1, ge=1),
+        page_size: int = Query(10, ge=1, le=100),
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     query = TenantPageQuery(
         name=name, contact_name=contact_name,
@@ -1100,9 +1100,9 @@ def get_tenant_page(
 
 @router.get("/{tenant_id}", response_model=TenantResp)
 def get_tenant(
-    tenant_id: int,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        tenant_id: int,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     tenant = service.get_tenant(tenant_id)
@@ -1113,9 +1113,9 @@ def get_tenant(
 
 @router.post("/create")
 def create_tenant(
-    req: TenantCreate,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        req: TenantCreate,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1127,9 +1127,9 @@ def create_tenant(
 
 @router.put("/update")
 def update_tenant(
-    req: TenantUpdate,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        req: TenantUpdate,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1141,9 +1141,9 @@ def update_tenant(
 
 @router.delete("/delete/{tenant_id}")
 def delete_tenant(
-    tenant_id: int,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        tenant_id: int,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1155,9 +1155,9 @@ def delete_tenant(
 
 @router.delete("/delete-list")
 def delete_tenant_list(
-    ids: list[int],
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        ids: list[int],
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     for tid in ids:
@@ -1179,8 +1179,8 @@ def get_tenant_simple_list(db: Session = Depends(get_db)):
 @router.get("/get-id-by-name")
 @tenant_ignore
 def get_tenant_id_by_name(
-    name: str = Query(...),
-    db: Session = Depends(get_db),
+        name: str = Query(...),
+        db: Session = Depends(get_db),
 ):
     service = TenantService(db)
     from app.models.tenant import SysTenant
@@ -1200,19 +1200,19 @@ from sqlalchemy.orm import Session
 from app.deps import get_db, require_admin
 from app.models.user import SysUser
 from app.schemas.tenant import TenantPackageCreate, TenantPackageUpdate, TenantPackageResp, TenantPackageSimple
-from app.services.tenant_service import TenantService
+from app.services.sys.tenant_service import TenantService
 
 router = APIRouter()
 
 
 @router.get("/page")
 def get_package_page(
-    name: str = Query(None),
-    status: str = Query(None),
-    page_no: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        name: str = Query(None),
+        status: str = Query(None),
+        page_no: int = Query(1, ge=1),
+        page_size: int = Query(10, ge=1, le=100),
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     items, total = service.get_package_page(name, status, page_no, page_size)
@@ -1227,9 +1227,9 @@ def get_package_page(
 
 @router.get("/{package_id}", response_model=TenantPackageResp)
 def get_package(
-    package_id: int,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        package_id: int,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     package = service.get_package(package_id)
@@ -1240,9 +1240,9 @@ def get_package(
 
 @router.post("/create")
 def create_package(
-    req: TenantPackageCreate,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        req: TenantPackageCreate,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1257,9 +1257,9 @@ def create_package(
 
 @router.put("/update")
 def update_package(
-    req: TenantPackageUpdate,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        req: TenantPackageUpdate,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1272,9 +1272,9 @@ def update_package(
 
 @router.delete("/delete/{package_id}")
 def delete_package(
-    package_id: int,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        package_id: int,
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     try:
@@ -1286,9 +1286,9 @@ def delete_package(
 
 @router.delete("/delete-list")
 def delete_package_list(
-    ids: list[int],
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(require_admin),
+        ids: list[int],
+        db: Session = Depends(get_db),
+        current_user: SysUser = Depends(require_admin),
 ):
     service = TenantService(db)
     for pid in ids:

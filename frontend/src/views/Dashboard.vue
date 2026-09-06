@@ -1,10 +1,5 @@
 <template>
   <div class="dashboard-panel">
-    <div class="panel-header">
-      <h2 class="panel-title">{{ t('userMenu.dashboard') }}</h2>
-      <span class="panel-subtitle">系统概览 · 快捷操作与最近动态</span>
-    </div>
-
     <!-- 统计概览：5 项指标排一行，点击进入对应页面 -->
     <div class="stat-row">
       <div
@@ -23,7 +18,7 @@
 
     <!-- 快捷操作 -->
     <div class="quick-actions">
-      <h3 class="section-title">快捷操作</h3>
+      <h3 class="section-title">{{ t('dashboard.quickActionsTitle') }}</h3>
       <div class="actions-grid">
         <a-button
           v-for="action in quickActions"
@@ -41,10 +36,10 @@
     <!-- 系统审查日志 -->
     <div class="recent-activities">
       <div class="section-header">
-        <h3 class="section-title">最近操作</h3>
+        <h3 class="section-title">{{ t('dashboard.recentOpsTitle') }}</h3>
         <a-spin :spinning="auditLoading" size="small" />
       </div>
-      <a-empty v-if="!auditLoading && auditLogs.length === 0" description="暂无操作日志" />
+      <a-empty v-if="!auditLoading && auditLogs.length === 0" :description="t('dashboard.noAuditLogs')" />
       <a-timeline v-else>
         <a-timeline-item
           v-for="log in auditLogs"
@@ -53,7 +48,7 @@
         >
           <div class="activity-item">
             <div class="activity-main">
-              <span class="log-username">{{ log.username || '未知用户' }}</span>
+              <span class="log-username">{{ log.username || t('dashboard.unknownUser') }}</span>
               <a-tag :color="getOperationColor(log.operationType)" class="log-op-tag">
                 {{ getOperationTypeLabel(log.operationType) }}
               </a-tag>
@@ -71,12 +66,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, type Component } from 'vue'
+import { ref, reactive, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   AppstoreOutlined,
+  DashboardOutlined,
   RobotOutlined,
   ApartmentOutlined,
   MessageOutlined,
@@ -103,14 +99,13 @@ const stats = reactive({
   tokens: 0,
 })
 
-const statList: Array<{ key: keyof typeof stats; label: string; icon: Component; target: string }> = [
-  { key: 'skills', label: '已安装技能', icon: AppstoreOutlined, target: 'skill-management' },
-  { key: 'agents', label: '已安装 Agent', icon: RobotOutlined, target: 'agent-management' },
-  { key: 'agentTeams', label: 'Agent 团队', icon: ApartmentOutlined, target: 'agent-team' },
-  { key: 'sessions', label: '会话数量', icon: MessageOutlined, target: 'ai-sessions' },
-  // 暂无独立的 Token 用量页面，点击进入最相关的「AI 会话」页面
-  { key: 'tokens', label: '消耗 Token', icon: ThunderboltOutlined, target: 'ai-sessions' },
-]
+const statList = computed(() => [
+  { key: 'skills' as const, label: t('dashboard.statSkills'), icon: AppstoreOutlined, target: 'skill-management' },
+  { key: 'agents' as const, label: t('dashboard.statAgents'), icon: RobotOutlined, target: 'agent-management' },
+  { key: 'agentTeams' as const, label: t('dashboard.statAgentTeams'), icon: ApartmentOutlined, target: 'agent-team' },
+  { key: 'sessions' as const, label: t('dashboard.statSessions'), icon: MessageOutlined, target: 'ai-sessions' },
+  { key: 'tokens' as const, label: t('dashboard.statTokens'), icon: ThunderboltOutlined, target: 'ai-sessions' },
+])
 
 function pickValue(obj: any, keys: string[]): number {
   if (!obj) return 0
@@ -161,11 +156,11 @@ const fetchStats = async () => {
 // ========================
 // 快捷操作
 // ========================
-const quickActions = [
-  { key: 'ai-chat', label: 'AI 助手', icon: RobotOutlined, to: '/admin?tab=ai-chat', type: 'primary' as const },
-  { key: 'wiki', label: '知识库', icon: BookOutlined, to: '/wiki', type: 'default' as const },
-  { key: 'agent-management', label: '专家管理', icon: ApartmentOutlined, to: '/admin?tab=agent-management', type: 'default' as const },
-]
+const quickActions = computed(() => [
+  { key: 'ai-chat', label: t('dashboard.actionAiChat'), icon: RobotOutlined, to: '/admin?tab=ai-chat', type: 'primary' as const },
+  { key: 'wiki', label: t('dashboard.actionWiki'), icon: BookOutlined, to: '/wiki', type: 'default' as const },
+  { key: 'agent-management', label: t('dashboard.actionAgentMgmt'), icon: ApartmentOutlined, to: '/admin?tab=agent-management', type: 'default' as const },
+])
 
 function handleAction(to: string) {
   router.push(to)
@@ -180,25 +175,25 @@ const auditLoading = ref(false)
 
 // 操作类型字典（亮色映射）
 const operationTypeMap = ref<Record<string, { label: string; color: string }>>({
-  create: { label: '创建', color: 'green' },
-  update: { label: '更新', color: 'blue' },
-  delete: { label: '删除', color: 'red' },
-  query: { label: '查询', color: 'default' },
-  login: { label: '登录', color: 'cyan' },
-  logout: { label: '登出', color: 'orange' },
+  create: { label: t('dashboard.opCreate'), color: 'green' },
+  update: { label: t('dashboard.opUpdate'), color: 'blue' },
+  delete: { label: t('dashboard.opDelete'), color: 'red' },
+  query: { label: t('dashboard.opQuery'), color: 'default' },
+  login: { label: t('dashboard.opLogin'), color: 'cyan' },
+  logout: { label: t('dashboard.opLogout'), color: 'orange' },
 })
 
 // 操作模块字典
 const operationModuleMap = ref<Record<string, string>>({
-  user: '用户管理',
-  role: '角色管理',
-  permission: '权限管理',
-  dictionary: '字典管理',
-  system: '系统设置',
-  auth: '身份认证',
-  ai_session: 'AI 会话',
-  agent: 'Agent 管理',
-  wiki: 'Wiki 管理',
+  user: t('dashboard.modUser'),
+  role: t('dashboard.modRole'),
+  permission: t('dashboard.modPermission'),
+  dictionary: t('dashboard.modDictionary'),
+  system: t('dashboard.modSystem'),
+  auth: t('dashboard.modAuth'),
+  ai_session: t('dashboard.modAiSession'),
+  agent: t('dashboard.modAgent'),
+  wiki: t('dashboard.modWiki'),
 })
 
 // 从字典接口加载操作类型和模块映射
@@ -250,12 +245,12 @@ const formatTime = (isoStr: string | null): string => {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
   const minutes = Math.floor(diff / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
+  if (minutes < 1) return t('dashboard.timeJustNow')
+  if (minutes < 60) return t('dashboard.timeMinutesAgo', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}小时前`
+  if (hours < 24) return t('dashboard.timeHoursAgo', { n: hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}天前`
+  if (days < 7) return t('dashboard.timeDaysAgo', { n: days })
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -267,7 +262,7 @@ const fetchAuditLogs = async () => {
       auditLogs.value = res.data
     }
   } catch (error) {
-    message.error('获取审计日志失败')
+    message.error(t('dashboard.fetchAuditFail'))
   } finally {
     auditLoading.value = false
   }
@@ -285,6 +280,61 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   overflow-y: auto;
+  padding: 20px;
+}
+
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  min-height: 36px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid var(--border-glow);
+  border-bottom: none;
+  background: var(--bg-surface);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg-secondary);
+  transition: all 0.2s;
+  user-select: none;
+  max-width: 180px;
+
+  &.active {
+    background: var(--bg-active);
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    font-weight: 600;
+  }
+}
+
+.tab-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
 }
 
 .panel-header {

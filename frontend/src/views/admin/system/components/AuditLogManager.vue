@@ -2,25 +2,28 @@
   <div class="audit-log-manager">
     <div class="toolbar">
       <a-form layout="inline">
-        <a-form-item label="用户ID">
-          <a-input v-model:value="filters.userId" placeholder="输入用户ID" allow-clear />
+        <a-form-item :label="t('sys.auditLog.labelUserId')">
+          <a-input v-model:value="filters.userId" :placeholder="t('sys.auditLog.placeholderUserId')" allow-clear />
         </a-form-item>
-        <a-form-item label="操作类型">
-          <a-select v-model:value="filters.operationType" style="width: 150px" allow-clear placeholder="选择操作类型">
-            <a-select-option value="create">创建 (create)</a-select-option>
-            <a-select-option value="update">更新 (update)</a-select-option>
-            <a-select-option value="delete">删除 (delete)</a-select-option>
-            <a-select-option value="query">查询 (query)</a-select-option>
-            <a-select-option value="login">登录 (login)</a-select-option>
-            <a-select-option value="logout">登出 (logout)</a-select-option>
+        <a-form-item :label="t('sys.auditLog.labelOpType')">
+          <a-select v-model:value="filters.operationType" style="width: 150px" allow-clear :placeholder="t('sys.auditLog.placeholderOpType')">
+            <a-select-option value="create">{{ t('sys.auditLog.opCreate') }}</a-select-option>
+            <a-select-option value="update">{{ t('sys.auditLog.opUpdate') }}</a-select-option>
+            <a-select-option value="delete">{{ t('sys.auditLog.opDelete') }}</a-select-option>
+            <a-select-option value="query">{{ t('sys.auditLog.opQuery') }}</a-select-option>
+            <a-select-option value="login">{{ t('sys.auditLog.opLogin') }}</a-select-option>
+            <a-select-option value="logout">{{ t('sys.auditLog.opLogout') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="只看有附件">
+        <a-form-item :label="t('sys.auditLog.labelAttachment')">
           <a-switch v-model:checked="filters.onlyWithAttachment" @change="fetchLogs" />
         </a-form-item>
+        <a-form-item v-if="showTenant" :label="t('sys.auditLog.labelTenant')">
+          <TenantFilterSelect v-model="selectedTenantId" />
+        </a-form-item>
         <a-form-item>
-          <a-button type="primary" @click="fetchLogs">过滤</a-button>
-          <a-button style="margin-left: 8px" @click="resetFilters">重置</a-button>
+          <a-button type="primary" @click="fetchLogs">{{ t('sys.auditLog.filter') }}</a-button>
+          <a-button style="margin-left: 8px" @click="resetFilters">{{ t('sys.auditLog.reset') }}</a-button>
         </a-form-item>
       </a-form>
     </div>
@@ -29,7 +32,7 @@
       :columns="columns"
       :data-source="filteredLogs"
       :loading="loading"
-      :pagination="pagination"
+      :pagination="tablePagination"
       @change="handleTableChange"
       row-key="logId"
     >
@@ -43,7 +46,7 @@
         </template>
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status >= 200 && record.status < 300 ? 'success' : 'error'">
-            {{ record.status || '无' }}
+            {{ record.status || t('sys.auditLog.none') }}
           </a-tag>
         </template>
         <template v-if="column.key === 'attachments'">
@@ -53,7 +56,7 @@
           />
         </template>
         <template v-if="column.key === 'actions'">
-          <a-button type="link" size="small" @click="openDetail(record)">详情</a-button>
+          <a-button type="link" size="small" @click="openDetail(record)">{{ t('sys.auditLog.detail') }}</a-button>
         </template>
       </template>
     </a-table>
@@ -61,28 +64,28 @@
     <!-- 详情弹窗：包含附件明细 -->
     <a-modal
       v-model:open="detailVisible"
-      title="审计日志详情"
+      :title="t('sys.auditLog.detailTitle')"
       :footer="null"
       width="720px"
     >
       <div v-if="currentLog" class="log-detail">
         <a-descriptions :column="2" bordered size="small">
-          <a-descriptions-item label="日志ID">{{ currentLog.logId }}</a-descriptions-item>
-          <a-descriptions-item label="用户名">{{ currentLog.username || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="操作类型">
+          <a-descriptions-item :label="t('sys.auditLog.logId')">{{ currentLog.logId }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.username')">{{ currentLog.username || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.opType')">
             <a-tag color="blue">{{ currentLog.operationType }}</a-tag>
           </a-descriptions-item>
-          <a-descriptions-item label="操作模块">{{ currentLog.operationModule }}</a-descriptions-item>
-          <a-descriptions-item label="请求 IP" :span="2">{{ currentLog.requestIp || '-' }}</a-descriptions-item>
-          <a-descriptions-item label="响应状态" :span="2">
+          <a-descriptions-item :label="t('sys.auditLog.opModule')">{{ currentLog.operationModule }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.requestIp')" :span="2">{{ currentLog.requestIp || '-' }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.responseStatus')" :span="2">
             <a-tag :color="currentLog.status && currentLog.status < 400 ? 'success' : 'error'">
-              {{ currentLog.status || '无' }}
+              {{ currentLog.status || t('sys.auditLog.none') }}
             </a-tag>
           </a-descriptions-item>
-          <a-descriptions-item label="URL" :span="2">{{ currentLog.requestUrl || currentLog.operationDesc }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.url')" :span="2">{{ currentLog.requestUrl || currentLog.operationDesc }}</a-descriptions-item>
         </a-descriptions>
 
-        <a-divider>附件明细</a-divider>
+        <a-divider>{{ t('sys.auditLog.attachmentDetail') }}</a-divider>
 
         <AttachmentSummary
           v-if="currentLog.newData?.attachment_info || hasAttachmentInParams(currentLog.requestParams)"
@@ -90,10 +93,10 @@
           :request-params="currentLog.requestParams"
           :detailed="true"
         />
-        <a-empty v-else description="此条日志无附件" />
+        <a-empty v-else :description="t('sys.auditLog.noAttachment')" />
 
         <template v-if="currentLog.requestParams">
-          <a-divider>请求参数</a-divider>
+          <a-divider>{{ t('sys.auditLog.requestParams') }}</a-divider>
           <pre class="request-params">{{ formatJson(currentLog.requestParams) }}</pre>
         </template>
       </div>
@@ -103,13 +106,23 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { getAuditLogs, type AuditLogItem } from '@/api/admin'
 import AttachmentSummary from './AttachmentSummary.vue'
+import TenantFilterSelect from './TenantFilterSelect.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   filterUserId: number | null
+  /** 超级管理员可见：显示租户筛选与所属租户列 */
+  showTenant?: boolean
 }>()
+
+// 租户筛选由本组件内部持有：超管可切换具体租户，清空=全部
+const selectedTenantId = ref<number | undefined>(undefined)
+const tenantParam = () => (props.showTenant && selectedTenantId.value != null ? selectedTenantId.value : null)
 
 const logs = ref<AuditLogItem[]>([])
 const loading = ref(false)
@@ -118,6 +131,10 @@ const pagination = reactive({
   pageSize: 10,
   total: 0
 })
+const tablePagination = computed(() => ({
+  ...pagination,
+  showTotal: (total: number) => t('common.total', { total })
+}))
 
 const filters = reactive({
   userId: '' as string | number,
@@ -125,19 +142,28 @@ const filters = reactive({
   onlyWithAttachment: false,
 })
 
-const columns = [
-  { title: '日志ID', dataIndex: 'logId', key: 'logId', width: 80 },
-  { title: '用户ID', dataIndex: 'userId', key: 'userId', width: 80 },
-  { title: '用户名', dataIndex: 'username', key: 'username', width: 120 },
-  { title: '操作类型', dataIndex: 'operationType', key: 'operationType', width: 110 },
-  { title: '操作模块', dataIndex: 'operationModule', key: 'operationModule', width: 130 },
-  { title: '描述', key: 'description' },
-  { title: '附件', key: 'attachments', width: 220 },
-  { title: '请求 IP', dataIndex: 'requestIp', key: 'requestIp', width: 130 },
-  { title: '响应状态', key: 'status', width: 90 },
-  { title: '操作时间', dataIndex: 'createdAt', key: 'createdAt', width: 170 },
-  { title: '操作', key: 'actions', width: 80, fixed: 'right' as const },
-]
+const columns = computed(() => {
+  const base: any[] = [
+    { title: t('sys.auditLog.colLogId'), dataIndex: 'logId', key: 'logId', width: 80 },
+    { title: t('sys.auditLog.colUserId'), dataIndex: 'userId', key: 'userId', width: 80 },
+    { title: t('sys.auditLog.colUsername'), dataIndex: 'username', key: 'username', width: 120 },
+  ]
+  // 超级管理员可见所属租户列
+  if (props.showTenant) {
+    base.push({ title: t('sys.auditLog.colTenant'), dataIndex: 'tenantName', key: 'tenantName', width: 120 })
+  }
+  base.push(
+    { title: t('sys.auditLog.colOpType'), dataIndex: 'operationType', key: 'operationType', width: 110 },
+    { title: t('sys.auditLog.colOpModule'), dataIndex: 'operationModule', key: 'operationModule', width: 130 },
+    { title: t('sys.auditLog.colDesc'), key: 'description' },
+    { title: t('sys.auditLog.colAttachment'), key: 'attachments', width: 220 },
+    { title: t('sys.auditLog.colIp'), dataIndex: 'requestIp', key: 'requestIp', width: 130 },
+    { title: t('sys.auditLog.colStatus'), key: 'status', width: 90 },
+    { title: t('sys.auditLog.colTime'), dataIndex: 'createdAt', key: 'createdAt', width: 170 },
+    { title: t('sys.auditLog.colAction'), key: 'actions', width: 80, fixed: 'right' as const },
+  )
+  return base
+})
 
 const fetchLogs = async () => {
   loading.value = true
@@ -146,6 +172,8 @@ const fetchLogs = async () => {
       skip: (pagination.current - 1) * pagination.pageSize,
       limit: pagination.pageSize
     }
+    const tid = tenantParam()
+    if (tid != null) params.tenant_id = tid
     if (filters.userId) params.user_id = filters.userId
     if (filters.operationType) params.operation_type = filters.operationType
 
@@ -155,7 +183,7 @@ const fetchLogs = async () => {
       pagination.total = res.total
     }
   } catch (error) {
-    message.error('获取审计日志失败')
+    message.error(t('sys.auditLog.fetchFail'))
   } finally {
     loading.value = false
   }
@@ -212,6 +240,12 @@ watch(() => props.filterUserId, (newVal) => {
   }
 })
 
+// 切换租户筛选时重新拉取
+watch(selectedTenantId, () => {
+  pagination.current = 1
+  fetchLogs()
+})
+
 onMounted(() => {
   if (props.filterUserId) {
     filters.userId = props.filterUserId
@@ -226,6 +260,11 @@ onMounted(() => {
   background: var(--bg-surface);
   padding: 16px;
   border-radius: 4px;
+}
+
+/* 表格行不换行；操作按钮保持单行 */
+:deep(.ant-table-cell) {
+  white-space: nowrap;
 }
 
 .log-detail {

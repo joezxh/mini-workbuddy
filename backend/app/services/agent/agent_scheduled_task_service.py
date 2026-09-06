@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 from app.db.database import SessionLocal
 from app.models.agent.agent_scheduled_task import AgentScheduledTask
-from app.services.async_task_service import (
+from app.services.sys.async_task_service import (
     _get_scheduler as _get_base_scheduler,
     _should_register_job,
     submit_task,

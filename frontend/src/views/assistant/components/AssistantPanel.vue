@@ -93,7 +93,6 @@
         @delete-session="handleDeleteSession"
         @toggle-thinking="toggleThinking"
         @copy="copyText"
-        @completed="handleCompleted"
       />
 
       <ChatInput
@@ -1457,11 +1456,6 @@ async function loadAvailableModels() {
 }
 
 // ── Skill Timeline View Events ───────────────────────────────────────────────
-function handleCompleted(result: any) {
-  // 当技能执行完成时，可以做一些后续操作
-  console.log('✅ 技能执行完成', result)
-  // TODO: 可以添加到消息历史记录或者更新 UI 状态
-}
 
 async function loadWorkspaces() {
   try {

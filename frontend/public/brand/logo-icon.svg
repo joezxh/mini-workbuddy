@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F6EF7"/>
+      <stop offset="100%" stop-color="#22D3AE"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3AE"/>
+      <stop offset="100%" stop-color="#4F6EF7"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <polygon points="32,4 56,18 56,46 32,60 8,46 8,18" fill="none" stroke="url(#brandGrad)" stroke-width="2" stroke-linejoin="round" opacity="0.6"/>
+  <line x1="32" y1="20" x2="22" y2="40" stroke="url(#brandGrad)" stroke-width="1.2" opacity="0.4"/>
+  <line x1="32" y1="20" x2="42" y2="40" stroke="url(#brandGrad)" stroke-width="1.2" opacity="0.4"/>
+  <line x1="22" y1="40" x2="42" y2="40" stroke="url(#brandGrad)" stroke-width="1.2" opacity="0.4"/>
+  <circle cx="32" cy="33" r="3" fill="url(#brandGrad)" filter="url(#glow)" opacity="0.5"/>
+  <circle cx="32" cy="20" r="4.5" fill="url(#brandGrad)" filter="url(#glow)"/>
+  <circle cx="32" cy="20" r="2" fill="#fff" opacity="0.9"/>
+  <circle cx="22" cy="40" r="3.5" fill="url(#accentGrad)" filter="url(#glow)"/>
+  <circle cx="22" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+  <circle cx="42" cy="40" r="3.5" fill="url(#accentGrad)" filter="url(#glow)"/>
+  <circle cx="42" cy="40" r="1.5" fill="#fff" opacity="0.9"/>
+</svg>

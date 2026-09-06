@@ -1,18 +1,18 @@
 <template>
   <div class="dictionary-panel">
     <div class="panel-header">
-      <h2>系统字典管理</h2>
-      <p class="description">管理系统中的字典数据，包括风险等级、处置状态、事件类型等</p>
+      <h2>{{ t('sys.dictionary.title') }}</h2>
+      <p class="description">{{ t('sys.dictionary.subtitle') }}</p>
     </div>
 
     <div class="dictionary-content">
       <!-- 左侧字典列表 -->
       <div class="dictionary-list">
         <div class="list-header">
-          <span class="title">字典列表</span>
+          <span class="title">{{ t('sys.dictionary.listTitle') }}</span>
           <a-button type="primary" size="small" @click="showAddDictModal">
             <template #icon><PlusOutlined /></template>
-            新增字典
+            {{ t('sys.dictionary.addDict') }}
           </a-button>
         </div>
         <a-spin :spinning="loading">
@@ -29,15 +29,15 @@
               </div>
               <div class="dict-meta">
                 <a-tag :color="dict.dict_type === 'system' ? 'blue' : 'green'" size="small">
-                  {{ dict.dict_type === 'system' ? '系统' : '业务' }}
+                  {{ dict.dict_type === 'system' ? t('sys.dictionary.systemType') : t('sys.dictionary.businessType') }}
                 </a-tag>
                 <a-badge :count="dict.items?.length || 0" :number-style="{ backgroundColor: 'var(--ok)' }" />
                 <a-space size="small" @click.stop>
-                  <a-button type="link" size="small" @click.stop="showEditDictModal(dict)">编辑</a-button>
+                  <a-button type="link" size="small" @click.stop="showEditDictModal(dict)">{{ t('sys.dictionary.edit') }}</a-button>
                   <a-popconfirm
-                    title="确认删除该字典吗？删除后对应字典项也将删除"
-                    ok-text="删除"
-                    cancel-text="取消"
+                    :title="t('sys.dictionary.deleteDictConfirm')"
+                    :ok-text="t('sys.dictionary.deleteDict')"
+                    :cancel-text="t('common.cancel')"
                     @confirm="deleteDict(dict)"
                   >
                     <a-button
@@ -45,7 +45,7 @@
                       danger
                       size="small"
                       :disabled="dict.dict_type === 'system'"
-                    >删除</a-button>
+                    >{{ t('sys.dictionary.delete') }}</a-button>
                   </a-popconfirm>
                 </a-space>
               </div>
@@ -58,7 +58,7 @@
               :total="dictPagination.total"
               :show-size-changer="true"
               :page-size-options="['5','10', '15', '20', '30']"
-              :show-total="(total: number, range: [number, number]) => `${range[0]}-${range[1]} / 共 ${total} 条`"
+              :show-total="(total: number) => t('common.total', { total })"
               size="small"
               @change="loadDictionaries"
               @showSizeChange="onDictPageSizeChange"
@@ -71,19 +71,19 @@
       <div class="dictionary-items">
         <div v-if="!selectedDict" class="empty-state">
           <DatabaseOutlined style="font-size: 48px; color: var(--fg-muted)" />
-          <p>请选择左侧字典查看详情</p>
+          <p>{{ t('sys.dictionary.selectHint') }}</p>
         </div>
 
         <div v-else class="items-container">
           <div class="items-header">
             <div class="header-info">
               <h3>{{ selectedDict.dict_name }}</h3>
-              <p class="dict-description">{{ selectedDict.description || '暂无描述' }}</p>
+              <p class="dict-description">{{ selectedDict.description || t('sys.dictionary.noDescription') }}</p>
             </div>
             <div class="header-actions">
               <a-button type="primary" @click="showAddItemModal">
                 <template #icon><PlusOutlined /></template>
-                添加字典项
+                {{ t('sys.dictionary.addItem') }}
               </a-button>
               <a-button @click="refreshDictItems">
                 <template #icon><ReloadOutlined /></template>
@@ -95,7 +95,7 @@
             :columns="itemColumns"
             :data-source="dictItems"
             :loading="itemsLoading"
-            :pagination="{ pageSize: 10 }"
+            :pagination="itemTablePagination"
             row-key="item_id"
             size="middle"
           >
@@ -125,14 +125,14 @@
 
               <template v-if="column.key === 'actions'">
                 <a-space>
-                  <a-button type="link" size="small" @click="editItem(record)">编辑</a-button>
+                  <a-button type="link" size="small" @click="editItem(record)">{{ t('sys.dictionary.edit') }}</a-button>
                   <a-popconfirm
-                    title="确定删除此字典项吗？"
-                    ok-text="确定"
-                    cancel-text="取消"
+                    :title="t('sys.dictionary.deleteItemConfirm')"
+                    :ok-text="t('common.confirm')"
+                    :cancel-text="t('common.cancel')"
                     @confirm="deleteItem(record)"
                   >
-                    <a-button type="link" danger size="small">删除</a-button>
+                    <a-button type="link" danger size="small">{{ t('sys.dictionary.delete') }}</a-button>
                   </a-popconfirm>
                 </a-space>
               </template>
@@ -145,38 +145,38 @@
     <!-- 添加/编辑字典项弹窗 -->
     <a-modal
       v-model:open="itemModalVisible"
-      :title="editingItem ? '编辑字典项' : '添加字典项'"
+      :title="editingItem ? t('sys.dictionary.editDictItem') : t('sys.dictionary.addDictItem')"
       width="600px"
       @ok="saveItem"
     >
       <a-form :model="itemForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-        <a-form-item label="字典项编码" required>
-          <a-input v-model:value="itemForm.item_code" :disabled="!!editingItem" placeholder="请输入字典项编码" />
+        <a-form-item :label="t('sys.dictionary.labelItemCode')" required>
+          <a-input v-model:value="itemForm.item_code" :disabled="!!editingItem" :placeholder="t('sys.dictionary.placeholderItemCode')" />
         </a-form-item>
-        <a-form-item label="字典项名称" required>
-          <a-input v-model:value="itemForm.item_name" placeholder="请输入字典项名称" />
+        <a-form-item :label="t('sys.dictionary.labelItemName')" required>
+          <a-input v-model:value="itemForm.item_name" :placeholder="t('sys.dictionary.placeholderItemName')" />
         </a-form-item>
-        <a-form-item label="字典项值">
-          <a-input v-model:value="itemForm.item_value" placeholder="请输入字典项值" />
+        <a-form-item :label="t('sys.dictionary.labelItemValue')">
+          <a-input v-model:value="itemForm.item_value" :placeholder="t('sys.dictionary.placeholderItemValue')" />
         </a-form-item>
-        <a-form-item label="颜色">
+        <a-form-item :label="t('sys.dictionary.labelColor')">
           <a-input v-model:value="itemForm.color" placeholder="#1890ff">
             <template #addonAfter>
               <input type="color" v-model="itemForm.color" style="border: none; cursor: pointer" />
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item label="图标">
-          <a-input v-model:value="itemForm.icon" placeholder="请输入图标" />
+        <a-form-item :label="t('sys.dictionary.labelIcon')">
+          <a-input v-model:value="itemForm.icon" :placeholder="t('sys.dictionary.placeholderItemName')" />
         </a-form-item>
-        <a-form-item label="排序">
+        <a-form-item :label="t('sys.dictionary.labelSort')">
           <a-input-number v-model:value="itemForm.sort_order" :min="0" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="是否启用">
+        <a-form-item :label="t('sys.dictionary.labelIsActive')">
           <a-switch v-model:checked="itemForm.is_active" />
         </a-form-item>
-        <a-form-item label="备注">
-          <a-textarea v-model:value="itemForm.remark" :rows="3" placeholder="请输入备注" />
+        <a-form-item :label="t('sys.dictionary.labelRemark')">
+          <a-textarea v-model:value="itemForm.remark" :rows="3" :placeholder="t('sys.dictionary.placeholderRemark')" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -184,28 +184,28 @@
     <!-- 添加字典弹窗 -->
     <a-modal
       v-model:open="dictModalVisible"
-      :title="editingDict ? '编辑字典' : '添加字典'"
+      :title="editingDict ? t('sys.dictionary.editDict') : t('sys.dictionary.addDictTitle')"
       width="600px"
       @ok="saveDict"
       :confirm-loading="dictSaving"
     >
       <a-form :model="dictForm" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-        <a-form-item label="字典编码" required>
-          <a-input v-model:value="dictForm.dict_code" placeholder="请输入字典编码" />
+        <a-form-item :label="t('sys.dictionary.labelDictCode')" required>
+          <a-input v-model:value="dictForm.dict_code" :placeholder="t('sys.dictionary.placeholderDictCode')" />
         </a-form-item>
-        <a-form-item label="字典名称" required>
-          <a-input v-model:value="dictForm.dict_name" placeholder="请输入字典名称" />
+        <a-form-item :label="t('sys.dictionary.labelDictName')" required>
+          <a-input v-model:value="dictForm.dict_name" :placeholder="t('sys.dictionary.placeholderDictName')" />
         </a-form-item>
-        <a-form-item label="字典类型" required>
-          <a-select v-model:value="dictForm.dict_type" placeholder="请选择字典类型">
-            <a-select-option value="system">系统字典</a-select-option>
-            <a-select-option value="business">业务字典</a-select-option>
+        <a-form-item :label="t('sys.dictionary.labelDictType')" required>
+          <a-select v-model:value="dictForm.dict_type" :placeholder="t('sys.dictionary.placeholderDictType')">
+            <a-select-option value="system">{{ t('sys.dictionary.systemDict') }}</a-select-option>
+            <a-select-option value="business">{{ t('sys.dictionary.businessDict') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item label="描述">
-          <a-textarea v-model:value="dictForm.description" :rows="3" placeholder="请输入描述" />
+        <a-form-item :label="t('sys.dictionary.labelDescription')">
+          <a-textarea v-model:value="dictForm.description" :rows="3" :placeholder="t('sys.dictionary.placeholderDescription')" />
         </a-form-item>
-        <a-form-item label="排序">
+        <a-form-item :label="t('sys.dictionary.labelSort')">
           <a-input-number v-model:value="dictForm.sort_order" :min="0" style="width: 100%" />
         </a-form-item>
       </a-form>
@@ -214,7 +214,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -234,6 +235,8 @@ import {
   type DictionaryItem
 } from '@/api/dictionary'
 
+const { t } = useI18n()
+
 // 数据
 const loading = ref(false)
 const itemsLoading = ref(false)
@@ -245,6 +248,10 @@ const dictPagination = ref({
   pageSize: 10,
   total: 0
 })
+const itemTablePagination = computed(() => ({
+  pageSize: 10,
+  showTotal: (total: number) => t('common.total', { total })
+}))
 
 // 弹窗
 const itemModalVisible = ref(false)
@@ -274,15 +281,15 @@ const dictForm = ref({
 })
 
 // 表格列
-const itemColumns = [
-  { title: '字典项名称', dataIndex: 'item_name', key: 'item_name', width: 200 },
-  { title: '编码', dataIndex: 'item_code', key: 'item_code', width: 150 },
-  { title: '值', dataIndex: 'item_value', key: 'item_value', width: 150 },
-  { title: '颜色', dataIndex: 'color', key: 'color', width: 120 },
-  { title: '排序', dataIndex: 'sort_order', key: 'sort_order', width: 80 },
-  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80 },
-  { title: '操作', key: 'actions', width: 150, fixed: 'right' }
-]
+const itemColumns = computed(() => [
+  { title: t('sys.dictionary.colItemName'), dataIndex: 'item_name', key: 'item_name', width: 200 },
+  { title: t('sys.dictionary.colCode'), dataIndex: 'item_code', key: 'item_code', width: 150 },
+  { title: t('sys.dictionary.colValue'), dataIndex: 'item_value', key: 'item_value', width: 150 },
+  { title: t('sys.dictionary.colColor'), dataIndex: 'color', key: 'color', width: 120 },
+  { title: t('sys.dictionary.colSort'), dataIndex: 'sort_order', key: 'sort_order', width: 80 },
+  { title: t('sys.dictionary.colStatus'), dataIndex: 'is_active', key: 'is_active', width: 80 },
+  { title: t('sys.dictionary.colAction'), key: 'actions', width: 150, fixed: 'right' }
+])
 
 // 加载字典列表
 const loadDictionaries = async () => {
@@ -299,7 +306,7 @@ const loadDictionaries = async () => {
       if (matched) selectedDict.value = matched
     }
   } catch (error: any) {
-    message.error(error.message || '加载字典列表失败')
+    message.error(error.message || t('sys.dictionary.loadFail'))
   } finally {
     loading.value = false
   }
@@ -324,7 +331,7 @@ const loadDictItems = async (dictCode: string) => {
     const data = await getDictionary(dictCode, true)
     dictItems.value = data.items || []
   } catch (error: any) {
-    message.error(error.message || '加载字典项失败')
+    message.error(error.message || t('sys.dictionary.loadItemsFail'))
   } finally {
     itemsLoading.value = false
   }
@@ -381,19 +388,19 @@ const saveItem = async () => {
         editingItem.value.item_code,
         itemForm.value
       )
-      message.success('更新成功')
+      message.success(t('sys.dictionary.saveSuccess'))
     } else {
       // 新增
       await createDictionaryItem(selectedDict.value.dict_code, {
         ...itemForm.value,
         dict_code: selectedDict.value.dict_code
       })
-      message.success('添加成功')
+      message.success(t('sys.dictionary.addSuccess'))
     }
     itemModalVisible.value = false
     await loadDictItems(selectedDict.value.dict_code)
   } catch (error: any) {
-    message.error(error.message || '保存失败')
+    message.error(error.message || t('sys.dictionary.saveFail'))
   }
 }
 
@@ -405,9 +412,9 @@ const toggleItemStatus = async (item: DictionaryItem) => {
     await updateDictionaryItem(selectedDict.value.dict_code, item.item_code, {
       is_active: item.is_active
     })
-    message.success('状态更新成功')
+    message.success(t('sys.dictionary.statusUpdateSuccess'))
   } catch (error: any) {
-    message.error(error.message || '状态更新失败')
+    message.error(error.message || t('sys.dictionary.statusUpdateFail'))
     item.is_active = !item.is_active // 回滚
   }
 }
@@ -418,10 +425,10 @@ const deleteItem = async (item: DictionaryItem) => {
 
   try {
     await deleteDictionaryItem(selectedDict.value.dict_code, item.item_code)
-    message.success('删除成功')
+    message.success(t('sys.dictionary.deleteSuccess'))
     await loadDictItems(selectedDict.value.dict_code)
   } catch (error: any) {
-    message.error(error.message || '删除失败')
+    message.error(error.message || t('sys.dictionary.deleteFail'))
   }
 }
 
@@ -461,15 +468,15 @@ const saveDict = async () => {
         description: dictForm.value.description,
         sort_order: dictForm.value.sort_order
       })
-      message.success('字典更新成功')
+      message.success(t('sys.dictionary.dictUpdateSuccess'))
     } else {
       await createDictionary(dictForm.value)
-      message.success('添加成功')
+      message.success(t('sys.dictionary.addSuccess'))
     }
     dictModalVisible.value = false
     await loadDictionaries()
   } catch (error: any) {
-    message.error(error.message || '添加失败')
+    message.error(error.message || t('sys.dictionary.addFail'))
   } finally {
     dictSaving.value = false
   }
@@ -477,12 +484,12 @@ const saveDict = async () => {
 
 const deleteDict = async (dict: Dictionary) => {
   if (dict.dict_type === 'system') {
-    message.warning('系统字典不允许删除')
+    message.warning(t('sys.dictionary.systemNoDelete'))
     return
   }
   try {
     await deleteDictionary(dict.dict_code)
-    message.success('字典删除成功')
+    message.success(t('sys.dictionary.dictDeleteSuccess'))
     if (selectedDict.value?.dict_code === dict.dict_code) {
       selectedDict.value = null
       dictItems.value = []
@@ -493,7 +500,7 @@ const deleteDict = async (dict: Dictionary) => {
     }
     await loadDictionaries()
   } catch (error: any) {
-    message.error(error.message || '字典删除失败')
+    message.error(error.message || t('sys.dictionary.dictDeleteFail'))
   }
 }
 
@@ -718,4 +725,3 @@ onMounted(() => {
   }
 }
 </style>
-
