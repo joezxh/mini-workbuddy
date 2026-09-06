@@ -2,27 +2,20 @@
 
 提供团队创建、执行和监控的统一接口。
 底层使用 AgentScope 的 Agent 协作机制。
-
-TODO: 完整实现待 AgentScope Team API 稳定后接入。
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncGenerator, Dict, List, Optional
-
+from typing import Any, AsyncGenerator, Dict, Optional
 from sqlalchemy.orm import Session
+
+from app.ai.team.orchestrator import AgentScopeOrchestrator
 
 logger = logging.getLogger(__name__)
 
 
 class TeamManager:
-    """管理 AgentScope Team 的创建和执行。
-
-    职责：
-    1. 从数据库加载团队配置与成员
-    2. 创建 Leader + Worker Agent
-    3. 运行团队编排并流式返回结果
-    """
+    """AgentScope Team Manager - 简化版委托给 Orchestrator。"""
 
     def __init__(self, db: Session):
         self._db = db
@@ -54,7 +47,7 @@ class TeamManager:
         try:
             team = svc.get_team(team_id)
         except Exception as e:
-            yield {"type": "error", "data": {"message": f"加载团队失败: {e}"}}
+            yield {"type": "error", "data": {"message": f"加载团队失败：{e}"}}
             return
 
         if team is None:
@@ -79,72 +72,25 @@ class TeamManager:
             },
         }
 
-        # TODO: 完整 AgentScope Team API 集成
-        # 1. 为每个 member 创建 AgentScope Agent（从 agent_config 读取 sys_prompt）
-        # 2. 创建 Leader Agent（协调者）
-        # 3. Leader 分析用户输入，派发给合适的 Worker
-        # 4. 收集 Worker 结果
-        # 5. Leader 汇总并输出最终结论
-
-        # 当前 stub：模拟团队执行过程
-        for i, member in enumerate(members):
-            agent_name = getattr(member, "role_name", None) or f"成员{i+1}"
+        # 创建 Orchestrator 并执行
+        try:
+            orchestrator = AgentScopeOrchestrator(
+                db=self._db,
+                team=team,
+                run=None,  # TODO: 创建运行记录
+                model_id=model_id,
+            )
+            
+            result = await orchestrator.submit(input_text=user_input)
+            
             yield {
-                "type": "team_worker_start",
-                "data": {"agent_name": agent_name, "index": i},
-            }
-            # 模拟 worker 执行
-            yield {
-                "type": "team_worker_done",
+                "type": "team_done",
                 "data": {
-                    "agent_name": agent_name,
-                    "index": i,
-                    "output": f"[{agent_name}] 已处理（stub 模式，待 AgentScope Team API 接入）",
+                    "team_code": team_code,
+                    "team_name": team_name,
+                    "result": result,
                 },
             }
-
-        final_output = (
-            f"团队 {team_name} 已完成分析（stub 模式）。\n\n"
-            f"输入：{user_input[:200]}\n"
-            f"参与成员：{len(members)} 人\n\n"
-            "完整编排待 AgentScope Team API 接入后实现。"
-        )
-
-        yield {
-            "type": "team_done",
-            "data": {
-                "team_code": team_code,
-                "team_name": team_name,
-                "result": final_output,
-            },
-        }
-
-    def create_team_agents(
-        self,
-        members: List[Dict[str, Any]],
-        model_id: Optional[int] = None,
-    ) -> List[Any]:
-        """为团队成员创建 AgentScope Agent 实例。
-
-        Args:
-            members: 团队成员列表（含 agent_config_id、role_name 等）
-            model_id: 模型 ID
-
-        Returns:
-            AgentScope Agent 列表
-        """
-        from agentscope.agent import Agent
-
-        agents = []
-        for m in members:
-            agent_name = m.get("role_name") or m.get("agent_name", "worker")
-            sys_prompt = m.get("sys_prompt", f"你是团队中的 {agent_name}，负责特定领域的任务。")
-
-            agent = Agent(
-                name=agent_name,
-                sys_prompt=sys_prompt,
-                model_config_name=str(model_id or "default"),
-            )
-            agents.append(agent)
-
-        return agents
+        except Exception as e:
+            logger.exception(f"团队执行失败：{e}")
+            yield {"type": "error", "data": {"message": str(e)}}
