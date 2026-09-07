@@ -7,7 +7,20 @@ import jaJP from './locales/ja-JP'
 
 export type LocaleKey = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP'
 
-const savedLocale = (localStorage.getItem('app-locale') || 'en-US') as LocaleKey
+/** 受支持的语言列表（须在 normalizeLocale 之前初始化，否则顶层调用会触发 TDZ） */
+export const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP'] as const
+
+/** 归一化语言：历史版本可能存了 'en' 等旧值，统一收敛到受支持的 LocaleKey */
+function normalizeLocale(value: unknown): LocaleKey {
+  if (isSupportedLocale(value)) return value
+  return 'en-US'
+}
+
+const savedLocale = normalizeLocale(localStorage.getItem('app-locale'))
+// 旧版本可能存了不受支持的值（如 'en'），就地纠正，避免每次都走 fallback
+if (localStorage.getItem('app-locale') !== savedLocale) {
+  localStorage.setItem('app-locale', savedLocale)
+}
 
 const i18n = createI18n({
   legacy: false,
@@ -34,10 +47,8 @@ export function setLocale(locale: LocaleKey) {
 }
 
 export function getLocale(): LocaleKey {
-  return (localStorage.getItem('app-locale') as LocaleKey) || 'en-US'
+  return normalizeLocale(localStorage.getItem('app-locale'))
 }
-
-export const SUPPORTED_LOCALES = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP'] as const
 
 export const LOCALE_LABELS: Record<LocaleKey, string> = {
   'zh-CN': '简体中文',

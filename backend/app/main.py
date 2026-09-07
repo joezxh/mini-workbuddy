@@ -227,57 +227,10 @@ async def health_check():
     return {"status": "ok", "version": settings.APP_VERSION}
 
 
-# 注册路由
-API_V1_PREFIX = "/api/v1"
+# 注册路由（声明式清单：新增/下线模块只需改 app/core/router_registry.py，无需改动本文件）
+from app.core.router_registry import register_routers
 
-# --- sys/ — 系统管理 ---
-from app.routers import auth, sys
-from app.routers.sys import sys_tenant as tenant_router
-from app.routers.sys import sys_tenant_package as tenant_package_router
-from app.routers.sys import sys_dictionary as dictionary_router
-app.include_router(auth.router, prefix=f"{API_V1_PREFIX}/auth", tags=["认证"])
-app.include_router(sys.router, prefix=f"{API_V1_PREFIX}/admin", tags=["管理员"])
-app.include_router(dictionary_router.router, prefix=f"{API_V1_PREFIX}/dictionary", tags=["字典管理"])
-app.include_router(tenant_router.router, prefix=f"{API_V1_PREFIX}/admin/tenant", tags=["租户管理"])
-app.include_router(tenant_package_router.router, prefix=f"{API_V1_PREFIX}/admin/tenant-package", tags=["租户套餐管理"])
-
-# --- ai/ — AI 会话 ---
-from app.routers.ai import (
-    ai_agent as ai_agent_router,
-    ai_chat as ai_session_router,
-    ai_skill as ai_skill_router,
-    ai_api_key as api_key_router,
-    ai_tool as tool_router,
-    ai_mcp as mcp_router,
-    ai_web_search as web_search_router,
-    ai_skill_rule as skill_rule_router,
-    ai_skill_evolution as skill_evolution_router,
-    ai_workspace as workspace_router,
-)
-from app.routers.sys import sys_notification as notification_router
-from app.routers.agent import agent_execution as agent_execution_router, agent as agent_router, \
-    agent_config as agent_config_router, agent_scheduled_task as agent_scheduled_task_router, \
-    agent_team as agent_team_router
-
-app.include_router(ai_agent_router.router, prefix=f"{API_V1_PREFIX}", tags=["AI Agent 统一执行"])
-app.include_router(ai_session_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["AI会话管理"])
-app.include_router(agent_router.router, prefix=f"{API_V1_PREFIX}", tags=["Agent"])
-app.include_router(agent_config_router.router, tags=["Agent配置管理"])
-app.include_router(agent_execution_router.router, tags=["Agent执行查询"])
-app.include_router(agent_scheduled_task_router.router, tags=["Agent定时任务"])
-app.include_router(agent_team_router.router, prefix=f"{API_V1_PREFIX}", tags=["AI Team 多智能体团队"])
-app.include_router(ai_skill_router.router, prefix=f"{API_V1_PREFIX}/ai-assistant/skills", tags=["AI技能"])
-app.include_router(api_key_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["AI API密钥管理"])
-app.include_router(tool_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["AI 工具管理"])
-app.include_router(mcp_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["MCP API Key管理"])
-app.include_router(mcp_router.client_router, prefix=f"{API_V1_PREFIX}/admin", tags=["MCP Client管理"])
-app.include_router(mcp_router.square_router, prefix=f"{API_V1_PREFIX}/admin", tags=["MCP广场管理"])
-app.include_router(mcp_router.mcp_tools_router, prefix=f"{API_V1_PREFIX}/admin", tags=["MCP已注册工具"])
-app.include_router(web_search_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["AI 联网搜索"])
-app.include_router(skill_rule_router.router, tags=["Skill规则管理"])
-app.include_router(skill_evolution_router.router, tags=["Skill进化管理"])
-app.include_router(workspace_router.router, prefix=f"{API_V1_PREFIX}", tags=["工作空间管理"])
-app.include_router(notification_router.router, prefix=f"{API_V1_PREFIX}/admin", tags=["通知管理"])
+register_routers(app)
 
 
 

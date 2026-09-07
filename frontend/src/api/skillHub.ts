@@ -12,6 +12,7 @@ export interface HubRepo {
   url: string
   branch: string
   is_official: boolean
+  source_type?: string
   sort_order: number
   created_at?: string
   updated_at?: string

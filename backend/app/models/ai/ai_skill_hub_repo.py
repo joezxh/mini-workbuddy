@@ -23,6 +23,10 @@ class AiSkillHubRepo(Base, TenantMixin):
     is_official = Column(
         Boolean, nullable=False, server_default="false", comment="是否官方仓库（官方不可删除）"
     )
+    source_type = Column(
+        String(20), nullable=False, server_default="git",
+        comment="仓库来源类型：git=Git 仓库，skillhub=SkillHub 云市场",
+    )
     username = Column(
         String(200), nullable=True, comment="仓库访问账号（留空则用全局配置 OFFICIAL_HUB_USERNAME）"
     )

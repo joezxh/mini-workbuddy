@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.skills.hub.git_hub import GitHubAdapter
+from app.ai.skills.hub.skillhub import SkillHubCloudAdapter
 from app.models.ai.ai_skill_hub_repo import AiSkillHubRepo
 from app.services.ai.ai_skill_admin_service import AiSkillAdminService
 
@@ -53,6 +54,7 @@ class AiSkillHubService:
     # ── 仓库 CRUD ─────────────────────────────────────────────
     def list_repos(self) -> list[AiSkillHubRepo]:
         self.ensure_official()
+        self.ensure_skillhub_cloud()
         return list(
             self.db.scalars(
                 select(AiSkillHubRepo).order_by(
@@ -60,6 +62,29 @@ class AiSkillHubService:
                 )
             ).all()
         )
+
+    def ensure_skillhub_cloud(self) -> AiSkillHubRepo:
+        """确保 SkillHub 云市场官方仓库记录在库（source_type=skillhub）。"""
+        existing = self.db.scalars(
+            select(AiSkillHubRepo).where(AiSkillHubRepo.source_type == "skillhub")
+        ).first()
+        if existing:
+            return existing
+        from app.config import settings
+
+        repo = AiSkillHubRepo(
+            name="SkillHub 云市场",
+            url=(settings.SKILLHUB_BASE_URL or "https://api.skillhub.cn").rstrip("/"),
+            branch="main",
+            is_official=True,
+            source_type="skillhub",
+            sort_order=1,
+        )
+        self.db.add(repo)
+        self.db.commit()
+        self.db.refresh(repo)
+        logger.info("已创建 SkillHub 云市场仓库: %s", repo.url)
+        return repo
 
     def get_repo(self, repo_id: int) -> Optional[AiSkillHubRepo]:
         return self.db.get(AiSkillHubRepo, repo_id)
@@ -131,19 +156,30 @@ class AiSkillHubService:
         repo = self.get_repo(repo_id)
         if not repo:
             raise ValueError("仓库不存在")
+        # 云市场为远程 API，无需本地克隆；刷新即视为重新拉取分类（无本地状态）
+        if getattr(repo, "source_type", "git") == "skillhub":
+            logger.info("SkillHub 云市场仓库刷新（无本地克隆）: %s", repo_id)
+            self.db.commit()
+            return repo
         self._build_adapter(repo).ensure_cloned(force=True)
         self.db.commit()
         return repo
 
     # ── 分类 / 列表 / 检索 / 分页 ─────────────────────────────
-    def _build_adapter(self, repo: AiSkillHubRepo) -> "GitHubAdapter":
-        """构造 git 适配器。
+    def _build_adapter(self, repo: AiSkillHubRepo):
+        """按 source_type 构造适配器。
 
-        凭据优先级：仓库自有账号密码 > 全局配置（OFFICIAL_HUB_USERNAME/PASSWORD）。
-        仓库未配置凭据时（含官方仓库）自动回退到全局配置。
+        - git：Git 仓库适配器（凭据优先级：仓库自有 > 全局 OFFICIAL_HUB_*）；
+        - skillhub：SkillHub 云市场适配器（api.skillhub.cn）。
         """
         from app.config import settings
 
+        source_type = getattr(repo, "source_type", "git") or "git"
+        if source_type == "skillhub":
+            return SkillHubCloudAdapter(
+                api_key=settings.SKILLHUB_API_KEY or None,
+                base_url=settings.SKILLHUB_BASE_URL or None,
+            )
         username = repo.username or settings.OFFICIAL_HUB_USERNAME or None
         password = repo.password or settings.OFFICIAL_HUB_PASSWORD or None
         return GitHubAdapter(repo.id, repo.url, repo.branch, username, password)
@@ -160,6 +196,26 @@ class AiSkillHubService:
         if not repo:
             raise ValueError("仓库不存在")
         adapter = self._build_adapter(repo)
+        page = max(1, page)
+        page_size = max(1, min(page_size, 100))
+
+        # 云市场：直接走远程 search（服务端分页 / 分类 / 检索）
+        if getattr(repo, "source_type", "git") == "skillhub":
+            try:
+                result = adapter.search(
+                    keyword=q or None, category=category or None, page=page, page_size=page_size
+                )
+            except Exception as e:  # 云市场接口异常时降级
+                logger.warning("SkillHub 云市场 %s 加载失败，返回空列表: %s", repo_id, e)
+                result = {"items": [], "total": 0, "page": page, "page_size": page_size}
+            return {
+                "total": result.get("total", 0),
+                "page": result.get("page", page),
+                "page_size": result.get("page_size", page_size),
+                "items": result.get("items", []),
+            }
+
+        # Git 仓库：读取本地克隆后内存过滤 / 分页
         try:
             entries = adapter.list_remote()
         except RuntimeError as e:
@@ -181,8 +237,6 @@ class AiSkillHubService:
             ]
 
         total = len(entries)
-        page = max(1, page)
-        page_size = max(1, min(page_size, 100))
         start = (page - 1) * page_size
         page_items = entries[start : start + page_size]
 
@@ -206,15 +260,32 @@ class AiSkillHubService:
         }
 
     def list_categories(self, repo_id: int) -> list[dict]:
-        """返回该仓库的分类聚合（来自 category_index.json）。
+        """返回该仓库的分类聚合（含每类技能数量）。
 
-        递归扫描型仓库（无 category_index.json）的条目不带分类，
-        跳过后返回空列表——前端侧仅展示「全部」入口。
+        - Git 仓库：从 category_index.json / 扫描结果聚合；
+        - SkillHub 云市场：从云市场分类接口取分类，并按分类实时检索总数。
         """
         repo = self.get_repo(repo_id)
         if not repo:
             raise ValueError("仓库不存在")
         adapter = self._build_adapter(repo)
+
+        # 云市场：分类名来自远程，数量按分类 search 统计
+        if getattr(repo, "source_type", "git") == "skillhub":
+            try:
+                cats = adapter.list_categories()
+            except Exception as e:
+                logger.warning("SkillHub 云市场分类加载失败: %s", e)
+                cats = []
+            for c in cats:
+                try:
+                    r = adapter.search(category=c.get("key"), page=1, page_size=1)
+                    c["count"] = int(r.get("total") or 0)
+                except Exception:
+                    c["count"] = 0
+            return cats
+
+        # Git 仓库：读取本地克隆后聚合
         try:
             entries = adapter.list_remote()
         except RuntimeError as e:
@@ -240,9 +311,25 @@ class AiSkillHubService:
         if not repo:
             raise ValueError("仓库不存在")
         adapter = self._build_adapter(repo)
-        entry = next((e for e in adapter.list_remote() if e.id == skill_id), None)
-        if not entry:
-            raise ValueError(f"仓库中不存在 skill: {skill_id}")
+
+        # 云市场：按 slug 取详情（list_remote 仅首页，不可靠），失败则回退检索
+        if getattr(repo, "source_type", "git") == "skillhub":
+            entry = adapter.get_entry(skill_id)
+            if not entry:
+                try:
+                    r = adapter.search(keyword=skill_id, page=1, page_size=1)
+                    items = r.get("items") or []
+                    if items:
+                        entry = adapter.get_entry(items[0].get("id") or skill_id)
+                except Exception:
+                    entry = None
+            if not entry:
+                raise ValueError(f"云市场中不存在 skill: {skill_id}")
+        else:
+            entry = next((e for e in adapter.list_remote() if e.id == skill_id), None)
+            if not entry:
+                raise ValueError(f"仓库中不存在 skill: {skill_id}")
+
         zip_bytes = adapter.fetch(entry)
         admin = AiSkillAdminService()
         result = admin.import_zip(self.db, zip_bytes)

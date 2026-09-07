@@ -3,23 +3,23 @@
     <!-- 顶部工具栏：标题 + 主 Tab 切换 + 操作按钮（单行，不增加高度） -->
     <div class="page-header">
       <div class="header-main">
-        <h2 class="page-title">🔧 技能管理</h2>
+        <h2 class="page-title">{{ t('skillHub.pageTitle') }}</h2>
         <div class="top-tab-bar">
-          <div class="top-tab" :class="{ active: activeMainTab === 'packages' }" @click="activeMainTab = 'packages'">技能包管理</div>
-          <div class="top-tab" :class="{ active: activeMainTab === 'hub' }" @click="activeMainTab = 'hub'">技能仓库</div>
+          <div class="top-tab" :class="{ active: activeMainTab === 'packages' }" @click="activeMainTab = 'packages'">{{ t('skillHub.tabPackages') }}</div>
+          <div class="top-tab" :class="{ active: activeMainTab === 'hub' }" @click="activeMainTab = 'hub'">{{ t('skillHub.tabHub') }}</div>
         </div>
       </div>
       <div class="header-actions">
         <template v-if="activeMainTab === 'packages'">
           <a-button @click="handleImport">
-            <UploadOutlined /> 导入 ZIP
+            <UploadOutlined /> {{ t('skillHub.importZip') }}
           </a-button>
           <a-button type="primary" @click="openPackageForm()">
-            <PlusOutlined /> 新建技能包
+            <PlusOutlined /> {{ t('skillHub.newPackage') }}
           </a-button>
         </template>
         <a-button v-else type="primary" @click="openRepoModal">
-          <PlusOutlined /> 添加仓库
+          <PlusOutlined /> {{ t('skillHub.addRepo') }}
         </a-button>
       </div>
     </div>
@@ -33,7 +33,7 @@
         <div class="search-box">
           <a-input-search
             v-model:value="keyword"
-            placeholder="搜索包名称..."
+            :placeholder="t('skillHub.searchPackage')"
             allow-clear
             @search="loadPackages"
           />
@@ -41,7 +41,7 @@
 
         <a-spin v-if="loading" class="loading-wrap" />
         <div v-else-if="!groupedPackages.size" class="empty-hint">
-          暂无可用技能包
+          {{ t('skillHub.noPackages') }}
         </div>
         <div v-else class="package-list">
           <div
@@ -50,7 +50,7 @@
             class="category-group"
           >
             <div class="cat-header" @click="toggleCat(cat)">
-              <span>{{ categoryLabel(cat) }} ({{ pkgs.length }})</span>
+              <span>{{ t('skillHub.groupCount', { name: categoryLabel(cat), count: pkgs.length }) }}</span>
               <DownOutlined v-if="collapsedCats.has(cat)" />
               <UpOutlined v-else />
             </div>
@@ -64,7 +64,7 @@
               >
                 <span class="pkg-icon">{{ iconLabel(pkg.icon) }}</span>
                 <span class="pkg-name">{{ pkg.name }}</span>
-                <a-tag v-if="!pkg.enabled" color="default" size="small">禁用</a-tag>
+                <a-tag v-if="!pkg.enabled" color="default" size="small">{{ t('skillHub.disabled') }}</a-tag>
               </div>
             </div>
           </div>
@@ -74,7 +74,7 @@
       <!-- 右侧:包详情 + 触发规则 Tabs -->
       <div class="right-panel">
         <div v-if="!selected" class="detail-placeholder">
-          <span>← 从左侧选择一个技能包</span>
+          <span>{{ t('skillHub.selectPackageHint') }}</span>
         </div>
         <div v-else class="detail-content">
           <!-- 包头部信息 -->
@@ -84,13 +84,13 @@
               <span>{{ selected.name }}</span>
             </div>
             <div class="detail-actions">
-              <a-button size="small" @click="openPackageForm(selected)">编辑</a-button>
+              <a-button size="small" @click="openPackageForm(selected)">{{ t('common.edit') }}</a-button>
               <a-button size="small" @click="toggleEnabled(selected)">
-                {{ selected.enabled ? '禁用' : '启用' }}
+                {{ selected.enabled ? t('skillHub.disabled') : t('skillHub.enabled') }}
               </a-button>
-              <a-button size="small" @click="handleExport(selected)">导出</a-button>
-              <a-popconfirm title="确定删除该技能包？" @confirm="handleDelete(selected)">
-                <a-button size="small" danger>删除</a-button>
+              <a-button size="small" @click="handleExport(selected)">{{ t('skillHub.export') }}</a-button>
+              <a-popconfirm :title="t('skillHub.deletePackageConfirm')" @confirm="handleDelete(selected)">
+                <a-button size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </div>
           </div>
@@ -98,26 +98,26 @@
           <!-- Tabs: 包详情 / 触发规则 -->
           <a-tabs v-model:activeKey="activeTab" class="detail-tabs">
             <!-- Tab 1: 包详情 -->
-            <a-tab-pane key="detail" tab="包详情">
+            <a-tab-pane key="detail" :tab="t('skillHub.tabDetail')">
               <a-descriptions :column="2" size="small" class="detail-meta">
-                <a-descriptions-item label="包 ID">{{ selected.package_id }}</a-descriptions-item>
-                <a-descriptions-item label="类目">{{ categoryLabel(selected.category) }}</a-descriptions-item>
-                <a-descriptions-item label="版本">{{ selected.version }}</a-descriptions-item>
-                <a-descriptions-item label="状态">
+                <a-descriptions-item :label="t('skillHub.pkgId')">{{ selected.package_id }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.category')">{{ categoryLabel(selected.category) }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.version')">{{ selected.version }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.status')">
                   <a-tag :color="selected.enabled ? 'green' : 'default'">
-                    {{ selected.enabled ? '启用' : '禁用' }}
+                    {{ selected.enabled ? t('skillHub.enabled') : t('skillHub.disabled') }}
                   </a-tag>
                 </a-descriptions-item>
-                <a-descriptions-item label="路径">{{ selected.file_path }}</a-descriptions-item>
-                <a-descriptions-item label="创建时间">{{ selected.created_at }}</a-descriptions-item>
-                <a-descriptions-item label="描述" :span="2">{{ selected.description || '—' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.path')">{{ selected.file_path }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.createdAt')">{{ selected.created_at }}</a-descriptions-item>
+                <a-descriptions-item :label="t('skillHub.description')" :span="2">{{ selected.description || '—' }}</a-descriptions-item>
               </a-descriptions>
 
-              <a-divider>脚本列表</a-divider>
+              <a-divider>{{ t('skillHub.scriptList') }}</a-divider>
 
               <div class="script-list">
                 <div v-if="!selected.scripts?.length" class="script-empty">
-                  该包暂无脚本
+                  {{ t('skillHub.noScripts') }}
                 </div>
                 <div
                   v-for="s in selected.scripts"
@@ -127,40 +127,40 @@
                   <div class="script-info">
                     <div class="script-name">
                       <span :class="{ 'text-disabled': !s.enabled }">{{ s.name }}</span>
-                      <a-tag v-if="!s.enabled" color="default" size="small">禁用</a-tag>
+                      <a-tag v-if="!s.enabled" color="default" size="small">{{ t('skillHub.disabled') }}</a-tag>
                     </div>
                     <div class="script-cmd">{{ s.command }}</div>
                     <div v-if="s.description" class="script-desc">{{ s.description }}</div>
-                  </div>
-                  <div class="script-actions">
+                    </div>
+                    <div class="script-actions">
                     <a-switch
                       :checked="s.enabled"
                       size="small"
                       @change="(v: boolean) => toggleScriptEnabled(s, v)"
                     />
-                    <a-button size="small" type="text" @click="openScriptForm(s)">编辑</a-button>
-                    <a-popconfirm title="确定删除？" @confirm="handleDeleteScript(s)">
-                      <a-button size="small" type="text" danger>删除</a-button>
+                    <a-button size="small" type="text" @click="openScriptForm(s)">{{ t('common.edit') }}</a-button>
+                    <a-popconfirm :title="t('skillHub.deleteScriptConfirm')" @confirm="handleDeleteScript(s)">
+                      <a-button size="small" type="text" danger>{{ t('common.delete') }}</a-button>
                     </a-popconfirm>
-                  </div>
+                    </div>
                 </div>
               </div>
 
               <div class="script-footer">
                 <a-button type="dashed" @click="openScriptForm()">
-                  <PlusOutlined /> 新建脚本
+                  <PlusOutlined /> {{ t('skillHub.newScript') }}
                 </a-button>
               </div>
             </a-tab-pane>
 
             <!-- Tab 2: 触发规则 -->
-            <a-tab-pane key="rules" tab="触发规则">
+            <a-tab-pane key="rules" :tab="t('skillHub.tabRules')">
               <div class="rules-toolbar">
                 <a-button type="primary" size="small" @click="openCreateRule">
-                  <PlusOutlined /> 新建规则
+                  <PlusOutlined /> {{ t('skillHub.newRule') }}
                 </a-button>
                 <a-button size="small" @click="loadRules">
-                  <ReloadOutlined :spin="rulesLoading" /> 刷新
+                  <ReloadOutlined :spin="rulesLoading" /> {{ t('skillHub.refresh') }}
                 </a-button>
               </div>
 
@@ -191,23 +191,23 @@
                     <template v-else-if="column.key === 'action'">
                       <a-space>
                         <a-button type="link" size="small" @click="openEditRule(record)">
-                          <EditOutlined /> 编辑
+                          <EditOutlined /> {{ t('common.edit') }}
                         </a-button>
                         <a-popconfirm
-                          title="确认删除该规则？"
-                          ok-text="确认"
-                          cancel-text="取消"
+                          :title="t('skillHub.deleteRuleConfirm')"
+                          :ok-text="t('common.confirm')"
+                          :cancel-text="t('common.cancel')"
                           @confirm="handleDeleteRule(record)"
                         >
                           <a-button type="link" size="small" danger>
-                            <DeleteOutlined /> 删除
+                            <DeleteOutlined /> {{ t('common.delete') }}
                           </a-button>
                         </a-popconfirm>
                       </a-space>
                     </template>
                   </template>
                 </a-table>
-                <a-empty v-if="!rulesLoading && rules.length === 0" description="暂无触发规则" />
+                <a-empty v-if="!rulesLoading && rules.length === 0" :description="t('skillHub.noRules')" />
               </a-spin>
             </a-tab-pane>
 
@@ -216,22 +216,22 @@
               <div class="markdown-toolbar">
                 <a-space v-if="!markdownEditing">
                   <a-button size="small" type="primary" @click="startEditMarkdown">
-                    <EditOutlined /> 编辑
+                    <EditOutlined /> {{ t('common.edit') }}
                   </a-button>
                   <a-button size="small" @click="loadMarkdown">
-                    <ReloadOutlined :spin="markdownLoading" /> 刷新
+                    <ReloadOutlined :spin="markdownLoading" /> {{ t('skillHub.refresh') }}
                   </a-button>
                 </a-space>
                 <a-space v-else>
                   <a-button size="small" type="primary" :loading="markdownSaving" @click="saveMarkdown">
-                    保存
+                    {{ t('common.save') }}
                   </a-button>
                   <a-button size="small" :disabled="markdownSaving" @click="cancelEditMarkdown">
-                    取消
+                    {{ t('common.cancel') }}
                   </a-button>
                 </a-space>
                 <span v-if="markdownSource" class="markdown-source-tag">
-                  来源：{{ markdownSourceLabel }}
+                  {{ t('skillHub.source') }}：{{ markdownSourceLabel }}
                 </span>
               </div>
               <div class="markdown-container">
@@ -243,32 +243,32 @@
                     v-else-if="markdownEditing"
                     v-model:value="markdownDraft"
                     class="markdown-editor"
-                    placeholder="请输入 SKILL.md 内容"
+                    :placeholder="t('skillHub.markdownPlaceholder')"
                     :auto-size="{ minRows: 18, maxRows: 36 }"
                   />
                   <pre v-else-if="markdownContent" class="markdown-pre">{{ markdownContent }}</pre>
-                  <a-empty v-else-if="!markdownLoading" description="SKILL.md 内容为空" />
+                  <a-empty v-else-if="!markdownLoading" :description="t('skillHub.markdownEmpty')" />
                 </a-spin>
               </div>
             </a-tab-pane>
 
             <!-- Tab 4: 进化配置 -->
-            <a-tab-pane key="evolution" tab="进化配置">
+            <a-tab-pane key="evolution" :tab="t('skillHub.tabEvolution')">
               <a-spin :spinning="evoLoading">
                 <!-- 指标概览 -->
                 <div class="evo-metrics">
                   <a-row :gutter="12">
                     <a-col :span="6">
-                      <a-statistic title="成功率" :value="(evoMetrics.success_rate * 100).toFixed(1)" suffix="%" />
+                      <a-statistic :title="t('skillHub.metricSuccess')" :value="(evoMetrics.success_rate * 100).toFixed(1)" suffix="%" />
                     </a-col>
                     <a-col :span="6">
-                      <a-statistic title="平均延迟" :value="evoMetrics.avg_latency.toFixed(2)" suffix="s" />
+                      <a-statistic :title="t('skillHub.metricLatency')" :value="evoMetrics.avg_latency.toFixed(2)" suffix="s" />
                     </a-col>
                     <a-col :span="6">
-                      <a-statistic title="执行次数" :value="evoMetrics.execution_count" />
+                      <a-statistic :title="t('skillHub.metricExec')" :value="evoMetrics.execution_count" />
                     </a-col>
                     <a-col :span="6">
-                      <a-statistic title="用户评分" :value="evoMetrics.user_rating.toFixed(2)" />
+                      <a-statistic :title="t('skillHub.metricRating')" :value="evoMetrics.user_rating.toFixed(2)" />
                     </a-col>
                   </a-row>
                 </div>
@@ -278,65 +278,65 @@
                   v-if="evoScore < evoConfig.threshold"
                   type="warning"
                   show-icon
-                  :message="`综合得分 ${evoScore.toFixed(3)} 低于阈值 ${evoConfig.threshold}，建议触发进化`"
+                  :message="t('skillHub.evoLow', { score: evoScore.toFixed(3), threshold: evoConfig.threshold })"
                   class="evo-alert"
                 />
                 <a-alert
                   v-else
                   type="success"
                   show-icon
-                  :message="`综合得分 ${evoScore.toFixed(3)} ≥ 阈值 ${evoConfig.threshold}，性能良好`"
+                  :message="t('skillHub.evoGood', { score: evoScore.toFixed(3), threshold: evoConfig.threshold })"
                   class="evo-alert"
                 />
 
                 <!-- 操作按钮 -->
                 <div class="evo-actions">
                   <a-button type="primary" :loading="evoTriggering" @click="handleTriggerEvolution">
-                    <ThunderboltOutlined /> 手动触发进化
+                    <ThunderboltOutlined /> {{ t('skillHub.trainEvo') }}
                   </a-button>
                   <a-button @click="loadEvolutionData">
-                    <ReloadOutlined /> 刷新指标
+                    <ReloadOutlined /> {{ t('skillHub.evoRefresh') }}
                   </a-button>
                 </div>
 
                 <!-- 配置表单 -->
-                <a-divider>进化参数</a-divider>
+                <a-divider>{{ t('skillHub.evoParams') }}</a-divider>
                 <a-form layout="inline" class="evo-config-form">
-                  <a-form-item label="评估阈值">
+                  <a-form-item :label="t('skillHub.evoThreshold')">
                     <a-input-number
                       v-model:value="evoConfig.threshold"
                       :min="0.1" :max="1.0" :step="0.05"
                       @change="saveEvoConfig"
                     />
                   </a-form-item>
-                  <a-form-item label="成功率权重">
+                  <a-form-item :label="t('skillHub.evoWeightSuccess')">
                     <a-input-number
                       v-model:value="evoConfig.weight_success"
                       :min="0" :max="1" :step="0.1"
                       @change="saveEvoConfig"
                     />
                   </a-form-item>
-                  <a-form-item label="延迟权重">
+                  <a-form-item :label="t('skillHub.evoWeightLatency')">
                     <a-input-number
                       v-model:value="evoConfig.weight_latency"
                       :min="0" :max="1" :step="0.1"
                       @change="saveEvoConfig"
                     />
                   </a-form-item>
-                  <a-form-item label="评分权重">
+                  <a-form-item :label="t('skillHub.evoWeightRating')">
                     <a-input-number
                       v-model:value="evoConfig.weight_user_rating"
                       :min="0" :max="1" :step="0.1"
                       @change="saveEvoConfig"
                     />
                   </a-form-item>
-                  <a-form-item label="自动进化">
+                  <a-form-item :label="t('skillHub.evoAuto')">
                     <a-switch v-model:checked="evoConfig.is_auto_enabled" @change="saveEvoConfig" />
                   </a-form-item>
-                  <a-form-item label="进化模型">
+                  <a-form-item :label="t('skillHub.evoModel')">
                     <a-select
                       v-model:value="evoConfig.model_code"
-                      placeholder="默认模型"
+                      :placeholder="t('skillHub.evoModelDefault')"
                       style="width: 220px"
                       :loading="chatModelsLoading"
                       allow-clear
@@ -351,7 +351,7 @@
                 </a-form>
 
                 <!-- 版本历史 -->
-                <a-divider>版本历史</a-divider>
+                <a-divider>{{ t('skillHub.evoVersionHistory') }}</a-divider>
                 <a-table
                   :columns="versionColumns"
                   :data-source="evoVersions"
@@ -362,25 +362,25 @@
                   <template #bodyCell="{ column, record }">
                     <template v-if="column.key === 'is_stable'">
                       <a-tag :color="record.is_stable ? 'green' : 'default'">
-                        {{ record.is_stable ? '稳定' : '历史' }}
+                        {{ record.is_stable ? t('skillHub.stable') : t('skillHub.history') }}
                       </a-tag>
                     </template>
                     <template v-else-if="column.key === 'action'">
                       <a-popconfirm
                         v-if="!record.is_stable"
-                        :title="`确认回滚到版本 ${record.version_number}？`"
+                        :title="t('skillHub.rollbackConfirm', { version: record.version_number })"
                         @confirm="handleRollback(record.version_number)"
                       >
-                        <a-button type="link" size="small">回滚</a-button>
+                        <a-button type="link" size="small">{{ t('skillHub.rollback') }}</a-button>
                       </a-popconfirm>
-                      <span v-else class="text-disabled">当前</span>
+                      <span v-else class="text-disabled">{{ t('skillHub.current') }}</span>
                     </template>
                   </template>
                 </a-table>
-                <a-empty v-if="evoVersions.length === 0" description="暂无版本记录" />
+                <a-empty v-if="evoVersions.length === 0" :description="t('skillHub.noVersions')" />
 
                 <!-- 进化日志 -->
-                <a-divider>进化日志</a-divider>
+                <a-divider>{{ t('skillHub.evoLogs') }}</a-divider>
                 <a-table
                   :columns="logColumns"
                   :data-source="evoLogs"
@@ -396,19 +396,19 @@
                     </template>
                   </template>
                 </a-table>
-                <a-empty v-if="evoLogs.length === 0" description="暂无进化记录" />
+                <a-empty v-if="evoLogs.length === 0" :description="t('skillHub.noEvoLogs')" />
               </a-spin>
             </a-tab-pane>
 
             <!-- Tab 5: 对话记录 -->
-            <a-tab-pane key="conversations" tab="对话记录">
+            <a-tab-pane key="conversations" :tab="t('skillHub.tabConversations')">
               <div class="conversations-container">
                 <a-row :gutter="[16, 0]">
                   <!-- 左侧：会话列表 -->
                   <a-col :span="8">
                     <div class="session-list-panel">
                       <div class="panel-header">
-                        <span>执行历史 ({{ sessionPagination.total }})</span>
+                        <span>{{ t('skillHub.execHistory', { total: sessionPagination.total }) }}</span>
                       </div>
                       
                       <a-spin :spinning="sessionsLoading" style="width: 100%">
@@ -421,16 +421,16 @@
                             @click="loadSessionMessages(session)"
                           >
                             <div class="session-header">
-                              <span class="session-title">{{ session.session_title || '无标题' }}</span>
+                              <span class="session-title">{{ session.session_title || t('skillHub.noTitle') }}</span>
                               <span class="session-time">{{ formatTime(session.updated_at) }}</span>
                             </div>
                             <div class="session-info">
-                              <span class="session-user">用户 ID: {{ session.user_id }}</span>
-                              <span class="session-msg-count">消息：{{ session.message_count }}</span>
+                              <span class="session-user">{{ t('skillHub.userId') }}: {{ session.user_id }}</span>
+                              <span class="session-msg-count">{{ t('skillHub.msgCount') }}：{{ session.message_count }}</span>
                             </div>
                           </div>
                           
-                          <a-empty v-if="!sessions.length && !sessionsLoading" description="暂无执行记录" />
+                          <a-empty v-if="!sessions.length && !sessionsLoading" :description="t('skillHub.noSessions')" />
                           
                           <!-- 分页 -->
                           <div class="pagination-wrapper" v-if="sessionPagination.total > (sessionPagination.pageSize || 20)">
@@ -453,8 +453,8 @@
                   <a-col :span="16">
                     <div class="messages-panel" v-if="currentSessionId">
                       <div class="panel-header">
-                        <span>会话消息详情</span>
-                        <a-button size="small" @click="clearCurrentSession">清空</a-button>
+                        <span>{{ t('skillHub.sessionMessages') }}</span>
+                        <a-button size="small" @click="clearCurrentSession">{{ t('skillHub.clear') }}</a-button>
                       </div>
                       
                       <div class="messages-content">
@@ -466,7 +466,7 @@
                         >
                           <div class="message-header">
                             <a-tag :color="msg.role === 'user' ? 'blue' : 'green'">
-                              {{ msg.role === 'user' ? '用户' : 'AI 回复' }}
+                              {{ msg.role === 'user' ? t('skillHub.roleUser') : t('skillHub.roleAi') }}
                             </a-tag>
                             <span class="message-time">{{ formatTime(msg.created_at) }}</span>
                           </div>
@@ -476,19 +476,19 @@
                           
                           <!-- 工具调用信息 -->
                           <div v-if="msg.tool_calls" class="tool-calls">
-                            <a-divider plain>工具调用</a-divider>
+                            <a-divider plain>{{ t('skillHub.toolCalls') }}</a-divider>
                             <pre class="json-preview">{{ JSON.stringify(msg.tool_calls, null, 2) }}</pre>
                           </div>
                           
                           <!-- 工具结果信息 -->
                           <div v-if="msg.tool_results" class="tool-results">
-                            <a-divider plain>工具结果</a-divider>
+                            <a-divider plain>{{ t('skillHub.toolResults') }}</a-divider>
                             <pre class="json-preview">{{ JSON.stringify(msg.tool_results, null, 2) }}</pre>
                           </div>
                         </div>
                         
                         <a-spin v-if="messagesLoading" :style="{ textAlign: 'center', padding: '20px' }" />
-                        <a-empty v-if="!messages.length && !messagesLoading && currentSessionId" description="暂无消息" />
+                        <a-empty v-if="!messages.length && !messagesLoading && currentSessionId" :description="t('skillHub.noMessages')" />
                       </div>
                       
                       <!-- 加载更多 -->
@@ -499,13 +499,13 @@
                           :loading="messagesLoading"
                           v-if="messages.length >= 50"
                         >
-                          加载更多
+                          {{ t('skillHub.loadMore') }}
                         </a-button>
                       </div>
                     </div>
                     
                     <div v-else class="messages-placeholder">
-                      <span>← 选择一条会话查看详细消息</span>
+                      <span>{{ t('skillHub.selectSessionHint') }}</span>
                     </div>
                   </a-col>
                 </a-row>
@@ -529,22 +529,23 @@
                 @click="selectHubRepo(r.id)"
               >
                 <span class="hub-repo-name">{{ r.name }}</span>
-                <a-tag v-if="r.is_official" color="blue" size="small">官方</a-tag>
+                <a-tag v-if="r.source_type === 'skillhub'" color="purple" size="small">{{ t('skillHub.cloudMarket') }}</a-tag>
+                <a-tag v-else-if="r.is_official" color="blue" size="small">{{ t('skillHub.official') }}</a-tag>
               </div>
               <a-button type="dashed" size="small" class="hub-repo-add" @click="openRepoModal()">
-                <PlusOutlined /> 管理仓库
+                <PlusOutlined /> {{ t('skillHub.manageRepo') }}
               </a-button>
             </div>
             <div class="hub-toolbar-right">
               <a-input-search
                 v-model:value="hubKeyword"
-                placeholder="搜索 skill 名称 / 描述 / 标签"
+                :placeholder="t('skillHub.searchSkill')"
                 allow-clear
                 style="width: 280px"
                 @search="loadHubSkills(true)"
               />
               <a-button @click="handleRefreshHubRepo" :loading="hubRefreshing">
-                <ReloadOutlined /> 刷新仓库
+                <ReloadOutlined /> {{ t('skillHub.refreshRepo') }}
               </a-button>
             </div>
           </div>
@@ -557,7 +558,7 @@
                 :class="{ active: hubActiveCat === '' }"
                 @click="selectHubCat('')"
               >
-                全部 ({{ hubSkillTotal }})
+                {{ t('skillHub.all') }} ({{ hubSkillTotal }})
               </div>
               <div
                 v-for="c in hubCategories"
@@ -566,7 +567,7 @@
                 :class="{ active: hubActiveCat === c.key }"
                 @click="selectHubCat(c.key)"
               >
-                {{ c.name }} ({{ c.count }})
+                {{ (isCloudMarket ? cloudCategoryLabel(c) : c.name) }} ({{ c.count }})
               </div>
             </div>
 
@@ -588,7 +589,7 @@
                         :loading="item._installing"
                         @click="handleInstallHubSkill(item)"
                       >
-                        安装
+                        {{ t('skillHub.install') }}
                       </a-button>
                     </template>
                     <div class="hub-card-desc">{{ item.description || '—' }}</div>
@@ -601,21 +602,21 @@
                     </div>
                   </a-card>
                 </div>
-                <a-empty v-if="!hubLoading && !hubSkills.length" description="该分类下暂无技能" />
+                <a-empty v-if="!hubLoading && !hubSkills.length" :description="t('skillHub.noSkillsInCat')" />
                 <div class="hub-pagination" v-if="hubSkillTotal > hubPageSize">
                   <a-pagination
                     v-model:current="hubPage"
                     v-model:page-size="hubPageSize"
                     :total="hubSkillTotal"
                     show-size-changer
-                    :show-total="(t: number) => `共 ${t} 个`"
+                    :show-total="(tt: number) => t('skillHub.totalCount', { total: tt })"
                     @change="loadHubSkills(false)"
                   />
                 </div>
               </a-spin>
             </div>
           </div>
-          <a-empty v-else description="请先选择或添加技能仓库" />
+          <a-empty v-else :description="t('skillHub.selectOrAddRepo')" />
         </div>
     </div>
   </div>
@@ -646,46 +647,47 @@
     <!-- 技能仓库管理弹窗 -->
     <a-modal
       v-model:visible="repoModalVisible"
-      title="技能仓库管理"
+      :title="t('skillHub.repoModalTitle')"
       @ok="saveRepo"
       :confirm-loading="repoSaving"
-      :ok-text="repoEditingId ? '保存' : '添加'"
+      :ok-text="repoEditingId ? t('common.save') : t('skillHub.addRepo')"
     >
       <a-form layout="vertical">
-        <a-form-item label="仓库名称">
-          <a-input v-model:value="repoForm.name" placeholder="如：官方仓库 / 第三方仓库" />
+        <a-form-item :label="t('skillHub.repoName')">
+          <a-input v-model:value="repoForm.name" :placeholder="t('skillHub.repoNamePlaceholder')" />
         </a-form-item>
-        <a-form-item label="Git 地址">
+        <a-form-item :label="t('skillHub.gitUrl')">
           <a-input
             v-model:value="repoForm.url"
-            placeholder="https://github.com/anbeime/skill.git"
+            :placeholder="t('skillHub.gitUrlPlaceholder')"
             :disabled="repoForm.is_official"
           />
         </a-form-item>
-        <a-form-item label="分支">
+        <a-form-item :label="t('skillHub.branch')">
           <a-input v-model:value="repoForm.branch" :disabled="repoForm.is_official" />
         </a-form-item>
       </a-form>
-      <a-divider>已配置仓库</a-divider>
+      <a-divider>{{ t('skillHub.configuredRepos') }}</a-divider>
       <a-list size="small" :data-source="hubRepos">
         <template #renderItem="{ item }">
           <a-list-item>
             <a-list-item-meta :description="item.url">
               <template #title>
                 {{ item.name }}
-                <a-tag v-if="item.is_official" color="blue" size="small">官方</a-tag>
+                <a-tag v-if="item.source_type === 'skillhub'" color="purple" size="small">{{ t('skillHub.cloudMarket') }}</a-tag>
+                <a-tag v-else-if="item.is_official" color="blue" size="small">{{ t('skillHub.official') }}</a-tag>
               </template>
             </a-list-item-meta>
             <template #actions>
-              <a v-if="!item.is_official" @click="editRepo(item)">编辑</a>
+              <a v-if="!item.is_official" @click="editRepo(item)">{{ t('common.edit') }}</a>
               <a-popconfirm
                 v-if="!item.is_official"
-                title="确认删除该仓库？"
+                :title="t('skillHub.deleteRepoConfirm')"
                 @confirm="deleteRepo(item)"
               >
-                <a style="color:var(--err)">删除</a>
+                <a style="color:var(--err)">{{ t('common.delete') }}</a>
               </a-popconfirm>
-              <span v-if="item.is_official" class="text-disabled">不可删除</span>
+              <span v-if="item.is_official" class="text-disabled">{{ t('skillHub.notDeletable') }}</span>
             </template>
           </a-list-item>
         </template>
@@ -696,6 +698,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { getLocale, type LocaleKey } from '@/i18n'
 import { message, Modal } from 'ant-design-vue'
 import {
   PlusOutlined, UploadOutlined, DownOutlined, UpOutlined,
@@ -731,6 +735,7 @@ import {
 } from '@/api/skillEvolution'
 
 const route = useRoute()
+const { t } = useI18n()
 const loading = ref(false)
 const packages = ref<SkillPackage[]>([])
 const selected = ref<SkillPackage | null>(null)
@@ -781,9 +786,9 @@ const markdownDraft = ref('')
 const markdownSource = ref('')
 const markdownSourceLabel = computed(() => {
   switch (markdownSource.value) {
-    case 'db': return '数据库'
-    case 'workspace': return '工作区'
-    case 'file': return '文件系统'
+    case 'db': return t('skillHub.srcDb')
+    case 'workspace': return t('skillHub.srcWorkspace')
+    case 'file': return t('skillHub.srcFile')
     default: return ''
   }
 })
@@ -809,9 +814,9 @@ async function saveMarkdown() {
     }
     markdownEditing.value = false
     markdownDraft.value = ''
-    message.success('SKILL.md 已保存（数据库优先）')
+    message.success(t('skillHub.savedMarkdown'))
   } catch (e: any) {
-    message.error('保存失败：' + (e?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.saveFailed') + (e?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     markdownSaving.value = false
   }
@@ -866,27 +871,27 @@ interface GetMessagesRequest {
 }
 
 const versionColumns = [
-  { title: '版本号', dataIndex: 'version_number', key: 'version_number', width: 80 },
-  { title: '状态', key: 'is_stable', width: 80 },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
-  { title: '操作', key: 'action', width: 80 },
+  { title: t('skillHub.verNum'), dataIndex: 'version_number', key: 'version_number', width: 80 },
+  { title: t('skillHub.status'), key: 'is_stable', width: 80 },
+  { title: t('skillHub.createdAt'), dataIndex: 'created_at', key: 'created_at', width: 180 },
+  { title: t('skillHub.verAction'), key: 'action', width: 80 },
 ]
 
 const logColumns = [
-  { title: '触发类型', dataIndex: 'trigger_type', key: 'trigger_type', width: 100 },
-  { title: '版本变化', key: 'version_change', width: 120,
+  { title: t('skillHub.logTriggerType'), dataIndex: 'trigger_type', key: 'trigger_type', width: 100 },
+  { title: t('skillHub.logVerChange'), key: 'version_change', width: 120,
     customRender: ({ record }: any) => `${record.from_version ?? '-'} → ${record.to_version ?? '-'}` },
-  { title: '结果', key: 'result', width: 100 },
-  { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
+  { title: t('skillHub.logResult'), key: 'result', width: 100 },
+  { title: t('skillHub.logTime'), dataIndex: 'created_at', key: 'created_at', width: 180 },
 ]
 
 const ruleColumns = [
-  { title: '规则名称', dataIndex: 'name', key: 'name', width: 180 },
-  { title: '所属专家', dataIndex: 'agent_name', key: 'agent_name', width: 150 },
-  { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
-  { title: '触发条件', key: 'conditions', width: 240 },
-  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80 },
-  { title: '操作', key: 'action', width: 150, fixed: 'right' as const },
+  { title: t('skillHub.ruleName'), dataIndex: 'name', key: 'name', width: 180 },
+  { title: t('skillHub.ruleAgent'), dataIndex: 'agent_name', key: 'agent_name', width: 150 },
+  { title: t('skillHub.rulePriority'), dataIndex: 'priority', key: 'priority', width: 80 },
+  { title: t('skillHub.ruleConditions'), key: 'conditions', width: 240 },
+  { title: t('skillHub.ruleStatus'), key: 'is_active', width: 80 },
+  { title: t('skillHub.ruleAction'), key: 'action', width: 150, fixed: 'right' as const },
 ]
 
 // ── 数据加载 ─────────────────────────────────────────────────────────────────
@@ -911,7 +916,7 @@ async function loadPackages() {
       selected.value = updated || null
     }
   } catch (e: any) {
-    message.error('加载失败：' + (e?.data?.detail || e?.message || String(e)))
+    message.error(t('skillHub.loadFailed') + (e?.data?.detail || e?.message || String(e)))
   } finally {
     loading.value = false
   }
@@ -947,7 +952,7 @@ async function loadHubRepos() {
       await loadHubCategoriesAndSkills()
     }
   } catch (e: any) {
-    message.error('加载技能仓库失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.loadRepoFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     hubReposLoading.value = false
   }
@@ -970,7 +975,7 @@ async function loadHubCategoriesAndSkills() {
     hubSkills.value = list.items || []
     hubSkillTotal.value = list.total || 0
   } catch (e: any) {
-    message.error('加载技能列表失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.loadSkillsFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     hubLoading.value = false
   }
@@ -1004,10 +1009,10 @@ async function handleRefreshHubRepo() {
   hubRefreshing.value = true
   try {
     await refreshHubRepo(hubActiveRepoId.value)
-    message.success('仓库已刷新')
+    message.success(t('skillHub.repoRefreshed'))
     await loadHubCategoriesAndSkills()
   } catch (e: any) {
-    message.error('刷新失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.refreshFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     hubRefreshing.value = false
   }
@@ -1018,10 +1023,10 @@ async function handleInstallHubSkill(item: HubSkillItem) {
   item._installing = true
   try {
     const res = await installHubSkill(hubActiveRepoId.value, item.id)
-    message.success(`已安装：${res.name || item.name}`)
+    message.success(t('skillHub.installed', { name: res.name || item.name }))
     loadPackages()
   } catch (e: any) {
-    message.error('安装失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.installFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     item._installing = false
   }
@@ -1042,7 +1047,7 @@ function editRepo(r: HubRepo) {
 
 async function saveRepo() {
   if (!repoForm.value.name.trim() || !repoForm.value.url.trim()) {
-    message.warning('请填写仓库名称与 Git 地址')
+    message.warning(t('skillHub.repoFormRequired'))
     return
   }
   repoSaving.value = true
@@ -1060,11 +1065,11 @@ async function saveRepo() {
         branch: repoForm.value.branch,
       })
     }
-    message.success('仓库已保存')
+    message.success(t('skillHub.repoSaved'))
     repoModalVisible.value = false
     await loadHubRepos()
   } catch (e: any) {
-    message.error('保存失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.saveFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   } finally {
     repoSaving.value = false
   }
@@ -1073,14 +1078,14 @@ async function saveRepo() {
 async function deleteRepo(r: HubRepo) {
   try {
     await deleteHubRepo(r.id)
-    message.success('仓库已删除')
+    message.success(t('skillHub.repoDeleted'))
     if (hubActiveRepoId.value === r.id) {
       hubActiveRepoId.value = null
       hubSkills.value = []
     }
     await loadHubRepos()
   } catch (e: any) {
-    message.error('删除失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+    message.error(t('skillHub.deleteFailed') + (e?.response?.data?.detail || e?.message || t('skillHub.unknownError')))
   }
 }
 
@@ -1129,7 +1134,7 @@ async function loadRules() {
     }) as any
     rules.value = res.items || []
   } catch (e: any) {
-    message.error('加载规则失败：' + (e.message || '未知错误'))
+    message.error(t('skillHub.loadRulesFailed') + (e.message || t('skillHub.unknownError')))
   } finally {
     rulesLoading.value = false
   }
@@ -1147,9 +1152,9 @@ async function loadMarkdown() {
     markdownSource.value = selected.value?.skill_markdown ? 'db' : 'file'
   } catch (e: any) {
     if (e?.data?.detail?.includes('不存在')) {
-      markdownError.value = '该技能包目录下不存在 SKILL.md 文件'
+      markdownError.value = t('skillHub.markdownMissing')
     } else {
-      markdownError.value = '读取失败：' + (e?.data?.detail || e?.message || '未知错误')
+      markdownError.value = t('skillHub.readFailed') + (e?.data?.detail || e?.message || t('skillHub.unknownError'))
     }
   } finally {
     markdownLoading.value = false
@@ -1175,7 +1180,7 @@ async function loadEvolutionData() {
     evoLogs.value = logs
     await loadChatModels()
   } catch (e: any) {
-    message.error('加载进化数据失败：' + (e.message || '未知错误'))
+    message.error(t('skillHub.loadEvoFailed') + (e.message || t('skillHub.unknownError')))
   } finally {
     evoLoading.value = false
   }
@@ -1199,9 +1204,9 @@ async function saveEvoConfig() {
   try {
     const { skill_id, ...data } = evoConfig.value
     await updateEvolutionConfig(selected.value.package_id, data)
-    message.success('进化配置已保存')
+    message.success(t('skillHub.evoSaved'))
   } catch (e: any) {
-    message.error('保存失败：' + (e.message || '未知错误'))
+    message.error(t('skillHub.saveFailed') + (e.message || t('skillHub.unknownError')))
   }
 }
 
@@ -1220,7 +1225,7 @@ async function handleTriggerEvolution() {
     }
     await loadEvolutionData()
   } catch (e: any) {
-    message.error('进化失败：' + (e?.data?.detail || e.message || '未知错误'))
+    message.error(t('skillHub.evoFailed') + (e?.data?.detail || e.message || t('skillHub.unknownError')))
   } finally {
     evoTriggering.value = false
   }
@@ -1230,7 +1235,7 @@ async function handleRollback(version: number) {
   if (!selected.value) return
   try {
     await rollbackVersion(selected.value.package_id, version)
-    message.success(`已回滚到版本 ${version}`)
+    message.success(t('skillHub.rolledBack', { version }))
     await loadEvolutionData()
   } catch (e: any) {
     message.error('回滚失败：' + (e?.data?.detail || e.message || '未知错误'))
@@ -1298,9 +1303,9 @@ async function toggleEnabled(pkg: SkillPackage) {
     if (selected.value?.package_id === pkg.package_id) {
       selected.value = { ...selected.value }
     }
-    message.success(pkg.enabled ? '已启用' : '已禁用')
+    message.success(pkg.enabled ? t('skillHub.enabled') : t('skillHub.disabled'))
   } catch (e: any) {
-    message.error(e?.data?.detail || '操作失败')
+    message.error(e?.data?.detail || t('skillHub.opFailed'))
   }
 }
 
@@ -1310,9 +1315,9 @@ async function toggleScriptEnabled(s: SkillScript, enabled: boolean) {
     await updateScript(selected.value.package_id, s.script_id, { enabled })
     s.enabled = enabled
     selected.value = { ...selected.value }
-    message.success(enabled ? '已启用' : '已禁用')
+    message.success(enabled ? t('skillHub.enabled') : t('skillHub.disabled'))
   } catch (e: any) {
-    message.error(e?.data?.detail || '操作失败')
+    message.error(e?.data?.detail || t('skillHub.opFailed'))
   }
 }
 
@@ -1321,9 +1326,9 @@ async function handleDelete(pkg: SkillPackage) {
     await deleteSkillPackage(pkg.package_id)
     if (selected.value?.package_id === pkg.package_id) selected.value = null
     await loadPackages()
-    message.success('已删除')
+    message.success(t('skillHub.deleted'))
   } catch (e: any) {
-    message.error(e?.data?.detail || '删除失败')
+    message.error(e?.data?.detail || t('skillHub.deleteFailed'))
   }
 }
 
@@ -1334,9 +1339,9 @@ async function handleDeleteScript(s: SkillScript) {
     selected.value.scripts = (selected.value.scripts || []).filter(
       x => x.script_id !== s.script_id
     )
-    message.success('已删除')
+    message.success(t('skillHub.deleted'))
   } catch (e: any) {
-    message.error(e?.data?.detail || '删除失败')
+    message.error(e?.data?.detail || t('skillHub.deleteFailed'))
   }
 }
 
@@ -1360,7 +1365,7 @@ async function loadSessions() {
     sessionPagination.value.total = res.total || 0
   } catch (e: any) {
     console.error('加载会话列表失败:', e)
-    message.error(e?.data?.detail || e?.message || String(e))
+    message.error(e?.data?.detail || e?.message || t('skillHub.loadSessionsFailed'))
   } finally {
     sessionsLoading.value = false
   }
@@ -1388,7 +1393,7 @@ async function loadSessionMessages(session: any) {
     messages.value = res.messages || []
   } catch (e: any) {
     console.error('加载消息失败:', e)
-    message.error(e?.data?.detail || '加载消息失败')
+    message.error(e?.data?.detail || t('skillHub.loadMessagesFailed'))
   } finally {
     messagesLoading.value = false
   }
@@ -1418,7 +1423,7 @@ async function loadMoreMessages() {
     }
   } catch (e: any) {
     console.error('加载更多消息失败:', e)
-    message.error(e?.data?.detail || '加载更多失败')
+    message.error(e?.data?.detail || t('skillHub.loadMoreFailed'))
   }
 }
 
@@ -1457,19 +1462,19 @@ async function toggleRuleActive(record: SkillRule, val: boolean) {
   try {
     await updateSkillRule(record.id, { is_active: val })
     record.is_active = val
-    message.success(val ? '已启用' : '已禁用')
+    message.success(val ? t('skillHub.enabled') : t('skillHub.disabled'))
   } catch (e: any) {
-    message.error('更新失败：' + (e.message || '未知错误'))
+    message.error(t('skillHub.updateFailed') + (e.message || t('skillHub.unknownError')))
   }
 }
 
 async function handleDeleteRule(record: SkillRule) {
   try {
     await deleteSkillRule(record.id)
-    message.success('删除成功')
+    message.success(t('skillHub.deleted'))
     loadRules()
   } catch (e: any) {
-    message.error('删除失败：' + (e.message || '未知错误'))
+    message.error(t('skillHub.deleteFailed') + (e.message || t('skillHub.unknownError')))
   }
 }
 
@@ -1508,19 +1513,19 @@ function onFileSelected(e: Event) {
   formData.append('file', file)
 
   Modal.confirm({
-    title: '导入确认',
-    content: `确定导入 ${file.name}？`,
-    okText: '导入',
+    title: t('skillHub.importConfirmTitle'),
+    content: t('skillHub.importConfirm', { name: file.name }),
+    okText: t('skillHub.import'),
     onOk: async () => {
       try {
         const res = await importSkillPackage(file)
         const d = res.data
-        message.success(`导入成功: ${d.name}（${d.scripts_count} 个脚本）`)
+        message.success(t('skillHub.importSuccess', { name: d.name, count: d.scripts_count }))
         await loadPackages()
         const newly = packages.value.find(p => p.package_id === d.package_id)
         if (newly) selectPackage(newly)
       } catch (e: any) {
-        message.error(e?.data?.detail || '导入失败')
+        message.error(e?.data?.detail || t('skillHub.importFailed'))
       }
     },
   })
@@ -1537,13 +1542,44 @@ async function handleExport(pkg: SkillPackage) {
     a.download = `${pkg.package_id}.zip`
     a.click()
     URL.revokeObjectURL(url)
-    message.success('导出成功')
+    message.success(t('skillHub.exportSuccess'))
   } catch (e: any) {
-    message.error(e?.data?.detail || '导出失败')
+    message.error(e?.data?.detail || t('skillHub.exportFailed'))
   }
 }
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
+
+// SkillHub 云市场分类多语言映射（参考 https://skillhub.cloud.tencent.com 场景分类）
+const CLOUD_CATEGORY_I18N: Record<string, Partial<Record<LocaleKey, string>>> = {
+  'office-efficiency': { 'zh-CN': '办公提效', 'zh-TW': '辦公提效', 'en-US': 'Office Efficiency', 'ja-JP': 'オフィス効率化' },
+  'writing': { 'zh-CN': '写作辅助', 'zh-TW': '寫作輔助', 'en-US': 'Writing', 'ja-JP': 'ライティング' },
+  'programming': { 'zh-CN': '编程开发', 'zh-TW': '程式開發', 'en-US': 'Programming', 'ja-JP': 'プログラミング' },
+  'design': { 'zh-CN': '设计创意', 'zh-TW': '設計創意', 'en-US': 'Design', 'ja-JP': 'デザイン' },
+  'research': { 'zh-CN': '科研学术', 'zh-TW': '科研學術', 'en-US': 'Research', 'ja-JP': '研究' },
+  'marketing': { 'zh-CN': '营销增长', 'zh-TW': '營銷增長', 'en-US': 'Marketing', 'ja-JP': 'マーケティング' },
+  'data-analysis': { 'zh-CN': '数据分析', 'zh-TW': '資料分析', 'en-US': 'Data Analysis', 'ja-JP': 'データ分析' },
+  'education': { 'zh-CN': '教育培训', 'zh-TW': '教育培訓', 'en-US': 'Education', 'ja-JP': '教育' },
+  'life': { 'zh-CN': '生活助手', 'zh-TW': '生活助手', 'en-US': 'Life Assistant', 'ja-JP': '生活支援' },
+  'business': { 'zh-CN': '商业办公', 'zh-TW': '商業辦公', 'en-US': 'Business', 'ja-JP': 'ビジネス' },
+  'image': { 'zh-CN': '图像生成', 'zh-TW': '圖像生成', 'en-US': 'Image', 'ja-JP': '画像生成' },
+  'video': { 'zh-CN': '视频处理', 'zh-TW': '視頻處理', 'en-US': 'Video', 'ja-JP': '動画' },
+  'audio': { 'zh-CN': '音频处理', 'zh-TW': '音頻處理', 'en-US': 'Audio', 'ja-JP': '音声' },
+  'translation': { 'zh-CN': '翻译', 'zh-TW': '翻譯', 'en-US': 'Translation', 'ja-JP': '翻訳' },
+  'finance': { 'zh-CN': '金融财经', 'zh-TW': '金融財經', 'en-US': 'Finance', 'ja-JP': '金融' },
+  'law': { 'zh-CN': '法律', 'zh-TW': '法律', 'en-US': 'Law', 'ja-JP': '法律' },
+  'health': { 'zh-CN': '医疗健康', 'zh-TW': '醫療健康', 'en-US': 'Health', 'ja-JP': 'ヘルスケア' },
+  'game': { 'zh-CN': '游戏', 'zh-TW': '遊戲', 'en-US': 'Game', 'ja-JP': 'ゲーム' },
+  'other': { 'zh-CN': '其他', 'zh-TW': '其他', 'en-US': 'Other', 'ja-JP': 'その他' },
+}
+
+function cloudCategoryLabel(c: HubCategory): string {
+  const loc = getLocale()
+  return CLOUD_CATEGORY_I18N[c.key]?.[loc] || c.name || c.key
+}
+
+const activeRepo = computed(() => hubRepos.value.find(r => r.id === hubActiveRepoId.value) || null)
+const isCloudMarket = computed(() => activeRepo.value?.source_type === 'skillhub')
 
 function categoryLabel(cat?: string) {
   return categoryOptions.value.find(o => o.item_code === cat)?.item_name || cat || '其他'
