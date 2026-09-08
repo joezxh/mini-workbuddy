@@ -87,12 +87,24 @@
         :streaming-research-stage="streamingResearchStage"
         :streaming-research-progress="streamingResearchProgress"
         :streaming-async-task="streamingAsyncTask"
+        :react-events="reactEvents"
+        :react-goal="reactGoal"
+        :react-plan-status="reactPlanStatus"
+        :react-confirm-visible="reactConfirmVisible"
+        :react-confirm-question="reactConfirmQuestion"
+        :react-confirm-options="reactConfirmOptions"
+        :is-react-streaming="isReactStreaming"
         @send-message="sendMessage"
         @load-more="loadMoreMessages"
         @clear-messages="clearMessages"
         @delete-session="handleDeleteSession"
         @toggle-thinking="toggleThinking"
         @copy="copyText"
+        @react-pause="handleReactPause"
+        @react-resume="handleReactResume"
+        @react-cancel="handleReactCancel"
+        @react-confirm="handleReactConfirm"
+        @react-skip="handleReactSkip"
       />
 
       <ChatInput
@@ -233,6 +245,31 @@ function stopStreaming() {
 
 defineExpose({ stopStreaming })
 
+// ── ReAct HITL 控制函数 ────────────────────────────────────────────────────
+async function handleReactPause() {
+  if (!reactRunId.value) return
+  try { await (await import('@/api/react')).pauseReact(reactRunId.value) } catch (e) { console.error(e) }
+}
+async function handleReactResume() {
+  if (!reactRunId.value) return
+  try { await (await import('@/api/react')).resumeReact(reactRunId.value) } catch (e) { console.error(e) }
+}
+async function handleReactCancel() {
+  if (!reactRunId.value) return
+  try { await (await import('@/api/react')).cancelReact(reactRunId.value) } catch (e) { console.error(e) }
+  reactConfirmVisible.value = false
+}
+async function handleReactConfirm(value: string, action: string) {
+  if (!reactRunId.value) return
+  try { await (await import('@/api/react')).respondReact(reactRunId.value, { answer: value, action }) } catch (e) { console.error(e) }
+  reactConfirmVisible.value = false
+}
+async function handleReactSkip() {
+  if (!reactRunId.value) return
+  try { await (await import('@/api/react')).respondReact(reactRunId.value, { answer: '', action: 'skip' }) } catch (e) { console.error(e) }
+  reactConfirmVisible.value = false
+}
+
 // 技能执行 composable（替代旧 streamingSkillEvents）
 const executionState = useExecutionState({ streaming: false } as any)
 const { enqueueEvent, agentGroups, agentOrder, teamState, tasks, progressHistory, phase: executionPhase, flatEvents, resetFlatEvents } = executionState
@@ -303,6 +340,19 @@ const streamingResearch = ref<{
   report?: ResearchReport
 }>({ stage: '', progress: 0, plan: [] })
 const streamingAsyncTask = ref<AsyncTaskInfo | null>(null)
+
+// ── ReAct 模式流式状态 ───────────────────────────────────────────────────────
+const reactEvents = ref<Array<{ type: string; [key: string]: any }>>([])
+const reactGoal = ref('')
+const reactPlanStatus = ref('planning')
+const reactRunId = ref<string | null>(null)
+const reactConfirmVisible = ref(false)
+const reactConfirmQuestion = ref('')
+const reactConfirmOptions = ref<Array<{ label: string; value: string; description?: string }>>([])
+/** ReAct 模式流式执行（渲染走独立的 ReactTimeline）。 */
+const isReactStreaming = computed(() =>
+  streaming.value && sessionType.value === 'react'
+)
 
 // 便于模板绑定的派生变量
 const streamingResearchPlan = computed(() => streamingResearch.value.plan)
@@ -465,11 +515,11 @@ const filteredSessions = computed(() => {
 
 function typeLabel(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.item_name ?? ({ general: '通用', dispute: '纠纷', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度' } as Record<string, string>)[t] ?? t
+  return item?.item_name ?? ({ general: '通用', dispute: '纠纷', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度', react: 'ReAct 计划' } as Record<string, string>)[t] ?? t
 }
 function sessionTypeColor(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.color ?? ({ general: 'cyan', dispute: 'purple', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano' } as Record<string, string>)[t] ?? 'default'
+  return item?.color ?? ({ general: 'cyan', dispute: 'purple', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano', react: 'lime' } as Record<string, string>)[t] ?? 'default'
 }
 function formatTime(t: string) { return t ? t.replace('T', ' ').slice(0, 16) : '' }
 async function copyText(t: string) { await navigator.clipboard.writeText(t); antMsg.success('已复制') }
@@ -708,6 +758,14 @@ async function sendMessage(text?: string) {
   streamingResearchSources.value = []
   currentExecutionId.value = undefined
   resetFlatEvents()
+  // ReAct 模式重置
+  reactEvents.value = []
+  reactGoal.value = ''
+  reactPlanStatus.value = 'planning'
+  reactRunId.value = null
+  reactConfirmVisible.value = false
+  reactConfirmQuestion.value = ''
+  reactConfirmOptions.value = []
   let _pendingSkillAnswer = ''  // 暂存技能回答，等 _gateway_meta 到达后再保存消息
   let _pendingArtifacts: Array<{ file_id: string; filename: string; size_bytes: number; mime_type: string }> | undefined
   // 统一步骤/产物事件（跨 8 种模式归一化时间线 + 产物画廊）
@@ -1163,6 +1221,12 @@ async function sendMessage(text?: string) {
                 executionId: currentExecutionId.value || undefined,
                 unifiedSteps: streamingUnifiedSteps.value || undefined,
                 unifiedArtifacts: streamingUnifiedArtifacts.value || undefined,
+                // ReAct 模式：保存事件列表与运行 ID 供历史回放
+                ...(activeSessionType === 'react' ? {
+                  renderKind: 'react' as const,
+                  reactEvents: reactEvents.value.length ? [...reactEvents.value] : undefined,
+                  reactRunId: reactRunId.value || undefined,
+                } : {}),
               })
               _assistantMsgSaved = true
               scrollToBottom()
@@ -1333,6 +1397,38 @@ async function sendMessage(text?: string) {
               taskNo: chunk.task_no,
               status: chunk.status || 'queued',
               progress: 0,
+            }
+
+          // ── REACT 计划执行模式 ──────────────────────────────────────────
+          } else if (eventType?.startsWith('react_')) {
+            reactEvents.value.push({ type: eventType, ...chunk })
+            if (eventType === 'react_start') {
+              reactGoal.value = chunk.goal || msgText
+              reactRunId.value = chunk.run_id || null
+              reactPlanStatus.value = 'planning'
+            } else if (eventType === 'react_plan') {
+              reactPlanStatus.value = 'planning'
+              reactGoal.value = chunk.goal || reactGoal.value
+            } else if (eventType === 'react_executing') {
+              reactPlanStatus.value = 'executing'
+            } else if (eventType === 'react_reflect') {
+              reactPlanStatus.value = 'reflecting'
+            } else if (eventType === 'react_confirm') {
+              reactConfirmVisible.value = true
+              reactConfirmQuestion.value = chunk.question || '请确认以下操作'
+              reactConfirmOptions.value = chunk.options || []
+            } else if (eventType === 'react_done') {
+              reactPlanStatus.value = 'done'
+              reactConfirmVisible.value = false
+              if (chunk.result) {
+                accAnswer += chunk.result
+                streamingText.value = accAnswer
+              }
+            } else if (eventType === 'react_report') {
+              if (chunk.content) {
+                accAnswer += chunk.content
+                streamingText.value = accAnswer
+              }
             }
           }
         } catch { /* ignore */ }

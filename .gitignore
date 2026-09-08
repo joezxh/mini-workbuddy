@@ -80,3 +80,8 @@ dist-ssr
 node_modules
 /frontend/public/file-viewer/
 /frontend/dist-verify/
+
+# Electron 桌面端产物
+dist-electron
+release
+/frontend/release/

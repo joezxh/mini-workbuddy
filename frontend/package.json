@@ -3,12 +3,19 @@
   "version": "1.0.0",
   "type": "module",
   "description": "MiniWorkBuddy - 轻量高效的 AI 工作台",
+  "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite --mode development",
     "dev:daily": "vite --mode daily",
     "build": "node scripts/build.cjs production",
     "build:daily": "node scripts/build.cjs daily",
     "preview": "vite preview",
+    "electron:dev": "node scripts/electron.cjs dev",
+    "electron:preview": "node scripts/electron.cjs preview",
+    "electron:build": "node scripts/electron.cjs build",
+    "electron:build:win": "node scripts/electron.cjs build --win",
+    "electron:build:mac": "node scripts/electron.cjs build --mac",
+    "electron:build:linux": "node scripts/electron.cjs build --linux",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
   },
   "dependencies": {
@@ -53,6 +60,8 @@
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
     "@vitejs/plugin-vue": "^5.0.4",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "less": "^4.6.3",

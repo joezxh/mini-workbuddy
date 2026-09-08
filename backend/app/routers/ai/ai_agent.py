@@ -152,6 +152,10 @@ async def chat_stream(
     # 构建 Agent 配置
     agent_config = _build_agent_config(req, session_type, db)
 
+    # 双入口：execution_mode="plan" 自动映射为 react session_type
+    if req.agent_id and agent_config.get("execution_mode") == "plan":
+        session_type = "react"
+
     async def event_generator():
         """SSE 事件生成器"""
         try:
@@ -203,16 +207,19 @@ def _build_agent_config(req: ChatRequest, session_type: str, db: Session) -> dic
             config["model_id"] = model.model_name
             config["model_id_db"] = req.model_id  # 数字 ID 供 Research/Skill/Team Agent 使用
 
-    # 如果指定了 Agent，从 agent_config 表读取人设
-    if req.agent_id and session_type == "agent":
+    # 如果指定了 Agent，从 agent_config 表读取人设和配置
+    if req.agent_id:
         from app.models.agent.agent_config import AgentConfig
         agent_cfg = db.query(AgentConfig).filter(
             AgentConfig.id == req.agent_id
         ).first()
         if agent_cfg:
-            config["name"] = agent_cfg.name or "专家"
-            config["sys_prompt"] = agent_cfg.sys_prompt or ""
-            config["tools"] = agent_cfg.tool_ids or []
+            config["name"] = agent_cfg.name or "助手"
+            config["sys_prompt"] = agent_cfg.system_prompt or ""
+            config["tools"] = agent_cfg.tools or []
+            config["execution_mode"] = agent_cfg.execution_mode or "llm"
+            config["react_config"] = agent_cfg.react_config or {}
+            config["skills"] = agent_cfg.skills or []
 
     # 团队模式：传递 team_id
     if req.team_id and session_type == "team":

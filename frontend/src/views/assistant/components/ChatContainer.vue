@@ -147,7 +147,22 @@
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
                 />
               </template>
-              <!-- 技能执行消息 / 携带统一执行时间线的消息：使用 SkillExecutionPanel（Tab 标签页，与 MediatorPanel 对齐）。
+              <!-- ReAct 计划执行模式：ReactTimeline（步骤时间线）+ ReactConfirmPanel（HITL 确认） -->
+              <template v-else-if="msg.renderKind === 'react'">
+                <ReactTimeline
+                  :events="msg.reactEvents || []"
+                  :goal="msg.content"
+                  :plan-status="msg.reactRunId ? 'done' : 'planning'"
+                  :show-actions="false"
+                />
+                <GeneralRenderer
+                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :expanded="thinkingExpanded[msg.message_id]"
+                  :session-type="currentSessionType"
+                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
+                />
+              </template>
+              <!-- 技能执行消息 / 携带统一执行时间线的消息：使用 SkillExecutionPanel（Tab 标签页，与 Mediator Panel 对齐）。
                    即时会话完成后与回放保持一致布局：执行详情 Tab 在上、结果正文在下。 -->
               <template
                 v-else-if="(msg.skillEvent && (msg.executionId || msg.sseUrl)) || usesTopTimelineBranch(msg)"
@@ -342,6 +357,36 @@
                 :session-type="currentSessionType"
               />
             </template>
+            <!-- ReAct 模式流式：ReactTimeline（步骤时间线）+ ReactConfirmPanel（HITL 确认） -->
+            <template v-else-if="isReactStreaming">
+              <div v-if="!streamingText && !(reactEvents?.length)" class="ai-stream-waiting">
+                <LoadingOutlined spin /> AI 正在规划执行...
+              </div>
+              <ReactTimeline
+                v-if="reactEvents?.length"
+                :events="reactEvents"
+                :goal="reactGoal"
+                :plan-status="reactPlanStatus"
+                :show-actions="true"
+                @pause="$emit('react-pause')"
+                @cancel="$emit('react-cancel')"
+              />
+              <ReactConfirmPanel
+                v-if="reactConfirmVisible"
+                :question="reactConfirmQuestion || ''"
+                :options="reactConfirmOptions"
+                :allow-custom="true"
+                @confirm="(v, a) => $emit('react-confirm', v, a)"
+                @skip="$emit('react-skip')"
+                @cancel="$emit('react-cancel')"
+              />
+              <GeneralRenderer
+                v-if="streamingText"
+                :parsed="streamingParsed"
+                streaming
+                :session-type="currentSessionType"
+              />
+            </template>
             <!-- 非技能模式：保持原有逻辑 -->
             <template v-else>
             <!-- 实时执行过程：当存在 agentGroups 或 toolHistory 时显示步骤时间线 -->
@@ -436,6 +481,9 @@ import DeepResearchTaskCard from './renderers/DeepResearchTaskCard.vue'
 import ArtifactCard from './renderers/ArtifactCard.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import DataAnalysisCard from './DataAnalysisCard.vue'
+import ReactTimeline from './ReactTimeline.vue'
+import ReactConfirmPanel from './ReactConfirmPanel.vue'
+import type { ReactEvent } from './ReactTimeline.vue'
 import type { ChatMessage } from './types'
 import type { AiChatSession } from '@/api/aiSession'
 import type { SqlBotData } from './types'
@@ -523,6 +571,20 @@ defineProps<{
   streamingResearchProgress?: number | null
   /** SCHEDULED 流式任务 */
   streamingAsyncTask?: any | null
+  /** ReAct 模式：流式事件列表 */
+  reactEvents?: ReactEvent[] | null
+  /** ReAct 模式：目标描述 */
+  reactGoal?: string
+  /** ReAct 模式：计划状态 */
+  reactPlanStatus?: string
+  /** ReAct 模式：是否显示确认面板 */
+  reactConfirmVisible?: boolean
+  /** ReAct 模式：确认问题 */
+  reactConfirmQuestion?: string
+  /** ReAct 模式：确认选项 */
+  reactConfirmOptions?: Array<{ label: string; value: string; description?: string }>
+  /** ReAct 模式：是否为流式执行 */
+  isReactStreaming?: boolean
 }>()
 
 defineEmits<{
@@ -534,6 +596,11 @@ defineEmits<{
   (e: 'copy', text: string): void
   (e: 'update:streamingActiveTab', val: string): void
   (e: 'completed', result: any): void
+  (e: 'react-pause'): void
+  (e: 'react-resume'): void
+  (e: 'react-cancel'): void
+  (e: 'react-confirm', value: string, action: string): void
+  (e: 'react-skip'): void
 }>()
 
 const msgListRef = ref<HTMLElement>()

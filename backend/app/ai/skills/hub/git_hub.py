@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -109,44 +110,160 @@ class GitHubAdapter(SkillHubAdapter):
         return any(cache.iterdir())
 
     def ensure_cloned(self, force: bool = False) -> Path:
-        """确保仓库已 clone 到缓存目录；force=True 时重新 clone。
+        """确保仓库已 clone 到缓存目录。
 
-        若缓存目录存在但非有效 clone（如空目录/克隆中途失败残留），
-        同样视为未克隆并重新克隆。
+        刷新策略（force=True）：目录已存在且为有效 clone 时，执行 git pull
+        增量刷新，而**不再删除重建**——目录常被 IDE / uvicorn 监视器 / 杀软占用，
+        rmtree 会静默失败并残留非空目录，导致 git clone 报
+        "destination path already exists and is not an empty directory"。
+
+        仅当目录存在但非有效 clone（空目录或克隆中途失败残留）时，才清理后重新克隆。
         """
         cache = self.cache_dir
-        if cache.exists() and not force and self._is_valid_clone(cache):
-            return cache
+
+        if cache.exists() and self._is_valid_clone(cache):
+            if not force:
+                return cache
+            if self._try_pull(cache):
+                return cache
+            logger.warning("git pull 刷新失败，将尝试重新克隆: %s", cache)
+
         if cache.exists():
-            shutil.rmtree(cache, ignore_errors=True)
+            self._remove_cache(cache)
 
         cache.parent.mkdir(parents=True, exist_ok=True)
         clone_url = self._clone_url()
         logger.info("克隆 skill hub 仓库 %s -> %s", self._safe_url(), cache)
+
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                self._run_clone(cache, clone_url)
+                return cache
+            except subprocess.CalledProcessError as e:
+                last_err = e
+                logger.warning(
+                    "git clone 失败(尝试 %d/3): %s",
+                    attempt + 1,
+                    (e.stderr or e.stdout or str(e)).strip().splitlines()[-1:],
+                )
+                # .git 已就绪但工作树 checkout 失败 → 就地重建工作树
+                if (cache / ".git").exists() and self._recover_checkout(cache):
+                    return cache
+                self._remove_cache(cache)
+                time.sleep(0.5 * (attempt + 1))
+            except subprocess.TimeoutExpired as e:
+                last_err = e
+                logger.warning("git clone 超时(尝试 %d/3)", attempt + 1)
+                self._remove_cache(cache)
+            except FileNotFoundError as e:
+                raise RuntimeError("未找到 git 命令，请确认运行环境已安装 git") from e
+
+        raise RuntimeError(
+            "克隆仓库失败: "
+            + (getattr(last_err, "stderr", "") or getattr(last_err, "stdout", "") or str(last_err))
+        ) from last_err
+
+    def _run_clone(self, cache: Path, clone_url: str) -> None:
+        """执行 git clone（启用 core.longpaths 规避 Windows 长路径 checkout 失败）。"""
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "core.longpaths=true",
+                "clone",
+                "--depth",
+                "1",
+                "-b",
+                self.branch,
+                clone_url,
+                str(cache),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+    def _try_pull(self, cache: Path) -> bool:
+        """对已存在的克隆执行增量刷新。
+
+        优先 git pull --ff-only；失败则退回 fetch --all + reset --hard origin/<branch>。
+        """
         try:
             subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--depth",
-                    "1",
-                    "-b",
-                    self.branch,
-                    clone_url,
-                    str(cache),
-                ],
+                ["git", "-c", "core.longpaths=true", "pull", "--ff-only"],
+                cwd=str(cache),
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=300,
             )
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(
-                f"克隆仓库失败: {e.stderr or e.stdout or e}"
-            ) from e
-        except FileNotFoundError as e:
-            raise RuntimeError("未找到 git 命令，请确认运行环境已安装 git") from e
-        return cache
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("git pull 失败(%s)，尝试 fetch+reset: %s", cache, e)
+
+        try:
+            subprocess.run(
+                ["git", "-c", "core.longpaths=true", "fetch", "--all", "--prune"],
+                cwd=str(cache),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "core.longpaths=true",
+                    "reset",
+                    "--hard",
+                    f"origin/{self.branch}",
+                ],
+                cwd=str(cache),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("fetch+reset 失败: %s", e)
+            return False
+
+    def _recover_checkout(self, cache: Path) -> bool:
+        """checkout 失败但 .git 已就绪时，强制重建工作树。
+
+        对应 git 提示的 `git restore --source=HEAD :/`，等价于 `git checkout -f`。
+        """
+        try:
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "core.longpaths=true",
+                    "-C",
+                    str(cache),
+                    "checkout",
+                    "-f",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("工作树恢复失败: %s | %s", cache, e)
+            return False
+        return self._is_valid_clone(cache)
+
+    @staticmethod
+    def _remove_cache(cache: Path) -> None:
+        """删除缓存目录；被占用时尽力而为。"""
+        shutil.rmtree(cache, ignore_errors=True)
+        if cache.exists():
+            logger.warning("缓存目录无法完全删除（可能被占用）: %s", cache)
 
     # ── 列表 ──────────────────────────────────────────────────
     def list_remote(self) -> list[SkillHubEntry]:

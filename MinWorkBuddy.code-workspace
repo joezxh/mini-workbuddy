@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../scientific-agent-skills"
+		},
+		{
+			"path": "../miniworkbuddy-skills"
+		}
+	],
+	"settings": {}
+}

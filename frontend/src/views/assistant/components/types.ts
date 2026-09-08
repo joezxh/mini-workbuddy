@@ -129,7 +129,7 @@ export type ChatMessage = AiChatMessage & {
    *  research-async：深度研究后台异步任务卡片
    *  research-legacy：旧版深度研究消息（过程面板 + 报告） */
   renderKind?: 'thinking' | 'research' | 'scheduled' | 'general' | 'skill' | 'agent' | 'team' | 'dispute' | 'data'
-    | 'research-async' | 'research-legacy'
+    | 'research-async' | 'research-legacy' | 'react'
   attachments?: Array<{
     file_id?: string
     db_id?: number
@@ -153,6 +153,11 @@ export type ChatMessage = AiChatMessage & {
   executionEvents?: Array<import('@/types/shared').ExecutionEvent>
   /** 深度研究来源列表（回放直读） */
   researchSources?: Array<{ title: string; url?: string; snippet?: string }>
+
+  /** ReAct 模式：SSE 事件列表（回放直读） */
+  reactEvents?: Array<{ type: string; [key: string]: any }>
+  /** ReAct 模式：运行 ID（供 HITL API 调用） */
+  reactRunId?: string
 }
 
 /** 技能信息 */

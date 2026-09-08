@@ -2,16 +2,26 @@ import axios, { AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequ
 import { message } from 'ant-design-vue'
 import { getToken, removeToken } from './auth'
 import router from '@/router'
+import { getApiBase, onApiBaseChange } from './apiBase'
 
 // 创建 axios 实例
 // 开发环境使用空 baseURL，所有 /api 请求走 Vite proxy 代理，避免 CORS 问题
 // 生产环境通过 VITE_API_BASE_URL 配置实际后端地址
+// 桌面端 VITE_API_BASE_URL 为空，实际地址在 initApiBase() 后由 onApiBaseChange 写入
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: getApiBase(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json;charset=utf-8'
   }
+})
+
+// 暴露实例本身，便于在外部调整默认配置
+export const http = service
+
+// 桌面端允许运行时修改后端地址，这里保持 axios 与 apiBase 同步
+onApiBaseChange((base) => {
+  service.defaults.baseURL = base
 })
 
 // 请求拦截器

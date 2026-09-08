@@ -47,6 +47,12 @@ services:
     container_name: minworkbuddy-backend-dev
     env_file:
       - ./backend/.env
+    environment:
+      # 容器内 WORKDIR=/app，显式锚定项目根，使 _BASE_DIR 正确解析为 /app
+      # （否则 config.py 三级上溯会算成 /，与挂载卷 /app/data/... 对不上）
+      - APP_BASE_DIR=/app
+      # 技能目录对齐挂载卷 /app/data/skills（默认 _BASE_DIR/backend/data/skills 在容器内会错位）
+      - SKILLS_BASE_DIR=/app/data/skills
     ports:
       - "8000:8000"
     volumes:
@@ -54,6 +60,7 @@ services:
       - backend_logs_dev:/app/logs
       - backend_uploads_dev:/app/uploads
       - backend_skills_dev:/app/data/skills
+      - backend_hub_cache_dev:/app/data/hub_cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,3 +99,4 @@ volumes:
   backend_logs_dev:
   backend_uploads_dev:
   backend_skills_dev:
+  backend_hub_cache_dev:

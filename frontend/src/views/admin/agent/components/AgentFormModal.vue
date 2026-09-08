@@ -172,10 +172,47 @@
               <a-select-option value="llm">LLM（对话/ReAct）</a-select-option>
               <a-select-option value="harness">Harness（工具编排）</a-select-option>
               <a-select-option value="react">ReAct（思考-行动）</a-select-option>
+              <a-select-option value="plan">ReAct 计划执行</a-select-option>
             </a-select>
           </a-form-item>
         </a-col>
       </a-row>
+
+      <!-- ReAct 计划执行配置区域 -->
+      <template v-if="config.execution_mode === 'plan'">
+        <a-divider>ReAct 模式配置</a-divider>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="交互模式">
+              <a-select v-model:value="reactConfig.interaction_mode">
+                <a-select-option value="auto">全自动</a-select-option>
+                <a-select-option value="approve">先审批</a-select-option>
+                <a-select-option value="confirm_steps">关键步骤确认</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="反思模式">
+              <a-select v-model:value="reactConfig.reflection_mode">
+                <a-select-option value="lightweight">轻量（自评估）</a-select-option>
+                <a-select-option value="deep">深度（独立调用）</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="最大步数">
+              <a-input-number v-model:value="reactConfig.max_iters" :min="1" :max="50" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="超时时间（秒）">
+              <a-input-number v-model:value="reactConfig.timeout_seconds" :min="30" :max="3600" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </template>
 
       <a-form-item label="绑定工具 (Tools)">
         <a-select
@@ -364,6 +401,13 @@ const config = reactive<Record<string, any>>({
   key_name: '' as string,
 })
 
+const reactConfig = reactive({
+  interaction_mode: 'auto',
+  reflection_mode: 'lightweight',
+  max_iters: 10,
+  timeout_seconds: 300,
+})
+
 const rules = {
   agent_code: [
     { required: true, message: '请输入专家编码' },
@@ -417,6 +461,16 @@ function initForm() {
     tools: d?.tools || [],
     skills: d?.skills || [],
   })
+  // 恢复 ReAct 配置
+  const rc = d?.react_config
+  if (rc) {
+    Object.assign(reactConfig, {
+      interaction_mode: rc.interaction_mode || 'auto',
+      reflection_mode: rc.reflection_mode || 'lightweight',
+      max_iters: rc.max_iters ?? 10,
+      timeout_seconds: rc.timeout_seconds ?? 300,
+    })
+  }
   // 恢复 MCP 服务选中状态（按 name 匹配 value；内置服务以 't'+template_id 形式存在）
   if (d?.mcp_servers?.length) {
     const names = (d.mcp_servers as any[]).map((s: any) => (typeof s === 'string' ? s : s.name))
@@ -561,6 +615,10 @@ function buildPayload() {
       skills: config.skills,
       mcp_servers: mcpServers,
     },
+    // ReAct 计划执行配置（execution_mode="plan" 时生效）
+    ...(config.execution_mode === 'plan' ? {
+      react_config: { ...reactConfig },
+    } : {}),
   }
 }
 

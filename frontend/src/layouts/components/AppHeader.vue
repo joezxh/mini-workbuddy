@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
+import ElectronServerButton from './ElectronServerButton.vue'
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@/i18n'
 import { useI18n } from 'vue-i18n'
 import { resolveIcon } from '@/utils/icons'
@@ -136,6 +137,9 @@ function onQuickNav({ key }: { key: string | number }) {
       <BulbFilled v-if="app.isDark" />
       <BulbOutlined v-else />
     </button>
+
+    <!-- 桌面端：可运行时切换后端地址；浏览器部署下该组件不渲染 -->
+    <ElectronServerButton />
 
     <button class="icon-btn" type="button" :title="t('sys.header.fullscreen')" @click="toggleFullscreen">
       <FullscreenExitOutlined v-if="isFullscreen" />

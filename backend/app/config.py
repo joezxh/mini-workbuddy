@@ -1,12 +1,15 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from urllib.parse import quote_plus
 from pathlib import Path
 
 
-
-# 项目根目录（backend/ 上一级），避免 settings.BASE_DIR 未定义崩溃
-_BASE_DIR = Path(__file__).resolve().parent.parent.parent
+# 项目根目录（backend/ 上一级），避免 settings.BASE_DIR 未定义崩溃。
+# 支持通过环境变量 APP_BASE_DIR 显式覆盖，以适配 Docker 容器：
+# WORKDIR=/app 且 COPY app ./app 时，__file__ 三级上溯会算成 / 而非 /app，
+# 导致所有 _BASE_DIR/"backend"/... 路径与挂载卷（/app/data/...）对不上。
+_BASE_DIR = Path(os.environ.get("APP_BASE_DIR", Path(__file__).resolve().parent.parent.parent))
 
 
 class Settings(BaseSettings):
@@ -41,7 +44,8 @@ class Settings(BaseSettings):
 
     # 技能仓库（Skill Hub）本地克隆缓存目录
     # 第三方/官方 git 仓库首次访问时 clone 到此目录，之后从缓存读取 skills/ 与 category_index.json。
-    # 留空则默认 backend/data/hub_cache。支持绝对路径或相对 _BASE_DIR 的相对路径。
+    # 留空则默认 <项目根>/data/hub_cache。支持绝对路径或相对 _BASE_DIR 的相对路径。
+    # 建议填相对路径 data/hub_cache：可跨机器/容器移植，避免写死盘符。
     HUB_CACHE_DIR: str = ""
 
     # 官方技能仓库（Skill Hub）Git 地址（默认展示，不可删除）
@@ -169,7 +173,9 @@ class Settings(BaseSettings):
             if not p.is_absolute():
                 p = _BASE_DIR / p
             return p
-        return _BASE_DIR / "backend" / "data" / "hub_cache"
+        # 默认指向项目根目录下的 data/hub_cache（与 data/workspace 同级），
+        # 不再使用旧的 backend/data/hub_cache。
+        return _BASE_DIR / "data" / "hub_cache"
 
     # Dify 配置（保留用于知识增强等场景，主 AI 引擎已切换到 AgentScope）
     DIFY_API_URL: str = ""
@@ -312,7 +318,14 @@ class Settings(BaseSettings):
     QUERY_CACHE_TTL: int = 300           # 查询缓存5分钟
 
     model_config = SettingsConfigDict(
-        env_file=[".env", "backend/.env"],  # 兼容从项目根目录或backend目录启动
+        # 同时按相对 CWD 与按 _BASE_DIR 绝对路径查找 .env，
+        # 无论从项目根目录、backend 目录还是其它目录启动都能命中配置，避免静默丢失。
+        env_file=[
+            ".env",
+            "backend/.env",
+            str(_BASE_DIR / ".env"),
+            str(_BASE_DIR / "backend" / ".env"),
+        ],
         case_sensitive=True,
         extra="ignore",  # 忽略未定义的字段
     )

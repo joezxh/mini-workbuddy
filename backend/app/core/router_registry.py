@@ -142,7 +142,10 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.ai.ai_skill_evolution", tags=["Skill进化管理"]),
     RouterSpec("app.routers.ai.ai_workspace", prefix=API_V1_PREFIX, tags=["工作空间管理"]),
 
-    # --- 25. 通知 ---
+    # --- 25. ReAct HITL ---
+    RouterSpec("app.routers.ai.react", prefix=API_V1_PREFIX, tags=["ReAct HITL"]),
+
+    # --- 26. 通知 ---
     RouterSpec("app.routers.sys.sys_notification", prefix=f"{API_V1_PREFIX}/admin", tags=["通知管理"]),
 
     # --- 未启用 ---

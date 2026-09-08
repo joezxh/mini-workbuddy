@@ -276,6 +276,10 @@ services:
       - ./backend/.env
     environment:
       - TASK_QUEUE_PROVIDER=${TASK_QUEUE_PROVIDER:-celery}
+      # 容器内 WORKDIR=/app，显式锚定项目根，使 _BASE_DIR 正确解析为 /app
+      - APP_BASE_DIR=/app
+      # 技能目录对齐挂载卷 /app/data/skills（默认 _BASE_DIR/backend/data/skills 在容器内会错位）
+      - SKILLS_BASE_DIR=/app/data/skills
     ports:
       - "8000:8000"
     volumes:
@@ -285,6 +289,7 @@ services:
       # 默认解析路径 backend/data/skills(容器内 /app/data/skills)
       # 多实例/共享存储场景：运维可将本卷替换为 NFS 或 MinIO 挂载点
       - backend_skills_prod:/app/data/skills
+      - backend_hub_cache_prod:/app/data/hub_cache
       - /home/tianque/shibing624_text2vec-base-chinese:/app/data/birt_rules/models/shibing624_text2vec-base-chinese:ro
     depends_on:
       postgres:
@@ -331,3 +336,4 @@ volumes:
   backend_uploads_prod:
   celery_beat_data:
   backend_skills_prod:
+  backend_hub_cache_prod:

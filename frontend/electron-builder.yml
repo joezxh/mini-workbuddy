@@ -1,0 +1,72 @@
+# electron-builder 打包配置
+# 文档：https://www.electron.build/configuration/configuration
+
+appId: com.miniworkbuddy.desktop
+productName: MiniWorkBuddy
+copyright: Copyright © 2026 MiniWorkBuddy
+
+# 渲染产物（dist）与主进程产物（dist-electron）都会被打进 asar
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+asar: true
+npmRebuild: false
+compression: maximum
+removePackageScripts: true
+
+directories:
+  output: release/${version}
+  buildResources: electron/resources
+
+# 不需要自动更新时保持 null；接入更新服务后在此配置 publish
+publish: null
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  # 需要自定义图标时，把 icon.ico（≥256x256）放到 electron/resources 下并取消注释
+  # icon: electron/resources/icon.ico
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDir: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MiniWorkBuddy
+  deleteAppDataOnUninstall: false
+  language: 2052
+
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  minimumSystemVersion: "11.0"
+  darkModeSupport: true
+  # icon: electron/resources/icon.icns
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  maintainer: MiniWorkBuddy
+  # icon: electron/resources/icon.png
+
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}

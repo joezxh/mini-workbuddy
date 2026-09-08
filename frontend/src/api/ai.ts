@@ -3,6 +3,7 @@
  */
 
 import request from '@/utils/request'
+import { resolveApiUrl } from '@/utils/apiBase'
 import type { ApiResponse } from '@/types/api'
 
 // 对话消息
@@ -49,7 +50,7 @@ export function sendMessage(sessionId: string, content: string) {
 
 // 发送消息（流式）- 返回SSE连接URL
 export function getStreamMessageUrl(sessionId: string) {
-  return `${import.meta.env.VITE_API_BASE_URL}/api/ai/sessions/${sessionId}/stream`
+  return resolveApiUrl(`/api/ai/sessions/${sessionId}/stream`)
 }
 
 // 关键词溯源

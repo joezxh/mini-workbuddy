@@ -6,6 +6,7 @@
 //   * 提供对应的 Ant Design 语言包（分页、空状态、日期选择等内置文案）
 //   * 同步 <html data-theme>，使 CSS 变量整体切换皮肤
 import { computed, onMounted, watchEffect } from 'vue'
+import { useRoute } from 'vue-router'
 import { theme as antdTheme } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
 import zhTW from 'ant-design-vue/es/locale/zh_TW'
@@ -13,10 +14,15 @@ import enUS from 'ant-design-vue/es/locale/en_US'
 import jaJP from 'ant-design-vue/es/locale/ja_JP'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
+import ElectronServerButton from '@/layouts/components/ElectronServerButton.vue'
 import type { LocaleKey } from '@/i18n'
 
 const app = useAppStore()
 const user = useUserStore()
+const route = useRoute()
+
+/** 登录页没有顶栏，桌面端退化成悬浮入口，保证后端地址不通时仍能修改。 */
+const showFloatingServerEntry = computed(() => route.name === 'Login')
 
 /** Ant Design 语言包，按项目自身的语言代码索引。 */
 const ANTD_LOCALES: Record<LocaleKey, unknown> = {
@@ -76,6 +82,7 @@ onMounted(() => {
   >
     <a-app class="app-root">
       <router-view />
+      <ElectronServerButton v-if="showFloatingServerEntry" floating />
     </a-app>
   </a-config-provider>
 </template>

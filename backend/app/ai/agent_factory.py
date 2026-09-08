@@ -63,6 +63,42 @@ class SkillAgent:
             yield {"type": skill_event.type, "data": skill_event.data}
 
 
+class ReactAgent:
+    """ReAct 计划执行 Agent 封装 — 将 ReActOrchestrator 适配为 AgentScope Agent 接口。
+
+    实现 reply_stream() 方法，将 ReAct 事件转换为 SSE 兼容的 dict 事件，
+    由 SSEBridge 或 ai_agent router 直接消费。
+    """
+
+    def __init__(self, db: Session, model_id: Optional[int] = None,
+                 tools: Optional[list] = None, react_config: Optional[dict] = None,
+                 sys_prompt: str = "", name: str = "ReAct 助手",
+                 skills: Optional[list] = None):
+        self._db = db
+        self._model_id = model_id
+        self._tools = tools or []
+        self._react_config = react_config or {}
+        self._sys_prompt = sys_prompt
+        self._skills = skills or []
+        self.name = name
+
+    async def reply_stream(self, user_msg) -> AsyncGenerator[dict, None]:
+        """运行 ReActOrchestrator 并 yield ReAct 事件。"""
+        from app.ai.react.orchestrator import ReActOrchestrator
+
+        topic = text_of(user_msg)
+        orchestrator = ReActOrchestrator(
+            db=self._db,
+            model_id=self._model_id,
+            tools=self._tools,
+            react_config=self._react_config,
+            sys_prompt=self._sys_prompt,
+            skills=self._skills,
+        )
+        async for event in orchestrator.run(topic):
+            yield {"type": event.get("type", "message"), "data": event}
+
+
 class TeamAgent:
     """团队协调 Agent 封装 — 将 TeamManager 适配为 AgentScope Agent 接口。"""
 
@@ -114,6 +150,8 @@ class AgentFactory:
                 return self._create_skill_agent(config)
             case "agent":
                 return self._create_expert_agent(config)
+            case "react":
+                return self._create_react_agent(config)
             case "team":
                 return self._create_team_agent(config)
             case _:
@@ -196,6 +234,18 @@ class AgentFactory:
             system_prompt=config.get("sys_prompt", "你是一位专业领域助手，在特定领域具有深入的专业知识和经验。"),
             model=model,
             toolkit=toolkit,
+        )
+
+    def _create_react_agent(self, config: dict):
+        """ReAct 计划执行 Agent — 使用 ReActOrchestrator 编排 Plan-Execute-Reflect 循环"""
+        return ReactAgent(
+            db=self._db,
+            model_id=config.get("model_id_db"),
+            tools=config.get("tools", []),
+            react_config=config.get("react_config", {}),
+            sys_prompt=config.get("sys_prompt", ""),
+            name=config.get("name", "ReAct 助手"),
+            skills=config.get("skills", []),
         )
 
     def _create_team_agent(self, config: dict):

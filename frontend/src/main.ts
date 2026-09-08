@@ -9,6 +9,7 @@ import 'dayjs/locale/zh-cn'
 import autoScale from './directives/autoScale'
 import i18n from './i18n'
 import { useAppStore } from './stores/app'
+import { initApiBase } from './utils/apiBase'
 
 dayjs.locale('zh-cn')
 
@@ -39,4 +40,8 @@ app.directive('permission', permissionDirective)
 // 首屏绘制前应用已保存的皮肤，避免闪白
 useAppStore().hydrate()
 
-app.mount('#app')
+// 桌面端需要先从主进程读取后端地址并改写请求，再挂载组件树，
+// 否则首批发起的 /api 请求会打到内置静态服务器上。
+void initApiBase().then(() => {
+  app.mount('#app')
+})

@@ -2,6 +2,7 @@
  * AI技能 API
  */
 import request from '@/utils/request'
+import { resolveApiUrl } from '@/utils/apiBase'
 
 const BASE_URL = '/api/v1'
 
@@ -176,6 +177,5 @@ export function listArtifacts(executionId: string) {
 
 /** 构造产物下载 URL（直接用于 fetch 下载） */
 export function artifactDownloadUrl(fileId: string): string {
-  const base = import.meta.env.VITE_API_BASE_URL || ''
-  return `${base}/api/v1/ai-agent/skill-artifacts/${fileId}/download`
+  return resolveApiUrl(`/api/v1/ai-agent/skill-artifacts/${fileId}/download`)
 }

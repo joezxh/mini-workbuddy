@@ -42,7 +42,8 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: mode !== 'production',
+      // 生产构建与桌面端安装包不打 sourcemap（体积优先），其余环境保留便于排查
+      sourcemap: mode !== 'production' && mode !== 'electron',
       rollupOptions: {
         output: {
           manualChunks: {
