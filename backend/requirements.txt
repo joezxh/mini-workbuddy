@@ -7,6 +7,7 @@ python-dotenv>=1.0.1
 # 数据库
 sqlalchemy>=2.0.35
 psycopg2-binary>=2.9.10
+pymysql>=1.1.0
 neo4j>=5.23,<6
 graphiti-core>=0.5
 alembic==1.13.1
@@ -115,3 +116,4 @@ rdflib>=7.0.0
 # fuzzy: scikit-fuzzy（Mamdani 模糊推理，不可用时降级为线性公式）
 scikit-fuzzy>=0.5.0
 # bayesian / fuzzy 依赖 numpy（已在上方声明）
+websockets>=12.0

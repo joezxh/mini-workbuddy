@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import shutil
+import stat
 import subprocess
 import time
 import zipfile
@@ -26,6 +27,25 @@ from app.ai.skills.hub.base import SkillHubAdapter, SkillHubEntry
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _force_unlink(func, path: str, exc_info) -> None:  # noqa: ANN001
+    """shutil.rmtree 的纠错回调：清掉只读属性后再删一次。
+
+    git 的 `.git/objects/**` 权限是 444（只读），Windows 下 rmtree 会抛
+    PermissionError；此时若用 ignore_errors=True，会**静默留下残骸**，
+    随后 git clone 就报
+    "destination path already exists and is not an empty directory"。
+    """
+    try:
+        os.chmod(path, stat.S_IWRITE)
+    except OSError:
+        pass
+    try:
+        func(path)
+    except OSError:
+        pass
+
 
 # Hub 七大类 → 本工程 skill_category 字典表代码（best-effort 映射）
 _HUB_CATEGORY_MAP = {
@@ -98,26 +118,55 @@ class GitHubAdapter(SkillHubAdapter):
         return urlunparse(parsed._replace(netloc=netloc))
 
     def _is_valid_clone(self, cache: Path) -> bool:
-        """判断缓存目录是否为一次有效 clone（含 .git 且非空）。
+        """判断缓存目录是否为一次**完整**的 clone。
 
-        避免「目录已存在但内容为空/克隆中途失败」时误判为已克隆，
-        从而永久返回空列表。
+        三个条件缺一不可：
+          1. 目录存在且含 .git；
+          2. 工作树含 .git 之外的文件（rmtree 半失败会留下「.git 完好 + 工作树空」的空壳）；
+          3. HEAD 能解析出有效提交（clone 被中断会留下 refs/heads/.invalid）。
+
+        只检查前两条会把半成品当成有效克隆，从而陷入
+        「pull 失败 → reset 失败 → 重克隆又被中断」的死循环，并永久返回空列表。
         """
         if not cache.is_dir():
             return False
         if not (cache / ".git").exists():
             return False
-        return any(cache.iterdir())
+        if not self._worktree_has_content(cache):
+            return False
+        return self._head_ok(cache)
+
+    @staticmethod
+    def _worktree_has_content(cache: Path) -> bool:
+        """工作树是否含 .git 之外的文件。"""
+        try:
+            return any(p.name != ".git" for p in cache.iterdir())
+        except OSError:
+            return False
+
+    @staticmethod
+    def _head_ok(cache: Path) -> bool:
+        """HEAD 是否指向一个可解析的提交。"""
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(cache), "rev-parse", "--verify", "-q", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            return False
+        return r.returncode == 0
 
     def ensure_cloned(self, force: bool = False) -> Path:
         """确保仓库已 clone 到缓存目录。
 
-        刷新策略（force=True）：目录已存在且为有效 clone 时，执行 git pull
+        刷新策略（force=True）：目录已存在且为**完整**克隆时，执行 git pull
         增量刷新，而**不再删除重建**——目录常被 IDE / uvicorn 监视器 / 杀软占用，
         rmtree 会静默失败并残留非空目录，导致 git clone 报
         "destination path already exists and is not an empty directory"。
 
-        仅当目录存在但非有效 clone（空目录或克隆中途失败残留）时，才清理后重新克隆。
+        目录存在但非完整克隆（空目录、克隆中途失败、HEAD 损坏）时，清理后重新克隆。
         """
         cache = self.cache_dir
 
@@ -138,8 +187,23 @@ class GitHubAdapter(SkillHubAdapter):
         last_err: Exception | None = None
         for attempt in range(3):
             try:
-                self._run_clone(cache, clone_url)
-                return cache
+                # 前两次按仓库配置的分支克隆；仍失败时第三次退回克隆远端默认分支，
+                # 兼容远端把 master 改成 main（或反之）而未同步更新仓库记录的情况。
+                branch = self.branch if attempt < 2 else None
+                if branch is None:
+                    logger.warning(
+                        "按分支 %s 克隆失败，退回克隆远端默认分支: %s",
+                        self.branch,
+                        self._safe_url(),
+                    )
+                self._run_clone(cache, clone_url, branch)
+                if self._is_valid_clone(cache):
+                    return cache
+                # clone 退出码为 0 但工作树不完整（极罕见）：清掉重来
+                logger.warning("克隆结束但工作树不完整，重试: %s", cache)
+                self._remove_cache(cache)
+                last_err = RuntimeError("克隆后工作树校验失败")
+                continue
             except subprocess.CalledProcessError as e:
                 last_err = e
                 logger.warning(
@@ -164,21 +228,17 @@ class GitHubAdapter(SkillHubAdapter):
             + (getattr(last_err, "stderr", "") or getattr(last_err, "stdout", "") or str(last_err))
         ) from last_err
 
-    def _run_clone(self, cache: Path, clone_url: str) -> None:
-        """执行 git clone（启用 core.longpaths 规避 Windows 长路径 checkout 失败）。"""
+    def _run_clone(self, cache: Path, clone_url: str, branch: Optional[str] = None) -> None:
+        """执行 git clone（启用 core.longpaths 规避 Windows 长路径 checkout 失败）。
+
+        branch 为 None 时不带 -b，克隆远端默认分支。
+        """
+        cmd = ["git", "-c", "core.longpaths=true", "clone", "--depth", "1"]
+        if branch:
+            cmd += ["-b", branch]
+        cmd += [clone_url, str(cache)]
         subprocess.run(
-            [
-                "git",
-                "-c",
-                "core.longpaths=true",
-                "clone",
-                "--depth",
-                "1",
-                "-b",
-                self.branch,
-                clone_url,
-                str(cache),
-            ],
+            cmd,
             check=True,
             capture_output=True,
             text=True,
@@ -188,8 +248,17 @@ class GitHubAdapter(SkillHubAdapter):
     def _try_pull(self, cache: Path) -> bool:
         """对已存在的克隆执行增量刷新。
 
-        优先 git pull --ff-only；失败则退回 fetch --all + reset --hard origin/<branch>。
+        顺序：pull --ff-only → fetch --all --prune + checkout -B。
+
+        为什么最后一步用 `checkout -B <branch> <ref>` 而不是 `reset --hard origin/<branch>`：
+          * 远端把分支改名（master→main）后 `origin/<branch>` 不存在，reset 直接 128；
+          * HEAD 损坏时 reset 无法定位当前分支，而 checkout -B 能同时重建分支与 HEAD；
+          * 因此先解析真实存在的远端 ref，再切换。
         """
+        if not self._head_ok(cache):
+            logger.warning("缓存仓库 HEAD 无效（上次克隆被中断），判定需重新克隆: %s", cache)
+            return False
+
         try:
             subprocess.run(
                 ["git", "-c", "core.longpaths=true", "pull", "--ff-only"],
@@ -201,7 +270,7 @@ class GitHubAdapter(SkillHubAdapter):
             )
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.warning("git pull 失败(%s)，尝试 fetch+reset: %s", cache, e)
+            logger.warning("git pull 失败(%s)，尝试 fetch+checkout: %s", cache, e)
 
         try:
             subprocess.run(
@@ -212,16 +281,28 @@ class GitHubAdapter(SkillHubAdapter):
                 text=True,
                 timeout=300,
             )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("git fetch 失败: %s | %s", cache, e)
+            return False
+
+        ref = self._resolve_remote_ref(cache)
+        if not ref:
+            logger.warning("远端不存在可用分支(branch=%s)，将重新克隆: %s", self.branch, cache)
+            return False
+
+        try:
             subprocess.run(
                 [
                     "git",
                     "-c",
                     "core.longpaths=true",
-                    "reset",
-                    "--hard",
-                    f"origin/{self.branch}",
+                    "-C",
+                    str(cache),
+                    "checkout",
+                    "-B",
+                    self.branch,
+                    ref,
                 ],
-                cwd=str(cache),
                 check=True,
                 capture_output=True,
                 text=True,
@@ -229,8 +310,34 @@ class GitHubAdapter(SkillHubAdapter):
             )
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.warning("fetch+reset 失败: %s", e)
+            logger.warning("checkout -B %s %s 失败: %s", self.branch, ref, e)
             return False
+
+    def _resolve_remote_ref(self, cache: Path) -> Optional[str]:
+        """挑选实际存在的远端分支 ref。
+
+        优先 origin/<branch>，其次 origin/HEAD、origin/main、origin/master，
+        最后退回第一个非 HEAD 的 origin/* 分支。
+        """
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(cache), "branch", "-r", "--format", "%(refname:short)"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+            return None
+
+        refs = [x.strip() for x in r.stdout.splitlines() if x.strip()]
+        for wanted in (f"origin/{self.branch}", "origin/HEAD", "origin/main", "origin/master"):
+            if wanted in refs:
+                return wanted
+        for ref in refs:
+            if ref.startswith("origin/") and ref != "origin/HEAD":
+                return ref
+        return None
 
     def _recover_checkout(self, cache: Path) -> bool:
         """checkout 失败但 .git 已就绪时，强制重建工作树。
@@ -260,8 +367,17 @@ class GitHubAdapter(SkillHubAdapter):
 
     @staticmethod
     def _remove_cache(cache: Path) -> None:
-        """删除缓存目录；被占用时尽力而为。"""
-        shutil.rmtree(cache, ignore_errors=True)
+        """删除缓存目录；被占用 / 只读时重试若干次。
+
+        Windows 上常被杀软 / 索引器 / IDE 短暂占用，且 git 对象文件是只读的，
+        单次 rmtree 会静默失败并残留目录，让随后的 git clone 报
+        "destination path already exists and is not an empty directory"。
+        """
+        for i in range(3):
+            shutil.rmtree(cache, onerror=_force_unlink)
+            if not cache.exists():
+                return
+            time.sleep(0.5 * (i + 1))
         if cache.exists():
             logger.warning("缓存目录无法完全删除（可能被占用）: %s", cache)
 
@@ -279,10 +395,18 @@ class GitHubAdapter(SkillHubAdapter):
 
     def _list_from_index(self, index_path: Path) -> list[SkillHubEntry]:
         data = json.loads(index_path.read_text(encoding="utf-8"))
+        cache = index_path.parent
         entries: list[SkillHubEntry] = []
+        missing: list[str] = []
         for cat in data.get("categories", []):
             cat_key = cat.get("key", "general")
             for s in cat.get("skills", []):
+                path = self._normalize_skill_path(s.get("path"), s["id"])
+                # 索引里列了但工作树中没有对应目录的条目（典型场景：仓库用了 git
+                # 子模块而克隆时未初始化，目录为空）直接跳过，避免「列表有、安装 500」。
+                if not (cache / path).is_dir():
+                    missing.append(s["id"])
+                    continue
                 entries.append(
                     SkillHubEntry(
                         id=s["id"],
@@ -293,11 +417,34 @@ class GitHubAdapter(SkillHubAdapter):
                             "category": cat_key,
                             "category_name": cat.get("name"),
                             "tags": s.get("tags", []),
-                            "path": s.get("path", f"skills/{s['id']}"),
+                            "path": path,
                         },
                     )
                 )
+        if missing:
+            logger.warning(
+                "category_index.json 中有 %d 个技能缺少对应目录（多为未初始化的 git 子模块），已跳过: %s%s",
+                len(missing),
+                missing[:5],
+                " …" if len(missing) > 5 else "",
+            )
         return entries
+
+    @staticmethod
+    def _normalize_skill_path(raw: Optional[str], skill_id: str) -> str:
+        """把索引里的 path 规整为**技能目录**的相对路径。
+
+        category_index.json 的 path 常直接指向 SKILL.md
+        （如 `buffett-skills/skills/buffett/SKILL.md`），
+        而 fetch 需要的是它所在的目录；否则 `cache / rel_path` 会拼成
+        `.../buffett/SKILL.md` 并报「仓库中不存在 skill 目录」。
+        """
+        p = (raw or "").replace("\\", "/").strip().strip("/")
+        if p.endswith("/SKILL.md"):
+            p = p[: -len("/SKILL.md")]
+        elif p.endswith("SKILL.md"):
+            p = p[: -len("SKILL.md")]
+        return p.strip("/") or f"skills/{skill_id}"
 
     def _list_from_scan(self, cache: Path) -> list[SkillHubEntry]:
         """递归扫描 skills/ 下任意层级的子目录，定位含 SKILL.md 的目录。
@@ -343,9 +490,20 @@ class GitHubAdapter(SkillHubAdapter):
     def fetch(self, entry: SkillHubEntry) -> bytes:
         cache = self.ensure_cloned()
         skill_id = entry.id
-        # 优先用扫描时记录的完整相对路径（支持嵌套目录如 skills/engineering/ask-matt）
-        rel_path = entry.meta.get("path") or f"skills/{skill_id}"
+        # 优先用扫描/索引时记录的完整相对路径（支持嵌套目录如 buffett-skills/skills/buffett）
+        # 历史索引里的 path 可能直接指向 SKILL.md，这里统一收敛到所在目录
+        rel_path = self._normalize_skill_path(entry.meta.get("path"), skill_id)
         skill_dir = cache / rel_path
+        if not skill_dir.is_dir():
+            # 兜底：按 skill_id 在 skills/ 下定位，再退化到全仓同名目录
+            fallback = cache / "skills" / skill_id
+            if fallback.is_dir():
+                skill_dir = fallback
+            else:
+                for cand in cache.rglob(skill_id):
+                    if cand.is_dir() and (cand / "SKILL.md").exists():
+                        skill_dir = cand
+                        break
         if not skill_dir.is_dir():
             raise RuntimeError(f"仓库中不存在 skill 目录: {rel_path}")
 

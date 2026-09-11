@@ -121,8 +121,21 @@ async def lifespan(app: FastAPI):
     # 建表：开发/小环境用 create_all（controlled by AUTO_CREATE_TABLES）
     if settings.AUTO_CREATE_TABLES:
         from app.db.database import Base, engine
-        Base.metadata.create_all(bind=engine)
-        logger.info("已通过 Base.metadata.create_all 完成建表")
+        # 基础表由 create_all 负责；kb_* 三表交由迁移 006 独占（建表+索引+pg_trgm 扩展），
+        # 避免 create_all 与 alembic 重复建表导致索引/扩展缺失或冲突（见 P1 简报 Task 1）。
+        non_kb = [t for t in Base.metadata.tables.values() if not t.name.startswith("kb_")]
+        Base.metadata.create_all(bind=engine, tables=non_kb)
+        logger.info("已通过 Base.metadata.create_all 完成基础表建表（kb_* 交由迁移 006）")
+
+        # 确保 kb 表（迁移 006）存在：基础表已由 create_all 建好，故仅跑 006。
+        app.state.kb_ready = False
+        try:
+            from app.db.migrate import ensure_kb_schema
+            ensure_kb_schema(engine)
+            app.state.kb_ready = True
+            logger.info("kb 表（迁移 006）已确保存在")
+        except Exception as _kb_err:
+            logger.error(f"确保 kb 表失败（迁移 006 未执行或 pg_trgm 异常？）: {_kb_err}")
 
         # 轻量列迁移：补齐后加列
         try:
@@ -159,6 +172,9 @@ async def lifespan(app: FastAPI):
         app.state.tool_manager = mgr
         startup_db = SessionLocal()
         try:
+            # 先幂等登记系统内置工具（web_search + 三个本体工具），再加载缓存
+            from app.ai.tool_manager.seed_tools import register_builtin_tools
+            register_builtin_tools(startup_db)
             mgr.load_all(startup_db)
         finally:
             startup_db.close()
@@ -249,6 +265,17 @@ try:
             logger.info("MCP SSE 端点已挂载: /mcp")
 except Exception as e:
     logger.warning(f"MCP Server 端点挂载失败: {e}")
+
+
+# 挂载知识库 RAG Service 子应用（AgentScope RAG Service 内核）
+# 检查点（P1 简报 Task 8）：Starlette 不会自动触发挂载子应用的 lifespan，
+# 因此 KB 初始化由主应用 lifespan 兜底（app.state.kb_ready），详见 tests/kb/test_mount_checkpoint.py
+try:
+    from app.services.kb.kb_app import kb_app
+    app.mount("/agentscope/knowledge_bases", kb_app)
+    logger.info("知识库 RAG Service 已挂载: /agentscope/knowledge_bases")
+except Exception as e:
+    logger.warning(f"知识库 RAG Service 挂载失败: {e}")
 
 
 if __name__ == "__main__":

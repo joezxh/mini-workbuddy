@@ -1,0 +1,3193 @@
+diff --git a/backend/alembic/versions/2026_09_10_0000-004_add_ontology_tables.py b/backend/alembic/versions/2026_09_10_0000-004_add_ontology_tables.py
+new file mode 100644
+index 0000000..c30a2e7
+--- /dev/null
++++ b/backend/alembic/versions/2026_09_10_0000-004_add_ontology_tables.py
+@@ -0,0 +1,161 @@
++"""add ontology tables (P4.1 本体持久化与租户隔离)
++
++背景：
++`WikiOwlEngine` 原为「进程内 rdflib.Graph 内存单例」，重启即丢且跨租户共享本体。
++本迁移新增三张按 `tenant_id` 隔离的本体表，作为引擎的持久化后端：
++  * `ontology`            本体定义（含 TTL 原始内容）
++  * `ontology_class`      OWL 类（URI / 标签 / 父类 URI 列表）
++  * `ontology_annotation` 目标对象（文章 / 片段 / 表 / 字段）↔ 本体类标注
++
++说明：
++* 状态字段用 `String(32)` 而非 PG ENUM（枚举类型后期变更困难，项目既有约定）；
++* `parent_uris` / `class_uris` 用裸 `JSONB`（与 `wiki_article.owl_class_uris` 一致；
++  不用 `JSON().with_variant(JSONB)`，否则 `.contains()` 会退化成 LIKE）；
++* 迁移幂等：表已存在时跳过创建（兼容 AUTO_CREATE_TABLES 先建表的环境）。
++
++Revision ID: 004_add_ontology_tables
++Revises: 003_add_sys_dictionary_tenant_id
++Create Date: 2026-09-10 00:00:00.000000+08:00
++"""
++from typing import Sequence, Union
++
++from alembic import op
++import sqlalchemy as sa
++from sqlalchemy.dialects.postgresql import JSONB
++
++
++# revision identifiers, used by Alembic.
++revision: str = "004_add_ontology_tables"
++down_revision: Union[str, None] = "003_add_sys_dictionary_tenant_id"
++branch_labels: Union[str, Sequence[str], None] = None
++depends_on: Union[str, Sequence[str], None] = None
++
++
++def _existing_tables() -> set:
++    """当前库中已存在的表名集合。
++
++    离线模式（`alembic upgrade --sql`）没有真实连接，无法反射，返回空集合。
++    """
++    if op.get_context().as_sql:
++        return set()
++    insp = sa.inspect(op.get_bind())
++    return set(insp.get_table_names())
++
++
++def upgrade() -> None:
++    existing = _existing_tables()
++
++    if "ontology" not in existing:
++        op.create_table(
++            "ontology",
++            sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="主键"),
++            sa.Column("tenant_id", sa.BigInteger(), nullable=True, comment="租户ID"),
++            sa.Column("code", sa.String(100), nullable=False, comment="本体编码（租户内唯一，如 default）"),
++            sa.Column("name", sa.String(200), nullable=True, comment="本体名称"),
++            sa.Column("description", sa.Text(), nullable=True, comment="本体描述"),
++            sa.Column("namespace_uri", sa.String(500), nullable=True, comment="本体命名空间 URI"),
++            sa.Column("version", sa.Integer(), nullable=False, server_default="1", comment="本体版本号"),
++            sa.Column(
++                "status",
++                sa.String(32),
++                nullable=False,
++                server_default="draft",
++                comment="状态: draft|published|archived",
++            ),
++            sa.Column(
++                "source",
++                sa.String(32),
++                nullable=False,
++                server_default="manual",
++                comment="来源: manual|ttl_import|build",
++            ),
++            sa.Column("ttl_content", sa.Text(), nullable=True, comment="TTL 原始内容（导入时非类/非标注的残余三元组）"),
++            sa.Column("creator_id", sa.BigInteger(), nullable=True, comment="创建者 ID"),
++            sa.Column("updater_id", sa.BigInteger(), nullable=True, comment="最后更新者 ID"),
++            sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="创建时间"),
++            sa.Column("updated_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="更新时间"),
++            sa.PrimaryKeyConstraint("id"),
++            sa.UniqueConstraint("tenant_id", "code", name="uq_ontology_code"),
++        )
++        op.create_index("ix_ontology_tenant_id", "ontology", ["tenant_id"])
++        op.create_index("idx_ontology_tenant", "ontology", ["tenant_id"])
++        op.create_index("idx_ontology_status", "ontology", ["status"])
++
++    if "ontology_class" not in existing:
++        op.create_table(
++            "ontology_class",
++            sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="主键"),
++            sa.Column("tenant_id", sa.BigInteger(), nullable=True, comment="租户ID"),
++            sa.Column("ontology_id", sa.BigInteger(), nullable=False, comment="所属本体 ID"),
++            sa.Column("uri", sa.String(1000), nullable=False, comment="类 URI"),
++            sa.Column("label", sa.String(500), nullable=True, comment="中文标签"),
++            sa.Column("comment", sa.Text(), nullable=True, comment="类描述"),
++            sa.Column("parent_uris", JSONB(), nullable=True, comment="父类 URI 列表"),
++            sa.Column(
++                "status",
++                sa.String(32),
++                nullable=False,
++                server_default="active",
++                comment="状态: active|deprecated",
++            ),
++            sa.Column("display_order", sa.Integer(), nullable=False, server_default="0", comment="展示顺序"),
++            sa.Column("creator_id", sa.BigInteger(), nullable=True, comment="创建者 ID"),
++            sa.Column("updater_id", sa.BigInteger(), nullable=True, comment="最后更新者 ID"),
++            sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="创建时间"),
++            sa.Column("updated_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="更新时间"),
++            sa.ForeignKeyConstraint(["ontology_id"], ["ontology.id"], ondelete="CASCADE"),
++            sa.PrimaryKeyConstraint("id"),
++            sa.UniqueConstraint("ontology_id", "uri", name="uq_ontology_class"),
++        )
++        op.create_index("ix_ontology_class_tenant_id", "ontology_class", ["tenant_id"])
++        op.create_index("idx_ontology_class_ontology", "ontology_class", ["ontology_id"])
++        op.create_index("idx_ontology_class_status", "ontology_class", ["status"])
++
++    if "ontology_annotation" not in existing:
++        op.create_table(
++            "ontology_annotation",
++            sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="主键"),
++            sa.Column("tenant_id", sa.BigInteger(), nullable=True, comment="租户ID"),
++            sa.Column("ontology_id", sa.BigInteger(), nullable=False, comment="所属本体 ID"),
++            sa.Column(
++                "target_type",
++                sa.String(32),
++                nullable=False,
++                server_default="article",
++                comment="目标类型: article|segment|table|column",
++            ),
++            sa.Column("target_id", sa.String(500), nullable=False, comment="目标对象 ID（字符串化）"),
++            sa.Column("class_uris", JSONB(), nullable=True, comment="关联的本体类 URI 列表"),
++            sa.Column("creator_id", sa.BigInteger(), nullable=True, comment="创建者 ID"),
++            sa.Column("updater_id", sa.BigInteger(), nullable=True, comment="最后更新者 ID"),
++            sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="创建时间"),
++            sa.Column("updated_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False, comment="更新时间"),
++            sa.ForeignKeyConstraint(["ontology_id"], ["ontology.id"], ondelete="CASCADE"),
++            sa.PrimaryKeyConstraint("id"),
++            sa.UniqueConstraint("ontology_id", "target_type", "target_id", name="uq_ontology_annotation"),
++        )
++        op.create_index("ix_ontology_annotation_tenant_id", "ontology_annotation", ["tenant_id"])
++        op.create_index("idx_ontology_annotation_target", "ontology_annotation", ["target_type", "target_id"])
++        op.create_index("idx_ontology_annotation_ontology", "ontology_annotation", ["ontology_id"])
++
++
++def downgrade() -> None:
++    existing = _existing_tables()
++
++    if "ontology_annotation" in existing:
++        op.drop_index("idx_ontology_annotation_ontology", table_name="ontology_annotation")
++        op.drop_index("idx_ontology_annotation_target", table_name="ontology_annotation")
++        op.drop_index("ix_ontology_annotation_tenant_id", table_name="ontology_annotation")
++        op.drop_table("ontology_annotation")
++
++    if "ontology_class" in existing:
++        op.drop_index("idx_ontology_class_status", table_name="ontology_class")
++        op.drop_index("idx_ontology_class_ontology", table_name="ontology_class")
++        op.drop_index("ix_ontology_class_tenant_id", table_name="ontology_class")
++        op.drop_table("ontology_class")
++
++    if "ontology" in existing:
++        op.drop_index("idx_ontology_status", table_name="ontology")
++        op.drop_index("idx_ontology_tenant", table_name="ontology")
++        op.drop_index("ix_ontology_tenant_id", table_name="ontology")
++        op.drop_table("ontology")
+diff --git a/backend/app/ai/knowledge/owl_engine.py b/backend/app/ai/knowledge/owl_engine.py
+index 43a499c..55efbcf 100644
+--- a/backend/app/ai/knowledge/owl_engine.py
++++ b/backend/app/ai/knowledge/owl_engine.py
+@@ -1,46 +1,94 @@
+-"""WikiOwlEngine - 基于 rdflib 的 OWL 本体引擎。
++"""WikiOwlEngine - 基于 rdflib 的 OWL 本体引擎（持久化后端）。
+ 
+ 功能:
+ - 注册 OWL Class (含 label / comment / parent)
+ - 查询类层级 (hierarchy / ancestors / descendants)
+ - TTL 导入 / 导出
+ - 文章 OWL 类标注 (article ↔ class 关联)
+ 
+ 设计:
+-- 使用 rdflib.Graph 做内存本体存储
++- 存储后端可插拔：默认持久化到数据库（`OntologyRepository`，按租户隔离），
++  也可传入内存 store（`InMemoryOntologyStore`，仅离线/单测使用）；
++  rdflib 只负责 TTL 的解析与序列化，不再作为运行期存储 —— 这样本体
++  **重启不丢**且**不跨租户共享**（修复了改造前的进程级内存单例缺陷）。
+ - 命名空间: 默认 WIKI_NS (可通过构造参数覆盖)
+ - 线程安全: 内部加锁 (本体操作非并发安全)
++
++用法:
++    # 生产（按租户持久化）
++    engine = WikiOwlEngine.from_store(OntologyRepository(db, tenant_id))
++    # 离线/单测（内存）
++    engine = WikiOwlEngine()
+ """
+ from __future__ import annotations
+ 
+-import io
+ import logging
+ import threading
+ from dataclasses import dataclass, field
+-from typing import Any, Dict, List, Optional, Set, Tuple
++from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
++
++if TYPE_CHECKING:  # 仅类型提示，避免运行时循环导入
++    from app.services.ontology.ontology_repository import (
++        ClassRecord,
++        OntologyRepository,
++    )
+ 
+ logger = logging.getLogger(__name__)
+ 
+ try:
+-    from rdflib import Graph, Namespace, URIRef, Literal, RDF, RDFS, OWL, XSD
+-    from rdflib.plugins.parsers.notation3 import BadSyntax
++    from rdflib import Graph, Namespace, URIRef, Literal, RDF, RDFS, OWL
++    from rdflib.compare import to_canonical_graph
+     HAS_RDFLIB = True
+-except ImportError:
++except ImportError:  # pragma: no cover - rdflib 已列入依赖
+     HAS_RDFLIB = False
+     logger.warning("rdflib 未安装, OWL 功能不可用。pip install rdflib")
+ 
+ 
+ # 默认命名空间
+ DEFAULT_WIKI_NS = "http://minworkbuddy.local/ontology/wiki#"
+ DEFAULT_ONTOLOGY_NS = "http://minworkbuddy.local/ontology/"
+ 
++# RDF/RDFS/OWL 标准词汇表前缀。
++# `a <X>` 的宾语落在这些前缀下时是**本体元词汇声明**（owl:Restriction、
++# owl:TransitiveProperty、rdf:Property …），不是「文章属于某个类」的标注，
++# 不应写入 `ontology_annotation`。按前缀判断而不是逐个白名单，避免词汇表
++# 扩展时出现漏网之鱼（评审 CR-01 / MI-03）。
++_STANDARD_VOCAB_PREFIXES = (
++    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
++    "http://www.w3.org/2000/01/rdf-schema#",
++    "http://www.w3.org/2002/07/owl#",
++    "http://www.w3.org/2001/XMLSchema#",
++)
++
++
++def _is_standard_vocabulary(uri: str) -> bool:
++    """`uri` 是否属于 RDF/RDFS/OWL/XSD 标准词汇。"""
++    return uri.startswith(_STANDARD_VOCAB_PREFIXES)
++
++
++def _canonicalize(graph: "Graph") -> "Graph":
++    """把图的空节点标签规范化。
++
++    rdflib 每次解析都会给空节点分配新 ID，直接比较/合并会因为 ID 不同而
++    产生重复三元组（评审 CR-01 中「每次导入多一个假父类」的根因）。
++    规范化后**结构相同**的子图获得相同标签，集合并集才真正幂等。
++    """
++    return to_canonical_graph(graph)
++
++
++def _serialize(graph: "Graph", prefix_source: "Graph") -> str:
++    """序列化为 TTL，复用 `prefix_source` 的前缀声明以保持可读。"""
++    for prefix, namespace in prefix_source.namespaces():
++        graph.bind(prefix, namespace, replace=True)
++    return graph.serialize(format="turtle")
++
+ 
+ @dataclass
+ class OwlClass:
+     """OWL 类描述。"""
+     uri: str
+     label: str = ""
+     comment: str = ""
+     parent_uris: List[str] = field(default_factory=list)
+ 
+     def to_dict(self) -> Dict[str, Any]:
+@@ -61,216 +109,354 @@ class HierarchyNode:
+ 
+     def to_dict(self) -> Dict[str, Any]:
+         return {
+             "uri": self.uri,
+             "label": self.label,
+             "children": [c.to_dict() for c in self.children],
+         }
+ 
+ 
+ class WikiOwlEngine:
+-    """基于 rdflib 的 OWL 本体引擎。
++    """基于 rdflib（解析/序列化）+ 可插拔存储后端的 OWL 本体引擎。
+ 
+     用法:
+-        engine = WikiOwlEngine()
++        engine = WikiOwlEngine.from_store(OntologyRepository(db, tenant_id))
+         engine.register_class("http://example.org/Person", label="人物", parent_uris=[...])
+         hierarchy = engine.get_hierarchy()
+         ttl_str = engine.export_ttl()
+     """
+ 
+     def __init__(
+         self,
++        store: Optional["OntologyRepository"] = None,
++        *,
+         wiki_ns: str = DEFAULT_WIKI_NS,
+         ontology_ns: str = DEFAULT_ONTOLOGY_NS,
+     ) -> None:
+         if not HAS_RDFLIB:
+             raise RuntimeError("rdflib 未安装, 请执行: pip install rdflib")
+         self._lock = threading.RLock()
+-        self._graph = Graph()
+         self._wiki_ns = Namespace(wiki_ns)
+         self._ontology_ns = Namespace(ontology_ns)
+-        self._graph.bind("wiki", self._wiki_ns)
+-        self._graph.bind("onto", self._ontology_ns)
+-        # 注册基础 OWL 公理
+-        self._graph.add((self._ontology_ns["wiki"], RDF.type, OWL.Ontology))
+-        logger.info("WikiOwlEngine 初始化完成 (ns=%s)", wiki_ns)
++
++        if store is None:
++            from app.services.ontology.ontology_repository import InMemoryOntologyStore
++
++            logger.warning(
++                "WikiOwlEngine 未传入持久化 store，使用内存后端（重启即丢，仅用于离线/测试）"
++            )
++            store = InMemoryOntologyStore()
++        self._store = store
++        logger.info("WikiOwlEngine 初始化完成 (ns=%s, store=%s)", wiki_ns, type(store).__name__)
++
++    @classmethod
++    def from_store(
++        cls,
++        store: "OntologyRepository",
++        *,
++        wiki_ns: str = DEFAULT_WIKI_NS,
++        ontology_ns: str = DEFAULT_ONTOLOGY_NS,
++    ) -> "WikiOwlEngine":
++        """用指定存储后端构造引擎（生产入口：按租户的 `OntologyRepository`）。"""
++        return cls(store=store, wiki_ns=wiki_ns, ontology_ns=ontology_ns)
+ 
+     # ---- 类注册 ----
+     def register_class(
+         self,
+         uri: str,
+         *,
+         label: str = "",
+         comment: str = "",
+         parent_uris: Optional[List[str]] = None,
+     ) -> OwlClass:
+-        """注册一个 OWL Class。"""
++        """注册一个 OWL Class。
++
++        语义与改造前保持一致：
++        - `label` / `comment` 为空时不覆盖已有值；
++        - `parent_uris` 与已有父类取并集（不会因重复注册而丢失父类）；
++        - 返回值中的 `parent_uris` 为本次入参（同改造前）。
++        """
+         with self._lock:
+-            subj = URIRef(uri)
+-            self._graph.add((subj, RDF.type, OWL.Class))
+-            if label:
+-                self._graph.set((subj, RDFS.label, Literal(label, lang="zh")))
+-            if comment:
+-                self._graph.set((subj, RDFS.comment, Literal(comment, lang="zh")))
+-            for parent_uri in (parent_uris or []):
+-                self._graph.add((subj, RDFS.subClassOf, URIRef(parent_uri)))
++            parents = list(parent_uris or [])
++            self._store.upsert_class(uri, label=label, comment=comment, parent_uris=parents)
+             logger.info("registered OWL class: %s (%s)", uri, label)
+-            return OwlClass(uri=uri, label=label, comment=comment, parent_uris=parent_uris or [])
++            return OwlClass(uri=uri, label=label, comment=comment, parent_uris=parents)
+ 
+     def unregister_class(self, uri: str) -> bool:
+-        """移除一个 OWL Class 及其所有三元组。"""
++        """移除一个 OWL Class **及其所有引用**。
++
++        与改造前 `rdflib` 实现对齐：旧实现会同时删除
++        `<uri> ?p ?o`、`?s ?p <uri>` 与 `<target> a <uri>`，
++        因此这里也要清理「其它类把它当父类」和「文章标注了它」两处引用，
++        否则类删除后 `get_articles_by_class(uri)` 仍返回悬挂引用（评审 IM-04）。
++        三步在仓储内部**同一事务**内完成。
++        """
+         with self._lock:
+-            subj = URIRef(uri)
+-            triples = list(self._graph.triples((subj, None, None)))
+-            if not triples:
+-                return False
+-            for t in triples:
+-                self._graph.remove(t)
+-            # 同时移除作为宾语的关系 (如 subClassOf)
+-            triples2 = list(self._graph.triples((None, None, subj)))
+-            for t in triples2:
+-                self._graph.remove(t)
+-            return True
++            return self._store.unregister(uri)
+ 
+     # ---- 类查询 ----
+     def get_class(self, uri: str) -> Optional[OwlClass]:
+-        """获取单个 OWL Class 信息。"""
++        """获取单个 OWL Class 信息，不存在返回 None。"""
+         with self._lock:
+-            subj = URIRef(uri)
+-            if not any(self._graph.triples((subj, RDF.type, OWL.Class))):
++            record = self._store.get_class(uri)
++            if record is None:
+                 return None
+-            label = str(self._graph.value(subj, RDFS.label, default=""))
+-            comment = str(self._graph.value(subj, RDFS.comment, default=""))
+-            parents = [
+-                str(o) for o in self._graph.objects(subj, RDFS.subClassOf)
+-            ]
+-            return OwlClass(uri=uri, label=label, comment=comment, parent_uris=parents)
++            return self._to_owl_class(record)
+ 
+     def list_classes(self) -> List[OwlClass]:
+-        """列出所有已注册 OWL Class。"""
++        """列出所有已注册 OWL Class（按 URI 排序）。"""
+         with self._lock:
+-            results = []
+-            for subj in self._graph.subjects(RDF.type, OWL.Class):
+-                uri = str(subj)
+-                label = str(self._graph.value(subj, RDFS.label, default=""))
+-                comment = str(self._graph.value(subj, RDFS.comment, default=""))
+-                parents = [str(o) for o in self._graph.objects(subj, RDFS.subClassOf)]
+-                results.append(OwlClass(uri=uri, label=label, comment=comment, parent_uris=parents))
+-            return results
++            return [self._to_owl_class(r) for r in self._store.list_classes()]
+ 
+     def get_ancestors(self, uri: str) -> List[str]:
+-        """获取指定类的所有祖先 URI (递归向上)。"""
++        """获取指定类的所有祖先 URI (递归向上，带循环保护)。"""
+         with self._lock:
++            parent_map = self._parent_map()
+             visited: Set[str] = set()
+             stack = [uri]
+             while stack:
+                 current = stack.pop()
+-                for parent in self._graph.objects(URIRef(current), RDFS.subClassOf):
+-                    parent_str = str(parent)
+-                    if parent_str not in visited:
+-                        visited.add(parent_str)
+-                        stack.append(parent_str)
+-            return list(visited)
++                for parent in parent_map.get(current, []):
++                    if parent not in visited:
++                        visited.add(parent)
++                        stack.append(parent)
++            return sorted(visited)
+ 
+     def get_descendants(self, uri: str) -> List[str]:
+-        """获取指定类的所有后代 URI (递归向下)。"""
++        """获取指定类的所有后代 URI (递归向下，带循环保护)。"""
+         with self._lock:
++            children_map = self._children_map()
+             visited: Set[str] = set()
+             stack = [uri]
+             while stack:
+                 current = stack.pop()
+-                for child in self._graph.subjects(RDFS.subClassOf, URIRef(current)):
+-                    child_str = str(child)
+-                    if child_str not in visited:
+-                        visited.add(child_str)
+-                        stack.append(child_str)
+-            return list(visited)
++                for child in children_map.get(current, []):
++                    if child not in visited:
++                        visited.add(child)
++                        stack.append(child)
++            return sorted(visited)
+ 
+     def get_hierarchy(self) -> List[HierarchyNode]:
+-        """构建完整类层级树 (返回根节点列表)。"""
++        """构建完整类层级树 (返回根节点列表)。
++
++        循环父类防护：任一类若在自身祖先链上重复出现，则在该处截断，
++        不会无限递归（改造前的实现在 `root -> A -> B -> A` 这类结构下会 RecursionError）。
++        """
+         with self._lock:
+-            all_classes = set()
++            records = self._store.list_classes()
++            all_classes: Set[str] = set()
+             has_parent: Set[str] = set()
+             parent_map: Dict[str, List[str]] = {}
++            labels: Dict[str, str] = {}
+ 
+-            for subj in self._graph.subjects(RDF.type, OWL.Class):
+-                uri = str(subj)
++            for record in records:
++                uri = record.uri
++                labels[uri] = record.label
+                 all_classes.add(uri)
+-                parents = [str(o) for o in self._graph.objects(subj, RDFS.subClassOf)]
+-                if parents:
++                if record.parent_uris:
+                     has_parent.add(uri)
+-                    parent_map[uri] = parents
+-                    for p in parents:
++                    parent_map[uri] = list(record.parent_uris)
++                    for p in record.parent_uris:
+                         all_classes.add(p)  # 确保父类也在集合中
+ 
+-            # 构建 children map
+             children_map: Dict[str, List[str]] = {}
+             for uri, parents in parent_map.items():
+                 for p in parents:
+                     children_map.setdefault(p, []).append(uri)
+ 
+-            # 根节点 = 没有 parent 的类
+-            roots = [uri for uri in all_classes if uri not in has_parent]
++            roots = sorted(u for u in all_classes if u not in has_parent)
+ 
+-            def _build_node(uri: str) -> HierarchyNode:
+-                label = str(self._graph.value(URIRef(uri), RDFS.label, default=uri.split("#")[-1] or uri))
+-                children = children_map.get(uri, [])
++            def _build_node(uri: str, path: frozenset) -> HierarchyNode:
++                label = labels.get(uri) or self._default_label(uri)
++                if uri in path:  # 循环保护：祖先链上已出现过
++                    logger.warning("检测到循环父类继承, 在 %s 处截断", uri)
++                    return HierarchyNode(uri=uri, label=label, children=[])
++                next_path = path | {uri}
+                 return HierarchyNode(
+                     uri=uri,
+                     label=label,
+-                    children=[_build_node(c) for c in sorted(children)],
++                    children=[_build_node(c, next_path) for c in sorted(children_map.get(uri, []))],
+                 )
+ 
+-            return [_build_node(r) for r in sorted(roots)]
++            return [_build_node(r, frozenset()) for r in roots]
+ 
+     # ---- 文章标注 ----
+     def annotate_article(self, article_uri: str, class_uris: List[str]) -> None:
+         """为文章标注 OWL 类 (rdf:type)。"""
+         with self._lock:
+-            subj = URIRef(article_uri)
+-            for cls_uri in class_uris:
+-                self._graph.add((subj, RDF.type, URIRef(cls_uri)))
+-            logger.info("annotated article %s with %d classes", article_uri, len(class_uris))
++            self._store.upsert_annotation(article_uri, list(class_uris or []))
++            logger.info("annotated article %s with %d classes", article_uri, len(class_uris or []))
+ 
+     def get_article_classes(self, article_uri: str) -> List[str]:
+         """获取文章关联的所有 OWL 类 URI。"""
+         with self._lock:
+-            return [
+-                str(o) for o in self._graph.objects(URIRef(article_uri), RDF.type)
+-                if str(o) not in (str(OWL.Class), str(RDF.type))
+-            ]
++            record = self._store.get_annotation(article_uri)
++            return list(record.class_uris) if record else []
+ 
+     def get_articles_by_class(self, class_uri: str) -> List[str]:
+         """获取属于指定 OWL 类的所有文章 URI。"""
+         with self._lock:
+             return [
+-                str(s) for s in self._graph.subjects(RDF.type, URIRef(class_uri))
++                record.target_id
++                for record in self._store.list_annotations()
++                if class_uri in record.class_uris
+             ]
+ 
+     # ---- TTL 导入/导出 ----
+     def import_ttl(self, ttl_content: str) -> int:
+-        """从 TTL 字符串导入本体。返回新增三元组数。"""
++        """从 TTL 字符串导入本体。返回新增三元组数。
++
++        存储策略（评审 CR-01，B 案）：
++        - `ontology.ttl_content` 存**规范化后的全量原文**（集合并集语义），
++          `ontology_class` / `ontology_annotation` 只作为**查询索引**冗余抽取。
++        因此：
++        - 往返天然一致 —— 原文原样保存，空节点（`owl:Restriction` 等）结构不被拆散；
++        - 幂等 —— 重复导入同一内容是集合并集，`ttl_content` 不会增长；
++        - 索引只接受 `URIRef`，空节点不会退化成假 URI 落库。
++        """
+         with self._lock:
+-            before = len(self._graph)
++            parsed = Graph()
+             try:
+-                self._graph.parse(data=ttl_content, format="turtle")
++                parsed.parse(data=ttl_content, format="turtle")
+             except Exception as exc:
+                 raise ValueError(f"TTL 解析失败: {exc}") from exc
+-            after = len(self._graph)
+-            added = after - before
+-            logger.info("imported TTL: %d new triples (total=%d)", added, after)
++
++            # 导出的 `onto:wiki a owl:Ontology` 公理由引擎自动附加，不作为内容存储，
++            # 否则「导出 → 再导入」会被算成 1 条新增，破坏幂等。
++            parsed.remove((self._ontology_ns["wiki"], RDF.type, OWL.Ontology))
++
++            # 两侧都先规范化空节点标签，结构相同的子图才能获得相同标签并被集合语义合并
++            stored = _canonicalize(self._content_graph())
++            incoming = _canonicalize(parsed)
++            before = len(stored)
++            merged = stored + incoming
++            added = len(merged) - before
++
++            self._store.set_ttl_content(_serialize(merged, parsed))
++            self._reindex(merged)
++            logger.info("imported TTL: %d new triples (total=%d)", added, len(merged))
+             return added
+ 
+     def export_ttl(self) -> str:
+         """导出本体为 TTL 字符串。"""
+         with self._lock:
+-            return self._graph.serialize(format="turtle")
++            return self._build_graph().serialize(format="turtle")
+ 
+     # ---- 统计 ----
+     def stats(self) -> Dict[str, int]:
+         """返回本体统计信息。"""
+         with self._lock:
+-            class_count = sum(1 for _ in self._graph.subjects(RDF.type, OWL.Class))
++            graph = self._build_graph()
+             return {
+-                "total_triples": len(self._graph),
+-                "class_count": class_count,
++                "total_triples": len(graph),
++                "class_count": len(self._store.list_classes()),
+             }
++
++    # ---- 内部 ----
++    def _content_graph(self) -> "Graph":
++        """读取持久化的全量 TTL 原文（`ttl_content`）。"""
++        graph = Graph()
++        raw = (self._store.get_ttl_content() or "").strip()
++        if raw:
++            try:
++                graph.parse(data=raw, format="turtle")
++            except Exception:  # pragma: no cover - 存量脏数据兜底
++                logger.exception("本体存量 TTL 内容解析失败, 导出时已忽略")
++        return graph
++
++    def _build_graph(self) -> "Graph":
++        """重建 rdflib 图 = 基础公理 + 全量原文 + 索引中「原文没有」的增量。
++
++        索引（`ontology_class` / `ontology_annotation`）只是查询用的冗余抽取，
++        原文已完整表达的部分不再重复展开 —— 否则既会重复计数，
++        也会把原文的语言标记（如无 lang）和索引的 `@zh` 同时输出。
++        """
++        graph = Graph()
++        graph.bind("wiki", self._wiki_ns)
++        graph.bind("onto", self._ontology_ns)
++        # 注册基础 OWL 公理（与改造前一致）
++        graph.add((self._ontology_ns["wiki"], RDF.type, OWL.Ontology))
++
++        for triple in self._content_graph():
++            graph.add(triple)
++
++        for record in self._store.list_classes():
++            subj = URIRef(record.uri)
++            if (subj, RDF.type, OWL.Class) in graph:
++                continue  # 原文已完整表达该类（含其原有语言标记）
++            graph.add((subj, RDF.type, OWL.Class))
++            if record.label:
++                graph.add((subj, RDFS.label, Literal(record.label, lang="zh")))
++            if record.comment:
++                graph.add((subj, RDFS.comment, Literal(record.comment, lang="zh")))
++            for parent_uri in record.parent_uris:
++                graph.add((subj, RDFS.subClassOf, URIRef(parent_uri)))
++
++        for annotation in self._store.list_annotations():
++            subj = URIRef(annotation.target_id)
++            for class_uri in annotation.class_uris:
++                triple = (subj, RDF.type, URIRef(class_uri))
++                if triple in graph:
++                    continue  # 原文已有这条标注
++                graph.add(triple)
++        return graph
++
++    def _reindex(self, graph: "Graph") -> None:
++        """把图里的类与文章标注**冗余抽取**进索引表。
++
++        索引只接受 `URIRef`：空节点（`owl:Restriction` 等）没有稳定 URI，
++        落库会变成形如 `n38afbef…` 的假父类/假标注（评审 CR-01）。
++        """
++        class_uris: Set[str] = set()
++        for subj in graph.subjects(RDF.type, OWL.Class):
++            if not isinstance(subj, URIRef):
++                continue  # 空节点声明的类无法用 URI 索引
++            class_uris.add(str(subj))
++
++        for uri in sorted(class_uris):
++            subj = URIRef(uri)
++            label = graph.value(subj, RDFS.label)
++            comment = graph.value(subj, RDFS.comment)
++            parents = [
++                str(o) for o in graph.objects(subj, RDFS.subClassOf) if isinstance(o, URIRef)
++            ]
++            self._store.upsert_class(
++                uri,
++                label=str(label) if label is not None else "",
++                comment=str(comment) if comment is not None else "",
++                parent_uris=parents,
++            )
++
++        # 文章标注：<target> a <Class>（排除类自身声明与 RDF/RDFS/OWL 元词汇）
++        annotations: Dict[str, Set[str]] = {}
++        for subj, obj in graph.subject_objects(RDF.type):
++            if not isinstance(subj, URIRef) or not isinstance(obj, URIRef):
++                continue
++            if str(subj) in class_uris or _is_standard_vocabulary(str(obj)):
++                continue
++            annotations.setdefault(str(subj), set()).add(str(obj))
++
++        for target_id, uris in sorted(annotations.items()):
++            self._store.upsert_annotation(target_id, sorted(uris))
++
++    def _parent_map(self) -> Dict[str, List[str]]:
++        return {r.uri: list(r.parent_uris) for r in self._store.list_classes()}
++
++    def _children_map(self) -> Dict[str, List[str]]:
++        children: Dict[str, List[str]] = {}
++        for uri, parents in self._parent_map().items():
++            for p in parents:
++                children.setdefault(p, []).append(uri)
++        return children
++
++    @staticmethod
++    def _default_label(uri: str) -> str:
++        return uri.split("#")[-1] or uri
++
++    @staticmethod
++    def _to_owl_class(record: "ClassRecord") -> OwlClass:
++        return OwlClass(
++            uri=record.uri,
++            label=record.label,
++            comment=record.comment,
++            parent_uris=list(record.parent_uris),
++        )
+diff --git a/backend/app/db/init_models.py b/backend/app/db/init_models.py
+index 26e426c..8121498 100644
+--- a/backend/app/db/init_models.py
++++ b/backend/app/db/init_models.py
+@@ -42,11 +42,16 @@ from app.models.ai.ai_mcp_square_template import AiMcpSquareTemplate
+ from app.models.ai.ai_web_search import AiWebSearch, AiWebSearchLog          # noqa: F401
+ from app.models.ai.ai_skill_hub_repo import AiSkillHubRepo                   # noqa: F401
+ 
+ # --- 工作空间 (ai_) ---
+ from app.models.ai.ai_workspace import AiWorkspace                              # noqa: F401
+ 
+ # --- LLM-wiki ---
+ from app.models.wiki.wiki_article import WikiArticle                           # noqa: F401
+ from app.models.wiki.wiki_article_version import WikiArticleVersion             # noqa: F401
+ from app.models.wiki.wiki_category import WikiCategory                         # noqa: F401
++
++# --- 本体 (ontology_) ---
++from app.models.ontology.ontology import (                                     # noqa: F401
++    Ontology, OntologyClass, OntologyAnnotation,
++)
+ # fmt: on
+diff --git a/backend/app/models/ontology/__init__.py b/backend/app/models/ontology/__init__.py
+new file mode 100644
+index 0000000..cb09454
+--- /dev/null
++++ b/backend/app/models/ontology/__init__.py
+@@ -0,0 +1 @@
++"""本体（OWL）持久化模型包。"""
+diff --git a/backend/app/models/ontology/ontology.py b/backend/app/models/ontology/ontology.py
+new file mode 100644
+index 0000000..1d08504
+--- /dev/null
++++ b/backend/app/models/ontology/ontology.py
+@@ -0,0 +1,168 @@
++"""本体（OWL）持久化模型 —— ontology / ontology_class / ontology_annotation。
++
++背景
++----
++改造前 `WikiOwlEngine` 是「进程内 rdflib.Graph 内存单例」：重启丢数据，
++且所有租户共享同一份本体（数据串租户）。三张表把本体按租户落到数据库：
++
++* `ontology`            本体（租户内可有多份，按 code 唯一）
++* `ontology_class`      本体类（类 URI / 标签 / 父类 URI 列表）
++* `ontology_annotation` 目标对象（文章 / 片段 / 表 / 字段）到本体类的标注
++
++约定
++----
++* `Base` 来自 `app.db.database`；租户表继承 `TenantMixin`；
++* 状态用 `String(32)` + comment（不用 SAEnum，PG ENUM 后期变更困难）；
++* 表名单数、`__table_args__` 具名索引/约束、字段中文 comment；
++* `parent_uris` / `class_uris` 在 PostgreSQL 上落 JSONB，
++  其它方言（如 SQLite 测试库）退化为 JSON —— 不引入新依赖。
++"""
++from sqlalchemy import (
++    BigInteger,
++    Column,
++    ForeignKey,
++    Index,
++    Integer,
++    String,
++    TIMESTAMP,
++    Text,
++    UniqueConstraint,
++)
++from sqlalchemy.dialects.postgresql import JSONB
++from sqlalchemy.sql import func
++
++from app.db.database import Base
++from app.models.tenant_mixin import TenantMixin
++
++# 与 `WikiArticle.owl_class_uris` 等既有列保持一致：**直接**用 JSONB。
++# 不能用 `JSON().with_variant(JSONB, "postgresql")`：变体类型在表达式构建期
++# 按默认类型 `JSON` 选 comparator，`.contains()` 会退化成 `LIKE '%…%'`，
++# 在 PostgreSQL 上直接报 `invalid input syntax for type json`（评审 IM-03）。
++JsonList = JSONB
++
++
++class Ontology(Base, TenantMixin):
++    """本体表：一个租户下的本体定义（含原始 TTL 内容）。"""
++
++    __tablename__ = "ontology"
++
++    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
++    code = Column(String(100), nullable=False, comment="本体编码（租户内唯一，如 default）")
++    name = Column(String(200), nullable=True, comment="本体名称")
++    description = Column(Text, nullable=True, comment="本体描述")
++
++    namespace_uri = Column(String(500), nullable=True, comment="本体命名空间 URI")
++    version = Column(Integer, nullable=False, server_default="1", comment="本体版本号")
++
++    # draft=草稿 published=已发布 archived=已归档（不用 ENUM，便于后期扩展）
++    status = Column(String(32), nullable=False, server_default="draft", comment="状态: draft|published|archived")
++    # manual=手工建模 ttl_import=TTL 导入 build=系统构建
++    source = Column(String(32), nullable=False, server_default="manual", comment="来源: manual|ttl_import|build")
++
++    ttl_content = Column(Text, nullable=True, comment="TTL 原始内容（导入时非类/非标注的残余三元组）")
++
++    # 审计
++    creator_id = Column(BigInteger, nullable=True, comment="创建者 ID")
++    updater_id = Column(BigInteger, nullable=True, comment="最后更新者 ID")
++    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
++    updated_at = Column(
++        TIMESTAMP,
++        nullable=False,
++        server_default=func.now(),
++        onupdate=func.now(),
++        comment="更新时间",
++    )
++
++    __table_args__ = (
++        UniqueConstraint("tenant_id", "code", name="uq_ontology_code"),
++        Index("idx_ontology_tenant", "tenant_id"),
++        Index("idx_ontology_status", "status"),
++    )
++
++    def __repr__(self) -> str:
++        return f"<Ontology {self.code} v{self.version}>"
++
++
++class OntologyClass(Base, TenantMixin):
++    """本体类表：OWL Class 的持久化表示。"""
++
++    __tablename__ = "ontology_class"
++
++    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
++    ontology_id = Column(
++        BigInteger,
++        ForeignKey("ontology.id", ondelete="CASCADE"),
++        nullable=False,
++        comment="所属本体 ID",
++    )
++
++    uri = Column(String(1000), nullable=False, comment="类 URI")
++    label = Column(String(500), nullable=True, comment="中文标签")
++    comment = Column(Text, nullable=True, comment="类描述")
++    parent_uris = Column(JsonList, nullable=True, default=list, comment="父类 URI 列表")
++
++    # active=生效 deprecated=已废弃
++    status = Column(String(32), nullable=False, server_default="active", comment="状态: active|deprecated")
++    display_order = Column(Integer, nullable=False, server_default="0", comment="展示顺序")
++
++    # 审计
++    creator_id = Column(BigInteger, nullable=True, comment="创建者 ID")
++    updater_id = Column(BigInteger, nullable=True, comment="最后更新者 ID")
++    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
++    updated_at = Column(
++        TIMESTAMP,
++        nullable=False,
++        server_default=func.now(),
++        onupdate=func.now(),
++        comment="更新时间",
++    )
++
++    __table_args__ = (
++        UniqueConstraint("ontology_id", "uri", name="uq_ontology_class"),
++        Index("idx_ontology_class_ontology", "ontology_id"),
++        Index("idx_ontology_class_status", "status"),
++    )
++
++    def __repr__(self) -> str:
++        return f"<OntologyClass {self.uri}>"
++
++
++class OntologyAnnotation(Base, TenantMixin):
++    """本体标注表：目标对象（文章 / 片段 / 表 / 字段）↔ 本体类 的关联。"""
++
++    __tablename__ = "ontology_annotation"
++
++    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
++    ontology_id = Column(
++        BigInteger,
++        ForeignKey("ontology.id", ondelete="CASCADE"),
++        nullable=False,
++        comment="所属本体 ID",
++    )
++
++    # article=文章 segment=片段 table=数据表 column=字段
++    target_type = Column(String(32), nullable=False, server_default="article", comment="目标类型: article|segment|table|column")
++    # 各类目标主键类型不一致（bigint / uuid / uri），统一以字符串存储
++    target_id = Column(String(500), nullable=False, comment="目标对象 ID（字符串化）")
++    class_uris = Column(JsonList, nullable=True, default=list, comment="关联的本体类 URI 列表")
++
++    # 审计
++    creator_id = Column(BigInteger, nullable=True, comment="创建者 ID")
++    updater_id = Column(BigInteger, nullable=True, comment="最后更新者 ID")
++    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
++    updated_at = Column(
++        TIMESTAMP,
++        nullable=False,
++        server_default=func.now(),
++        onupdate=func.now(),
++        comment="更新时间",
++    )
++
++    __table_args__ = (
++        UniqueConstraint("ontology_id", "target_type", "target_id", name="uq_ontology_annotation"),
++        Index("idx_ontology_annotation_target", "target_type", "target_id"),
++        Index("idx_ontology_annotation_ontology", "ontology_id"),
++    )
++
++    def __repr__(self) -> str:
++        return f"<OntologyAnnotation {self.target_type}:{self.target_id}>"
+diff --git a/backend/app/routers/wiki/wiki_owl.py b/backend/app/routers/wiki/wiki_owl.py
+index 7d0a3aa..2e34b46 100644
+--- a/backend/app/routers/wiki/wiki_owl.py
++++ b/backend/app/routers/wiki/wiki_owl.py
+@@ -1,161 +1,214 @@
+ """Wiki OWL 本体管理 API 路由。
+ 
+ 端点:
+ - POST /wiki/owl/classes       注册 OWL Class
+ - GET  /wiki/owl/classes       列出所有 OWL Class
+ - GET  /wiki/owl/hierarchy     获取类层级树
+ - POST /wiki/owl/import-ttl    导入 TTL 本体文件
+ - GET  /wiki/owl/export-ttl    导出 TTL
+ - GET  /wiki/owl/stats         本体统计
+ - GET  /wiki/owl/articles/{class_uri}  按 OWL 类查询文章
++
++租户隔离
++--------
++改造前 `get_owl_engine()` 返回**进程级单例**，本体既重启即丢又跨租户共享。
++现按当前登录用户的 `tenant_id` 构造引擎，本体持久化到 `ontology*` 三张表。
+ """
+ from __future__ import annotations
+ 
+ import logging
+-from typing import List
++from typing import TYPE_CHECKING, List, Optional
+ 
+ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+ from pydantic import BaseModel, Field
+ from sqlalchemy import select
++from sqlalchemy.exc import SQLAlchemyError
+ from sqlalchemy.orm import Session
+ 
+ from app.deps import get_db, get_current_user
+ from app.models.sys.sys_user import SysUser
+ from app.models.wiki.wiki_article import WikiArticle
+ 
++if TYPE_CHECKING:  # 仅类型提示，避免运行时循环导入
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++
+ logger = logging.getLogger(__name__)
+ 
+ router = APIRouter(prefix="/wiki/owl", tags=["Wiki OWL 本体"])
+ 
+ 
+ # ── Schemas ──────────────────────────────────────────────────────────────────
+ 
+ class OwlClassCreateRequest(BaseModel):
+     uri: str = Field(..., description="OWL Class URI")
+     label: str = Field("", description="中文标签")
+     comment: str = Field("", description="描述")
+     parent_uris: List[str] = Field(default_factory=list, description="父类 URI 列表")
+ 
+ 
+-# ── 全局 OWL 引擎单例 ────────────────────────────────────────────────────────
++# ── 按租户构造引擎 ───────────────────────────────────────────────────────────
++
++def get_owl_engine(
++    tenant_id: Optional[int],
++    db: Session,
++    *,
++    auto_commit: bool = True,
++) -> "WikiOwlEngine":
++    """按租户构造 WikiOwlEngine（持久化后端，不再使用全局单例）。
++
++    :param auto_commit: 仓储是否自行提交。批量写（TTL 导入）传 `False`，
++        由路由在一个显式事务里收口，失败整体回滚（评审 IM-05）。
++    """
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    return WikiOwlEngine.from_store(
++        OntologyRepository(db, tenant_id, auto_commit=auto_commit)
++    )
+ 
+-_owl_engine = None
+ 
++def _tenant_id_of(current_user: SysUser) -> Optional[int]:
++    """取当前用户租户 ID。
+ 
+-def get_owl_engine():
+-    """获取全局 WikiOwlEngine 单例。"""
+-    global _owl_engine
+-    if _owl_engine is None:
+-        from app.ai.knowledge.owl_engine import WikiOwlEngine
+-        _owl_engine = WikiOwlEngine()
+-    return _owl_engine
++    未设置时返回 `None`（仓储按 NULL 分区处理）。该情况下**所有无租户用户共享同一份本体**，
++    与改造前的「全局单例」等价 —— 不静默带过，打 WARN 便于在日志中定位（评审 IM-07）。
++    """
++    tenant_id = getattr(current_user, "tenant_id", None)
++    if tenant_id is None:
++        logger.warning(
++            "当前用户缺少 tenant_id，本体读写将落在 NULL 租户分区："
++            "该分区在所有无租户用户（含 API Key 场景）之间共享，存在跨租户可见风险"
++        )
++    return tenant_id
+ 
+ 
+ # ── OWL Class CRUD ───────────────────────────────────────────────────────────
+ 
+ @router.post("/classes")
+ def create_class(
+     body: OwlClassCreateRequest,
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+     """注册一个 OWL Class。"""
+-    engine = get_owl_engine()
+-    owl_class = engine.register_class(
+-        uri=body.uri,
+-        label=body.label,
+-        comment=body.comment,
+-        parent_uris=body.parent_uris,
+-    )
++    engine = get_owl_engine(_tenant_id_of(current_user), db)
++    try:
++        owl_class = engine.register_class(
++            uri=body.uri,
++            label=body.label,
++            comment=body.comment,
++            parent_uris=body.parent_uris,
++        )
++        db.commit()
++    except (ValueError, SQLAlchemyError) as exc:
++        db.rollback()
++        logger.warning("注册 OWL Class 失败，已回滚: %s", exc)
++        raise HTTPException(status_code=400, detail=str(exc))
+     return owl_class.to_dict()
+ 
+ 
+ @router.get("/classes")
+ def list_classes(
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+-    """列出所有已注册 OWL Class。"""
+-    engine = get_owl_engine()
++    """列出当前租户的所有 OWL Class。"""
++    engine = get_owl_engine(_tenant_id_of(current_user), db)
+     return [c.to_dict() for c in engine.list_classes()]
+ 
+ 
+ @router.get("/hierarchy")
+ def get_hierarchy(
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+-    """获取 OWL 类层级树。"""
+-    engine = get_owl_engine()
++    """获取当前租户的 OWL 类层级树。"""
++    engine = get_owl_engine(_tenant_id_of(current_user), db)
+     return [node.to_dict() for node in engine.get_hierarchy()]
+ 
+ 
+ # ── TTL 导入/导出 ─────────────────────────────────────────────────────────────
+ 
+ @router.post("/import-ttl")
+ async def import_ttl(
+     file: UploadFile = File(...),
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+     """导入 TTL 本体文件。"""
+     content = await file.read()
+     try:
+         ttl_str = content.decode("utf-8")
+     except UnicodeDecodeError:
+         raise HTTPException(status_code=400, detail="TTL 文件必须为 UTF-8 编码")
+ 
+-    engine = get_owl_engine()
++    # auto_commit=False：整个导入在同一个事务里完成，失败整体回滚，
++    # 不会留下「导入了一半的本体」（评审 IM-05）。
++    engine = get_owl_engine(_tenant_id_of(current_user), db, auto_commit=False)
+     try:
+         added = engine.import_ttl(ttl_str)
+-    except ValueError as exc:
+-        raise HTTPException(status_code=400, detail=str(exc))
++        db.commit()
++    except (ValueError, SQLAlchemyError) as exc:
++        db.rollback()
++        # SQLAlchemy 的 DataError / IntegrityError 不属于 ValueError，
++        # 只捕获 ValueError 会让超长 URI 之类的错误直接冒泡成 500。
++        logger.warning("TTL 导入失败，已回滚: %s", exc)
++        raise HTTPException(status_code=400, detail=f"TTL 导入失败: {exc}")
+ 
+     return {"message": f"导入成功, 新增 {added} 条三元组", "added": added}
+ 
+ 
+ @router.get("/export-ttl")
+ def export_ttl(
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+-    """导出本体为 TTL 格式。"""
+-    engine = get_owl_engine()
++    """导出当前租户本体为 TTL 格式。"""
++    engine = get_owl_engine(_tenant_id_of(current_user), db)
+     ttl = engine.export_ttl()
+     from fastapi.responses import PlainTextResponse
+     return PlainTextResponse(
+         content=ttl,
+         media_type="text/turtle",
+         headers={"Content-Disposition": "attachment; filename=wiki-ontology.ttl"},
+     )
+ 
+ 
+ # ── 统计 ─────────────────────────────────────────────────────────────────────
+ 
+ @router.get("/stats")
+ def get_stats(
++    db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+-    """获取本体统计信息。"""
+-    engine = get_owl_engine()
++    """获取当前租户的本体统计信息。"""
++    engine = get_owl_engine(_tenant_id_of(current_user), db)
+     return engine.stats()
+ 
+ 
+ # ── 按 OWL 类查询文章 ────────────────────────────────────────────────────────
+ 
+ @router.get("/articles/{class_uri:path}")
+ def get_articles_by_class(
+     class_uri: str,
+     db: Session = Depends(get_db),
+     current_user: SysUser = Depends(get_current_user),
+ ):
+     """获取属于指定 OWL 类的所有文章。"""
+-    # 使用 JSONB 包含查询
++    tenant_id = _tenant_id_of(current_user)
++    # 使用 JSONB 包含查询（`@>`）；租户过滤在端点内**显式**声明，
++    # 不依赖全局 do_orm_execute 拦截器（后者在 tenant_id 为空/超管时会跳过过滤）。
+     articles = db.execute(
+         select(WikiArticle)
+         .where(WikiArticle.status >= 0)
++        .where(WikiArticle.tenant_id == tenant_id)
+         .where(WikiArticle.owl_class_uris.contains([class_uri]))
+         .order_by(WikiArticle.updated_at.desc())
+     ).scalars().all()
+ 
+     return {
+         "class_uri": class_uri,
+         "total": len(articles),
+         "items": [
+             {
+                 "id": a.id,
+diff --git a/backend/app/services/ontology/__init__.py b/backend/app/services/ontology/__init__.py
+new file mode 100644
+index 0000000..2110094
+--- /dev/null
++++ b/backend/app/services/ontology/__init__.py
+@@ -0,0 +1 @@
++"""本体领域服务包。"""
+diff --git a/backend/app/services/ontology/ontology_repository.py b/backend/app/services/ontology/ontology_repository.py
+new file mode 100644
+index 0000000..8643629
+--- /dev/null
++++ b/backend/app/services/ontology/ontology_repository.py
+@@ -0,0 +1,574 @@
++"""本体持久化仓储 —— `WikiOwlEngine` 的存储后端。
++
++职责
++----
++* 以 `tenant_id` 为边界读写 `ontology` / `ontology_class` / `ontology_annotation`；
++* 对外暴露一组与 rdflib 无关的「记录」对象，供 `WikiOwlEngine` 组装 OWL 语义；
++* 写操作立即 `commit`：`app.db.database.get_db()` 在会话存在待写入对象时
++  **不会**自动提交（见其 `if not db.new ...` 判断），故持久化由仓储显式保证。
++
++写操作语义（与改造前 rdflib 图操作对齐）
++----------------------------------------
++* `upsert_class(parent_uris=...)` 默认与已有父类**取并集**（旧实现是 graph.add）；
++* `label` / `comment` 为空字符串时不覆盖已有值（旧实现是 `if label: graph.set(...)`）。
++"""
++from __future__ import annotations
++
++import logging
++from dataclasses import dataclass, field
++from typing import Dict, List, Optional
++
++from sqlalchemy import select
++from sqlalchemy.exc import IntegrityError
++from sqlalchemy.orm import Session
++
++from app.models.ontology.ontology import Ontology, OntologyAnnotation, OntologyClass
++
++logger = logging.getLogger(__name__)
++
++DEFAULT_ONTOLOGY_CODE = "default"
++"""默认本体编码：一个租户一份"默认本体"，与改造前「一份进程级本体」等价。"""
++
++# 与模型列宽一致（`ontology_class.uri` String(1000)、`ontology_annotation.target_id` String(500)）。
++# 超长值必须在入库前拦掉：否则 PostgreSQL 抛 DataError，路由层会把一个
++# 本应是 400 的客户端错误报成 500（评审 IM-05）。
++MAX_URI_LENGTH = 1000
++MAX_TARGET_ID_LENGTH = 500
++
++
++def _validate_uri(uri: str) -> None:
++    if len(uri) > MAX_URI_LENGTH:
++        raise ValueError(f"URI 长度 {len(uri)} 超过上限 {MAX_URI_LENGTH}")
++
++
++def _validate_target_id(target_id: str) -> None:
++    if len(target_id) > MAX_TARGET_ID_LENGTH:
++        raise ValueError(
++            f"标注目标 ID 长度 {len(target_id)} 超过上限 {MAX_TARGET_ID_LENGTH}"
++        )
++
++
++@dataclass
++class ClassRecord:
++    """本体类记录（持久化行 → 引擎可用的对象）。"""
++
++    uri: str
++    label: str = ""
++    comment: str = ""
++    parent_uris: List[str] = field(default_factory=list)
++    status: str = "active"
++
++
++@dataclass
++class AnnotationRecord:
++    """本体标注记录。"""
++
++    target_type: str
++    target_id: str
++    class_uris: List[str] = field(default_factory=list)
++
++
++class OntologyRepository:
++    """按租户隔离的本体仓储。
++
++    用法:
++        repo = OntologyRepository(db, tenant_id)
++        engine = WikiOwlEngine.from_store(repo)
++    """
++
++    def __init__(
++        self,
++        db: Session,
++        tenant_id: Optional[int],
++        code: str = DEFAULT_ONTOLOGY_CODE,
++        *,
++        auto_commit: bool = True,
++    ) -> None:
++        if db is None:
++            raise ValueError("OntologyRepository 需要数据库会话")
++        if tenant_id is None:
++            # 评审 IM-07：无租户用户会落到 NULL 分区（与改造前「全局共享」等价），
++            # 这里不静默处理，打 WARN 便于在日志中发现并定位到具体请求。
++            logger.warning(
++                "OntologyRepository 的 tenant_id 为 None：本次读写落在 NULL 租户分区，"
++                "本体在**所有无租户用户之间共享**（与改造前的进程级单例缺陷等价）。"
++            )
++        self._db = db
++        self._tenant_id = tenant_id
++        self._code = code
++        # auto_commit=False：由调用方（如 TTL 导入）在一个显式事务里收口，
++        # 避免一次请求产生 N 次提交、中途失败留下部分导入（评审 IM-05）。
++        self._auto_commit = auto_commit
++        self._ontology_id: Optional[int] = None
++
++    # ── 本体行 ───────────────────────────────────────────────────────────────
++    @property
++    def tenant_id(self) -> Optional[int]:
++        return self._tenant_id
++
++    @property
++    def code(self) -> str:
++        return self._code
++
++    def get_or_create_ontology(self) -> Ontology:
++        """获取当前租户的本体行，不存在则创建（幂等）。"""
++        if self._ontology_id is not None:
++            cached = self._db.get(Ontology, self._ontology_id)
++            if cached is not None:
++                return cached
++
++        stmt = select(Ontology).where(
++            Ontology.tenant_id == self._tenant_id,
++            Ontology.code == self._code,
++        )
++        ontology = self._db.execute(stmt).scalar_one_or_none()
++        if ontology is not None:
++            self._ontology_id = ontology.id
++            return ontology
++
++        ontology = Ontology(
++            tenant_id=self._tenant_id,
++            code=self._code,
++            name=self._code,
++            status="draft",
++            source="manual",
++            version=1,
++        )
++        try:
++            with self._db.begin_nested():  # savepoint：并发创建失败时回滚到此处
++                self._db.add(ontology)
++                self._db.flush()
++        except IntegrityError:
++            # 并发下已被其它请求创建，重新读取
++            ontology = self._db.execute(stmt).scalar_one_or_none()
++            if ontology is None:  # pragma: no cover - 理论上不可达
++                raise
++        self._ontology_id = ontology.id
++        return ontology
++
++    def get_ontology_id(self) -> int:
++        return self.get_or_create_ontology().id
++
++    # ── 类读写 ───────────────────────────────────────────────────────────────
++    def list_classes(self) -> List[ClassRecord]:
++        """列出当前租户本体的全部类（按 URI 排序，保证输出稳定）。"""
++        stmt = (
++            select(OntologyClass)
++            .where(
++                OntologyClass.tenant_id == self._tenant_id,
++                OntologyClass.ontology_id == self.get_ontology_id(),
++            )
++            .order_by(OntologyClass.uri)
++        )
++        return [self._to_class_record(row) for row in self._db.execute(stmt).scalars()]
++
++    def get_class(self, uri: str) -> Optional[ClassRecord]:
++        """按 URI 取单个类，不存在返回 None。"""
++        stmt = select(OntologyClass).where(
++            OntologyClass.tenant_id == self._tenant_id,
++            OntologyClass.ontology_id == self.get_ontology_id(),
++            OntologyClass.uri == uri,
++        )
++        row = self._db.execute(stmt).scalar_one_or_none()
++        return self._to_class_record(row) if row else None
++
++    def upsert_class(
++        self,
++        uri: str,
++        *,
++        label: str = "",
++        comment: str = "",
++        parent_uris: Optional[List[str]] = None,
++        merge_parents: bool = True,
++    ) -> ClassRecord:
++        """新增或更新类（幂等）。"""
++        _validate_uri(uri)
++        for parent in parent_uris or []:
++            _validate_uri(parent)
++        ontology_id = self.get_ontology_id()
++        stmt = select(OntologyClass).where(
++            OntologyClass.tenant_id == self._tenant_id,
++            OntologyClass.ontology_id == ontology_id,
++            OntologyClass.uri == uri,
++        )
++        row = self._db.execute(stmt).scalar_one_or_none()
++
++        parents = [p for p in (parent_uris or []) if p]
++        if row is None:
++            row = OntologyClass(
++                tenant_id=self._tenant_id,
++                ontology_id=ontology_id,
++                uri=uri,
++                label=label or "",
++                comment=comment or "",
++                parent_uris=list(parents),
++                status="active",
++                display_order=0,
++            )
++            self._db.add(row)
++        else:
++            if label:
++                row.label = label
++            if comment:
++                row.comment = comment
++            if merge_parents:
++                merged = list(row.parent_uris or [])
++                for p in parents:
++                    if p not in merged:
++                        merged.append(p)
++                row.parent_uris = merged
++            elif parents:
++                row.parent_uris = list(parents)
++        self._commit()
++        return self._to_class_record(row)
++
++    def delete_class(self, uri: str) -> bool:
++        """删除类，返回是否真实删除。"""
++        if not self._delete_class_rows(uri, self.get_ontology_id()):
++            return False
++        self._commit()
++        return True
++
++    def remove_parent_reference(self, uri: str) -> int:
++        """把 `uri` 从其它类的 `parent_uris` 中摘除（对齐旧实现的宾语侧清理）。
++
++        :return: 被修改的类数量
++        """
++        changed = self._remove_parent_reference_rows(uri, self.get_ontology_id())
++        if changed:
++            self._commit()
++        return changed
++
++    def remove_class_reference(self, uri: str) -> int:
++        """把 `uri` 从 `ontology_annotation.class_uris` 中摘除。
++
++        对齐改造前 `unregister_class` 的语义：旧实现会删除所有
++        `<target> a <uri>` 三元组，类删除后不应残留指向它的标注（评审 IM-04）。
++
++        :return: 被修改的标注数量
++        """
++        changed = self._remove_class_reference_rows(uri, self.get_ontology_id())
++        if changed:
++            self._commit()
++        return changed
++
++    def unregister(self, uri: str) -> bool:
++        """原子地注销一个类：删类 + 摘父类引用 + 摘标注引用，**只提交一次**。
++
++        拆成三次独立提交时，中途失败会留下「类已删、标注还在」的中间态。
++        """
++        ontology_id = self.get_ontology_id()
++        if not self._delete_class_rows(uri, ontology_id):
++            return False
++        self._remove_parent_reference_rows(uri, ontology_id)
++        self._remove_class_reference_rows(uri, ontology_id)
++        self._commit()
++        return True
++
++    def _delete_class_rows(self, uri: str, ontology_id: int) -> bool:
++        stmt = select(OntologyClass).where(
++            OntologyClass.tenant_id == self._tenant_id,
++            OntologyClass.ontology_id == ontology_id,
++            OntologyClass.uri == uri,
++        )
++        row = self._db.execute(stmt).scalar_one_or_none()
++        if row is None:
++            return False
++        self._db.delete(row)
++        return True
++
++    def _remove_parent_reference_rows(self, uri: str, ontology_id: int) -> int:
++        changed = 0
++        stmt = select(OntologyClass).where(
++            OntologyClass.tenant_id == self._tenant_id,
++            OntologyClass.ontology_id == ontology_id,
++        )
++        for row in self._db.execute(stmt).scalars():
++            parents = list(row.parent_uris or [])
++            if uri not in parents:
++                continue
++            row.parent_uris = [p for p in parents if p != uri]
++            changed += 1
++        return changed
++
++    def _remove_class_reference_rows(self, uri: str, ontology_id: int) -> int:
++        changed = 0
++        stmt = select(OntologyAnnotation).where(
++            OntologyAnnotation.tenant_id == self._tenant_id,
++            OntologyAnnotation.ontology_id == ontology_id,
++        )
++        for row in self._db.execute(stmt).scalars():
++            uris = list(row.class_uris or [])
++            if uri not in uris:
++                continue
++            row.class_uris = [u for u in uris if u != uri]
++            changed += 1
++        return changed
++
++    # ── TTL 原始内容 ─────────────────────────────────────────────────────────
++    def get_ttl_content(self) -> str:
++        """取本体的原始 TTL 内容（类与标注之外的残余三元组）。"""
++        return self.get_or_create_ontology().ttl_content or ""
++
++    def append_ttl_content(self, ttl_fragment: str) -> None:
++        """追加 TTL 片段（空片段忽略）。"""
++        fragment = (ttl_fragment or "").strip()
++        if not fragment:
++            return
++        ontology = self.get_or_create_ontology()
++        existing = (ontology.ttl_content or "").strip()
++        ontology.ttl_content = f"{existing}\n\n{fragment}" if existing else fragment
++        self._commit()
++
++    def set_ttl_content(self, ttl_content: str) -> None:
++        """整体覆盖 TTL 内容。"""
++        ontology = self.get_or_create_ontology()
++        ontology.ttl_content = ttl_content or ""
++        self._commit()
++
++    # ── 标注读写 ─────────────────────────────────────────────────────────────
++    def list_annotations(self) -> List[AnnotationRecord]:
++        """列出当前租户本体的全部标注。"""
++        stmt = select(OntologyAnnotation).where(
++            OntologyAnnotation.tenant_id == self._tenant_id,
++            OntologyAnnotation.ontology_id == self.get_ontology_id(),
++        )
++        return [
++            AnnotationRecord(
++                target_type=row.target_type,
++                target_id=row.target_id,
++                class_uris=list(row.class_uris or []),
++            )
++            for row in self._db.execute(stmt).scalars()
++        ]
++
++    def get_annotation(
++        self, target_id: str, target_type: str = "article"
++    ) -> Optional[AnnotationRecord]:
++        stmt = select(OntologyAnnotation).where(
++            OntologyAnnotation.tenant_id == self._tenant_id,
++            OntologyAnnotation.ontology_id == self.get_ontology_id(),
++            OntologyAnnotation.target_type == target_type,
++            OntologyAnnotation.target_id == target_id,
++        )
++        row = self._db.execute(stmt).scalar_one_or_none()
++        if row is None:
++            return None
++        return AnnotationRecord(
++            target_type=row.target_type,
++            target_id=row.target_id,
++            class_uris=list(row.class_uris or []),
++        )
++
++    def upsert_annotation(
++        self,
++        target_id: str,
++        class_uris: List[str],
++        target_type: str = "article",
++        *,
++        merge: bool = True,
++    ) -> AnnotationRecord:
++        """新增或更新标注（幂等）。"""
++        _validate_target_id(target_id)
++        for class_uri in class_uris or []:
++            _validate_uri(class_uri)
++        ontology_id = self.get_ontology_id()
++        stmt = select(OntologyAnnotation).where(
++            OntologyAnnotation.tenant_id == self._tenant_id,
++            OntologyAnnotation.ontology_id == ontology_id,
++            OntologyAnnotation.target_type == target_type,
++            OntologyAnnotation.target_id == target_id,
++        )
++        row = self._db.execute(stmt).scalar_one_or_none()
++        uris = [u for u in (class_uris or []) if u]
++        if row is None:
++            row = OntologyAnnotation(
++                tenant_id=self._tenant_id,
++                ontology_id=ontology_id,
++                target_type=target_type,
++                target_id=target_id,
++                class_uris=list(uris),
++            )
++            self._db.add(row)
++        else:
++            merged = list(row.class_uris or [])
++            for u in uris:
++                if u not in merged:
++                    merged.append(u)
++            row.class_uris = merged if merge else list(uris)
++        self._commit()
++        return AnnotationRecord(
++            target_type=row.target_type,
++            target_id=row.target_id,
++            class_uris=list(row.class_uris or []),
++        )
++
++    # ── 内部 ─────────────────────────────────────────────────────────────────
++    def _commit(self) -> None:
++        """提交（或仅 flush）。
++
++        `auto_commit=False` 时只 `flush()`：写操作进入当前事务但不落盘，
++        由调用方统一 `commit()` / `rollback()`，保证一次导入的原子性。
++        """
++        if not self._auto_commit:
++            self._db.flush()
++            return
++        try:
++            self._db.commit()
++        except Exception:
++            self._db.rollback()
++            logger.exception("本体写入失败，已回滚")
++            raise
++
++    @staticmethod
++    def _to_class_record(row: OntologyClass) -> ClassRecord:
++        return ClassRecord(
++            uri=row.uri,
++            label=row.label or "",
++            comment=row.comment or "",
++            parent_uris=list(row.parent_uris or []),
++            status=row.status or "active",
++        )
++
++
++class InMemoryOntologyStore:
++    """内存版仓储（与改造前 `rdflib.Graph` 等价的后端）。
++
++    仅用于离线脚本/单测：写入不落库，进程重启即丢。
++    `WikiOwlEngine` 未显式传入 store 时使用它，并打印 warning。
++    """
++
++    def __init__(self, tenant_id: Optional[int] = None, code: str = DEFAULT_ONTOLOGY_CODE) -> None:
++        self.tenant_id = tenant_id
++        self.code = code
++        self._classes: Dict[str, ClassRecord] = {}
++        self._annotations: Dict[str, AnnotationRecord] = {}
++        self._ttl_content: str = ""
++
++    def list_classes(self) -> List[ClassRecord]:
++        return [self._clone_class(c) for c in sorted(self._classes.values(), key=lambda r: r.uri)]
++
++    def get_class(self, uri: str) -> Optional[ClassRecord]:
++        record = self._classes.get(uri)
++        return self._clone_class(record) if record else None
++
++    def upsert_class(
++        self,
++        uri: str,
++        *,
++        label: str = "",
++        comment: str = "",
++        parent_uris: Optional[List[str]] = None,
++        merge_parents: bool = True,
++    ) -> ClassRecord:
++        parents = [p for p in (parent_uris or []) if p]
++        record = self._classes.get(uri)
++        if record is None:
++            record = ClassRecord(uri=uri, label=label or "", comment=comment or "", parent_uris=list(parents))
++            self._classes[uri] = record
++            return self._clone_class(record)
++        if label:
++            record.label = label
++        if comment:
++            record.comment = comment
++        if merge_parents:
++            for p in parents:
++                if p not in record.parent_uris:
++                    record.parent_uris.append(p)
++        elif parents:
++            record.parent_uris = list(parents)
++        return self._clone_class(record)
++
++    def delete_class(self, uri: str) -> bool:
++        return self._classes.pop(uri, None) is not None
++
++    def remove_parent_reference(self, uri: str) -> int:
++        return self._remove_parent_reference_rows(uri)
++
++    def remove_class_reference(self, uri: str) -> int:
++        """把 `uri` 从所有标注的 `class_uris` 中摘除（与 `OntologyRepository` 对齐）。"""
++        changed = 0
++        for record in self._annotations.values():
++            if uri in record.class_uris:
++                record.class_uris = [u for u in record.class_uris if u != uri]
++                changed += 1
++        return changed
++
++    def unregister(self, uri: str) -> bool:
++        """原子地注销一个类：删类 + 摘父类引用 + 摘标注引用。"""
++        if self._classes.pop(uri, None) is None:
++            return False
++        self._remove_parent_reference_rows(uri)
++        self.remove_class_reference(uri)
++        return True
++
++    def _remove_parent_reference_rows(self, uri: str) -> int:
++        changed = 0
++        for record in self._classes.values():
++            if uri in record.parent_uris:
++                record.parent_uris = [p for p in record.parent_uris if p != uri]
++                changed += 1
++        return changed
++
++    def get_ttl_content(self) -> str:
++        return self._ttl_content
++
++    def append_ttl_content(self, ttl_fragment: str) -> None:
++        fragment = (ttl_fragment or "").strip()
++        if not fragment:
++            return
++        self._ttl_content = f"{self._ttl_content}\n\n{fragment}" if self._ttl_content.strip() else fragment
++
++    def set_ttl_content(self, ttl_content: str) -> None:
++        self._ttl_content = ttl_content or ""
++
++    def list_annotations(self) -> List[AnnotationRecord]:
++        return [
++            AnnotationRecord(a.target_type, a.target_id, list(a.class_uris))
++            for a in self._annotations.values()
++        ]
++
++    def get_annotation(
++        self, target_id: str, target_type: str = "article"
++    ) -> Optional[AnnotationRecord]:
++        record = self._annotations.get(self._key(target_type, target_id))
++        if record is None:
++            return None
++        return AnnotationRecord(record.target_type, record.target_id, list(record.class_uris))
++
++    def upsert_annotation(
++        self,
++        target_id: str,
++        class_uris: List[str],
++        target_type: str = "article",
++        *,
++        merge: bool = True,
++    ) -> AnnotationRecord:
++        key = self._key(target_type, target_id)
++        record = self._annotations.get(key)
++        uris = [u for u in (class_uris or []) if u]
++        if record is None:
++            record = AnnotationRecord(target_type=target_type, target_id=target_id, class_uris=list(uris))
++            self._annotations[key] = record
++            return record
++        if merge:
++            for u in uris:
++                if u not in record.class_uris:
++                    record.class_uris.append(u)
++        else:
++            record.class_uris = list(uris)
++        return record
++
++    @staticmethod
++    def _key(target_type: str, target_id: str) -> str:
++        return f"{target_type}::{target_id}"
++
++    @staticmethod
++    def _clone_class(record: ClassRecord) -> ClassRecord:
++        return ClassRecord(
++            uri=record.uri,
++            label=record.label,
++            comment=record.comment,
++            parent_uris=list(record.parent_uris),
++            status=record.status,
++        )
+diff --git a/backend/tests/ontology/__init__.py b/backend/tests/ontology/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/tests/ontology/conftest.py b/backend/tests/ontology/conftest.py
+new file mode 100644
+index 0000000..0d3e635
+--- /dev/null
++++ b/backend/tests/ontology/conftest.py
+@@ -0,0 +1,294 @@
++"""tests/ontology 测试基础设施。
++
++数据库
++------
++默认连接 **PostgreSQL**（独立测试库 `minworkbuddy_test`），与生产方言一致：
++
++* 测试库不存在时自动创建（连到 `postgres` 维护库执行 `CREATE DATABASE`）；
++* 库内创建 `vector` 扩展（`wiki_article.content_vector` 是 pgvector 列）；
++* 每个用例一个**独立 schema**（`t_<uuid>`），用例结束 `DROP SCHEMA ... CASCADE`，
++  用例之间完全隔离；
++* 「重启不丢」通过在同一 schema 上**再建一个 engine + session**（全新连接）来模拟，
++  而不是复用同一个 engine；
++* 只建测试需要的表（ontology 三张表 + wiki_article + sys_user），不做整库 create_all。
++
++连接串来自 `app.config.settings`（DB_HOST/DB_PORT/DB_USER/DB_PASSWORD），
++只把库名换成 `minworkbuddy_test`；也可用环境变量整体覆盖：
++
++    MINWORKBUDDY_TEST_DB_URL=postgresql+psycopg2://user:pwd@host:5432/minworkbuddy_test
++"""
++from __future__ import annotations
++
++import logging
++import uuid
++from pathlib import Path
++from typing import Iterator, List
++
++import pytest
++from fastapi import FastAPI
++from fastapi.testclient import TestClient
++from sqlalchemy import BigInteger, create_engine, event, text
++from sqlalchemy.dialects.postgresql import JSONB
++from sqlalchemy.engine import Engine, make_url
++from sqlalchemy.engine.url import URL
++from sqlalchemy.ext.compiler import compiles
++from sqlalchemy.orm import Session, sessionmaker
++
++from app.db.database import Base
++from app.deps import get_current_user, get_db
++from app.models.sys.sys_user import SysUser
++from app.models.wiki.wiki_article import WikiArticle
++
++TENANT_A = 100
++TENANT_B = 200
++
++TEST_DB_NAME = "minworkbuddy_test"
++"""独立测试库名：与开发库 `minworkbuddy` 分开，避免测试 DDL/DML 污染开发数据。"""
++
++
++# 测试环境降噪：应用启动配置把 sqlalchemy 提到了 DEBUG/INFO，会淹没 pytest 输出
++logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
++
++
++def _test_db_url() -> str:
++    """解析测试库连接串（默认 PostgreSQL；可用环境变量覆盖）。"""
++    import os
++
++    override = os.getenv("MINWORKBUDDY_TEST_DB_URL")
++    if override:
++        return override
++
++    from urllib.parse import quote_plus
++
++    from app.config import settings
++
++    password = quote_plus(settings.DB_PASSWORD)
++    return (
++        f"postgresql+psycopg2://{settings.DB_USER}:{password}"
++        f"@{settings.DB_HOST}:{settings.DB_PORT}/{TEST_DB_NAME}"
++    )
++
++
++TEST_DB_URL = _test_db_url()
++IS_POSTGRES = make_url(TEST_DB_URL).get_backend_name() == "postgresql"
++
++
++@compiles(JSONB, "sqlite")
++def _compile_jsonb_for_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN202
++    """让 JSONB 列能在 SQLite 上建表（仅 `MINWORKBUDDY_TEST_DB_URL` 指向 SQLite 时生效）。
++
++    PostgreSQL 是验收数据库，这里只是方言兜底，不改变生产行为。
++    """
++    return "JSON"
++
++
++@compiles(BigInteger, "sqlite")
++def _compile_biginteger_for_sqlite(type_, compiler, **kw):  # noqa: ANN001, ANN202
++    """让 BigInteger 主键在 SQLite 上具备自增能力（同上，仅方言兜底）。"""
++    return "INTEGER"
++
++
++# ── 需要建表的模型 ────────────────────────────────────────────────────────────
++def _tables() -> List:
++    """测试需要创建的表。"""
++    from app.models.ontology.ontology import (
++        Ontology,
++        OntologyAnnotation,
++        OntologyClass,
++    )
++
++    return [
++        SysUser.__table__,
++        WikiArticle.__table__,
++        Ontology.__table__,
++        OntologyClass.__table__,
++        OntologyAnnotation.__table__,
++    ]
++
++
++# ── PostgreSQL 测试库引导 ─────────────────────────────────────────────────────
++def _maintenance_url() -> URL:
++    """维护库（postgres）连接串：`CREATE DATABASE` 不能在该库自身上执行。"""
++    return make_url(TEST_DB_URL).set(database="postgres")
++
++
++@pytest.fixture(scope="session")
++def _test_database() -> Iterator[None]:
++    """确保测试库存在且 pgvector 扩展可用（仅 PostgreSQL 分支执行）。"""
++    if not IS_POSTGRES:
++        yield
++        return
++
++    maint = create_engine(_maintenance_url(), isolation_level="AUTOCOMMIT")
++    try:
++        with maint.connect() as conn:
++            exists = conn.execute(
++                text("SELECT 1 FROM pg_database WHERE datname = :name"),
++                {"name": TEST_DB_NAME},
++            ).scalar()
++            if not exists:
++                conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
++    finally:
++        maint.dispose()
++
++    bootstrap = create_engine(TEST_DB_URL, isolation_level="AUTOCOMMIT")
++    try:
++        with bootstrap.connect() as conn:
++            # wiki_article.content_vector 需要 pgvector；缺扩展时建表会直接失败
++            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
++    finally:
++        bootstrap.dispose()
++    yield
++
++
++def _admin_engine() -> Engine:
++    """用于建/删 schema 的 engine（不绑定具体 schema）。"""
++    return create_engine(TEST_DB_URL)
++
++
++# ── 每个用例一个独立 schema / 文件库 ──────────────────────────────────────────
++@pytest.fixture
++def schema_name() -> str:
++    """PostgreSQL 隔离单元：schema 名。"""
++    return f"t_{uuid.uuid4().hex[:12]}"
++
++
++@pytest.fixture
++def db_path(tmp_path: Path) -> Path:
++    """SQLite 兜底时的临时文件库路径（PG 模式下不使用）。"""
++    return tmp_path / "ontology_test.db"
++
++
++@pytest.fixture
++def db_target(schema_name: str, db_path: Path, _test_database: None) -> Iterator[str]:
++    """测试库「目标」：PG 为 schema 名，SQLite 为文件库路径。
++
++    PostgreSQL 下负责 schema 的建/删；engine 与建表由 `engine` fixture 完成，
++    因此只依赖 `db_target`（自行建 engine 的「重启」用例）也能拿到干净 schema。
++    """
++    target = schema_name if IS_POSTGRES else db_path.as_posix()
++    if IS_POSTGRES:
++        admin = _admin_engine()
++        with admin.begin() as conn:
++            conn.execute(text(f'CREATE SCHEMA "{target}"'))
++        admin.dispose()
++    try:
++        yield target
++    finally:
++        if IS_POSTGRES:
++            admin = _admin_engine()
++            try:
++                with admin.begin() as conn:
++                    conn.execute(text(f'DROP SCHEMA IF EXISTS "{target}" CASCADE'))
++            finally:
++                admin.dispose()
++
++
++def engine_for(target: str, *, create_tables: bool = False) -> Engine:
++    """为同一个 target 再建一个 engine。
++
++    用于模拟「进程重启」：新 engine ⇒ 新连接池 ⇒ 新连接，
++    数据必须来自数据库而不是任何进程内缓存。
++
++    :param create_tables: 顺带建表（`create_all` 幂等，重复调用安全）
++    """
++    if IS_POSTGRES:
++        eng = create_engine(TEST_DB_URL)
++        _bind_schema(eng, target)
++    else:
++        eng = create_engine(f"sqlite:///{target}")
++    if create_tables:
++        Base.metadata.create_all(eng, tables=_tables())
++    return eng
++
++
++def _bind_schema(eng: Engine, schema: str) -> None:
++    """把 engine 的所有连接固定到指定 schema（含 public，供 pgvector 类型解析）。"""
++
++    @event.listens_for(eng, "connect")
++    def _set_search_path(dbapi_conn, _record):  # noqa: ANN001, ANN202
++        with dbapi_conn.cursor() as cursor:
++            cursor.execute(f'SET search_path TO "{schema}", public')
++
++
++def open_session(eng: Engine) -> Session:
++    """在指定 engine 上开一个会话（与 `db` fixture 同参数）。"""
++    factory = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False)
++    return factory()
++
++
++@pytest.fixture
++def engine(db_target: str) -> Iterator[Engine]:
++    """测试库 engine（每个用例一个独立 schema / 文件库）。"""
++    eng = engine_for(db_target)
++    Base.metadata.create_all(eng, tables=_tables())
++    try:
++        yield eng
++    finally:
++        eng.dispose()
++
++
++@pytest.fixture
++def db(engine: Engine) -> Iterator[Session]:
++    """测试库会话。"""
++    session = open_session(engine)
++    try:
++        yield session
++    finally:
++        session.close()
++
++
++def _fake_user(tenant_id: int) -> SysUser:
++    """构造一个未落库的 SysUser，仅用于依赖覆盖。"""
++    user = SysUser()
++    user.user_id = abs(tenant_id) + 1
++    user.username = f"user-{tenant_id}"
++    user.status = "active"
++    user.is_admin = False
++    user.tenant_id = tenant_id
++    return user
++
++
++def build_client(db: Session, tenant_id: int) -> TestClient:
++    """构造一个只挂载 /api/v1/wiki/owl 路由的测试客户端。"""
++    app = FastAPI()
++    app.include_router(
++        __import__("app.routers.wiki.wiki_owl", fromlist=["router"]).router,
++        prefix="/api/v1",
++    )
++
++    def _override_db() -> Iterator[Session]:
++        yield db
++
++    def _override_user() -> SysUser:
++        return _fake_user(tenant_id)
++
++    app.dependency_overrides[get_db] = _override_db
++    app.dependency_overrides[get_current_user] = _override_user
++    return TestClient(app)
++
++
++@pytest.fixture
++def client_a(db: Session) -> TestClient:
++    """租户 A 的客户端。"""
++    return build_client(db, TENANT_A)
++
++
++@pytest.fixture
++def client_b(db: Session) -> TestClient:
++    """租户 B 的客户端。"""
++    return build_client(db, TENANT_B)
++
++
++@pytest.fixture(autouse=True)
++def _reset_legacy_singleton():
++    """清掉遗留的进程级单例（改造前存在，改造后该属性消失）。
++
++    改造前：`wiki_owl._owl_engine` 是全局变量，不清会导致用例之间互相污染；
++    改造后：该属性不存在，此 fixture 为空操作。
++    """
++    from app.routers.wiki import wiki_owl
++
++    setattr(wiki_owl, "_owl_engine", None)
++    yield
++    setattr(wiki_owl, "_owl_engine", None)
+diff --git a/backend/tests/ontology/test_api_regression.py b/backend/tests/ontology/test_api_regression.py
+new file mode 100644
+index 0000000..61b6ca4
+--- /dev/null
++++ b/backend/tests/ontology/test_api_regression.py
+@@ -0,0 +1,411 @@
++"""`/api/v1/wiki/owl/*` 全量端点回归测试。
++
++`WikiOwlEngine` 由内存单例改为按租户持久化属于**行为变更**，
++因此本文件把改造前各端点的对外契约固化下来：
++改造前后都必须全绿（改造前先跑一遍作为基线）。
++"""
++from __future__ import annotations
++
++from typing import List, Optional
++
++from fastapi.testclient import TestClient
++from sqlalchemy.orm import Session
++
++from app.models.wiki.wiki_article import WikiArticle
++
++from .conftest import TENANT_A, TENANT_B, build_client
++
++SAMPLE_TTL = """
++@prefix owl: <http://www.w3.org/2002/07/owl#> .
++@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
++@prefix ex: <http://example.org/ontology#> .
++
++ex:Risk a owl:Class ;
++    rdfs:label "风险" ;
++    rdfs:comment "风险描述" .
++
++ex:OperationalRisk a owl:Class ;
++    rdfs:label "操作风险" ;
++    rdfs:subClassOf ex:Risk .
++"""
++
++
++# ── POST /classes + GET /classes ─────────────────────────────────────────────
++
++def test_create_and_list_classes_contract(client_a: TestClient) -> None:
++    """注册类 → 返回 4 字段；列表接口返回同构数组。"""
++    payload = {
++        "uri": "http://example.org/ontology#Risk",
++        "label": "风险",
++        "comment": "风险描述",
++        "parent_uris": [],
++    }
++    resp = client_a.post("/api/v1/wiki/owl/classes", json=payload)
++    assert resp.status_code == 200, resp.text
++    body = resp.json()
++    assert set(body) == {"uri", "label", "comment", "parent_uris"}
++    assert body == {
++        "uri": "http://example.org/ontology#Risk",
++        "label": "风险",
++        "comment": "风险描述",
++        "parent_uris": [],
++    }
++
++    listed = client_a.get("/api/v1/wiki/owl/classes")
++    assert listed.status_code == 200, listed.text
++    assert listed.json() == [body]
++
++
++def test_create_class_with_parents_contract(client_a: TestClient) -> None:
++    """带父类注册时 parent_uris 原样回显。"""
++    client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": "http://example.org/ontology#Root", "label": "根"},
++    )
++    resp = client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={
++            "uri": "http://example.org/ontology#Child",
++            "label": "子",
++            "parent_uris": ["http://example.org/ontology#Root"],
++        },
++    )
++    assert resp.status_code == 200, resp.text
++    assert resp.json()["parent_uris"] == ["http://example.org/ontology#Root"]
++
++
++def test_register_same_uri_twice_is_idempotent(client_a: TestClient) -> None:
++    """重复注册同一 URI：只有一条记录，字段以最后一次为准。"""
++    uri = "http://example.org/ontology#Dup"
++    client_a.post("/api/v1/wiki/owl/classes", json={"uri": uri, "label": "旧"})
++    client_a.post("/api/v1/wiki/owl/classes", json={"uri": uri, "label": "新"})
++
++    listed = client_a.get("/api/v1/wiki/owl/classes").json()
++    assert len(listed) == 1
++    assert listed[0]["uri"] == uri
++    assert listed[0]["label"] == "新"
++
++
++def test_list_classes_empty_by_default(client_a: TestClient) -> None:
++    """未注册任何类时列表为空数组（不是 null / 对象）。"""
++    assert client_a.get("/api/v1/wiki/owl/classes").json() == []
++
++
++# ── GET /hierarchy ───────────────────────────────────────────────────────────
++
++def test_hierarchy_contract(client_a: TestClient) -> None:
++    """层级树：返回根节点数组，节点为 {uri, label, children}。"""
++    client_a.post(
++        "/api/v1/wiki/owl/classes", json={"uri": "http://example.org/ontology#Root", "label": "根"}
++    )
++    client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={
++            "uri": "http://example.org/ontology#Child",
++            "label": "子",
++            "parent_uris": ["http://example.org/ontology#Root"],
++        },
++    )
++    client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={
++            "uri": "http://example.org/ontology#GrandChild",
++            "label": "孙",
++            "parent_uris": ["http://example.org/ontology#Child"],
++        },
++    )
++
++    resp = client_a.get("/api/v1/wiki/owl/hierarchy")
++    assert resp.status_code == 200, resp.text
++    tree = resp.json()
++    assert len(tree) == 1
++    root = tree[0]
++    assert set(root) == {"uri", "label", "children"}
++    assert root["uri"] == "http://example.org/ontology#Root"
++    assert root["label"] == "根"
++    assert len(root["children"]) == 1
++    child = root["children"][0]
++    assert child["uri"] == "http://example.org/ontology#Child"
++    assert child["label"] == "子"
++    assert [c["uri"] for c in child["children"]] == [
++        "http://example.org/ontology#GrandChild"
++    ]
++
++
++def test_hierarchy_empty_by_default(client_a: TestClient) -> None:
++    assert client_a.get("/api/v1/wiki/owl/hierarchy").json() == []
++
++
++# ── POST /import-ttl ─────────────────────────────────────────────────────────
++
++def test_import_ttl_contract(client_a: TestClient) -> None:
++    """导入成功返回 {message, added}，且导入的类可被列表接口查到。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("ontology.ttl", SAMPLE_TTL.encode("utf-8"), "text/turtle")},
++    )
++    assert resp.status_code == 200, resp.text
++    body = resp.json()
++    assert set(body) == {"message", "added"}
++    assert body["message"].startswith("导入成功, 新增 ")
++    assert isinstance(body["added"], int)
++    assert body["added"] > 0
++
++    uris = {c["uri"] for c in client_a.get("/api/v1/wiki/owl/classes").json()}
++    assert "http://example.org/ontology#Risk" in uris
++    assert "http://example.org/ontology#OperationalRisk" in uris
++
++
++def test_import_invalid_ttl_returns_400(client_a: TestClient) -> None:
++    """非法 TTL 返回 400，detail 含「TTL 解析失败」。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("bad.ttl", b"this is not turtle @@@ {{{", "text/turtle")},
++    )
++    assert resp.status_code == 400, resp.text
++    assert "TTL 解析失败" in resp.json()["detail"]
++
++
++def test_import_non_utf8_returns_400(client_a: TestClient) -> None:
++    """非 UTF-8 文件返回 400，detail 为固定文案。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("bad.ttl", b"\xff\xfe\x00\x01", "application/octet-stream")},
++    )
++    assert resp.status_code == 400, resp.text
++    assert resp.json()["detail"] == "TTL 文件必须为 UTF-8 编码"
++
++
++# ── GET /export-ttl ──────────────────────────────────────────────────────────
++
++def test_export_ttl_contract(client_a: TestClient) -> None:
++    """导出返回 text/turtle 附件，内容含已注册类的 URI。"""
++    client_a.post(
++        "/api/v1/wiki/owl/classes", json={"uri": "http://example.org/ontology#Risk", "label": "风险"}
++    )
++
++    resp = client_a.get("/api/v1/wiki/owl/export-ttl")
++    assert resp.status_code == 200, resp.text
++    assert resp.headers["content-type"].startswith("text/turtle")
++    assert resp.headers["content-disposition"] == (
++        "attachment; filename=wiki-ontology.ttl"
++    )
++    assert "http://example.org/ontology#Risk" in resp.text
++
++
++def test_export_ttl_label_uses_zh_lang_tag(client_a: TestClient) -> None:
++    """导出的标签带 `@zh` 语言标记（与改造前 register_class 的写入方式一致）。
++
++    已知偏差：TTL 导入的标签若原文带其它语言标记（如 @en），
++    持久化后只保留文本，导出统一为 @zh（模型未设计语言列）。
++    """
++    client_a.post(
++        "/api/v1/wiki/owl/classes", json={"uri": "http://example.org/ontology#Risk", "label": "风险"}
++    )
++    ttl = client_a.get("/api/v1/wiki/owl/export-ttl").text
++    assert '"风险"@zh' in ttl
++
++
++def test_export_ttl_empty_by_default(client_a: TestClient) -> None:
++    """空本体导出仍返回合法（可解析）的 TTL。"""
++    resp = client_a.get("/api/v1/wiki/owl/export-ttl")
++    assert resp.status_code == 200, resp.text
++    from rdflib import Graph
++
++    graph = Graph()
++    graph.parse(data=resp.text, format="turtle")  # 能解析即合法
++
++
++# ── GET /stats ───────────────────────────────────────────────────────────────
++
++def test_stats_contract(client_a: TestClient) -> None:
++    """统计返回 total_triples / class_count 两个整型。"""
++    empty = client_a.get("/api/v1/wiki/owl/stats").json()
++    assert set(empty) == {"total_triples", "class_count"}
++    assert empty["class_count"] == 0
++
++    client_a.post(
++        "/api/v1/wiki/owl/classes", json={"uri": "http://example.org/ontology#A", "label": "A"}
++    )
++    client_a.post(
++        "/api/v1/wiki/owl/classes", json={"uri": "http://example.org/ontology#B", "label": "B"}
++    )
++    filled = client_a.get("/api/v1/wiki/owl/stats").json()
++    assert set(filled) == {"total_triples", "class_count"}
++    assert filled["class_count"] == 2
++    assert isinstance(filled["total_triples"], int)
++    assert filled["total_triples"] >= filled["class_count"]
++
++
++# ── GET /articles/{class_uri} ────────────────────────────────────────────────
++
++RISK_URI = "http://example.org/ontology/Risk"
++
++
++def _make_article(
++    db: Session,
++    slug: str,
++    tenant_id: int,
++    class_uris: Optional[List[str]],
++    status: int = 1,
++) -> WikiArticle:
++    """在**真实数据库**里插一篇文章（不用桩）。"""
++    article = WikiArticle(
++        slug=slug,
++        title=f"标题-{slug}",
++        summary="摘要",
++        content="正文",
++        status=status,
++        tenant_id=tenant_id,
++        owl_class_uris=class_uris,
++        version=2,
++    )
++    db.add(article)
++    db.commit()
++    return article
++
++
++def test_articles_by_class_endpoint_contract(db: Session) -> None:
++    """按 OWL 类查询文章：返回 {class_uri, total, items:[{...}]}。
++
++    走**真实 SQL**（PostgreSQL JSONB `@>`），不再用桩会话 ——
++    否则 SQL 写错、`contains` 语义反转都测不出来（评审 IM-02）。
++    """
++    article = _make_article(db, "risk-management", TENANT_A, [RISK_URI])
++    _make_article(db, "unrelated", TENANT_A, ["http://example.org/ontology/Other"])
++
++    client = build_client(db, TENANT_A)
++    resp = client.get(f"/api/v1/wiki/owl/articles/{RISK_URI}")
++    assert resp.status_code == 200, resp.text
++    body = resp.json()
++    assert set(body) == {"class_uri", "total", "items"}
++    assert body["class_uri"] == RISK_URI
++    assert body["total"] == 1
++    assert body["items"][0]["id"] == article.id
++    assert body["items"][0]["slug"] == "risk-management"
++    assert body["items"][0]["title"] == "标题-risk-management"
++    assert body["items"][0]["summary"] == "摘要"
++    assert body["items"][0]["version"] == 2
++
++
++def test_articles_by_class_endpoint_is_tenant_scoped(db: Session) -> None:
++    """同 URI 的文章在别的租户下**不可见**：端点自己带 tenant_id 过滤，不依赖全局拦截器。"""
++    _make_article(db, "tenant-a-risk", TENANT_A, [RISK_URI])
++    _make_article(db, "tenant-b-risk", TENANT_B, [RISK_URI])
++
++    resp_a = build_client(db, TENANT_A).get(f"/api/v1/wiki/owl/articles/{RISK_URI}")
++    assert resp_a.status_code == 200, resp_a.text
++    assert [i["slug"] for i in resp_a.json()["items"]] == ["tenant-a-risk"]
++
++    resp_b = build_client(db, TENANT_B).get(f"/api/v1/wiki/owl/articles/{RISK_URI}")
++    assert resp_b.status_code == 200, resp_b.text
++    assert [i["slug"] for i in resp_b.json()["items"]] == ["tenant-b-risk"]
++
++
++def test_articles_by_class_endpoint_empty(db: Session) -> None:
++    """无匹配文章时 total=0、items=[]（真实库，不是空桩）。"""
++    _make_article(db, "draft-or-other", TENANT_A, ["http://example.org/ontology/Other"])
++
++    client = build_client(db, TENANT_A)
++    resp = client.get("/api/v1/wiki/owl/articles/http://example.org/ontology/None")
++    assert resp.status_code == 200, resp.text
++    assert resp.json() == {
++        "class_uri": "http://example.org/ontology/None",
++        "total": 0,
++        "items": [],
++    }
++
++
++def test_articles_by_class_endpoint_filters_by_containment(db: Session) -> None:
++    """`owl_class_uris` 是数组：只匹配**包含**该类的文章，不是子串匹配。"""
++    _make_article(db, "has-both", TENANT_A, [RISK_URI, "http://example.org/ontology/Other"])
++    _make_article(db, "has-prefix-only", TENANT_A, [RISK_URI + "Sub"])
++
++    resp = build_client(db, TENANT_A).get(f"/api/v1/wiki/owl/articles/{RISK_URI}")
++    assert resp.status_code == 200, resp.text
++    assert [i["slug"] for i in resp.json()["items"]] == ["has-both"]
++
++
++# ── 错误处理与事务边界（IM-05）──────────────────────────────────────────────
++
++def _ttl_with_class_uri(uri: str) -> str:
++    return f"""
++@prefix owl: <http://www.w3.org/2002/07/owl#> .
++@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
++
++<{uri}> a owl:Class ;
++    rdfs:label "超长" .
++"""
++
++
++def test_register_class_with_oversized_uri_returns_400(client_a: TestClient) -> None:
++    """超长 URI 必须返回 400（客户端错误），不能因 PG DataError 冒泡成 500。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": "http://example.org/ontology#" + "A" * 2000, "label": "超长"},
++    )
++    assert resp.status_code == 400, resp.text
++    assert "超过上限" in resp.json()["detail"]
++
++
++def test_failed_import_returns_400_not_500(client_a: TestClient) -> None:
++    """导入触发数据库错误时返回 400，而不是 500。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={
++            "file": (
++                "big.ttl",
++                _ttl_with_class_uri("http://example.org/ontology#" + "B" * 2000).encode("utf-8"),
++                "text/turtle",
++            )
++        },
++    )
++    assert resp.status_code == 400, resp.text
++
++
++def test_failed_import_leaves_no_partial_data(client_a: TestClient) -> None:
++    """导入失败整体回滚：不会留下「导入了一半」的本体（导入是单事务）。"""
++    ok = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("ontology.ttl", SAMPLE_TTL.encode("utf-8"), "text/turtle")},
++    )
++    assert ok.status_code == 200, ok.text
++    before = {c["uri"] for c in client_a.get("/api/v1/wiki/owl/classes").json()}
++    assert before == {
++        "http://example.org/ontology#Risk",
++        "http://example.org/ontology#OperationalRisk",
++    }
++
++    failed = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={
++            "file": (
++                "big.ttl",
++                _ttl_with_class_uri("http://example.org/ontology#" + "C" * 2000).encode("utf-8"),
++                "text/turtle",
++            )
++        },
++    )
++    assert failed.status_code == 400, failed.text
++
++    after = {c["uri"] for c in client_a.get("/api/v1/wiki/owl/classes").json()}
++    assert after == before, "失败的导入必须整体回滚，不能残留部分数据"
++
++
++# ── 端点清单（防漏测）────────────────────────────────────────────────────────
++
++def test_all_owl_endpoints_are_covered(client_a: TestClient) -> None:
++    """路由表里所有 /wiki/owl 路径都在本文件中有对应用例。"""
++    paths = {
++        route.path
++        for route in client_a.app.routes  # type: ignore[attr-defined]
++        if getattr(route, "path", "").startswith("/api/v1/wiki/owl")
++    }
++    assert paths == {
++        "/api/v1/wiki/owl/classes",
++        "/api/v1/wiki/owl/hierarchy",
++        "/api/v1/wiki/owl/import-ttl",
++        "/api/v1/wiki/owl/export-ttl",
++        "/api/v1/wiki/owl/stats",
++        "/api/v1/wiki/owl/articles/{class_uri:path}",
++    }, paths
+diff --git a/backend/tests/ontology/test_hierarchy.py b/backend/tests/ontology/test_hierarchy.py
+new file mode 100644
+index 0000000..7ce5e34
+--- /dev/null
++++ b/backend/tests/ontology/test_hierarchy.py
+@@ -0,0 +1,184 @@
++"""类层级查询与循环父类防护测试。
++
++要求：
++- `get_ancestors` / `get_descendants` / `get_hierarchy` 结果正确；
++- **存在循环父类时不死循环**（改造前的 `get_hierarchy` 会在
++  `root -> A -> B -> A` 这类结构下无限递归直至 RecursionError）。
++"""
++from __future__ import annotations
++
++from typing import List
++
++from fastapi.testclient import TestClient
++from sqlalchemy.orm import Session
++
++from app.ai.knowledge.owl_engine import HierarchyNode, WikiOwlEngine
++from app.services.ontology.ontology_repository import OntologyRepository
++
++NS = "http://example.org/ontology#"
++ROOT = NS + "Root"
++CHILD = NS + "Child"
++GRAND = NS + "GrandChild"
++
++
++def _engine(db: Session, tenant_id: int = 700) -> WikiOwlEngine:
++    return WikiOwlEngine.from_store(OntologyRepository(db, tenant_id))
++
++
++def _find(nodes: List[HierarchyNode], uri: str):
++    for node in nodes:
++        if node.uri == uri:
++            return node
++        found = _find(node.children, uri)
++        if found is not None:
++            return found
++    return None
++
++
++def _build_chain(engine: WikiOwlEngine) -> None:
++    engine.register_class(ROOT, label="根")
++    engine.register_class(CHILD, label="子", parent_uris=[ROOT])
++    engine.register_class(GRAND, label="孙", parent_uris=[CHILD])
++
++
++# ── 基本层级查询 ─────────────────────────────────────────────────────────────
++
++def test_ancestors_returns_all_levels(db: Session) -> None:
++    engine = _engine(db)
++    _build_chain(engine)
++    assert engine.get_ancestors(GRAND) == [CHILD, ROOT]
++    assert engine.get_ancestors(CHILD) == [ROOT]
++    assert engine.get_ancestors(ROOT) == []
++
++
++def test_descendants_returns_all_levels(db: Session) -> None:
++    engine = _engine(db)
++    _build_chain(engine)
++    assert engine.get_descendants(ROOT) == [CHILD, GRAND]
++    assert engine.get_descendants(CHILD) == [GRAND]
++    assert engine.get_descendants(GRAND) == []
++
++
++def test_hierarchy_shape(db: Session) -> None:
++    engine = _engine(db)
++    _build_chain(engine)
++    tree = engine.get_hierarchy()
++    assert len(tree) == 1
++    assert tree[0].uri == ROOT
++    assert [c.uri for c in tree[0].children] == [CHILD]
++    assert [c.uri for c in tree[0].children[0].children] == [GRAND]
++    assert _find(tree, GRAND).label == "孙"
++
++
++def test_hierarchy_includes_unregistered_parent(db: Session) -> None:
++    """父类未单独注册时也作为节点出现（与改造前一致）。"""
++    engine = _engine(db)
++    engine.register_class(CHILD, label="子", parent_uris=[NS + "ExternalParent"])
++
++    tree = engine.get_hierarchy()
++    assert [n.uri for n in tree] == [NS + "ExternalParent"]
++    assert tree[0].label == "ExternalParent"  # 无标签时回退为 URI 末段
++    assert [c.uri for c in tree[0].children] == [CHILD]
++
++
++def test_unregister_clears_parent_references(db: Session) -> None:
++    """删除父类后，子类的 parent_uris 不再指向它（不产生悬挂引用）。"""
++    engine = _engine(db)
++    _build_chain(engine)
++    assert engine.unregister_class(CHILD) is True
++
++    assert engine.get_class(CHILD) is None
++    assert engine.get_class(GRAND).parent_uris == []
++    # CHILD 被删除后，GRAND 与 ROOT 都成为根节点（与改造前 rdflib 行为一致）
++    assert {n.uri for n in engine.get_hierarchy()} == {ROOT, GRAND}
++
++
++# ── 循环父类防护 ─────────────────────────────────────────────────────────────
++
++def test_ancestors_terminates_on_cycle(db: Session) -> None:
++    """A -> B -> A：祖先查询不死循环。"""
++    engine = _engine(db)
++    engine.register_class(NS + "A", label="A", parent_uris=[NS + "B"])
++    engine.register_class(NS + "B", label="B", parent_uris=[NS + "A"])
++
++    result = engine.get_ancestors(NS + "A")
++    assert set(result) == {NS + "A", NS + "B"}
++
++
++def test_descendants_terminates_on_cycle(db: Session) -> None:
++    """A -> B -> A：后代查询不死循环。"""
++    engine = _engine(db)
++    engine.register_class(NS + "A", label="A", parent_uris=[NS + "B"])
++    engine.register_class(NS + "B", label="B", parent_uris=[NS + "A"])
++
++    result = engine.get_descendants(NS + "A")
++    assert set(result) == {NS + "A", NS + "B"}
++
++
++def test_hierarchy_terminates_on_cycle_between_roots(db: Session) -> None:
++    """A -> B -> A：二者互为父子，无根节点，层级树为空且能正常返回。"""
++    engine = _engine(db)
++    engine.register_class(NS + "A", label="A", parent_uris=[NS + "B"])
++    engine.register_class(NS + "B", label="B", parent_uris=[NS + "A"])
++
++    assert engine.get_hierarchy() == []
++
++
++def test_hierarchy_terminates_on_cycle_under_root(db: Session) -> None:
++    """Root -> A -> B -> A：循环挂在根节点之下，必须在 A 处截断而不是无限递归。"""
++    engine = _engine(db)
++    engine.register_class(ROOT, label="根")
++    engine.register_class(NS + "A", label="A", parent_uris=[ROOT, NS + "B"])
++    engine.register_class(NS + "B", label="B", parent_uris=[NS + "A"])
++
++    tree = engine.get_hierarchy()
++    assert [n.uri for n in tree] == [ROOT]
++    node_a = tree[0].children[0]
++    assert node_a.uri == NS + "A"
++    # B 展开后指向 A，A 已在祖先链上 → 截断为空 children
++    node_b = node_a.children[0]
++    assert node_b.uri == NS + "B"
++    assert node_b.children[0].uri == NS + "A"
++    assert node_b.children[0].children == []
++
++
++def test_hierarchy_terminates_on_self_parent(db: Session) -> None:
++    """自环：A -> A。"""
++    engine = _engine(db)
++    engine.register_class(NS + "A", label="A", parent_uris=[NS + "A"])
++
++    assert engine.get_ancestors(NS + "A") == [NS + "A"]
++    assert engine.get_hierarchy() == []
++
++
++def test_hierarchy_cycle_survives_persistence(engine, db: Session) -> None:
++    """循环结构落库后，新引擎实例读取时同样不死循环。"""
++    from .conftest import open_session
++
++    eng = _engine(db)
++    eng.register_class(NS + "A", label="A", parent_uris=[NS + "B"])
++    eng.register_class(NS + "B", label="B", parent_uris=[NS + "A"])
++
++    other = open_session(engine)
++    try:
++        reloaded = _engine(other)
++        assert reloaded.get_hierarchy() == []
++        assert set(reloaded.get_ancestors(NS + "A")) == {NS + "A", NS + "B"}
++    finally:
++        other.close()
++
++
++def test_api_hierarchy_with_cycle_returns_200(client_a: TestClient) -> None:
++    """API 层：循环父类时 /hierarchy 仍能 200 返回（不会打挂请求）。"""
++    assert client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": NS + "A", "label": "A", "parent_uris": [NS + "B"]},
++    ).status_code == 200
++    assert client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": NS + "B", "label": "B", "parent_uris": [NS + "A"]},
++    ).status_code == 200
++
++    resp = client_a.get("/api/v1/wiki/owl/hierarchy")
++    assert resp.status_code == 200, resp.text
++    assert resp.json() == []
+diff --git a/backend/tests/ontology/test_persistence.py b/backend/tests/ontology/test_persistence.py
+new file mode 100644
+index 0000000..d75232b
+--- /dev/null
++++ b/backend/tests/ontology/test_persistence.py
+@@ -0,0 +1,204 @@
++"""本体持久化与租户隔离测试。
++
++TDD 说明
++--------
++本文件第一条用例 `test_tenant_b_cannot_see_tenant_a_classes` 是**先写的失败测试**：
++改造前 `get_owl_engine()` 返回进程级单例，租户 B 能看到租户 A 注册的类，
++该用例在改造前必须失败（用于暴露「跨租户可见」缺陷）。
++"""
++from __future__ import annotations
++
++import pytest
++from fastapi.testclient import TestClient
++
++
++# ── 1. 租户隔离（缺陷暴露用例）────────────────────────────────────────────────
++
++def test_tenant_b_cannot_see_tenant_a_classes(
++    client_a: TestClient, client_b: TestClient
++) -> None:
++    """租户 A 注册一个 OWL 类后，租户 B 的列表必须为空。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": "http://example.org/ontology#Risk", "label": "风险"},
++    )
++    assert resp.status_code == 200, resp.text
++    assert resp.json()["uri"] == "http://example.org/ontology#Risk"
++
++    resp_b = client_b.get("/api/v1/wiki/owl/classes")
++    assert resp_b.status_code == 200, resp_b.text
++    assert resp_b.json() == [], "租户 B 不应看到租户 A 的本体类"
++
++
++def test_tenant_a_cannot_see_tenant_b_classes(
++    client_a: TestClient, client_b: TestClient
++) -> None:
++    """反向隔离：租户 B 注册的类对租户 A 同样不可见。"""
++    resp = client_b.post(
++        "/api/v1/wiki/owl/classes",
++        json={"uri": "http://example.org/ontology#Control", "label": "控制措施"},
++    )
++    assert resp.status_code == 200, resp.text
++
++    resp_a = client_a.get("/api/v1/wiki/owl/classes")
++    assert resp_a.status_code == 200, resp_a.text
++    assert resp_a.json() == [], "租户 A 不应看到租户 B 的本体类"
++
++
++def test_same_tenant_sees_own_classes(client_a: TestClient) -> None:
++    """同租户内注册的类可见（隔离不能做成全空）。"""
++    for uri, label in [
++        ("http://example.org/ontology#Risk", "风险"),
++        ("http://example.org/ontology#Control", "控制措施"),
++    ]:
++        resp = client_a.post(
++            "/api/v1/wiki/owl/classes", json={"uri": uri, "label": label}
++        )
++        assert resp.status_code == 200, resp.text
++
++    listed = client_a.get("/api/v1/wiki/owl/classes").json()
++    assert {c["uri"] for c in listed} == {
++        "http://example.org/ontology#Risk",
++        "http://example.org/ontology#Control",
++    }
++
++
++# ── 2. 持久化（重启/新实例不丢）──────────────────────────────────────────────
++
++
++def test_classes_survive_new_engine_instance(db_target: str) -> None:
++    """新建引擎实例（模拟重启）后，已注册的类仍在。
++
++    两次访问之间用 `engine_for()` **重建 engine**（新连接池、新连接），
++    确保数据来自数据库而非任何进程内缓存。
++    """
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    from .conftest import engine_for, open_session
++
++    uri = "http://example.org/ontology#Asset"
++
++    # 第一次「进程」：注册
++    eng1 = engine_for(db_target, create_tables=True)
++    sess1 = open_session(eng1)
++    try:
++        WikiOwlEngine.from_store(OntologyRepository(sess1, 9001)).register_class(
++            uri, label="资产", comment="企业资产"
++        )
++        sess1.commit()
++    finally:
++        sess1.close()
++        eng1.dispose()
++
++    # 第二次「进程」：全新 engine + 全新会话，数据应仍在
++    eng2 = engine_for(db_target)
++    sess2 = open_session(eng2)
++    try:
++        engine2 = WikiOwlEngine.from_store(OntologyRepository(sess2, 9001))
++        classes = engine2.list_classes()
++        assert [c.uri for c in classes] == [uri]
++        assert classes[0].label == "资产"
++        assert classes[0].comment == "企业资产"
++    finally:
++        sess2.close()
++        eng2.dispose()
++
++
++def test_classes_survive_across_sessions(engine, db) -> None:
++    """同一文件库、不同会话之间数据可见。"""
++    pytest.importorskip("app.models.ontology.ontology")
++
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    from .conftest import open_session
++
++    uri = "http://example.org/ontology#Incident"
++    WikiOwlEngine.from_store(OntologyRepository(db, 9002)).register_class(
++        uri, label="事件"
++    )
++    db.commit()
++
++    other = open_session(engine)
++    try:
++        engine2 = WikiOwlEngine.from_store(OntologyRepository(other, 9002))
++        assert [c.uri for c in engine2.list_classes()] == [uri]
++    finally:
++        other.close()
++
++
++def test_tenant_id_none_is_logged_as_shared_partition(db, caplog) -> None:
++    """`tenant_id=None` 落到 NULL 分区（多个无租户用户共享）。
++
++    评审 IM-07：简报未授权改成 400，因此保留 NULL 分区语义，
++    但必须**显式告警**而不是静默共享。本用例把该行为与告警固化下来。
++    """
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    uri = "http://example.org/ontology#Shared"
++    with caplog.at_level("WARNING"):
++        engine = WikiOwlEngine.from_store(OntologyRepository(db, None))
++
++    assert any("NULL 租户分区" in r.getMessage() for r in caplog.records), [
++        r.getMessage() for r in caplog.records
++    ]
++
++    engine.register_class(uri, label="共享类")
++    db.commit()
++    assert [c.uri for c in WikiOwlEngine.from_store(OntologyRepository(db, None)).list_classes()] == [uri]
++
++
++def test_unregister_clears_annotation_references(db) -> None:
++    """注销类后，指向该类的文章标注必须一并清理（评审 IM-04）。
++
++    改造前 `unregister_class` 会删除所有 `<target> a <uri>` 三元组；
++    只清理 `parent_uris` 会留下悬挂引用：`get_articles_by_class(uri)`
++    仍返回指向已删除类的文章。
++    """
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    uri = "http://example.org/ontology#Risk"
++    engine = WikiOwlEngine.from_store(OntologyRepository(db, 9004))
++    engine.register_class(uri, label="风险")
++    engine.annotate_article("wiki://article-1", [uri])
++    engine.annotate_article("wiki://article-2", [uri, "http://example.org/ontology#Other"])
++    db.commit()
++
++    assert sorted(engine.get_articles_by_class(uri)) == ["wiki://article-1", "wiki://article-2"]
++
++    assert engine.unregister_class(uri) is True
++    db.commit()
++
++    assert engine.get_articles_by_class(uri) == [], "类已删除，不应再有指向它的标注"
++    # 标注行里引用的其它类不能被误删
++    assert engine.get_article_classes("wiki://article-2") == [
++        "http://example.org/ontology#Other"
++    ]
++
++
++def test_unregister_is_persisted(engine, db) -> None:
++    """删除操作同样持久化：新实例里类已消失。"""
++    pytest.importorskip("app.models.ontology.ontology")
++
++    from app.ai.knowledge.owl_engine import WikiOwlEngine
++    from app.services.ontology.ontology_repository import OntologyRepository
++
++    from .conftest import open_session
++
++    uri = "http://example.org/ontology#Temp"
++    eng = WikiOwlEngine.from_store(OntologyRepository(db, 9003))
++    eng.register_class(uri, label="临时")
++    db.commit()
++    assert eng.unregister_class(uri) is True
++    db.commit()
++
++    other = open_session(engine)
++    try:
++        assert WikiOwlEngine.from_store(
++            OntologyRepository(other, 9003)
++        ).list_classes() == []
++    finally:
++        other.close()
+diff --git a/backend/tests/ontology/test_postgres_contract.py b/backend/tests/ontology/test_postgres_contract.py
+new file mode 100644
+index 0000000..771a90e
+--- /dev/null
++++ b/backend/tests/ontology/test_postgres_contract.py
+@@ -0,0 +1,67 @@
++"""PostgreSQL 方言契约测试（评审 IM-01 / IM-03）。
++
++本任务的验收标准是「持久化到 PostgreSQL」，因此测试必须跑在真实 PostgreSQL 上。
++这个文件把「确实是 PostgreSQL」以及「JSONB 语义正确」固化为断言：
++
++* 连接串必须是 PostgreSQL（防止有人把测试退回 SQLite 后声称通过）；
++* `parent_uris` / `class_uris` 在 PG 上的真实类型必须是 `jsonb`；
++* `.contains()` 必须编译成 `@>` 而不是 `LIKE`（`JSON().with_variant(JSONB)` 的坑）。
++"""
++from __future__ import annotations
++
++import pytest
++from sqlalchemy import select, text
++from sqlalchemy.dialects import postgresql
++from sqlalchemy.engine import Engine
++
++from app.models.ontology.ontology import OntologyAnnotation, OntologyClass
++
++from .conftest import IS_POSTGRES, TEST_DB_URL
++
++pytestmark = pytest.mark.skipif(
++    not IS_POSTGRES,
++    reason="MINWORKBUDDY_TEST_DB_URL 被显式覆盖为非 PostgreSQL，跳过方言契约检查",
++)
++
++
++def test_tests_run_against_postgresql() -> None:
++    """验收数据库必须是 PostgreSQL（不是 SQLite）。"""
++    assert IS_POSTGRES, f"测试必须跑在 PostgreSQL 上，当前连接串为 {TEST_DB_URL}"
++
++
++def test_json_list_columns_are_real_jsonb(engine: Engine) -> None:
++    """`parent_uris` / `class_uris` 在 PG 上必须是 jsonb 列。"""
++    with engine.connect() as conn:
++        rows = conn.execute(
++            text(
++                "SELECT table_name, column_name, data_type FROM information_schema.columns "
++                "WHERE table_schema = current_schema() "
++                "AND ((table_name = 'ontology_class' AND column_name = 'parent_uris') "
++                "OR (table_name = 'ontology_annotation' AND column_name = 'class_uris'))"
++            )
++        ).all()
++    types = {(row[0], row[1]): row[2] for row in rows}
++    assert types == {
++        ("ontology_class", "parent_uris"): "jsonb",
++        ("ontology_annotation", "class_uris"): "jsonb",
++    }, types
++
++
++def test_contains_operator_compiles_to_jsonb_containment() -> None:
++    """`.contains()` 必须编译成 JSONB 的 `@>`（不是 `LIKE`） —— 评审 IM-03。"""
++    for column in (OntologyClass.parent_uris, OntologyAnnotation.class_uris):
++        stmt = select(column).where(column.contains(["http://example.org/ontology#X"]))
++        sql = str(stmt.compile(dialect=postgresql.dialect()))
++        assert "@>" in sql, f"期望 JSONB @> 运算符，实际: {sql}"
++        assert "LIKE" not in sql, f"退化成了 LIKE 匹配，实际: {sql}"
++
++
++def test_jsonb_containment_query_actually_runs(engine: Engine) -> None:
++    """真实执行一条 `@>` 查询：类型变体错误会在这一步暴露为 DataError。"""
++    with engine.connect() as conn:
++        rows = conn.execute(
++            select(OntologyClass.uri).where(
++                OntologyClass.parent_uris.contains(["http://example.org/ontology#Risk"])
++            )
++        ).all()
++    assert rows == []
+diff --git a/backend/tests/ontology/test_ttl_roundtrip.py b/backend/tests/ontology/test_ttl_roundtrip.py
+new file mode 100644
+index 0000000..7814e33
+--- /dev/null
++++ b/backend/tests/ontology/test_ttl_roundtrip.py
+@@ -0,0 +1,232 @@
++"""TTL 导入 → 导出 往返一致性测试。
++
++往返口径：把「原始 TTL」和「导出 TTL」分别解析成 rdflib 图，
++比较其中**有意义的三元组集合**（类声明 / rdfs:subClassOf / rdfs:label / rdfs:comment），
++忽略 rdflib 序列化带来的前缀与顺序差异。
++"""
++from __future__ import annotations
++
++from typing import Set, Tuple
++
++from fastapi.testclient import TestClient
++from rdflib import Graph, RDF, RDFS, OWL, URIRef
++from rdflib.compare import isomorphic
++from sqlalchemy.orm import Session
++
++from app.ai.knowledge.owl_engine import (
++    DEFAULT_ONTOLOGY_NS,
++    WikiOwlEngine,
++)
++from app.services.ontology.ontology_repository import OntologyRepository
++
++from .conftest import TENANT_A
++
++SAMPLE_TTL = """
++@prefix owl: <http://www.w3.org/2002/07/owl#> .
++@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
++@prefix ex: <http://example.org/ontology#> .
++
++ex:Risk a owl:Class ;
++    rdfs:label "风险" ;
++    rdfs:comment "可能对目标产生影响的不确定性" .
++
++ex:OperationalRisk a owl:Class ;
++    rdfs:label "操作风险" ;
++    rdfs:subClassOf ex:Risk .
++
++ex:CreditRisk a owl:Class ;
++    rdfs:label "信用风险" ;
++    rdfs:subClassOf ex:Risk .
++"""
++
++TTL_WITH_RESIDUAL = """
++@prefix owl: <http://www.w3.org/2002/07/owl#> .
++@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
++@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
++@prefix ex: <http://example.org/ontology#> .
++
++ex:Risk a owl:Class ;
++    rdfs:label "风险" .
++
++ex:hasOwner a rdf:Property ;
++    rdfs:label "归属人" .
++"""
++
++
++# 含**空节点**（`owl:Restriction`）的真实 OWL 结构：
++# 改造前 rdflib 原样保存整图，往返天然一致；持久化改造必须保持这一点。
++TTL_WITH_BLANK_NODE = """
++@prefix owl: <http://www.w3.org/2002/07/owl#> .
++@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
++@prefix ex: <http://example.org/ontology#> .
++
++ex:A a owl:Class ;
++    rdfs:label "A" ;
++    rdfs:subClassOf [ a owl:Restriction ;
++                      owl:onProperty ex:hasPart ;
++                      owl:someValuesFrom ex:B ] .
++
++ex:B a owl:Class ;
++    rdfs:label "B" .
++"""
++
++ONTOLOGY_AXIOM_URI = DEFAULT_ONTOLOGY_NS + "wiki"
++
++
++def _meaningful_triples(ttl: str) -> Set[Tuple[str, str, str]]:
++    """抽取用于往返比较的三元组（字符串化，忽略语言标记差异）。"""
++    graph = Graph()
++    graph.parse(data=ttl, format="turtle")
++    triples: Set[Tuple[str, str, str]] = set()
++    for subj in graph.subjects(RDF.type, OWL.Class):
++        triples.add((str(subj), str(RDF.type), str(OWL.Class)))
++        for predicate in (RDFS.label, RDFS.comment):
++            value = graph.value(subj, predicate)
++            if value is not None:
++                triples.add((str(subj), str(predicate), str(value)))
++        for parent in graph.objects(subj, RDFS.subClassOf):
++            triples.add((str(subj), str(RDFS.subClassOf), str(parent)))
++    return triples
++
++
++def _engine(db: Session, tenant_id: int = TENANT_A) -> WikiOwlEngine:
++    return WikiOwlEngine.from_store(OntologyRepository(db, tenant_id))
++
++
++# ── 引擎层往返 ───────────────────────────────────────────────────────────────
++
++def test_ttl_roundtrip_preserves_classes(db: Session) -> None:
++    """导入 → 导出，类声明 / 标签 / 描述 / 父类 全部保持一致。"""
++    engine = _engine(db)
++    added = engine.import_ttl(SAMPLE_TTL)
++    assert added > 0
++
++    exported = engine.export_ttl()
++    assert _meaningful_triples(exported) == _meaningful_triples(SAMPLE_TTL)
++
++
++def test_ttl_roundtrip_is_idempotent(db: Session) -> None:
++    """导出内容再导入：新增三元组数为 0，且 ttl_content 不重复膨胀。"""
++    engine = _engine(db)
++    engine.import_ttl(SAMPLE_TTL)
++    first_export = engine.export_ttl()
++
++    added = engine.import_ttl(first_export)
++    assert added == 0, "重复导入同一内容不应产生新增三元组"
++    assert engine.export_ttl() == first_export
++
++
++def test_ttl_roundtrip_keeps_non_class_triples(db: Session) -> None:
++    """非类三元组（如 rdf:Property）原样保留在导出结果中。"""
++    engine = _engine(db)
++    engine.import_ttl(TTL_WITH_RESIDUAL)
++
++    exported = Graph()
++    exported.parse(data=engine.export_ttl(), format="turtle")
++    assert "http://example.org/ontology#hasOwner" in {
++        str(s) for s in exported.subjects(RDF.type, RDF.Property)
++    }
++
++
++def test_ttl_roundtrip_across_engine_instances(db_target: str, db: Session) -> None:
++    """导入后换新引擎实例（模拟重启）再导出，内容不丢。"""
++    from .conftest import engine_for, open_session
++
++    _engine(db).import_ttl(SAMPLE_TTL)
++
++    restarted = engine_for(db_target)
++    other = open_session(restarted)
++    try:
++        exported = _engine(other).export_ttl()
++    finally:
++        other.close()
++        restarted.dispose()
++    assert _meaningful_triples(exported) == _meaningful_triples(SAMPLE_TTL)
++
++
++def test_import_invalid_ttl_raises_value_error(db: Session) -> None:
++    """非法 TTL 抛 ValueError（路由层转成 400）。"""
++    import pytest
++
++    with pytest.raises(ValueError, match="TTL 解析失败"):
++        _engine(db).import_ttl("this is not turtle @@@ {{{")
++
++
++# ── API 层往返 ───────────────────────────────────────────────────────────────
++
++def test_api_ttl_roundtrip(client_a: TestClient) -> None:
++    """POST /import-ttl → GET /export-ttl → 再导入，新增数为 0。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("ontology.ttl", SAMPLE_TTL.encode("utf-8"), "text/turtle")},
++    )
++    assert resp.status_code == 200, resp.text
++
++    exported = client_a.get("/api/v1/wiki/owl/export-ttl")
++    assert exported.status_code == 200
++    assert _meaningful_triples(exported.text) == _meaningful_triples(SAMPLE_TTL)
++
++    reimport = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("ontology.ttl", exported.text.encode("utf-8"), "text/turtle")},
++    )
++    assert reimport.status_code == 200, reimport.text
++    assert reimport.json()["added"] == 0
++
++
++def test_api_ttl_is_tenant_scoped(client_a: TestClient, client_b: TestClient) -> None:
++    """TTL 导入同样受租户隔离：租户 A 导入的内容不会出现在租户 B 的导出里。"""
++    resp = client_a.post(
++        "/api/v1/wiki/owl/import-ttl",
++        files={"file": ("ontology.ttl", SAMPLE_TTL.encode("utf-8"), "text/turtle")},
++    )
++    assert resp.status_code == 200, resp.text
++
++    exported_b = client_b.get("/api/v1/wiki/owl/export-ttl").text
++    assert "http://example.org/ontology#Risk" not in exported_b
++    assert client_b.get("/api/v1/wiki/owl/stats").json()["class_count"] == 0
++
++
++# ── 空节点（CR-01）───────────────────────────────────────────────────────────
++
++def _graph_without_axiom(ttl: str) -> Graph:
++    """解析 TTL 并去掉导出时自动附加的 `onto:wiki a owl:Ontology` 公理。"""
++    graph = Graph()
++    graph.parse(data=ttl, format="turtle")
++    graph.remove((URIRef(ONTOLOGY_AXIOM_URI), RDF.type, OWL.Ontology))
++    return graph
++
++
++def test_ttl_roundtrip_preserves_blank_nodes(db: Session) -> None:
++    """含 `owl:Restriction` 空节点的 OWL 导入后导出，图必须同构（往返一致）。"""
++    engine = _engine(db)
++    engine.import_ttl(TTL_WITH_BLANK_NODE)
++
++    exported = engine.export_ttl()
++    assert isomorphic(_graph_without_axiom(exported), _graph_without_axiom(TTL_WITH_BLANK_NODE)), (
++        "空节点结构在导入→导出后必须与原文同构，实际导出:\n" + exported
++    )
++
++
++def test_blank_node_is_not_persisted_as_parent_uri(db: Session) -> None:
++    """空节点不是 URI，不能作为父类 URI 落库（否则每次导入都多一个假父类）。"""
++    engine = _engine(db)
++    engine.import_ttl(TTL_WITH_BLANK_NODE)
++
++    cls_a = engine.get_class("http://example.org/ontology#A")
++    assert cls_a is not None
++    assert cls_a.parent_uris == [], cls_a.parent_uris
++
++
++def test_repeated_import_of_blank_node_ttl_is_idempotent(db: Session) -> None:
++    """同一份含空节点的 TTL 连续导入 3 次：内容不增长、导出完全一致。"""
++    engine = _engine(db)
++
++    engine.import_ttl(TTL_WITH_BLANK_NODE)
++    first_export = engine.export_ttl()
++
++    for _ in range(2):
++        added = engine.import_ttl(TTL_WITH_BLANK_NODE)
++        assert added == 0, "重复导入同一内容不应产生新增三元组"
++
++    assert engine.export_ttl() == first_export

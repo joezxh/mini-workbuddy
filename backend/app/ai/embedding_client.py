@@ -320,6 +320,21 @@ def _build_backend_from_env() -> _BaseEmbeddingBackend:
             dimension=settings.DASHSCOPE_EMBEDDING_DIMENSION,
         )
 
+    if provider == "nvidia":
+        # NVIDIA NIM：OpenAI 兼容协议（此前 nvidia 会被误落到 GPUStack 分支）
+        logger.info(
+            f"[EmbeddingClient] 降级 .env NVIDIA NIM："
+            f"url={settings.NVIDIA_API_URL}, "
+            f"model={settings.NVIDIA_EMBEDDING_MODEL}, "
+            f"dim={settings.NVIDIA_EMBEDDING_DIMENSION}"
+        )
+        return _OpenAICompatibleBackend(
+            api_url=settings.NVIDIA_API_URL,
+            api_key=settings.NVIDIA_API_KEY,
+            model=settings.NVIDIA_EMBEDDING_MODEL,
+            dimension=settings.NVIDIA_EMBEDDING_DIMENSION,
+        )
+
     # 默认 gpustack
     logger.info(
         f"[EmbeddingClient] 降级 .env GPUStack："

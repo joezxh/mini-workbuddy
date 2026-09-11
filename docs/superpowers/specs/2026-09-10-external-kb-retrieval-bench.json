@@ -1,0 +1,416 @@
+{
+  "top_k": 5,
+  "n_queries": 20,
+  "modeA": {
+    "recall@1": 1.0,
+    "recall@5": 1.0,
+    "mrr": 1.0
+  },
+  "modeB": {
+    "recall@1": 1.0,
+    "recall@5": 1.0,
+    "mrr": 1.0
+  },
+  "per_query": [
+    {
+      "q": "逾期贷款怎么催收",
+      "gold": "d_OverdueLoan",
+      "modeA_top": [
+        "d_OverdueLoan",
+        "d_Refund",
+        "d_Invoice",
+        "d_Inventory",
+        "d_OrderAmount"
+      ],
+      "modeB_top": [
+        "d_OverdueLoan",
+        "d_Refund",
+        "d_Invoice",
+        "d_Privacy",
+        "d_Inventory"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "M1 阶段电话催收",
+      "gold": "d_OverdueLoan",
+      "modeA_top": [
+        "d_OverdueLoan",
+        "d_Invoice",
+        "d_OrderAmount",
+        "d_Privacy",
+        "d_DataSync"
+      ],
+      "modeB_top": [
+        "d_OverdueLoan",
+        "d_Privacy",
+        "d_Invoice",
+        "d_DataSync",
+        "d_Backup"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "订单金额含税吗",
+      "gold": "d_OrderAmount",
+      "modeA_top": [
+        "d_OrderAmount",
+        "d_Invoice",
+        "d_Refund",
+        "d_Reimburse",
+        "d_AccountSec"
+      ],
+      "modeB_top": [
+        "d_OrderAmount",
+        "d_Invoice",
+        "d_AccountSec",
+        "d_Refund",
+        "d_Reimburse"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "订单金额字段口径",
+      "gold": "d_OrderAmount",
+      "modeA_top": [
+        "d_OrderAmount",
+        "d_Refund",
+        "d_Invoice",
+        "d_Privacy",
+        "d_OverdueLoan"
+      ],
+      "modeB_top": [
+        "d_OrderAmount",
+        "d_Privacy",
+        "d_OverdueLoan",
+        "d_AccountSec",
+        "d_Invoice"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "退款多久到账",
+      "gold": "d_Refund",
+      "modeA_top": [
+        "d_Refund",
+        "d_AccountSec",
+        "d_OverdueLoan",
+        "d_Invoice",
+        "d_OrderAmount"
+      ],
+      "modeB_top": [
+        "d_Refund",
+        "d_AccountSec",
+        "d_OverdueLoan",
+        "d_DataSync",
+        "d_Inventory"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "退款原路退回",
+      "gold": "d_Refund",
+      "modeA_top": [
+        "d_Refund",
+        "d_OverdueLoan",
+        "d_CsSla",
+        "d_Inventory",
+        "d_OrderAmount"
+      ],
+      "modeB_top": [
+        "d_Refund",
+        "d_DataSync",
+        "d_OverdueLoan",
+        "d_AccountSec",
+        "d_CsSla"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "电子发票怎么开",
+      "gold": "d_Invoice",
+      "modeA_top": [
+        "d_Invoice",
+        "d_Reimburse",
+        "d_OverdueLoan",
+        "d_Refund",
+        "d_Inventory"
+      ],
+      "modeB_top": [
+        "d_Invoice",
+        "d_Reimburse",
+        "d_Inventory",
+        "d_OrderAmount",
+        "d_AccountSec"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "发票抬头",
+      "gold": "d_Invoice",
+      "modeA_top": [
+        "d_Invoice",
+        "d_Reimburse",
+        "d_OverdueLoan",
+        "d_Refund",
+        "d_Inventory"
+      ],
+      "modeB_top": [
+        "d_Invoice",
+        "d_OverdueLoan",
+        "d_Reimburse",
+        "d_Inventory",
+        "d_Refund"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "手机号脱敏",
+      "gold": "d_Privacy",
+      "modeA_top": [
+        "d_Privacy",
+        "d_AccountSec",
+        "d_OverdueLoan",
+        "d_OrderAmount",
+        "d_Refund"
+      ],
+      "modeB_top": [
+        "d_Privacy",
+        "d_OverdueLoan",
+        "d_AccountSec",
+        "d_DataSync",
+        "d_RBAC"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "敏感字段脱敏",
+      "gold": "d_Privacy",
+      "modeA_top": [
+        "d_Privacy",
+        "d_OrderAmount",
+        "d_OverdueLoan",
+        "d_AccountSec",
+        "d_Refund"
+      ],
+      "modeB_top": [
+        "d_Privacy",
+        "d_OverdueLoan",
+        "d_AccountSec",
+        "d_OrderAmount",
+        "d_Inventory"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "数据同步频率",
+      "gold": "d_DataSync",
+      "modeA_top": [
+        "d_DataSync",
+        "d_Refund",
+        "d_Backup",
+        "d_AccountSec",
+        "d_OverdueLoan"
+      ],
+      "modeB_top": [
+        "d_DataSync",
+        "d_Backup",
+        "d_Refund",
+        "d_Invoice",
+        "d_RBAC"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "增量同步每 15 分钟",
+      "gold": "d_DataSync",
+      "modeA_top": [
+        "d_DataSync",
+        "d_Backup",
+        "d_AccountSec",
+        "d_Refund",
+        "d_OverdueLoan"
+      ],
+      "modeB_top": [
+        "d_DataSync",
+        "d_Backup",
+        "d_Invoice",
+        "d_AccountSec",
+        "d_Refund"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "RBAC 权限",
+      "gold": "d_RBAC",
+      "modeA_top": [
+        "d_RBAC",
+        "d_Privacy",
+        "d_OverdueLoan",
+        "d_OrderAmount",
+        "d_Refund"
+      ],
+      "modeB_top": [
+        "d_RBAC",
+        "d_Privacy",
+        "d_AccountSec",
+        "d_OrderAmount",
+        "d_DataSync"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "普通成员只读",
+      "gold": "d_RBAC",
+      "modeA_top": [
+        "d_RBAC",
+        "d_Invoice",
+        "d_Refund",
+        "d_Reimburse",
+        "d_OverdueLoan"
+      ],
+      "modeB_top": [
+        "d_RBAC",
+        "d_Invoice",
+        "d_Backup",
+        "d_Privacy",
+        "d_DataSync"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "差旅报销期限",
+      "gold": "d_Reimburse",
+      "modeA_top": [
+        "d_Reimburse",
+        "d_OverdueLoan",
+        "d_RBAC",
+        "d_Inventory",
+        "d_OrderAmount"
+      ],
+      "modeB_top": [
+        "d_Reimburse",
+        "d_Invoice",
+        "d_Privacy",
+        "d_RBAC",
+        "d_OverdueLoan"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "报销超标审批",
+      "gold": "d_Reimburse",
+      "modeA_top": [
+        "d_Reimburse",
+        "d_CsSla",
+        "d_OverdueLoan",
+        "d_Refund",
+        "d_Backup"
+      ],
+      "modeB_top": [
+        "d_Reimburse",
+        "d_Backup",
+        "d_CsSla",
+        "d_OverdueLoan",
+        "d_Invoice"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "登录密码锁定",
+      "gold": "d_AccountSec",
+      "modeA_top": [
+        "d_AccountSec",
+        "d_OverdueLoan",
+        "d_OrderAmount",
+        "d_Privacy",
+        "d_Refund"
+      ],
+      "modeB_top": [
+        "d_AccountSec",
+        "d_OrderAmount",
+        "d_CsSla",
+        "d_OverdueLoan",
+        "d_Refund"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "连续登录失败锁定",
+      "gold": "d_AccountSec",
+      "modeA_top": [
+        "d_AccountSec",
+        "d_DataSync",
+        "d_OverdueLoan",
+        "d_OrderAmount",
+        "d_Refund"
+      ],
+      "modeB_top": [
+        "d_AccountSec",
+        "d_OrderAmount",
+        "d_CsSla",
+        "d_Refund",
+        "d_DataSync"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "库存先进先出",
+      "gold": "d_Inventory",
+      "modeA_top": [
+        "d_Inventory",
+        "d_Backup",
+        "d_OverdueLoan",
+        "d_Reimburse",
+        "d_OrderAmount"
+      ],
+      "modeB_top": [
+        "d_Inventory",
+        "d_Backup",
+        "d_Reimburse",
+        "d_CsSla",
+        "d_OverdueLoan"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    },
+    {
+      "q": "数据库备份保留天数",
+      "gold": "d_Backup",
+      "modeA_top": [
+        "d_Backup",
+        "d_DataSync",
+        "d_Inventory",
+        "d_Privacy",
+        "d_AccountSec"
+      ],
+      "modeB_top": [
+        "d_Backup",
+        "d_Inventory",
+        "d_DataSync",
+        "d_AccountSec",
+        "d_Privacy"
+      ],
+      "modeA_hit@k": true,
+      "modeB_hit@k": true
+    }
+  ]
+}

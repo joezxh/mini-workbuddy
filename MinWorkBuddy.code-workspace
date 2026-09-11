@@ -4,10 +4,16 @@
 			"path": "."
 		},
 		{
-			"path": "../scientific-agent-skills"
+			"path": "../miniworkbuddy-skills"
 		},
 		{
-			"path": "../miniworkbuddy-skills"
+			"path": "../github/ontomind"
+		},
+		{
+			"path": "../../work/tianshu-ontology"
+		},
+		{
+			"path": "../github/Yuxi"
 		}
 	],
 	"settings": {}

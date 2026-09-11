@@ -50,8 +50,26 @@ class SkillCategory:
     OTHER = 'other'
     
     @classmethod
+    def _default_categories(cls) -> Set[str]:
+        """内置默认分类集合（数据库不可用 / 字典未启用时的兜底）。"""
+        return {
+            cls.LEGAL_REASONING,
+            cls.DOCUMENT,
+            cls.RISK_ASSESSMENT,
+            cls.RETRIEVAL,
+            cls.ARGUMENTATION,
+            cls.DATA_ANALYSIS,
+            cls.OTHER,
+        }
+
+    @classmethod
     def _load_from_database(cls) -> Set[str]:
-        """从数据库字典表加载所有有效的技能分类"""
+        """从数据库字典表加载所有有效的技能分类。
+
+        注意：查询**成功但结果为空**同样按「加载失败」处理并退回内置分类。
+        否则字典表未启用（is_active=false）或尚未初始化时，all_categories()
+        会返回空集合，导致任何技能都装不上（"无效的技能分类 'other'。有效分类："）。
+        """
         db = SessionLocal()
         try:
             items = db.scalars(
@@ -61,20 +79,17 @@ class SkillCategory:
                     SysDictionaryItem.is_deleted == False,
                 )
             ).all()
-            return set(items)
+            categories = set(items)
+            if categories:
+                return categories
+            print("⚠️  数据库字典 skill_category 中没有启用状态下的分类项")
+            print("   使用默认分类集合")
+            return cls._default_categories()
         except Exception as e:
             # 如果数据库查询失败，返回默认分类（向后兼容）
             print(f"⚠️  无法从数据库加载技能分类：{e}")
             print("   使用默认分类集合")
-            return {
-                cls.LEGAL_REASONING,
-                cls.DOCUMENT,
-                cls.RISK_ASSESSMENT,
-                cls.RETRIEVAL,
-                cls.ARGUMENTATION,
-                cls.DATA_ANALYSIS,
-                cls.OTHER,
-            }
+            return cls._default_categories()
         finally:
             db.close()
     

@@ -49,4 +49,31 @@ from app.models.ai.ai_workspace import AiWorkspace                              
 from app.models.wiki.wiki_article import WikiArticle                           # noqa: F401
 from app.models.wiki.wiki_article_version import WikiArticleVersion             # noqa: F401
 from app.models.wiki.wiki_category import WikiCategory                         # noqa: F401
+
+# --- 本体 (ontology_) ---
+from app.models.ontology.ontology import (                                     # noqa: F401
+    Ontology, OntologyClass, OntologyAnnotation,
+)
+from app.models.ontology.model import (                                        # noqa: F401
+    OntologyObjectType, OntologyProperty, OntologyLinkType,
+    OntologyMapping, OntologyCq, OntologyVersion,
+)
+# --- 知识库 (kb_) ---
+from app.models.kb.kb_collection import KbCollection                           # noqa: F401
+from app.models.kb.kb_segment import KbSegment                                # noqa: F401
+from app.models.kb.kb_ref import KbRef                                         # noqa: F401
+# --- DataOps (dataops_) ---
+from app.models.dataops.data_source import DataSource                           # noqa: F401
+from app.models.dataops.meta import (                                           # noqa: F401
+    MetaScanJob, MetaTable, MetaColumn,
+)
+from app.models.dataops.standard import (                                       # noqa: F401
+    MetaStandard, MetaStandardVersion, MetaColumnStandard, MetaColumnStandardHistory,
+)
+from app.models.dataops.write_request import DataWriteRequest                   # noqa: F401
+from app.models.dataops.meta_relation import MetaRelation                         # noqa: F401
+# --- 连接器落库 (P3 Task 7) ---
+from app.models.connectors.connector_record import (                              # noqa: F401
+    ConnectorIngest, ConnectorSyncState,
+)
 # fmt: on

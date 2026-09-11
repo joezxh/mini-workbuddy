@@ -145,7 +145,10 @@ ROUTER_SPECS: List[RouterSpec] = [
     # --- 25. ReAct HITL ---
     RouterSpec("app.routers.ai.react", prefix=API_V1_PREFIX, tags=["ReAct HITL"]),
 
-    # --- 26. 通知 ---
+    # --- 26. DataOps（router 自带完整 prefix /api/v1/dataops，故 prefix 留空）---
+    RouterSpec("app.routers.dataops.dataops", tags=["DataOps 数据源"]),
+
+    # --- 27. 通知 ---
     RouterSpec("app.routers.sys.sys_notification", prefix=f"{API_V1_PREFIX}/admin", tags=["通知管理"]),
 
     # --- 未启用 ---

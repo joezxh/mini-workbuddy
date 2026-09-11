@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     OFFICIAL_HUB_USERNAME: str = ""
     OFFICIAL_HUB_PASSWORD: str = ""
 
+    # SkillHub 云市场（source_type=skillhub 的官方仓库）
+    # API Key 通过请求头 X-API-Key 注入；留空时走公共接口（部分技能可能无法下载）
+    SKILLHUB_API_KEY: str = ""
+    SKILLHUB_BASE_URL: str = "https://api.skillhub.cn"
+
     # 数据库配置
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
@@ -187,6 +192,17 @@ class Settings(BaseSettings):
     GPUSTACK_API_KEY: str = "gpustack_ee60e8a2e89f94f2_f7106a2810b92acda3a3a338991caf28"
     GPUSTACK_EMBEDDING_MODEL: str = "Qwen3-Embedding-4B"
     GPUSTACK_EMBEDDING_DIMENSION: int = 768  # Qwen3-Embedding-4B 向量维度
+
+    # NVIDIA NIM Embedding 配置（OpenAI 兼容模式，EMBEDDING_PROVIDER=nvidia 时生效）
+    NVIDIA_API_URL: str = "http://localhost:8080/v1"
+    NVIDIA_API_KEY: str = ""
+    NVIDIA_EMBEDDING_MODEL: str = "Qwen3-Embedding-4B"
+    NVIDIA_EMBEDDING_DIMENSION: int = 768
+    NVIDIA_CHAT_MODEL: str = "qwen3-32b"
+
+    # RAG Service 上传文件的本地 blob 存储根目录（P1 Task 1）
+    # 留空则默认 <项目根>/data/kb_blobs
+    KB_BLOB_DIR: str = ""
     # GPUStack 对话/Chat 模型（用于知识增强 LLM 辅助标注建议）
     GPUSTACK_CHAT_MODEL: str = "qwen3-32b"   # 对话模型名称（Agent 流程默认使用）
 
@@ -209,10 +225,18 @@ class Settings(BaseSettings):
         provider = self.EMBEDDING_PROVIDER.lower().strip()
         if provider == "dashscope":
             return self.DASHSCOPE_EMBEDDING_DIMENSION
+        if provider == "nvidia":
+            return self.NVIDIA_EMBEDDING_DIMENSION
         return self.GPUSTACK_EMBEDDING_DIMENSION
 
     # Magic API 配置
     MAGIC_API_URL: str = ""
+
+    # DataOps 数据源凭据加密密钥（Fernet，32 字节 url-safe base64）。
+    # 独立密钥，不得复用 SECRET_KEY（默认值硬编码且密钥混用）。
+    # 未配置时加密/解密显式报错，拒绝降级为明文存储。
+    # 生成方式：python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    DATAOPS_ENCRYPTION_KEY: str = ""
 
     # 文件上传配置
     MAX_UPLOAD_SIZE: int = 10485760  # 10MB
