@@ -76,4 +76,8 @@ from app.models.dataops.meta_relation import MetaRelation                       
 from app.models.connectors.connector_record import (                              # noqa: F401
     ConnectorIngest, ConnectorSyncState,
 )
+# --- 工作流管理 (workflow_) ---
+from app.models.workflow.workflow_flow import WorkflowFlow               # noqa: F401
+from app.models.workflow.workflow_execution_log import WorkflowExecutionLog  # noqa: F401
+from app.models.workflow.workflow_chain import WorkflowChain              # noqa: F401
 # fmt: on

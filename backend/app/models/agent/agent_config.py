@@ -68,6 +68,7 @@ class AgentConfig(Base, TenantMixin):
     is_active = Column(Boolean, nullable=False, server_default="true", comment="是否启用")
     sort_order = Column(Integer, nullable=False, server_default="0", comment="排序权重")
     workspace_id = Column(BigInteger, nullable=True, comment="多租户隔离")
+    workflow_id = Column(BigInteger, nullable=True, comment="FK → workflow_flow.id")
 
     # ── 审计字段 ──────────────────────────────────────────────────────────
     created_by = Column(BigInteger, nullable=True, comment="创建人ID")
@@ -80,6 +81,7 @@ class AgentConfig(Base, TenantMixin):
         Index("idx_agent_config_strategy", "strategy_code"),
         Index("idx_agent_config_mode", "execution_mode"),
         Index("idx_agent_config_active", "is_active"),
+        Index("idx_agent_config_workflow", "workflow_id"),
     )
 
     def __repr__(self):
