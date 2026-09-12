@@ -8,7 +8,7 @@
 - 反向链接 (backlinks: JSONB 数组, 由系统维护)
 - 标签 (tags: JSONB 数组)
 """
-from sqlalchemy import Column, BigInteger, String, Text, Integer, Boolean, TIMESTAMP, Index
+from sqlalchemy import Column, BigInteger, String, Text, Integer, Boolean, TIMESTAMP, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
@@ -19,7 +19,7 @@ from app.config import settings
 
 class WikiArticle(Base, TenantMixin):
     """Wiki 文章表。"""
-    __tablename__ = 'wiki_article'
+    __tablename__ = 'kms_article'
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment='主键')
     slug = Column(String(200), nullable=False, unique=True, index=True, comment='URL 友好标识')
@@ -42,6 +42,13 @@ class WikiArticle(Base, TenantMixin):
     backlinks = Column(JSONB, nullable=True, default=list, comment='链接到本文的其他文章 slug 列表')
 
     # 分类 & 标签
+    knowledge_id = Column(
+        BigInteger,
+        ForeignKey('kms_knowledge.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+        comment='所属知识库 ID (null=未归类)',
+    )
     category_id = Column(BigInteger, nullable=True, index=True, comment='所属分类 ID')
     tags = Column(JSONB, nullable=True, default=list, comment='标签列表')
 

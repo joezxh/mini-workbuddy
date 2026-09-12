@@ -13,15 +13,22 @@ from app.models.tenant_mixin import TenantMixin
 
 class WikiCategory(Base, TenantMixin):
     """Wiki 分类表 (层级结构)。"""
-    __tablename__ = 'wiki_category'
+    __tablename__ = 'kms_category'
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment='主键')
     name = Column(String(200), nullable=False, comment='分类名称')
     slug = Column(String(200), nullable=False, unique=True, index=True, comment='URL 友好标识')
     description = Column(Text, nullable=True, comment='分类描述')
+    knowledge_id = Column(
+        BigInteger,
+        ForeignKey('kms_knowledge.id', ondelete='CASCADE'),
+        nullable=True,
+        index=True,
+        comment='所属知识库 ID (null=未归类)',
+    )
     parent_id = Column(
         BigInteger,
-        ForeignKey('wiki_category.id', ondelete='SET NULL'),
+        ForeignKey('kms_category.id', ondelete='SET NULL'),
         nullable=True,
         index=True,
         comment='父分类 ID (null=顶级)',

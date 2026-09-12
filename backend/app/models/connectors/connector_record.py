@@ -15,7 +15,7 @@ from app.models.tenant_mixin import TenantMixin
 class ConnectorIngest(Base, TenantMixin):
     """连接器落库记录（一条外部记录一行）。"""
 
-    __tablename__ = "connector_ingest"
+    __tablename__ = "meta_connector_ingest"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     connector_type = Column(String(32), nullable=False, comment="连接器类型: http|dingtalk|feishu|wecom")
@@ -35,7 +35,7 @@ class ConnectorIngest(Base, TenantMixin):
 class ConnectorSyncState(Base, TenantMixin):
     """每个「租户+连接器类型」的增量游标状态。"""
 
-    __tablename__ = "connector_sync_state"
+    __tablename__ = "meta_connector_sync_state"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     connector_type = Column(String(32), nullable=False, comment="连接器类型")

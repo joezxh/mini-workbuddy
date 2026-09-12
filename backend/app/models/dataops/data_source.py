@@ -14,7 +14,7 @@ from app.models.tenant_mixin import TenantMixin
 class DataSource(Base, TenantMixin):
     """数据源连接配置（mysql / doris / postgresql）。"""
 
-    __tablename__ = "data_source"
+    __tablename__ = "meta_data_source"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     name = Column(String(128), nullable=False, comment="显示名称")

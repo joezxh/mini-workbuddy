@@ -13,12 +13,12 @@ from app.models.tenant_mixin import TenantMixin
 
 class WikiArticleVersion(Base, TenantMixin):
     """Wiki 文章版本历史。"""
-    __tablename__ = 'wiki_article_version'
+    __tablename__ = 'kms_article_version'
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment='主键')
     article_id = Column(
         BigInteger,
-        ForeignKey('wiki_article.id', ondelete='CASCADE'),
+        ForeignKey('kms_article.id', ondelete='CASCADE'),
         nullable=False,
         index=True,
         comment='关联文章 ID',

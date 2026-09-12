@@ -14,11 +14,11 @@ from app.models.tenant_mixin import TenantMixin
 class DataWriteRequest(Base, TenantMixin):
     """数据写操作申请单（spec §5.7）。"""
 
-    __tablename__ = "data_write_request"
+    __tablename__ = "meta_data_write_request"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     source_id = Column(
-        BigInteger, ForeignKey("data_source.id", ondelete="CASCADE"), nullable=False, comment="数据源 ID"
+        BigInteger, ForeignKey("meta_data_source.id", ondelete="CASCADE"), nullable=False, comment="数据源 ID"
     )
     database = Column(String(128), nullable=True, comment="目标库")
     sql_text = Column(Text, nullable=False, comment="申请时提交的 SQL 原文")

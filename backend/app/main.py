@@ -154,6 +154,28 @@ async def lifespan(app: FastAPI):
                 _conn.execute(_text(
                     "ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS i18n_key VARCHAR(100)"
                 ))
+                # 知识库归属字段：category/article/search_log 补 knowledge_id
+                _conn.execute(_text(
+                    "ALTER TABLE kms_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
+                ))
+                _conn.execute(_text(
+                    "CREATE INDEX IF NOT EXISTS ix_kms_category_knowledge_id "
+                    "ON kms_category (knowledge_id)"
+                ))
+                _conn.execute(_text(
+                    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
+                ))
+                _conn.execute(_text(
+                    "CREATE INDEX IF NOT EXISTS ix_kms_article_knowledge_id "
+                    "ON kms_article (knowledge_id)"
+                ))
+                _conn.execute(_text(
+                    "ALTER TABLE kms_search_log ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
+                ))
+                _conn.execute(_text(
+                    "CREATE INDEX IF NOT EXISTS ix_kms_search_log_knowledge_id "
+                    "ON kms_search_log (knowledge_id)"
+                ))
         except Exception as _col_err:
             logger.warning(f"补齐新列失败(忽略): {_col_err}")
 

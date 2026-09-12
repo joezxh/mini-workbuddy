@@ -20,7 +20,7 @@ class MetaRelation(Base, TenantMixin):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     source_id = Column(
-        BigInteger, ForeignKey("data_source.id", ondelete="CASCADE"), nullable=False, comment="数据源 ID"
+        BigInteger, ForeignKey("meta_data_source.id", ondelete="CASCADE"), nullable=False, comment="数据源 ID"
     )
     database = Column(String(128), nullable=False, comment="库/schema")
 
