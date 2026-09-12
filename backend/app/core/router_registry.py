@@ -167,6 +167,9 @@ ROUTER_SPECS: List[RouterSpec] = [
         enabled=False,
         note="未启用：模块未完成，__init__.py 未导出",
     ),
+
+    # --- 30. 工作流管理 ---
+    RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),
 ]
 
 
