@@ -82,6 +82,13 @@ const routes: RouteRecordRaw[] = [
         name: 'AgentTeamReplay',
         component: () => import('@/views/admin/agent-team/TeamReplay.vue'),
         meta: { title: '运行回放', hidden: true }
+      },
+      // ── 工作流管理 ──
+      {
+        path: 'admin/workflow',
+        name: 'WorkflowManagement',
+        component: () => import('@/views/admin/workflow/WorkflowManagement.vue'),
+        meta: { title: '工作流管理', icon: 'ApiOutlined', requiresAdmin: true }
       }
     ]
   },
