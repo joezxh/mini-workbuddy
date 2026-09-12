@@ -1,37 +1,37 @@
 <template>
   <a-modal
     :open="visible"
-    :title="isEdit ? '编辑 Client' : '新增 Client'"
+    :title="isEdit ? t('mcpSquare.editClient') : t('mcpSquare.addClient')"
     width="560px"
     :confirm-loading="submitting"
     @ok="handleSubmit"
     @cancel="handleCancel"
   >
     <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-      <a-form-item label="名称" required>
-        <a-input v-model:value="form.name" placeholder="客户端名称" />
+      <a-form-item :label="t('mcpSquare.name')" required>
+        <a-input v-model:value="form.name" :placeholder="t('mcpSquare.clientNamePlaceholder')" />
       </a-form-item>
-      <a-form-item label="客户端类型" required>
-        <a-select v-model:value="form.client_type" placeholder="选择类型">
+      <a-form-item :label="t('mcpSquare.clientType')" required>
+        <a-select v-model:value="form.client_type" :placeholder="t('mcpSquare.selectType')">
           <a-select-option value="stdio">Stdio</a-select-option>
           <a-select-option value="http">HTTP</a-select-option>
           <a-select-option value="sse">SSE</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="应用类别" required>
-        <a-select v-model:value="form.mcp_type" placeholder="选择类别">
+      <a-form-item :label="t('mcpSquare.mcpType')" required>
+        <a-select v-model:value="form.mcp_type" :placeholder="t('mcpSquare.selectMcpType')">
           <a-select-option value="tool">Tool</a-select-option>
           <a-select-option value="resource">Resource</a-select-option>
         </a-select>
       </a-form-item>
-      <a-form-item label="版本">
-        <a-input v-model:value="form.version" placeholder="版本号" />
+      <a-form-item :label="t('skillHub.version')">
+        <a-input v-model:value="form.version" :placeholder="t('mcpSquare.versionNumPlaceholder')" />
       </a-form-item>
-      <a-form-item label="描述">
-        <a-textarea v-model:value="form.description" :rows="2" placeholder="描述" />
+      <a-form-item :label="t('skillHub.description')">
+        <a-textarea v-model:value="form.description" :rows="2" :placeholder="t('mcpSquare.descPlaceholder')" />
       </a-form-item>
-      <a-form-item label="备注">
-        <a-textarea v-model:value="form.remark" :rows="2" placeholder="备注" />
+      <a-form-item :label="t('mcpSquare.remark')">
+        <a-textarea v-model:value="form.remark" :rows="2" :placeholder="t('mcpSquare.remark')" />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createMcpClient, updateMcpClient, type McpClient } from '@/api/ai-mcp'
 
@@ -52,6 +53,8 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
   success: []
 }>()
+
+const { t } = useI18n()
 
 const isEdit = computed(() => !!props.record)
 const submitting = ref(false)
@@ -95,7 +98,7 @@ function buildPayload(): Record<string, any> {
 
 async function handleSubmit() {
   if (!form.name || !form.client_type || !form.mcp_type) {
-    message.warning('请填写必填字段')
+    message.warning(t('mcpSquare.fillRequired'))
     return
   }
   submitting.value = true
@@ -103,15 +106,15 @@ async function handleSubmit() {
     const data = buildPayload()
     if (isEdit.value && props.record) {
       await updateMcpClient({ id: props.record.id, ...data })
-      message.success('更新成功')
+      message.success(t('mcpSquare.updateSuccess'))
     } else {
       await createMcpClient({ api_key_id: props.apiKeyId, ...data })
-      message.success('创建成功')
+      message.success(t('mcpSquare.createSuccess'))
     }
     emit('update:visible', false)
     emit('success')
   } catch (e: any) {
-    const detail = e?.response?.data?.detail || '操作失败'
+    const detail = e?.response?.data?.detail || t('common.error')
     message.error(detail)
   } finally {
     submitting.value = false

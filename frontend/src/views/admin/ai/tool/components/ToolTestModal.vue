@@ -1,11 +1,11 @@
 <template>
   <a-modal
     v-model:open="visible"
-    title="工具测试"
+    :title="t('toolMgmt.testTitle')"
     width="640px"
     :confirm-loading="testing"
-    ok-text="执行测试"
-    cancel-text="关闭"
+    :ok-text="t('toolMgmt.runTest')"
+    :cancel-text="t('common.close')"
     @ok="handleTest"
     @cancel="visible = false"
   >
@@ -15,10 +15,10 @@
       show-icon
       style="margin-bottom: 16px"
       :message="`${tool.displayName}（${tool.toolKey}）`"
-      :description="tool.description || '未填写描述'"
+      :description="tool.description || t('toolMgmt.noDescription')"
     />
 
-    <a-empty v-if="!hasInputs" description="该工具未定义输入参数（inputSchema 为空）" style="margin: 24px 0" />
+    <a-empty v-if="!hasInputs" :description="t('toolMgmt.emptyInputs')" style="margin: 24px 0" />
 
     <a-form v-else :model="formData" layout="vertical" style="margin-top: 12px">
       <a-form-item
@@ -30,13 +30,13 @@
         <a-input
           v-if="field.type === 'string' && !field.enum"
           v-model:value="(formData as any)[key as string]"
-          :placeholder="field.description || '请输入文本'"
+          :placeholder="field.description || t('toolMgmt.inputTextPh')"
         />
         <!-- 枚举 -->
         <a-select
           v-else-if="field.enum"
           v-model:value="(formData as any)[key as string]"
-          :placeholder="field.description || '请选择'"
+          :placeholder="field.description || t('toolMgmt.selectOption')"
           allow-clear
         >
           <a-select-option v-for="opt in field.enum" :key="String(opt)" :value="opt">{{ opt }}</a-select-option>
@@ -46,7 +46,7 @@
           v-else-if="field.type === 'number' || field.type === 'integer'"
           v-model:value="(formData as any)[key as string]"
           style="width: 100%"
-          :placeholder="field.description || '请输入数字'"
+          :placeholder="field.description || t('toolMgmt.inputNumberPh')"
         />
         <!-- 布尔 -->
         <a-switch
@@ -58,18 +58,18 @@
           v-else
           v-model:value="jsonText[key as string]"
           :rows="3"
-          :placeholder="field.description || 'JSON 格式'"
+          :placeholder="field.description || t('toolMgmt.inputJsonPh')"
         />
       </a-form-item>
     </a-form>
 
     <!-- 测试结果 -->
-    <a-divider v-if="result" orientation="left">测试结果</a-divider>
+    <a-divider v-if="result" orientation="left">{{ t('toolMgmt.resultTitle') }}</a-divider>
     <div v-if="result">
       <a-alert
         :type="result.success ? 'success' : 'error'"
         show-icon
-        :message="result.success ? '执行成功' : '执行失败'"
+        :message="result.success ? t('toolMgmt.execSuccess') : t('toolMgmt.execFailed')"
         :description="result.error || ''"
       />
       <pre v-if="result.success" class="test-output">{{ formatOutput(result.output) }}</pre>
@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { testTool, type AiTool } from '@/api/ai-tool'
 
@@ -86,6 +87,8 @@ const props = defineProps<{
   open: boolean
   tool?: AiTool | null
 }>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
@@ -172,7 +175,7 @@ const handleTest = async () => {
     })
     result.value = res
   } catch (e: any) {
-    message.error(e.message || '测试请求失败')
+    message.error(e.message || t('toolMgmt.testRequestFailed'))
   } finally {
     testing.value = false
   }

@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="visible"
-    title="安装 MCP 服务"
+    :title="t('mcpSquare.installTitle')"
     width="600px"
     :confirm-loading="submitting"
     @ok="handleSubmit"
@@ -15,46 +15,46 @@
           <a-tag>{{ serviceTypeLabel(template.service_type) }}</a-tag>
           <a-tag v-if="template.category">{{ categoryLabel(template.category) }}</a-tag>
         </div>
-        <p class="template-desc">{{ template.description || '暂无描述' }}</p>
+        <p class="template-desc">{{ template.description || t('mcpSquare.noDescription') }}</p>
       </div>
 
       <a-divider style="margin: 12px 0" />
 
       <!-- 安装参数表单 -->
       <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
-        <a-form-item label="服务名称">
+        <a-form-item :label="t('mcpSquare.serviceName')">
           <a-input v-model:value="form.name" :placeholder="template.name" />
         </a-form-item>
 
         <!-- HTTP/SSE 字段 -->
         <template v-if="isHttpOrSse">
-          <a-form-item label="服务地址" required>
+          <a-form-item :label="t('mcpSquare.serviceUrl')" required>
             <a-input v-model:value="form.service_url" :placeholder="template.service_url || 'https://...'" />
           </a-form-item>
-          <a-form-item label="访问路径">
+          <a-form-item :label="t('mcpSquare.accessPath')">
             <a-input v-model:value="form.access_path" :placeholder="template.access_path || '/mcp'" />
           </a-form-item>
           <a-form-item label="API Key">
-            <a-input-password v-model:value="form.api_key" placeholder="鉴权密钥（选填）" />
+            <a-input-password v-model:value="form.api_key" :placeholder="t('mcpSquare.authKeyOptional')" />
           </a-form-item>
         </template>
 
         <!-- Nacos 字段 -->
         <template v-if="isNacos">
-          <a-form-item label="Nacos 地址" required>
+          <a-form-item :label="t('mcpSquare.nacosUrl')" required>
             <a-input v-model:value="form.service_url" :placeholder="template.service_url || 'http://nacos:8848'" />
           </a-form-item>
-          <a-form-item label="服务名" required>
-            <a-input v-model:value="form.service_name" placeholder="Nacos 注册的服务名" />
+          <a-form-item :label="t('mcpSquare.serviceName')" required>
+            <a-input v-model:value="form.service_name" :placeholder="t('mcpSquare.nacosServiceNamePlaceholder')" />
           </a-form-item>
-          <a-form-item label="命名空间">
-            <a-input v-model:value="form.namespace" placeholder="namespace（选填）" />
+          <a-form-item :label="t('mcpSquare.namespace')">
+            <a-input v-model:value="form.namespace" :placeholder="t('mcpSquare.namespaceOptional')" />
           </a-form-item>
-          <a-form-item label="分组">
-            <a-input v-model:value="form.group_key" placeholder="group（选填）" />
+          <a-form-item :label="t('mcpSquare.group')">
+            <a-input v-model:value="form.group_key" :placeholder="t('mcpSquare.groupOptional')" />
           </a-form-item>
           <a-form-item label="API Key">
-            <a-input-password v-model:value="form.api_key" placeholder="鉴权密钥（选填）" />
+            <a-input-password v-model:value="form.api_key" :placeholder="t('mcpSquare.authKeyOptional')" />
           </a-form-item>
         </template>
       </a-form>
@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   installMcpSquare,
@@ -81,6 +82,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
+const { t } = useI18n()
 const submitting = ref(false)
 
 const defaultForm = (): McpSquareInstallData => ({
@@ -97,34 +99,35 @@ const defaultForm = (): McpSquareInstallData => ({
 const form = reactive<McpSquareInstallData>(defaultForm())
 
 const isNacos = computed(() => {
-  const t = props.template?.service_type
-  return t === 'nacos2' || t === 'nacos3'
+  const st = props.template?.service_type
+  return st === 'nacos2' || st === 'nacos3'
 })
 const isHttpOrSse = computed(() => {
-  const t = props.template?.service_type
-  return t === 'http' || t === 'sse'
+  const st = props.template?.service_type
+  return st === 'http' || st === 'sse'
 })
 
+// 服务类型为代码值，保留原映射
 const SERVICE_TYPE_LABEL: Record<string, string> = {
   nacos2: 'Nacos 2.x',
   nacos3: 'Nacos 3.x',
   http: 'HTTP',
   sse: 'SSE',
 }
-const CATEGORY_LABEL: Record<string, string> = {
-  finance: '金融投资',
-  sales: '销售营销',
-  legal: '法律合规',
-  office: '办公OA',
-  education: '教育学习',
-}
-function serviceTypeLabel(t?: string | null): string {
-  if (!t) return '-'
-  return SERVICE_TYPE_LABEL[t] || t
+function serviceTypeLabel(type?: string | null): string {
+  if (!type) return '-'
+  return SERVICE_TYPE_LABEL[type] || type
 }
 function categoryLabel(c?: string | null): string {
   if (!c) return ''
-  return CATEGORY_LABEL[c] || c
+  const map: Record<string, string> = {
+    finance: t('mcpSquare.catFinance'),
+    sales: t('mcpSquare.catSales'),
+    legal: t('mcpSquare.catLegal'),
+    office: t('mcpSquare.catOffice'),
+    education: t('mcpSquare.catEducation'),
+  }
+  return map[c] || c
 }
 
 watch(() => props.visible, (val) => {
@@ -150,22 +153,22 @@ async function handleSubmit() {
 
   // 校验必填
   if (isHttpOrSse.value && !form.service_url) {
-    message.warning('请填写服务地址')
+    message.warning(t('mcpSquare.serviceUrlRequired'))
     return
   }
   if (isNacos.value && (!form.service_url || !form.service_name)) {
-    message.warning('请填写 Nacos 地址和服务名')
+    message.warning(t('mcpSquare.nacosRequired'))
     return
   }
 
   submitting.value = true
   try {
     await installMcpSquare({ ...form })
-    message.success('安装成功')
+    message.success(t('mcpSquare.installSuccess'))
     emit('update:visible', false)
     emit('success')
   } catch {
-    message.error('安装失败')
+    message.error(t('mcpSquare.installFailed'))
   } finally {
     submitting.value = false
   }

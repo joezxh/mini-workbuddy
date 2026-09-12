@@ -8,7 +8,7 @@
         <span v-else class="think-icon-done">💡</span>
       </span>
       <span class="think-label">
-        {{ thinking ? '思考中...' : '已深度思考' }}
+        {{ thinking ? '{{ t('apiKeyMgmt.thinkingInProgress') }}' : '已深度思考' }}
       </span>
       <span class="think-toggle">
         <svg

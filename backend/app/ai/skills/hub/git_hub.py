@@ -167,6 +167,8 @@ class GitHubAdapter(SkillHubAdapter):
         "destination path already exists and is not an empty directory"。
 
         目录存在但非完整克隆（空目录、克隆中途失败、HEAD 损坏）时，清理后重新克隆。
+        若清理失败（目录被占用），回退为克隆到临时兄弟目录，成功后原子替换——
+        避免对非空目录直接 clone 必然 128 的问题。
         """
         cache = self.cache_dir
 
@@ -181,8 +183,19 @@ class GitHubAdapter(SkillHubAdapter):
             self._remove_cache(cache)
 
         cache.parent.mkdir(parents=True, exist_ok=True)
+
+        # 删除失败仍非空时，git clone 进原目录必报 "already exists"；
+        # 此时改克隆到临时目录，成功后再尝试替换回正式路径。
+        target = cache
+        if self._dir_not_empty(cache):
+            target = cache.with_name(cache.name + ".clone-tmp")
+            self._remove_cache(target)
+            logger.warning(
+                "缓存目录被占用无法清空，改用临时目录克隆: %s -> %s", cache, target
+            )
+
         clone_url = self._clone_url()
-        logger.info("克隆 skill hub 仓库 %s -> %s", self._safe_url(), cache)
+        logger.info("克隆 skill hub 仓库 %s -> %s", self._safe_url(), target)
 
         last_err: Exception | None = None
         for attempt in range(3):
@@ -196,12 +209,22 @@ class GitHubAdapter(SkillHubAdapter):
                         self.branch,
                         self._safe_url(),
                     )
-                self._run_clone(cache, clone_url, branch)
-                if self._is_valid_clone(cache):
+                self._run_clone(target, clone_url, branch)
+                if self._is_valid_clone(target):
+                    if target != cache:
+                        self._remove_cache(cache)
+                        if cache.exists():
+                            # 正式路径仍被占用，无法替换；保留 tmp 供下次直接 pull
+                            self._remove_cache(target)
+                            raise RuntimeError(
+                                f"缓存目录被占用无法替换: {cache}；"
+                                "请关闭占用该目录的进程（IDE/杀软/索引器）后重试"
+                            )
+                        target.rename(cache)
                     return cache
                 # clone 退出码为 0 但工作树不完整（极罕见）：清掉重来
-                logger.warning("克隆结束但工作树不完整，重试: %s", cache)
-                self._remove_cache(cache)
+                logger.warning("克隆结束但工作树不完整，重试: %s", target)
+                self._remove_cache(target)
                 last_err = RuntimeError("克隆后工作树校验失败")
                 continue
             except subprocess.CalledProcessError as e:
@@ -212,14 +235,16 @@ class GitHubAdapter(SkillHubAdapter):
                     (e.stderr or e.stdout or str(e)).strip().splitlines()[-1:],
                 )
                 # .git 已就绪但工作树 checkout 失败 → 就地重建工作树
-                if (cache / ".git").exists() and self._recover_checkout(cache):
-                    return cache
-                self._remove_cache(cache)
+                if (target / ".git").exists() and self._recover_checkout(target):
+                    if target != cache:
+                        return self._promote_tmp(target, cache)
+                    return target
+                self._remove_cache(target)
                 time.sleep(0.5 * (attempt + 1))
             except subprocess.TimeoutExpired as e:
                 last_err = e
                 logger.warning("git clone 超时(尝试 %d/3)", attempt + 1)
-                self._remove_cache(cache)
+                self._remove_cache(target)
             except FileNotFoundError as e:
                 raise RuntimeError("未找到 git 命令，请确认运行环境已安装 git") from e
 
@@ -227,6 +252,23 @@ class GitHubAdapter(SkillHubAdapter):
             "克隆仓库失败: "
             + (getattr(last_err, "stderr", "") or getattr(last_err, "stdout", "") or str(last_err))
         ) from last_err
+
+    def _promote_tmp(self, target: Path, cache: Path) -> Path:
+        """把临时目录克隆结果替换到正式缓存路径；替换失败时返回 tmp 路径兜底。"""
+        self._remove_cache(cache)
+        if cache.exists():
+            logger.warning("正式缓存目录仍被占用，暂用临时目录: %s", target)
+            return target
+        target.rename(cache)
+        return cache
+
+    @staticmethod
+    def _dir_not_empty(path: Path) -> bool:
+        """目录是否存在且包含任何条目（路径不存在视为空）。"""
+        try:
+            return any(path.iterdir())
+        except OSError:
+            return False
 
     def _run_clone(self, cache: Path, clone_url: str, branch: Optional[str] = None) -> None:
         """执行 git clone（启用 core.longpaths 规避 Windows 长路径 checkout 失败）。

@@ -82,7 +82,7 @@
                 {{ record.status === 1 ? '禁用' : '启用' }}
               </a-button>
               <a-popconfirm
-                title="确定删除该模型？"
+                :title="t('apiKeyMgmt.deleteModelConfirm')"
                 ok-text="确定"
                 cancel-text="取消"
                 @confirm="handleDelete(record)"

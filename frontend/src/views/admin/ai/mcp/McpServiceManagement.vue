@@ -2,16 +2,16 @@
   <div class="mcp-service-management">
     <a-tabs v-model:activeKey="activeTab" class="mcp-tabs">
       <!-- ============ Tab 1: 我的 MCP ============ -->
-      <a-tab-pane key="my-mcp" tab="我的 MCP">
+      <a-tab-pane key="my-mcp" :tab="t('mcpSquare.tabMyMcp')">
         <div class="panel-header">
           <div class="header-left">
-            <h2>MCP API Key 管理</h2>
-            <p class="sub">管理 MCP 服务发布凭证，支持多服务类型配置</p>
+            <h2>{{ t('mcpSquare.apiKeyTitle') }}</h2>
+            <p class="sub">{{ t('mcpSquare.apiKeySubtitle') }}</p>
           </div>
           <div class="header-actions">
             <a-button type="primary" @click="showCreateModal">
               <template #icon><PlusOutlined /></template>
-              新增 API Key
+              {{ t('mcpSquare.addApiKey') }}
             </a-button>
           </div>
         </div>
@@ -20,7 +20,7 @@
         <div class="search-bar">
           <a-input-search
             v-model:value="filters.name"
-            placeholder="搜索名称"
+            :placeholder="t('mcpSquare.searchName')"
             allow-clear
             style="width: 200px"
             @search="handleSearch"
@@ -28,7 +28,7 @@
           />
           <a-select
             v-model:value="filters.service_type"
-            placeholder="服务类型"
+            :placeholder="t('mcpSquare.serviceType')"
             allow-clear
             style="width: 160px"
             @change="handleSearch"
@@ -40,15 +40,15 @@
           </a-select>
           <a-select
             v-model:value="filters.status"
-            placeholder="状态"
+            :placeholder="t('skillHub.status')"
             allow-clear
             style="width: 120px"
             @change="handleSearch"
           >
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="0">禁用</a-select-option>
+            <a-select-option :value="1">{{ t('skillHub.enabled') }}</a-select-option>
+            <a-select-option :value="0">{{ t('skillHub.disabled') }}</a-select-option>
           </a-select>
-          <a-button @click="handleReset"><ReloadOutlined /> 重置</a-button>
+          <a-button @click="handleReset"><ReloadOutlined /> {{ t('common.reset') }}</a-button>
         </div>
 
         <!-- 表格 -->
@@ -73,10 +73,10 @@
             <span class="protocol-text">{{ row.protocol_type || '-' }}</span>
           </template>
           <template #status="{ row }">
-            <a-badge :status="row.status === 1 ? 'success' : 'default'" :text="row.status === 1 ? '启用' : '禁用'" />
+            <a-badge :status="row.status === 1 ? 'success' : 'default'" :text="row.status === 1 ? t('skillHub.enabled') : t('skillHub.disabled')" />
           </template>
           <template #health="{ row }">
-            <a-tooltip :title="row.last_check_at ? `检测于 ${row.last_check_at}` : '未检测'">
+            <a-tooltip :title="row.last_check_at ? t('mcpSquare.checkedAt', { time: row.last_check_at }) : t('mcpSquare.notChecked')">
               <a-badge
                 :status="healthBadge(row.health_status)"
                 :text="healthLabel(row.health_status)"
@@ -85,11 +85,11 @@
           </template>
           <template #action="{ row }">
             <a-space>
-              <a-button type="link" size="small" :loading="testingId === row.id" @click="handleTestConnection(row)">测试</a-button>
-              <a-button type="link" size="small" @click="handleEdit(row)">编辑</a-button>
+              <a-button type="link" size="small" :loading="testingId === row.id" @click="handleTestConnection(row)">{{ t('mcpSquare.test') }}</a-button>
+              <a-button type="link" size="small" @click="handleEdit(row)">{{ t('common.edit') }}</a-button>
               <a-button type="link" size="small" @click="handleClientManage(row)">Client</a-button>
-              <a-popconfirm title="确定删除？" @confirm="handleDelete(row)">
-                <a-button type="link" size="small" danger>删除</a-button>
+              <a-popconfirm :title="t('mcpSquare.deleteConfirm')" @confirm="handleDelete(row)">
+                <a-button type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -97,23 +97,23 @@
       </a-tab-pane>
 
       <!-- ============ Tab 2: MCP 广场 ============ -->
-      <a-tab-pane key="mcp-square" tab="MCP 广场">
+      <a-tab-pane key="mcp-square" :tab="t('mcpSquare.tabSquare')">
         <div class="panel-header">
           <div class="header-left">
-            <h2>MCP 服务广场</h2>
-            <p class="sub">浏览、安装与管理预配置 MCP 服务模板</p>
+            <h2>{{ t('mcpSquare.squareTitle') }}</h2>
+            <p class="sub">{{ t('mcpSquare.squareSubtitle') }}</p>
           </div>
           <div class="header-actions">
             <a-button type="primary" @click="handleAddTemplate">
               <template #icon><PlusOutlined /></template>
-              新增模板
+              {{ t('mcpSquare.addTemplate') }}
             </a-button>
           </div>
         </div>
         <div class="search-bar">
           <a-input-search
             v-model:value="squareFilters.name"
-            placeholder="搜索模板名称"
+            :placeholder="t('mcpSquare.searchTemplate')"
             allow-clear
             style="width: 200px"
             @search="handleSquareSearch"
@@ -121,28 +121,28 @@
           />
           <a-select
             v-model:value="squareFilters.category"
-            placeholder="分类"
+            :placeholder="t('mcpSquare.category')"
             allow-clear
             style="width: 160px"
             @change="handleSquareSearch"
           >
-            <a-select-option value="finance">金融投资</a-select-option>
-            <a-select-option value="sales">销售营销</a-select-option>
-            <a-select-option value="legal">法律合规</a-select-option>
-            <a-select-option value="office">办公OA</a-select-option>
-            <a-select-option value="education">教育学习</a-select-option>
+            <a-select-option value="finance">{{ t('mcpSquare.catFinance') }}</a-select-option>
+            <a-select-option value="sales">{{ t('mcpSquare.catSales') }}</a-select-option>
+            <a-select-option value="legal">{{ t('mcpSquare.catLegal') }}</a-select-option>
+            <a-select-option value="office">{{ t('mcpSquare.catOffice') }}</a-select-option>
+            <a-select-option value="education">{{ t('mcpSquare.catEducation') }}</a-select-option>
           </a-select>
           <a-select
             v-model:value="squareFilters.status"
-            placeholder="状态"
+            :placeholder="t('skillHub.status')"
             allow-clear
             style="width: 120px"
             @change="handleSquareSearch"
           >
-            <a-select-option :value="1">启用</a-select-option>
-            <a-select-option :value="0">禁用</a-select-option>
+            <a-select-option :value="1">{{ t('skillHub.enabled') }}</a-select-option>
+            <a-select-option :value="0">{{ t('skillHub.disabled') }}</a-select-option>
           </a-select>
-          <a-button @click="handleSquareReset"><ReloadOutlined /> 重置</a-button>
+          <a-button @click="handleSquareReset"><ReloadOutlined /> {{ t('common.reset') }}</a-button>
         </div>
         <a-row :gutter="[16, 16]">
           <a-col v-for="tpl in squareList" :key="tpl.id" :xs="24" :sm="12" :md="8" :lg="6">
@@ -150,47 +150,47 @@
               <template #title>
                 <div class="card-title">
                   <span class="card-name">{{ tpl.name }}</span>
-                  <a-tag v-if="tpl.is_installed" color="green">已安装</a-tag>
+                  <a-tag v-if="tpl.is_installed" color="green">{{ t('mcpSquare.installed') }}</a-tag>
                 </div>
               </template>
-              <p class="card-desc">{{ tpl.description || '暂无描述' }}</p>
+              <p class="card-desc">{{ tpl.description || t('mcpSquare.noDescription') }}</p>
               <div class="card-meta">
                 <a-tag :color="serviceTypeColor(tpl.service_type)">
                   {{ serviceTypeLabel(tpl.service_type) }}
                 </a-tag>
                 <a-tag v-if="tpl.category">{{ categoryLabel(tpl.category) }}</a-tag>
-                <a-tag v-if="tpl.status === 0" color="default">已禁用</a-tag>
+                <a-tag v-if="tpl.status === 0" color="default">{{ t('mcpSquare.disabledTag') }}</a-tag>
               </div>
               <template #actions>
-                <a-button type="link" size="small" @click="handleViewDetail(tpl)">详情</a-button>
-                <a-button type="link" size="small" @click="handleEditTemplate(tpl)">编辑</a-button>
+                <a-button type="link" size="small" @click="handleViewDetail(tpl)">{{ t('mcpSquare.detail') }}</a-button>
+                <a-button type="link" size="small" @click="handleEditTemplate(tpl)">{{ t('common.edit') }}</a-button>
                 <a-button
                   v-if="!tpl.is_installed"
                   type="link"
                   size="small"
                   @click="handleInstall(tpl)"
-                >安装</a-button>
+                >{{ t('skillHub.install') }}</a-button>
                 <a-popconfirm
                   v-else
-                  title="确定卸载？卸载后将无法恢复。"
+                  :title="t('mcpSquare.uninstallConfirm')"
                   @confirm="handleUninstall(tpl)"
                 >
-                  <a-button type="link" size="small" danger>卸载</a-button>
+                  <a-button type="link" size="small" danger>{{ t('mcpSquare.uninstall') }}</a-button>
                 </a-popconfirm>
                 <a-popconfirm
-                  title="确定删除此模板？"
-                  ok-text="取消删除"
-                  cancel-text="强制删除"
+                  :title="t('mcpSquare.deleteTemplateConfirm')"
+                  :ok-text="t('mcpSquare.cancelDelete')"
+                  :cancel-text="t('mcpSquare.forceDelete')"
                   @confirm="handleSoftDelete(tpl)"
                   @cancel="handleForceDelete(tpl)"
                 >
-                  <a-button type="link" size="small" danger>删除</a-button>
+                  <a-button type="link" size="small" danger>{{ t('common.delete') }}</a-button>
                 </a-popconfirm>
               </template>
             </a-card>
           </a-col>
         </a-row>
-        <a-empty v-if="squareList.length === 0" description="暂无模板" />
+        <a-empty v-if="squareList.length === 0" :description="t('mcpSquare.noTemplates')" />
         <div v-else class="square-pagination">
           <a-pagination
             v-model:current="squarePagination.page"
@@ -199,7 +199,7 @@
             show-size-changer
             :page-size-options="['10', '20', '50']"
             show-quick-jumper
-            :show-total="(total: number) => `共 ${total} 条`"
+            :show-total="(total: number) => t('common.total', { total })"
             @change="handleSquarePageChange"
             @showSizeChange="handleSquarePageSizeChange"
           />
@@ -244,7 +244,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import BackTable from '@/components/common/BackTable/index.vue'
@@ -265,6 +266,7 @@ import {
 } from '@/api/ai-mcp'
 
 const activeTab = ref('my-mcp')
+const { t } = useI18n()
 
 // ============= API Key 列表 =============
 const loading = ref(false)
@@ -276,30 +278,23 @@ const filters = reactive({
   status: undefined as number | undefined,
 })
 
-const apiKeyColumns = [
-  { title: '名称', key: 'name', dataIndex: 'name', width: 180, ellipsis: true },
-  { title: '服务类型', key: 'service_type', dataIndex: 'service_type', width: 100 },
-  { title: '协议类型', key: 'protocol_type', dataIndex: 'protocol_type', width: 130 },
-  { title: '状态', key: 'status', dataIndex: 'status', width: 80 },
-  { title: '健康', key: 'health', dataIndex: 'health_status', width: 100 },
-  { title: '创建人', key: 'creator', dataIndex: 'creator', width: 90 },
-  { title: '创建时间', key: 'created_at', dataIndex: 'created_at', width: 160 },
-  { title: '操作', key: 'action', width: 220, fixed: 'right' as const },
-]
+const apiKeyColumns = computed(() => [
+  { title: t('mcpSquare.name'), key: 'name', dataIndex: 'name', width: 180, ellipsis: true },
+  { title: t('mcpSquare.serviceType'), key: 'service_type', dataIndex: 'service_type', width: 100 },
+  { title: t('mcpSquare.protocolType'), key: 'protocol_type', dataIndex: 'protocol_type', width: 130 },
+  { title: t('skillHub.status'), key: 'status', dataIndex: 'status', width: 80 },
+  { title: t('mcpSquare.health'), key: 'health', dataIndex: 'health_status', width: 100 },
+  { title: t('mcpSquare.creator'), key: 'creator', dataIndex: 'creator', width: 90 },
+  { title: t('skillHub.createdAt'), key: 'created_at', dataIndex: 'created_at', width: 160 },
+  { title: t('mcpSquare.action'), key: 'action', width: 220, fixed: 'right' as const },
+])
 
-// 服务类型 → 显示文本/颜色映射
+// 服务类型 → 显示文本/颜色映射（代码值，无需翻译）
 const SERVICE_TYPE_LABEL: Record<string, string> = {
   nacos2: 'Nacos 2.x',
   nacos3: 'Nacos 3.x',
   http: 'HTTP',
   sse: 'SSE',
-}
-const CATEGORY_LABEL: Record<string, string> = {
-  finance: '金融投资',
-  sales: '销售营销',
-  legal: '法律合规',
-  office: '办公OA',
-  education: '教育学习',
 }
 
 function serviceTypeLabel(type: string): string {
@@ -315,7 +310,14 @@ function serviceTypeColor(type: string): string {
   return map[type] || 'default'
 }
 function categoryLabel(cat: string): string {
-  return CATEGORY_LABEL[cat] || cat
+  const map: Record<string, string> = {
+    finance: t('mcpSquare.catFinance'),
+    sales: t('mcpSquare.catSales'),
+    legal: t('mcpSquare.catLegal'),
+    office: t('mcpSquare.catOffice'),
+    education: t('mcpSquare.catEducation'),
+  }
+  return map[cat] || cat
 }
 
 async function loadData() {
@@ -332,7 +334,7 @@ async function loadData() {
     pagination.total = res.total ?? 0
   } catch (e) {
     console.error('加载 MCP API Key 失败', e)
-    message.error('加载失败')
+    message.error(t('mcpSquare.loadFailed'))
     apiKeyList.value = []
     pagination.total = 0
   } finally {
@@ -380,10 +382,10 @@ function handleEdit(record: McpApiKey) {
 async function handleDelete(record: McpApiKey) {
   try {
     await deleteMcpApiKey(record.id)
-    message.success('删除成功')
+    message.success(t('mcpSquare.deleteSuccess'))
     loadData()
   } catch {
-    message.error('删除失败')
+    message.error(t('mcpSquare.deleteFailed'))
   }
 }
 
@@ -432,7 +434,7 @@ async function loadSquareData() {
     squarePagination.total = res.total ?? 0
   } catch (e) {
     console.error('加载 MCP 广场模板失败', e)
-    message.error('加载广场模板失败')
+    message.error(t('mcpSquare.loadSquareFailed'))
     squareList.value = []
     squarePagination.total = 0
   }
@@ -478,15 +480,15 @@ async function handleUninstall(tpl: McpSquareTemplate) {
     const key = apiKeyList.value.find(k => k.template_id === tpl.id)
     if (key) {
       await uninstallMcpSquare(key.id)
-      message.success('卸载成功')
+      message.success(t('mcpSquare.uninstallSuccess'))
       tpl.is_installed = false
       loadData()
       loadSquareData()
     } else {
-      message.warning('未找到已安装的 API Key，请刷新后重试')
+      message.warning(t('mcpSquare.uninstallNoKey'))
     }
   } catch {
-    message.error('卸载失败')
+    message.error(t('mcpSquare.uninstallFailed'))
   }
 }
 
@@ -512,17 +514,17 @@ function handleViewDetail(tpl: McpSquareTemplate) {
 async function handleSoftDelete(tpl: McpSquareTemplate) {
   try {
     await deleteMcpSquare(tpl.id, false)
-    message.success('删除成功')
+    message.success(t('mcpSquare.deleteSuccess'))
     loadSquareData()
   } catch (e: any) {
     // 后端返回 400 时让用户选择强制删除
-    const msg = e?.response?.data?.detail || '删除失败'
+    const msg = e?.response?.data?.detail || t('mcpSquare.deleteFailed')
     Modal.confirm({
-      title: '无法直接删除',
-      content: `${msg}\n是否级联删除所有关联的 API Key 和 Client？`,
-      okText: '强制删除',
+      title: t('mcpSquare.cannotDeleteTitle'),
+      content: t('mcpSquare.cascadeDeleteConfirm', { msg }),
+      okText: t('mcpSquare.forceDelete'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       onOk: () => handleForceDelete(tpl, true),
     })
   }
@@ -532,11 +534,11 @@ async function handleSoftDelete(tpl: McpSquareTemplate) {
 async function handleForceDelete(tpl: McpSquareTemplate, silent = false) {
   try {
     await deleteMcpSquare(tpl.id, true)
-    message.success('已强制删除模板及其关联的 API Key')
+    message.success(t('mcpSquare.forceDeleteSuccess'))
     loadSquareData()
     loadData()
   } catch {
-    if (!silent) message.error('强制删除失败')
+    if (!silent) message.error(t('mcpSquare.forceDeleteFailed'))
   }
 }
 
@@ -550,12 +552,12 @@ async function handleTestConnection(row: McpApiKey) {
     row.health_status = res.health_status
     row.last_check_at = res.checked_at
     if (res.health_status === 'healthy') {
-      message.success(`连接正常：${res.detail}`)
+      message.success(t('mcpSquare.connOk', { detail: res.detail }))
     } else {
-      message.warning(`连接异常：${res.detail}`)
+      message.warning(t('mcpSquare.connBad', { detail: res.detail }))
     }
   } catch {
-    message.error('测试失败')
+    message.error(t('mcpSquare.testFailed'))
   } finally {
     testingId.value = 0
   }
@@ -568,9 +570,9 @@ function healthBadge(status: string): 'success' | 'error' | 'default' {
 }
 
 function healthLabel(status: string): string {
-  if (status === 'healthy') return '健康'
-  if (status === 'unhealthy') return '异常'
-  return '未知'
+  if (status === 'healthy') return t('mcpSquare.health')
+  if (status === 'unhealthy') return t('mcpSquare.unhealthy')
+  return t('mcpSquare.unknown')
 }
 
 onMounted(() => {

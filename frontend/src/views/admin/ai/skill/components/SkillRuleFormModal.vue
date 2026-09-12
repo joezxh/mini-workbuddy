@@ -1,13 +1,13 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑技能规则' : '新建技能规则'"
+    :title="isEdit ? t('skillMgmt.editRule') : t('skillMgmt.newRule')"
     :width="800"
     :confirm-loading="submitting"
     @ok="handleSubmit"
     @cancel="handleCancel"
-    ok-text="保存"
-    cancel-text="取消"
+    :ok-text="t('common.save')"
+    :cancel-text="t('common.cancel')"
   >
     <a-form
       ref="formRef"
@@ -16,14 +16,14 @@
       :label-col="{ span: 5 }"
       :wrapper-col="{ span: 18 }"
     >
-      <a-form-item label="规则名称" name="name">
-        <a-input v-model:value="formData.name" placeholder="如：劳动纠纷自动匹配" />
+      <a-form-item :label="t('skillHub.ruleName')" name="name">
+        <a-input v-model:value="formData.name" :placeholder="t('skillMgmt.ruleNamePlaceholder')" />
       </a-form-item>
 
-      <a-form-item label="技能包" name="package_id">
+      <a-form-item :label="t('skillMgmt.package')" name="package_id">
         <a-select
           v-model:value="formData.package_id"
-          placeholder="选择技能包"
+          :placeholder="t('skillMgmt.selectPackage')"
           :loading="loadingPackages"
           show-search
           :filter-option="filterPackageOption"
@@ -39,15 +39,15 @@
         </a-select>
       </a-form-item>
 
-      <a-form-item label="关联专家" name="agent_name">
+      <a-form-item :label="t('skillMgmt.agent')" name="agent_name">
         <a-input
           v-model:value="formData.agent_name"
-          placeholder="留空表示全局规则，填写则仅该专家可用"
+          :placeholder="t('skillMgmt.agentPlaceholder')"
           allow-clear
         />
       </a-form-item>
 
-      <a-form-item label="优先级" name="priority">
+      <a-form-item :label="t('skillHub.rulePriority')" name="priority">
         <div style="display: flex; align-items: center; gap: 8px;">
           <a-input-number
             v-model:value="formData.priority"
@@ -55,56 +55,56 @@
             :max="9999"
             style="width: 200px"
           />
-          <span class="form-hint" style="margin: 0">数字越小越先执行（建议 1-100）</span>
+          <span class="form-hint" style="margin: 0">{{ t('skillMgmt.priorityHint') }}</span>
         </div>
       </a-form-item>
 
-      <a-form-item label="触发条件" :wrapper-col="{ span: 18, offset: 0 }">
+      <a-form-item :label="t('skillHub.ruleConditions')" :wrapper-col="{ span: 18, offset: 0 }">
         <div class="conditions-builder">
           <a-form
             :label-col="{ span: 6 }"
             :wrapper-col="{ span: 17 }"
             style="background: transparent"
           >
-            <a-form-item label="事件类型">
+            <a-form-item :label="t('skillMgmt.eventType')">
               <a-select
                 v-model:value="formData.conditions.event_types"
                 mode="tags"
-                placeholder="如：金融风险、法律风险"
+                :placeholder="t('skillMgmt.eventTypePlaceholder')"
                 style="width: 100%"
                 allow-clear
               />
             </a-form-item>
 
-            <a-form-item label="关键词">
+            <a-form-item :label="t('skillMgmt.keywords')">
               <a-select
                 v-model:value="formData.conditions.keywords"
                 mode="tags"
-                placeholder="如：违约、诉讼、债务"
+                :placeholder="t('skillMgmt.keywordsPlaceholder')"
                 style="width: 100%"
                 allow-clear
               />
             </a-form-item>
 
-            <a-form-item label="时间范围">
+            <a-form-item :label="t('skillMgmt.timeRange')">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <a-time-picker
                   v-model:value="formData.conditions.time_start"
                   format="HH:mm"
-                  placeholder="开始"
+                  :placeholder="t('skillMgmt.start')"
                   style="width: 120px"
                 />
                 <span style="color: var(--fg-muted)">~</span>
                 <a-time-picker
                   v-model:value="formData.conditions.time_end"
                   format="HH:mm"
-                  placeholder="结束"
+                  :placeholder="t('skillMgmt.end')"
                   style="width: 120px"
                 />
               </div>
             </a-form-item>
 
-            <a-form-item label="风险等级 ≥">
+            <a-form-item :label="t('skillMgmt.riskLevelGte')">
               <a-input-number
                 v-model:value="formData.conditions.risk_level_gte"
                 :min="0"
@@ -113,7 +113,7 @@
               />
             </a-form-item>
 
-            <a-form-item label="自定义条件">
+            <a-form-item :label="t('skillMgmt.customConditions')">
               <a-textarea
                 v-model:value="customConditionsJson"
                 placeholder='{"region": "华东"}'
@@ -125,11 +125,11 @@
         </div>
       </a-form-item>
 
-      <a-form-item label="启用状态">
+      <a-form-item :label="t('skillMgmt.activeStatus')">
         <a-switch
           v-model:checked="formData.is_active"
-          checked-children="启用"
-          un-checked-children="禁用"
+          :checked-children="t('skillHub.enabled')"
+          :un-checked-children="t('skillHub.disabled')"
         />
       </a-form-item>
     </a-form>
@@ -138,6 +138,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import dayjs, { Dayjs } from 'dayjs'
 import {
@@ -158,6 +159,7 @@ const emit = defineEmits<{
 }>()
 
 const visible = defineModel<boolean>('visible', { default: false })
+const { t } = useI18n()
 const submitting = ref(false)
 const loadingPackages = ref(false)
 const formRef = ref<any>(null)
@@ -184,11 +186,11 @@ const formData = reactive({
   },
 })
 
-const rules = {
-  name: [{ required: true, message: '请输入规则名称' }],
-  package_id: [{ required: true, message: '请选择技能包' }],
-  priority: [{ required: true, message: '请输入优先级' }],
-}
+const rules = computed(() => ({
+  name: [{ required: true, message: t('skillMgmt.ruleNameRequired') }],
+  package_id: [{ required: true, message: t('skillMgmt.packageRequired') }],
+  priority: [{ required: true, message: t('skillMgmt.priorityRequired') }],
+}))
 
 watch(() => visible.value, (val) => {
   if (val) {
@@ -208,7 +210,7 @@ async function loadSkillPackages() {
     const res = await getSkills() as any
     skillPackages.value = res.packages || res.items || []
   } catch (e: any) {
-    message.error('加载技能包列表失败：' + (e.message || ''))
+    message.error(t('skillMgmt.loadPackagesFailed') + (e.message || ''))
     skillPackages.value = []
   } finally {
     loadingPackages.value = false
@@ -265,7 +267,7 @@ function handleCustomConditionsChange() {
     const parsed = JSON.parse(customConditionsJson.value || '{}')
     formData.conditions.context_match = parsed
   } catch {
-    message.warning('自定义条件 JSON 格式错误')
+    message.warning(t('skillMgmt.customJsonError'))
   }
 }
 
@@ -312,15 +314,15 @@ async function handleSubmit() {
 
     if (isEdit.value && props.ruleId) {
       await updateSkillRule(props.ruleId, payload)
-      message.success('更新成功')
+      message.success(t('skillMgmt.updateSuccess'))
     } else {
       await createSkillRule(payload)
-      message.success('创建成功')
+      message.success(t('skillMgmt.createSuccess'))
     }
 
     emit('success')
   } catch (e: any) {
-    message.error((isEdit.value ? '更新' : '创建') + '失败：' + (e.message || '未知错误'))
+    message.error((isEdit.value ? t('skillMgmt.updateFailed') : t('skillMgmt.createFailed')) + (e.message || t('skillHub.unknownError')))
   } finally {
     submitting.value = false
   }

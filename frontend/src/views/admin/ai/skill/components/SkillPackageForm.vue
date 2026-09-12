@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑技能包' : '新建技能包'"
+    :title="isEdit ? t('skillMgmt.editPackage') : t('skillHub.newPackage')"
     :confirm-loading="loading"
     width="520px"
     @ok="handleSubmit"
@@ -15,39 +15,39 @@
       autocomplete="off"
     >
       <a-form-item
-        label="包 ID"
+        :label="t('skillHub.pkgId')"
         name="package_id"
-        :rules="[{ required: true, message: '请输入包 ID' }, { pattern: /^[a-zA-Z0-9-]+$/, message: '仅支持字母、数字、中划线' }]"
+        :rules="[{ required: true, message: t('skillMgmt.pkgIdRequired') }, { pattern: /^[a-zA-Z0-9-]+$/, message: t('skillMgmt.idPattern') }]"
       >
-        <a-input v-model:value="form.package_id" placeholder="如 dataease" :disabled="isEdit" />
+        <a-input v-model:value="form.package_id" :placeholder="t('skillMgmt.pkgIdPlaceholder')" :disabled="isEdit" />
       </a-form-item>
 
-      <a-form-item label="名称" name="name" :rules="[{ required: true, message: '请输入名称' }]">
-        <a-input v-model:value="form.name" placeholder="如 DataEase 数据分析" />
+      <a-form-item :label="t('skillMgmt.name')" name="name" :rules="[{ required: true, message: t('skillMgmt.nameRequired') }]">
+        <a-input v-model:value="form.name" :placeholder="t('skillMgmt.namePlaceholder')" />
       </a-form-item>
 
-      <a-form-item label="类目" name="category">
-        <a-select v-model:value="form.category" placeholder="选择类目">
+      <a-form-item :label="t('skillHub.category')" name="category">
+        <a-select v-model:value="form.category" :placeholder="t('skillMgmt.selectCategory')">
           <a-select-option v-for="opt in categoryOptions" :key="opt.item_code" :value="opt.item_code">
             {{ opt.item_name }}
           </a-select-option>
         </a-select>
       </a-form-item>
 
-      <a-form-item label="图标" name="icon">
-        <a-select v-model:value="form.icon" placeholder="选择图标">
+      <a-form-item :label="t('skillMgmt.icon')" name="icon">
+        <a-select v-model:value="form.icon" :placeholder="t('skillMgmt.selectIcon')">
           <a-select-option v-for="opt in ICON_OPTIONS" :key="opt.value" :value="opt.value">
             <span>{{ opt.label }}</span>
           </a-select-option>
         </a-select>
       </a-form-item>
 
-      <a-form-item label="版本" name="version">
+      <a-form-item :label="t('skillHub.version')" name="version">
         <a-input v-model:value="form.version" placeholder="1.0.0" />
       </a-form-item>
 
-      <a-form-item label="描述" name="description">
-        <a-textarea v-model:value="form.description" :rows="3" placeholder="简要描述该技能包的功能..." />
+      <a-form-item :label="t('skillHub.description')" name="description">
+        <a-textarea v-model:value="form.description" :rows="3" :placeholder="t('skillMgmt.descPlaceholder')" />
       </a-form-item>
     </a-form>
   </a-modal>
@@ -55,6 +55,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createSkillPackage, updateSkillPackage, ICON_OPTIONS } from '@/api/skill'
 import { getDictionaryItems } from '@/api/dictionary'
@@ -68,6 +69,8 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'success'): void
 }>()
+
+const { t } = useI18n()
 
 const visible = ref(false)
 const loading = ref(false)
@@ -127,15 +130,15 @@ async function handleSubmit() {
   try {
     if (isEdit.value && currentPackage.value) {
       await updateSkillPackage(currentPackage.value.package_id, form.value)
-      message.success('更新成功')
+      message.success(t('skillMgmt.updateSuccess'))
     } else {
       await createSkillPackage(form.value)
-      message.success('创建成功')
+      message.success(t('skillMgmt.createSuccess'))
     }
     visible.value = false
     emit('success')
   } catch (err: any) {
-    message.error(err?.data?.detail || err?.message || '操作失败')
+    message.error(err?.data?.detail || err?.message || t('common.error'))
   } finally {
     loading.value = false
   }

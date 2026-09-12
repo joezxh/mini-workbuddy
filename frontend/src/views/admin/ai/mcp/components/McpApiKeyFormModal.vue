@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="visible"
-    :title="isEdit ? '编辑 API Key' : '新增 API Key'"
+    :title="isEdit ? t('mcpSquare.editApiKey') : t('mcpSquare.addApiKey')"
     width="680px"
     :confirm-loading="submitting"
     @ok="handleSubmit"
@@ -10,68 +10,68 @@
     <a-form :model="form" :label-col="{ span: 6 }" :wrapper-col="{ span: 16 }">
       <a-tabs v-model:activeKey="formTab">
         <!-- Tab 1: 基础信息 -->
-        <a-tab-pane key="basic" tab="基础信息">
-          <a-form-item label="名称" required>
-            <a-input v-model:value="form.name" placeholder="请输入名称" />
+        <a-tab-pane key="basic" :tab="t('mcpSquare.tabBasic')">
+          <a-form-item :label="t('mcpSquare.name')" required>
+            <a-input v-model:value="form.name" :placeholder="t('mcpSquare.namePlaceholder')" />
           </a-form-item>
-          <a-form-item label="服务类型" required>
-            <a-select v-model:value="form.service_type" placeholder="选择服务类型">
+          <a-form-item :label="t('mcpSquare.serviceType')" required>
+            <a-select v-model:value="form.service_type" :placeholder="t('mcpSquare.selectServiceType')">
               <a-select-option value="nacos2">Nacos 2.x</a-select-option>
               <a-select-option value="nacos3">Nacos 3.x</a-select-option>
               <a-select-option value="http">HTTP</a-select-option>
               <a-select-option value="sse">SSE</a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="平台">
+          <a-form-item :label="t('mcpSquare.platform')">
             <a-input v-model:value="form.platform" placeholder="local / remote" />
           </a-form-item>
-          <a-form-item label="版本">
-            <a-input v-model:value="form.version" placeholder="MCP协议版本" />
+          <a-form-item :label="t('skillHub.version')">
+            <a-input v-model:value="form.version" :placeholder="t('mcpSquare.versionPlaceholder')" />
           </a-form-item>
-          <a-form-item label="描述">
-            <a-textarea v-model:value="form.description" :rows="3" placeholder="描述信息" />
+          <a-form-item :label="t('skillHub.description')">
+            <a-textarea v-model:value="form.description" :rows="3" :placeholder="t('mcpSquare.descPlaceholder')" />
           </a-form-item>
         </a-tab-pane>
 
         <!-- Tab 2: 连接配置 -->
-        <a-tab-pane key="connection" tab="连接配置">
-          <a-form-item label="服务地址">
+        <a-tab-pane key="connection" :tab="t('mcpSquare.tabConnection')">
+          <a-form-item :label="t('mcpSquare.serviceUrl')">
             <a-input v-model:value="form.service_url" placeholder="http://..." />
           </a-form-item>
           <!-- Nacos 特有字段 -->
           <template v-if="isNacos">
-            <a-form-item label="服务名">
-              <a-input v-model:value="form.service_name" placeholder="Nacos 服务名" />
+            <a-form-item :label="t('mcpSquare.serviceName')">
+              <a-input v-model:value="form.service_name" :placeholder="t('mcpSquare.nacosServiceNamePlaceholder')" />
             </a-form-item>
-            <a-form-item label="命名空间">
-              <a-input v-model:value="form.namespace" placeholder="Nacos namespace" />
+            <a-form-item :label="t('mcpSquare.namespace')">
+              <a-input v-model:value="form.namespace" :placeholder="t('mcpSquare.namespaceOptional')" />
             </a-form-item>
-            <a-form-item label="分组">
-              <a-input v-model:value="form.group_key" placeholder="Nacos group" />
+            <a-form-item :label="t('mcpSquare.group')">
+              <a-input v-model:value="form.group_key" :placeholder="t('mcpSquare.groupOptional')" />
             </a-form-item>
           </template>
           <!-- HTTP/SSE 特有字段 -->
           <template v-if="isHttpOrSse">
-            <a-form-item label="访问路径">
-              <a-input v-model:value="form.access_path" placeholder="/mcp/v1" />
+            <a-form-item :label="t('mcpSquare.accessPath')">
+              <a-input v-model:value="form.access_path" :placeholder="t('mcpSquare.accessPathPlaceholder')" />
             </a-form-item>
           </template>
           <a-form-item label="API Key">
-            <a-input-password v-model:value="form.api_key" placeholder="鉴权密钥" />
+            <a-input-password v-model:value="form.api_key" :placeholder="t('mcpSquare.authKey')" />
           </a-form-item>
         </a-tab-pane>
 
         <!-- Tab 3: 高级配置 -->
-        <a-tab-pane key="advanced" tab="高级配置">
-          <a-form-item label="能力列表">
-            <a-select v-model:value="form.capabilities" mode="multiple" placeholder="选择能力">
+        <a-tab-pane key="advanced" :tab="t('mcpSquare.tabAdvanced')">
+          <a-form-item :label="t('mcpSquare.capabilities')">
+            <a-select v-model:value="form.capabilities" mode="multiple" :placeholder="t('mcpSquare.selectCapabilities')">
               <a-select-option value="tools">Tools</a-select-option>
               <a-select-option value="resources">Resources</a-select-option>
               <a-select-option value="prompts">Prompts</a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="备注">
-            <a-textarea v-model:value="form.remark" :rows="3" placeholder="备注" />
+          <a-form-item :label="t('mcpSquare.remark')">
+            <a-textarea v-model:value="form.remark" :rows="3" :placeholder="t('mcpSquare.remark')" />
           </a-form-item>
         </a-tab-pane>
       </a-tabs>
@@ -81,6 +81,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createMcpApiKey, updateMcpApiKey, type McpApiKey } from '@/api/ai-mcp'
 
@@ -93,6 +94,8 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
   success: []
 }>()
+
+const { t } = useI18n()
 
 const isEdit = computed(() => !!props.record)
 const formTab = ref('basic')
@@ -164,7 +167,7 @@ function buildPayload(): Record<string, any> {
 
 async function handleSubmit() {
   if (!form.name || !form.service_type) {
-    message.warning('请填写必填字段')
+    message.warning(t('mcpSquare.fillRequired'))
     return
   }
   submitting.value = true
@@ -172,15 +175,15 @@ async function handleSubmit() {
     const data = buildPayload()
     if (isEdit.value && props.record) {
       await updateMcpApiKey({ id: props.record.id, ...data })
-      message.success('更新成功')
+      message.success(t('mcpSquare.updateSuccess'))
     } else {
       await createMcpApiKey(data)
-      message.success('创建成功')
+      message.success(t('mcpSquare.createSuccess'))
     }
     emit('update:visible', false)
     emit('success')
   } catch (e: any) {
-    const detail = e?.response?.data?.detail || '操作失败'
+    const detail = e?.response?.data?.detail || t('common.error')
     message.error(detail)
   } finally {
     submitting.value = false

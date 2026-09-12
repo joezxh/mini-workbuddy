@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑工具' : '新增工具'"
+    :title="isEdit ? t('toolMgmt.editTitle') : t('toolMgmt.addTool')"
     width="680px"
     :confirm-loading="saving"
     @ok="handleSubmit"
@@ -15,28 +15,28 @@
       style="margin-top: 20px"
     >
       <a-form-item
-        label="工具标识"
+        :label="t('toolMgmt.colToolKey')"
         name="toolKey"
         :rules="[
-          { required: true, message: '请输入工具标识' },
-          { pattern: /^[A-Za-z][A-Za-z0-9_]*$/, message: '只能包含字母、数字、下划线，且以字母开头' }
+          { required: true, message: t('toolMgmt.toolKeyRequired') },
+          { pattern: /^[A-Za-z][A-Za-z0-9_]*$/, message: t('toolMgmt.toolKeyPattern') }
         ]"
       >
         <a-input
           v-model:value="formData.toolKey"
-          placeholder="如：test_tool"
+          :placeholder="t('toolMgmt.toolKeyPh')"
           :disabled="isEdit"
         />
       </a-form-item>
 
-      <a-form-item label="显示名称" name="displayName" :rules="[{ required: true, message: '请输入显示名称' }]">
-        <a-input v-model:value="formData.displayName" placeholder="如：测试工具" />
+      <a-form-item :label="t('toolMgmt.colDisplayName')" name="displayName" :rules="[{ required: true, message: t('toolMgmt.displayNameRequired') }]">
+        <a-input v-model:value="formData.displayName" :placeholder="t('toolMgmt.displayNamePh')" />
       </a-form-item>
 
-      <a-form-item label="分类" name="category" :rules="[{ required: true, message: '请选择分类' }]">
+      <a-form-item :label="t('toolMgmt.colCategory')" name="category" :rules="[{ required: true, message: t('toolMgmt.categoryRequired') }]">
         <a-select
           v-model:value="formData.category"
-          placeholder="请选择分类（来自工具分组）"
+          :placeholder="t('toolMgmt.categoryPh')"
           allow-clear
           show-search
           :loading="loadingCategories"
@@ -44,28 +44,28 @@
         />
       </a-form-item>
 
-      <a-form-item label="类型" name="type">
+      <a-form-item :label="t('toolMgmt.typeLabel')" name="type">
         <a-select
           v-model:value="formData.type"
-          placeholder="请选择类型"
+          :placeholder="t('toolMgmt.typePh')"
           :loading="loadingTypes"
           :options="typeOptions"
         />
       </a-form-item>
 
-      <a-form-item label="类名" name="className" :rules="[{ required: true, message: '请输入类名' }]">
+      <a-form-item :label="t('toolMgmt.classNameLabel')" name="className" :rules="[{ required: true, message: t('toolMgmt.classNameRequired') }]">
         <a-input v-model:value="formData.className" placeholder="如：com.tianque.module.ai.service.model.tool.TestToolFunction" />
       </a-form-item>
 
-      <a-form-item label="方法名" name="methodName" :rules="[{ required: true, message: '请输入方法名' }]">
-        <a-input v-model:value="formData.methodName" placeholder="如：execute" />
+      <a-form-item :label="t('toolMgmt.methodNameLabel')" name="methodName" :rules="[{ required: true, message: t('toolMgmt.methodNameRequired') }]">
+        <a-input v-model:value="formData.methodName" :placeholder="t('toolMgmt.methodNamePh')" />
       </a-form-item>
 
-      <a-form-item label="描述" name="description">
-        <a-textarea v-model:value="formData.description" placeholder="工具描述" :rows="2" />
+      <a-form-item :label="t('toolMgmt.colDescription')" name="description">
+        <a-textarea v-model:value="formData.description" :placeholder="t('toolMgmt.descriptionPh')" :rows="2" />
       </a-form-item>
 
-      <a-form-item label="配置 Schema" name="configSchema">
+      <a-form-item :label="t('toolMgmt.configSchemaLabel')" name="configSchema">
         <a-textarea
           v-model:value="formData.configSchemaText"
           placeholder='JSON 格式，如：{"type":"object","properties":{}}'
@@ -73,7 +73,7 @@
         />
       </a-form-item>
 
-      <a-form-item label="配置值" name="configValue">
+      <a-form-item :label="t('toolMgmt.configValueLabel')" name="configValue">
         <a-textarea
           v-model:value="formData.configValueText"
           placeholder='JSON 格式，如：{"key":"value"}'
@@ -81,19 +81,19 @@
         />
       </a-form-item>
 
-      <a-form-item label="输入 Schema" name="inputSchema">
+      <a-form-item :label="t('toolMgmt.inputSchemaLabel')" name="inputSchema">
         <a-textarea
           v-model:value="formData.inputSchemaText"
-          placeholder='JSON Schema，用于测试表单动态渲染'
+          :placeholder="t('toolMgmt.inputSchemaPh')"
           :rows="3"
         />
       </a-form-item>
 
-      <a-form-item label="排序" name="sort">
+      <a-form-item :label="t('toolMgmt.colSort')" name="sort">
         <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
       </a-form-item>
 
-      <a-form-item label="系统内置" name="isSystem">
+      <a-form-item :label="t('toolMgmt.isSystemLabel')" name="isSystem">
         <a-switch v-model:checked="formData.isSystem" :disabled="isEdit && props.tool?.isSystem" />
       </a-form-item>
     </a-form>
@@ -102,6 +102,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createTool, updateTool, getToolGroupPage, type AiTool } from '@/api/ai-tool'
 import { getDictionaryItems, type DictionaryItem } from '@/api/dictionary'
@@ -122,6 +123,8 @@ const visible = computed({
 })
 
 const isEdit = computed(() => !!props.tool?.id)
+
+const { t } = useI18n()
 
 const formRef = ref()
 const saving = ref(false)
@@ -144,9 +147,9 @@ const loadToolTypes = async () => {
   } catch {
     // 兜底：如果字典加载失败，使用基本类型
     typeOptions.value = [
-      { value: 'custom', label: '自定义' },
-      { value: 'agentscope_builtin', label: 'AgentScope内置' },
-      { value: 'custom_dev', label: '自定义开发' }
+      { value: 'custom', label: t('toolMgmt.typeCustom') },
+      { value: 'agentscope_builtin', label: t('toolMgmt.typeBuiltin') },
+      { value: 'custom_dev', label: t('toolMgmt.typeCustomDev') }
     ]
   } finally {
     loadingTypes.value = false
@@ -192,7 +195,7 @@ function parseJson(text: string, field: string): Record<string, any> | null {
   try {
     return JSON.parse(text)
   } catch (e) {
-    throw new Error(`${field} 不是合法 JSON: ${(e as Error).message}`)
+    throw new Error(t('toolMgmt.invalidJson', { field, msg: (e as Error).message }))
   }
 }
 
@@ -235,9 +238,9 @@ const handleSubmit = async () => {
   let configValue: Record<string, any> | null = null
   let inputSchema: Record<string, any> | null = null
   try {
-    configSchema = parseJson(formData.configSchemaText, '配置 Schema')
-    configValue = parseJson(formData.configValueText, '配置值')
-    inputSchema = parseJson(formData.inputSchemaText, '输入 Schema')
+    configSchema = parseJson(formData.configSchemaText, t('toolMgmt.fieldConfigSchema'))
+    configValue = parseJson(formData.configValueText, t('toolMgmt.fieldConfigValue'))
+    inputSchema = parseJson(formData.inputSchemaText, t('toolMgmt.fieldInputSchema'))
   } catch (e: any) {
     message.error(e.message)
     return
@@ -261,15 +264,15 @@ const handleSubmit = async () => {
     }
     if (isEdit.value && props.tool?.id) {
       await updateTool({ id: props.tool.id, ...payload })
-      message.success('更新成功')
+      message.success(t('toolMgmt.updated'))
     } else {
       await createTool(payload)
-      message.success('创建成功')
+      message.success(t('toolMgmt.created'))
     }
     emit('success')
     visible.value = false
   } catch (e: any) {
-    message.error(e.message || '保存失败')
+    message.error(e.message || t('toolMgmt.saveFailed'))
   } finally {
     saving.value = false
   }

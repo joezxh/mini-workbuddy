@@ -22,6 +22,7 @@ import TenantPanel from '@/views/admin/system/TenantPanel.vue'
 import TenantPackagePanel from '@/views/admin/system/TenantPackagePanel.vue'
 import TeamList from '@/views/admin/agent-team/TeamList.vue'
 import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
+import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 
 export const componentMap: Record<string, Component> = {
   dashboard: markRaw(DashboardPanel),
@@ -43,4 +44,5 @@ export const componentMap: Record<string, Component> = {
   'agent-team-editor': markRaw(TeamEditor),
   'tenant-management': markRaw(TenantPanel),
   'tenant-package-management': markRaw(TenantPackagePanel),
+  'workflow-management': markRaw(WorkflowManagement),
 }

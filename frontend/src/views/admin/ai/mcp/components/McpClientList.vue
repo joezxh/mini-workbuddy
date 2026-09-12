@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="visible"
-    :title="`Client 管理 - ${apiKeyName}`"
+    :title="t('mcpSquare.clientManageTitle', { name: apiKeyName })"
     width="900px"
     :footer="null"
     @cancel="handleCancel"
@@ -9,7 +9,7 @@
     <div class="client-header">
       <a-button type="primary" size="small" @click="showCreate">
         <template #icon><PlusOutlined /></template>
-        新增 Client
+        {{ t('mcpSquare.addClient') }}
       </a-button>
     </div>
     <a-table
@@ -22,13 +22,13 @@
     >
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
-          <a-badge :status="record.status === 1 ? 'success' : 'default'" :text="record.status === 1 ? '启用' : '禁用'" />
+          <a-badge :status="record.status === 1 ? 'success' : 'default'" :text="record.status === 1 ? t('skillHub.enabled') : t('skillHub.disabled')" />
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
-            <a-button type="link" size="small" @click="handleEdit(record)">编辑</a-button>
-            <a-popconfirm title="确定删除？" @confirm="handleDelete(record)">
-              <a-button type="link" size="small" danger>删除</a-button>
+            <a-button type="link" size="small" @click="handleEdit(record)">{{ t('common.edit') }}</a-button>
+            <a-popconfirm :title="t('mcpSquare.deleteConfirm')" @confirm="handleDelete(record)">
+              <a-button type="link" size="small" danger>{{ t('common.delete') }}</a-button>
             </a-popconfirm>
           </a-space>
         </template>
@@ -46,7 +46,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import McpClientFormModal from './McpClientFormModal.vue'
@@ -62,20 +63,22 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
 
+const { t } = useI18n()
+
 const loading = ref(false)
 const list = ref<McpClient[]>([])
 const clientFormVisible = ref(false)
 const currentClient = ref<McpClient | null>(null)
 
-const columns = [
-  { title: '名称', key: 'name', dataIndex: 'name', width: 160 },
-  { title: '类型', key: 'client_type', dataIndex: 'client_type', width: 80 },
-  { title: '应用类别', key: 'mcp_type', dataIndex: 'mcp_type', width: 80 },
-  { title: '版本', key: 'version', dataIndex: 'version', width: 80 },
-  { title: '状态', key: 'status', width: 80 },
-  { title: '创建人', key: 'creator', dataIndex: 'creator', width: 100 },
-  { title: '操作', key: 'action', width: 140 },
-]
+const columns = computed(() => [
+  { title: t('mcpSquare.name'), key: 'name', dataIndex: 'name', width: 160 },
+  { title: t('mcpSquare.clientType'), key: 'client_type', dataIndex: 'client_type', width: 80 },
+  { title: t('mcpSquare.mcpType'), key: 'mcp_type', dataIndex: 'mcp_type', width: 80 },
+  { title: t('skillHub.version'), key: 'version', dataIndex: 'version', width: 80 },
+  { title: t('skillHub.status'), key: 'status', width: 80 },
+  { title: t('mcpSquare.creator'), key: 'creator', dataIndex: 'creator', width: 100 },
+  { title: t('mcpSquare.action'), key: 'action', width: 140 },
+])
 
 async function loadData() {
   if (!props.apiKeyId) return
@@ -85,7 +88,7 @@ async function loadData() {
     list.value = res.data ?? []
   } catch (e) {
     console.error('加载 Client 列表失败', e)
-    message.error('加载 Client 列表失败')
+    message.error(t('mcpSquare.loadClientFailed'))
     list.value = []
   } finally {
     loading.value = false
@@ -105,10 +108,10 @@ function handleEdit(record: McpClient) {
 async function handleDelete(record: McpClient) {
   try {
     await deleteMcpClient(record.id)
-    message.success('删除成功')
+    message.success(t('mcpSquare.deleteSuccess'))
     loadData()
   } catch {
-    message.error('删除失败')
+    message.error(t('mcpSquare.deleteFailed'))
   }
 }
 

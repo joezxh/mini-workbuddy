@@ -1,7 +1,7 @@
 <template>
   <a-modal
     :open="visible"
-    title="MCP 广场模板详情"
+    :title="t('mcpSquare.detailTitle')"
     width="680px"
     :footer="null"
     @cancel="handleCancel"
@@ -11,8 +11,8 @@
       <div class="detail-header">
         <div class="detail-title">
           <span class="title-text">{{ template.name }}</span>
-          <a-tag v-if="template.is_installed" color="green">已安装</a-tag>
-          <a-tag v-if="template.status === 0" color="default">已禁用</a-tag>
+          <a-tag v-if="template.is_installed" color="green">{{ t('mcpSquare.installed') }}</a-tag>
+          <a-tag v-if="template.status === 0" color="default">{{ t('mcpSquare.disabledTag') }}</a-tag>
         </div>
         <div class="detail-subtitle">
           <a-tag :color="serviceTypeColor(template.service_type)">
@@ -28,20 +28,20 @@
 
       <a-descriptions :column="2" bordered size="small">
         <a-descriptions-item label="ID">{{ template.id }}</a-descriptions-item>
-        <a-descriptions-item label="排序">{{ template.sort ?? 0 }}</a-descriptions-item>
-        <a-descriptions-item label="服务类型">
+        <a-descriptions-item :label="t('mcpSquare.sort')">{{ template.sort ?? 0 }}</a-descriptions-item>
+        <a-descriptions-item :label="t('mcpSquare.serviceType')">
           {{ serviceTypeLabel(template.service_type) }}
         </a-descriptions-item>
-        <a-descriptions-item label="协议类型">
+        <a-descriptions-item :label="t('mcpSquare.protocolType')">
           {{ protocolTypeFromService(template.service_type) }}
         </a-descriptions-item>
-        <a-descriptions-item label="服务地址" :span="2">
+        <a-descriptions-item :label="t('mcpSquare.serviceUrl')" :span="2">
           <span class="url-text">{{ template.service_url || '-' }}</span>
         </a-descriptions-item>
-        <a-descriptions-item label="访问路径" :span="2">
+        <a-descriptions-item :label="t('mcpSquare.accessPath')" :span="2">
           <span class="url-text">{{ template.access_path || '-' }}</span>
         </a-descriptions-item>
-        <a-descriptions-item label="能力列表" :span="2">
+        <a-descriptions-item :label="t('mcpSquare.capabilities')" :span="2">
           <template v-if="template.capabilities && template.capabilities.length">
             <a-tag
               v-for="cap in template.capabilities"
@@ -52,20 +52,20 @@
           </template>
           <span v-else>-</span>
         </a-descriptions-item>
-        <a-descriptions-item label="图标标识" :span="2">
+        <a-descriptions-item :label="t('mcpSquare.icon')" :span="2">
           <span class="url-text">{{ template.icon || '-' }}</span>
         </a-descriptions-item>
-        <a-descriptions-item label="描述" :span="2">
-          <div class="description-text">{{ template.description || '暂无描述' }}</div>
+        <a-descriptions-item :label="t('skillHub.description')" :span="2">
+          <div class="description-text">{{ template.description || t('mcpSquare.noDescription') }}</div>
         </a-descriptions-item>
-        <a-descriptions-item label="默认客户端配置" :span="2">
+        <a-descriptions-item :label="t('mcpSquare.defaultClientConfig')" :span="2">
           <pre v-if="defaultClientConfigText" class="json-block">{{ defaultClientConfigText }}</pre>
           <span v-else>-</span>
         </a-descriptions-item>
-        <a-descriptions-item v-if="template.created_at" label="创建时间">
+        <a-descriptions-item v-if="template.created_at" :label="t('skillHub.createdAt')">
           {{ template.created_at }}
         </a-descriptions-item>
-        <a-descriptions-item v-if="template.updated_at" label="更新时间">
+        <a-descriptions-item v-if="template.updated_at" :label="t('mcpSquare.updatedAt')">
           {{ template.updated_at }}
         </a-descriptions-item>
       </a-descriptions>
@@ -75,6 +75,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { McpSquareTemplate } from '@/api/ai-mcp'
 
 const props = defineProps<{
@@ -86,6 +87,8 @@ const emit = defineEmits<{
   'update:visible': [value: boolean]
 }>()
 
+const { t } = useI18n()
+
 const defaultClientConfigText = computed(() => {
   if (!props.template?.default_client_config) return ''
   try {
@@ -95,18 +98,12 @@ const defaultClientConfigText = computed(() => {
   }
 })
 
+// 服务类型/协议类型为代码值，保留原映射
 const SERVICE_TYPE_LABEL: Record<string, string> = {
   nacos2: 'Nacos 2.x',
   nacos3: 'Nacos 3.x',
   http: 'HTTP',
   sse: 'SSE',
-}
-const CATEGORY_LABEL: Record<string, string> = {
-  finance: '金融投资',
-  sales: '销售营销',
-  legal: '法律合规',
-  office: '办公OA',
-  education: '教育学习',
 }
 // 与后端 PROTOCOL_TYPE_MAP 保持一致
 const PROTOCOL_TYPE_MAP: Record<string, string> = {
@@ -129,7 +126,14 @@ function serviceTypeColor(type: string): string {
   return map[type] || 'default'
 }
 function categoryLabel(cat: string): string {
-  return CATEGORY_LABEL[cat] || cat
+  const map: Record<string, string> = {
+    finance: t('mcpSquare.catFinance'),
+    sales: t('mcpSquare.catSales'),
+    legal: t('mcpSquare.catLegal'),
+    office: t('mcpSquare.catOffice'),
+    education: t('mcpSquare.catEducation'),
+  }
+  return map[cat] || cat
 }
 function protocolTypeFromService(svc: string): string {
   return PROTOCOL_TYPE_MAP[svc] || '-'

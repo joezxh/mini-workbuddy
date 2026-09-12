@@ -24,7 +24,7 @@
       />
       <a-select
         v-model:value="filters.platform"
-        placeholder="平台筛选"
+        :placeholder="t('apiKeyMgmt.platformFilter')"
         allow-clear
         style="width:160px"
         @change="handleSearch"
@@ -33,7 +33,7 @@
       </a-select>
       <a-select
         v-model:value="filters.status"
-        placeholder="状态筛选"
+        :placeholder="t('apiKeyMgmt.statusFilter')"
         allow-clear
         style="width:120px"
         @change="handleSearch"

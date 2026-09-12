@@ -2,21 +2,21 @@
   <div class="tool-management">
     <a-tabs v-model:activeKey="activeTab" class="tool-tabs">
       <!-- ============ 工具列表 ============ -->
-      <a-tab-pane key="tools" tab="工具列表">
+      <a-tab-pane key="tools" :tab="t('toolMgmt.tabTools')">
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-left">
-            <h2>工具管理</h2>
-            <p class="sub">管理系统内置与自定义工具，支持分类筛选、状态切换、测试与缓存刷新</p>
+            <h2>{{ t('toolMgmt.pageTitle') }}</h2>
+            <p class="sub">{{ t('toolMgmt.pageDesc') }}</p>
           </div>
           <div class="header-actions">
             <a-button @click="handleRefreshCache">
               <template #icon><ReloadOutlined /></template>
-              刷新缓存
+              {{ t('toolMgmt.refreshCache') }}
             </a-button>
             <a-button type="primary" @click="showCreateModal">
               <template #icon><PlusOutlined /></template>
-              新增工具
+              {{ t('toolMgmt.addTool') }}
             </a-button>
           </div>
         </div>
@@ -25,7 +25,7 @@
         <div class="search-bar">
           <a-input-search
             v-model:value="filters.toolKey"
-            placeholder="搜索工具标识"
+            :placeholder="t('toolMgmt.searchToolKey')"
             allow-clear
             style="width:200px"
             @search="handleSearch"
@@ -33,7 +33,7 @@
           />
           <a-input-search
             v-model:value="filters.displayName"
-            placeholder="搜索显示名称"
+            :placeholder="t('toolMgmt.searchDisplayName')"
             allow-clear
             style="width:200px"
             @search="handleSearch"
@@ -41,7 +41,7 @@
           />
           <a-select
             v-model:value="filters.category"
-            placeholder="分类筛选"
+            :placeholder="t('toolMgmt.filterCategory')"
             allow-clear
             style="width:160px"
             @change="handleSearch"
@@ -50,24 +50,24 @@
           </a-select>
           <a-select
             v-model:value="filters.type"
-            placeholder="类型筛选"
+            :placeholder="t('toolMgmt.filterType')"
             allow-clear
             style="width:160px"
             @change="handleSearch"
           >
-            <a-select-option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
+            <a-select-option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
           </a-select>
           <a-select
             v-model:value="filters.status"
-            placeholder="状态筛选"
+            :placeholder="t('toolMgmt.filterStatus')"
             allow-clear
             style="width:120px"
             @change="handleSearch"
           >
-            <a-select-option value="enabled">启用</a-select-option>
-            <a-select-option value="disabled">禁用</a-select-option>
+            <a-select-option value="enabled">{{ t('toolMgmt.enabled') }}</a-select-option>
+            <a-select-option value="disabled">{{ t('toolMgmt.disabled') }}</a-select-option>
           </a-select>
-          <a-button @click="handleReset"><ReloadOutlined /> 重置</a-button>
+          <a-button @click="handleReset"><ReloadOutlined /> {{ t('common.reset') }}</a-button>
         </div>
 
         <!-- 表格 -->
@@ -95,7 +95,7 @@
           </template>
           <template #isSystem="{ record }">
             <a-tag :color="record.isSystem ? 'blue' : 'default'">
-              {{ record.isSystem ? '系统' : '自定义' }}
+              {{ record.isSystem ? t('toolMgmt.system') : t('toolMgmt.custom') }}
             </a-tag>
           </template>
           <template #description="{ record }">
@@ -116,20 +116,20 @@
           <template #actions="{ record }">
             <a-space>
               <a-button type="link" size="small" @click="handleTest(record)">
-                <PlayCircleOutlined /> 测试
+                <PlayCircleOutlined /> {{ t('toolMgmt.test') }}
               </a-button>
               <a-button type="link" size="small" @click="handleEdit(record)">
-                <EditOutlined /> 编辑
+                <EditOutlined /> {{ t('common.edit') }}
               </a-button>
               <a-popconfirm
-                :title="record.isSystem ? '系统内置工具不允许删除' : '确定删除该工具？'"
-                ok-text="确定"
-                cancel-text="取消"
+                :title="record.isSystem ? t('toolMgmt.deleteSystemForbidden') : t('toolMgmt.deleteToolConfirm')"
+                :ok-text="t('common.confirm')"
+                :cancel-text="t('common.cancel')"
                 :disabled="record.isSystem"
                 @confirm="handleDelete(record)"
               >
                 <a-button type="link" size="small" danger :disabled="record.isSystem">
-                  <DeleteOutlined /> 删除
+                  <DeleteOutlined /> {{ t('common.delete') }}
                 </a-button>
               </a-popconfirm>
             </a-space>
@@ -139,28 +139,28 @@
       </a-tab-pane>
 
       <!-- ============ 工具分组 ============ -->
-      <a-tab-pane key="groups" tab="工具分组">
+      <a-tab-pane key="groups" :tab="t('toolMgmt.tabGroups')">
         <div class="panel-header">
           <div class="header-left">
-            <h2>工具分组</h2>
-            <p class="sub">将多个工具组成协作组，供多 Agent 编排复用</p>
+            <h2>{{ t('toolMgmt.tabGroups') }}</h2>
+            <p class="sub">{{ t('toolMgmt.groupsDesc') }}</p>
           </div>
           <a-button type="primary" @click="showGroupModal()">
             <template #icon><PlusOutlined /></template>
-            新增分组
+            {{ t('toolMgmt.addGroup') }}
           </a-button>
         </div>
 
         <div class="search-bar">
           <a-input-search
             v-model:value="groupFilters.name"
-            placeholder="搜索分组名称"
+            :placeholder="t('toolMgmt.searchGroupName')"
             allow-clear
             style="width:220px"
             @search="loadGroups"
             @clear="loadGroups"
           />
-          <a-button @click="loadGroups"><ReloadOutlined /> 刷新</a-button>
+          <a-button @click="loadGroups"><ReloadOutlined /> {{ t('toolMgmt.refresh') }}</a-button>
         </div>
 
         <div class="table-wrapper">
@@ -179,25 +179,25 @@
         >
           <template #isActive="{ record }">
             <a-tag :color="record.isActive ? 'success' : 'default'">
-              {{ record.isActive ? '启用' : '停用' }}
+              {{ record.isActive ? t('toolMgmt.enabled') : t('toolMgmt.inactive') }}
             </a-tag>
           </template>
           <template #actions="{ record }">
             <a-space>
               <a-button type="link" size="small" @click="openMembers(record)">
-                <ApartmentOutlined /> 成员
+                <ApartmentOutlined /> {{ t('toolMgmt.members') }}
               </a-button>
               <a-button type="link" size="small" @click="showGroupModal(record)">
-                <EditOutlined /> 编辑
+                <EditOutlined /> {{ t('common.edit') }}
               </a-button>
               <a-popconfirm
-                title="确定删除该分组？"
-                ok-text="确定"
-                cancel-text="取消"
+                :title="t('toolMgmt.deleteGroupConfirm')"
+                :ok-text="t('common.confirm')"
+                :cancel-text="t('common.cancel')"
                 @confirm="deleteGroup(record)"
               >
                 <a-button type="link" size="small" danger>
-                  <DeleteOutlined /> 删除
+                  <DeleteOutlined /> {{ t('common.delete') }}
                 </a-button>
               </a-popconfirm>
             </a-space>
@@ -220,29 +220,29 @@
     <!-- 分组新增/编辑弹窗 -->
     <a-modal
       v-model:open="groupVisible"
-      :title="editingGroup ? '编辑分组' : '新增分组'"
+      :title="editingGroup ? t('toolMgmt.editGroup') : t('toolMgmt.addGroup')"
       width="560px"
       :confirm-loading="groupSaving"
       @ok="submitGroup"
       @cancel="groupVisible = false"
     >
       <a-form :model="groupForm" layout="vertical" style="margin-top:16px">
-        <a-form-item label="分组标识" required>
+        <a-form-item :label="t('toolMgmt.groupKeyLabel')" required>
           <a-input v-model:value="groupForm.name" placeholder="如：risk_intel_group" :disabled="!!editingGroup" />
         </a-form-item>
-        <a-form-item label="显示名称">
-          <a-input v-model:value="groupForm.displayName" placeholder="如：风险情报采集组" />
+        <a-form-item :label="t('toolMgmt.colDisplayName')">
+          <a-input v-model:value="groupForm.displayName" :placeholder="t('toolMgmt.displayNamePh')" />
         </a-form-item>
-        <a-form-item label="描述">
+        <a-form-item :label="t('toolMgmt.colDescription')">
           <a-textarea v-model:value="groupForm.description" :rows="2" />
         </a-form-item>
-        <a-form-item label="协作指令">
-          <a-textarea v-model:value="groupForm.instructions" :rows="2" placeholder="多 Agent 协作时的共享指令" />
+        <a-form-item :label="t('toolMgmt.instructionsLabel')">
+          <a-textarea v-model:value="groupForm.instructions" :rows="2" :placeholder="t('toolMgmt.instructionsPlaceholder')" />
         </a-form-item>
-        <a-form-item label="是否启用">
+        <a-form-item :label="t('toolMgmt.enabledLabel')">
           <a-switch v-model:checked="groupForm.isActive" />
         </a-form-item>
-        <a-form-item label="排序">
+        <a-form-item :label="t('toolMgmt.colSort')">
           <a-input-number v-model:value="groupForm.sort" :min="0" style="width:100%" />
         </a-form-item>
       </a-form>
@@ -251,24 +251,24 @@
     <!-- 分组成员管理弹窗 -->
     <a-modal
       v-model:open="memberVisible"
-      title="分组成员管理"
+      :title="t('toolMgmt.memberMgmtTitle')"
       width="720px"
       @cancel="memberVisible = false"
       @ok="memberVisible = false"
     >
       <template v-if="currentGroup">
-        <a-alert :message="`当前分组：${currentGroup.displayName || currentGroup.name}`" style="margin-bottom:12px" />
+        <a-alert :message="t('toolMgmt.currentGroup', { name: currentGroup.displayName || currentGroup.name })" style="margin-bottom:12px" />
         <div class="member-toolbar">
           <a-select
             v-model:value="addMemberKeys"
             mode="multiple"
-            placeholder="选择工具加入分组"
+            :placeholder="t('toolMgmt.selectToolsToAdd')"
             style="width:100%"
             :options="selectableTools"
             show-search
             option-filter-prop="label"
           />
-          <a-button type="primary" @click="addMembers"><PlusOutlined /> 添加</a-button>
+          <a-button type="primary" @click="addMembers"><PlusOutlined /> {{ t('toolMgmt.add') }}</a-button>
         </div>
         <a-table
           row-key="id"
@@ -281,7 +281,7 @@
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'actions'">
               <a-button type="link" size="small" danger @click="removeMember(record)">
-                <DeleteOutlined /> 移除
+                <DeleteOutlined /> {{ t('toolMgmt.remove') }}
               </a-button>
             </template>
           </template>
@@ -292,7 +292,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
@@ -310,6 +311,7 @@ import {
 import { getDictionaryItems, type DictionaryItem } from '@/api/dictionary'
 
 // ============ 工具列表 ============
+const { t } = useI18n()
 const activeTab = ref('tools')
 const loading = ref(false)
 const dataList = ref<AiTool[]>([])
@@ -325,17 +327,17 @@ const filters = reactive({
   status: undefined as string | undefined
 })
 
-const columns: any[] = [
-  { title: '工具标识', dataIndex: 'toolKey', key: 'toolKey', width: 160, align: 'center' as const },
-  { title: '显示名称', dataIndex: 'displayName', key: 'displayName', width: 160, align: 'center' as const },
-  { title: '分类', dataIndex: 'category', key: 'category', width: 120, align: 'center' as const },
-  { title: '系统标记', dataIndex: 'isSystem', key: 'isSystem', width: 100, align: 'center' as const },
-  { title: '描述', dataIndex: 'description', key: 'description', width: 220, align: 'center' as const },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 90, align: 'center' as const },
-  { title: '排序', dataIndex: 'sort', key: 'sort', width: 70, align: 'center' as const },
-  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 170, align: 'center' as const },
-  { title: '操作', key: 'actions', width: 220, fixed: 'right', align: 'center' as const }
-]
+const columns = computed<any[]>(() => [
+  { title: t('toolMgmt.colToolKey'), dataIndex: 'toolKey', key: 'toolKey', width: 160, align: 'center' as const },
+  { title: t('toolMgmt.colDisplayName'), dataIndex: 'displayName', key: 'displayName', width: 160, align: 'center' as const },
+  { title: t('toolMgmt.colCategory'), dataIndex: 'category', key: 'category', width: 120, align: 'center' as const },
+  { title: t('toolMgmt.colIsSystem'), dataIndex: 'isSystem', key: 'isSystem', width: 100, align: 'center' as const },
+  { title: t('toolMgmt.colDescription'), dataIndex: 'description', key: 'description', width: 220, align: 'center' as const },
+  { title: t('toolMgmt.colStatus'), dataIndex: 'status', key: 'status', width: 90, align: 'center' as const },
+  { title: t('toolMgmt.colSort'), dataIndex: 'sort', key: 'sort', width: 70, align: 'center' as const },
+  { title: t('toolMgmt.colCreatedAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, align: 'center' as const },
+  { title: t('toolMgmt.colActions'), key: 'actions', width: 220, fixed: 'right', align: 'center' as const }
+])
 
 const formVisible = ref(false)
 const editingTool = ref<AiTool | null>(null)
@@ -368,9 +370,9 @@ const loadToolTypes = async () => {
   } catch {
     // 兜底
     typeOptions.value = [
-      { value: 'custom', label: '自定义' },
-      { value: 'agentscope_builtin', label: 'AgentScope内置' },
-      { value: 'custom_dev', label: '自定义开发' }
+      { value: 'custom', label: t('toolMgmt.typeCustom') },
+      { value: 'agentscope_builtin', label: t('toolMgmt.typeBuiltin') },
+      { value: 'custom_dev', label: t('toolMgmt.typeCustomDev') }
     ]
   }
 }
@@ -390,7 +392,7 @@ const loadData = async () => {
     dataList.value = res.data
     pagination.total = res.total
   } catch (e: any) {
-    message.error(e.message || '加载失败')
+    message.error(e.message || t('toolMgmt.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -420,30 +422,30 @@ const onFormSuccess = () => { loadData() }
 const toggleStatus = async (record: AiTool) => {
   try {
     await updateTool({ id: record.id, status: record.status === 'enabled' ? 'disabled' : 'enabled' })
-    message.success(record.status === 'enabled' ? '已禁用' : '已启用')
+    message.success(record.status === 'enabled' ? t('toolMgmt.disabledMsg') : t('toolMgmt.enabledMsg'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '状态切换失败')
+    message.error(e.message || t('toolMgmt.statusToggleFailed'))
   }
 }
 
 const handleDelete = async (record: AiTool) => {
   try {
     await deleteTool(record.id)
-    message.success('删除成功')
+    message.success(t('toolMgmt.deleteSuccess'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('toolMgmt.deleteFailed'))
   }
 }
 
 const handleRefreshCache = async () => {
   try {
     const res = await refreshToolCache()
-    message.success(`缓存刷新成功，已加载 ${res.count} 个工具`)
+    message.success(t('toolMgmt.cacheRefreshed', { count: res.count }))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '缓存刷新失败')
+    message.error(e.message || t('toolMgmt.cacheRefreshFailed'))
   }
 }
 
@@ -453,15 +455,15 @@ const groupList = ref<ToolGroup[]>([])
 const groupPagination = reactive({ current: 1, pageSize: 15, total: 0 })
 const groupFilters = reactive({ name: '' })
 
-const groupColumns: any[] = [
-  { title: '分组标识', dataIndex: 'name', key: 'name', width: 200, align: 'center' as const },
-  { title: '显示名称', dataIndex: 'displayName', key: 'displayName', width: 180, align: 'center' as const },
-  { title: '描述', dataIndex: 'description', key: 'description', width: 240, align: 'center' as const },
-  { title: '工具数', dataIndex: 'toolCount', key: 'toolCount', width: 80, align: 'center' as const },
-  { title: '状态', dataIndex: 'isActive', key: 'isActive', width: 90, align: 'center' as const },
-  { title: '排序', dataIndex: 'sort', key: 'sort', width: 70, align: 'center' as const },
-  { title: '操作', key: 'actions', width: 200, fixed: 'right', align: 'center' as const }
-]
+const groupColumns = computed<any[]>(() => [
+  { title: t('toolMgmt.groupKeyLabel'), dataIndex: 'name', key: 'name', width: 200, align: 'center' as const },
+  { title: t('toolMgmt.colDisplayName'), dataIndex: 'displayName', key: 'displayName', width: 180, align: 'center' as const },
+  { title: t('toolMgmt.colDescription'), dataIndex: 'description', key: 'description', width: 240, align: 'center' as const },
+  { title: t('toolMgmt.toolCount'), dataIndex: 'toolCount', key: 'toolCount', width: 80, align: 'center' as const },
+  { title: t('toolMgmt.colStatus'), dataIndex: 'isActive', key: 'isActive', width: 90, align: 'center' as const },
+  { title: t('toolMgmt.colSort'), dataIndex: 'sort', key: 'sort', width: 70, align: 'center' as const },
+  { title: t('toolMgmt.colActions'), key: 'actions', width: 200, fixed: 'right', align: 'center' as const }
+])
 
 const groupVisible = ref(false)
 const groupSaving = ref(false)
@@ -473,12 +475,12 @@ const groupForm = reactive({
 const memberVisible = ref(false)
 const currentGroup = ref<ToolGroup | null>(null)
 const memberList = ref<AiTool[]>([])
-const memberColumns: any[] = [
-  { title: '工具标识', dataIndex: 'toolKey', key: 'toolKey' },
-  { title: '显示名称', dataIndex: 'displayName', key: 'displayName' },
-  { title: '分类', dataIndex: 'category', key: 'category' },
-  { title: '操作', key: 'actions', width: 100 }
-]
+const memberColumns = computed<any[]>(() => [
+  { title: t('toolMgmt.colToolKey'), dataIndex: 'toolKey', key: 'toolKey' },
+  { title: t('toolMgmt.colDisplayName'), dataIndex: 'displayName', key: 'displayName' },
+  { title: t('toolMgmt.colCategory'), dataIndex: 'category', key: 'category' },
+  { title: t('toolMgmt.colActions'), key: 'actions', width: 100 }
+])
 const addMemberKeys = ref<string[]>([])
 const selectableTools = ref<{ value: string; label: string }[]>([])
 
@@ -489,7 +491,7 @@ const loadGroups = async () => {
     groupList.value = res.data
     groupPagination.total = res.total
   } catch (e: any) {
-    message.error(e.message || '加载分组失败')
+    message.error(e.message || t('toolMgmt.loadGroupsFailed'))
   } finally {
     groupLoading.value = false
   }
@@ -513,20 +515,20 @@ const showGroupModal = (group?: ToolGroup) => {
 }
 
 const submitGroup = async () => {
-  if (!groupForm.name.trim()) { message.warning('请输入分组标识'); return }
+  if (!groupForm.name.trim()) { message.warning(t('toolMgmt.nameRequired')); return }
   groupSaving.value = true
   try {
     if (editingGroup.value) {
       await updateToolGroup({ id: editingGroup.value.id, ...groupForm })
-      message.success('更新成功')
+      message.success(t('toolMgmt.updated'))
     } else {
       await createToolGroup({ ...groupForm })
-      message.success('创建成功')
+      message.success(t('toolMgmt.created'))
     }
     groupVisible.value = false
     loadGroups()
   } catch (e: any) {
-    message.error(e.message || '保存失败')
+    message.error(e.message || t('toolMgmt.saveFailed'))
   } finally {
     groupSaving.value = false
   }
@@ -535,10 +537,10 @@ const submitGroup = async () => {
 const deleteGroup = async (record: ToolGroup) => {
   try {
     await deleteToolGroup(record.id)
-    message.success('删除成功')
+    message.success(t('toolMgmt.deleteSuccess'))
     loadGroups()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('toolMgmt.deleteFailed'))
   }
 }
 
@@ -551,10 +553,10 @@ const openMembers = async (group: ToolGroup) => {
     memberList.value = members
     const memberKeys = new Set(members.map((m) => m.toolKey))
     selectableTools.value = (simple as ToolSimpleItem[])
-      .filter((t) => !memberKeys.has(t.toolKey))
-      .map((t) => ({ value: t.toolKey, label: `${t.displayName}（${t.toolKey}）` }))
+      .filter((tool) => !memberKeys.has(tool.toolKey))
+      .map((tool) => ({ value: tool.toolKey, label: `${tool.displayName}（${tool.toolKey}）` }))
   } catch (e: any) {
-    message.error(e.message || '加载成员失败')
+    message.error(e.message || t('toolMgmt.loadMembersFailed'))
   }
 }
 
@@ -562,11 +564,11 @@ const addMembers = async () => {
   if (!currentGroup.value || addMemberKeys.value.length === 0) return
   try {
     await addGroupMembers(currentGroup.value.id, addMemberKeys.value)
-    message.success('添加成功')
+    message.success(t('toolMgmt.addSuccess'))
     addMemberKeys.value = []
     await openMembers(currentGroup.value)
   } catch (e: any) {
-    message.error(e.message || '添加失败')
+    message.error(e.message || t('toolMgmt.addFailed'))
   }
 }
 
@@ -574,10 +576,10 @@ const removeMember = async (record: AiTool) => {
   if (!currentGroup.value) return
   try {
     await removeGroupMember(currentGroup.value.id, record.toolKey)
-    message.success('移除成功')
+    message.success(t('toolMgmt.removeSuccess'))
     await openMembers(currentGroup.value)
   } catch (e: any) {
-    message.error(e.message || '移除失败')
+    message.error(e.message || t('toolMgmt.removeFailed'))
   }
 }
 </script>

@@ -440,7 +440,7 @@
                               :total="sessionPagination.total"
                               show-size-changer
                               show-quick-jumper
-                              :show-total="(total: number) => `共 ${total} 条`"
+                              :show-total="(total: number) => t('common.total', { total })"
                               @change="onSessionPageChange"
                             />
                           </div>
@@ -1238,7 +1238,7 @@ async function handleRollback(version: number) {
     message.success(t('skillHub.rolledBack', { version }))
     await loadEvolutionData()
   } catch (e: any) {
-    message.error('回滚失败：' + (e?.data?.detail || e.message || '未知错误'))
+    message.error(t('skillHub.rollbackFailed') + (e?.data?.detail || e.message || t('skillHub.unknownError')))
   }
 }
 
@@ -1491,7 +1491,7 @@ function priorityColor(p: number): string {
 }
 
 function formatConditions(c: any): string {
-  if (!c) return '无条件'
+  if (!c) return t('skillMgmt.noConditions')
   return JSON.stringify(c, null, 2)
 }
 
@@ -1582,7 +1582,7 @@ const activeRepo = computed(() => hubRepos.value.find(r => r.id === hubActiveRep
 const isCloudMarket = computed(() => activeRepo.value?.source_type === 'skillhub')
 
 function categoryLabel(cat?: string) {
-  return categoryOptions.value.find(o => o.item_code === cat)?.item_name || cat || '其他'
+  return categoryOptions.value.find(o => o.item_code === cat)?.item_name || cat || t('skillMgmt.other')
 }
 
 function iconLabel(icon?: string) {
