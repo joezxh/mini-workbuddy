@@ -6,7 +6,7 @@
         <div class="logo-icon">
           <img src="/brand/logo-icon.svg" width="26" height="26" alt="" />
         </div>
-        <h1 class="logo-text">智能调解</h1>
+        <h1 class="logo-text">智能助手</h1>
       </div>
       
     </div>

@@ -33,10 +33,7 @@
             style="width: 160px"
             @change="handleSearch"
           >
-            <a-select-option value="nacos2">Nacos 2.x</a-select-option>
-            <a-select-option value="nacos3">Nacos 3.x</a-select-option>
-            <a-select-option value="http">HTTP</a-select-option>
-            <a-select-option value="sse">SSE</a-select-option>
+            <a-select-option v-for="it in serviceTypeItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
           </a-select>
           <a-select
             v-model:value="filters.status"
@@ -126,11 +123,7 @@
             style="width: 160px"
             @change="handleSquareSearch"
           >
-            <a-select-option value="finance">{{ t('mcpSquare.catFinance') }}</a-select-option>
-            <a-select-option value="sales">{{ t('mcpSquare.catSales') }}</a-select-option>
-            <a-select-option value="legal">{{ t('mcpSquare.catLegal') }}</a-select-option>
-            <a-select-option value="office">{{ t('mcpSquare.catOffice') }}</a-select-option>
-            <a-select-option value="education">{{ t('mcpSquare.catEducation') }}</a-select-option>
+            <a-select-option v-for="it in categoryItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
           </a-select>
           <a-select
             v-model:value="squareFilters.status"
@@ -254,6 +247,8 @@ import McpClientList from './components/McpClientList.vue'
 import McpInstallModal from './components/McpInstallModal.vue'
 import McpSquareTemplateFormModal from './components/McpSquareTemplateFormModal.vue'
 import McpSquareDetailModal from './components/McpSquareDetailModal.vue'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 import {
   getMcpApiKeyPage,
   deleteMcpApiKey,
@@ -267,6 +262,10 @@ import {
 
 const activeTab = ref('my-mcp')
 const { t } = useI18n()
+
+// 字典驱动
+const serviceTypeItems = computed(() => dictItems(DictType.MCP_SERVICE_TYPE))
+const categoryItems = computed(() => dictItems(DictType.MCP_CATEGORY))
 
 // ============= API Key 列表 =============
 const loading = ref(false)
@@ -289,35 +288,15 @@ const apiKeyColumns = computed(() => [
   { title: t('mcpSquare.action'), key: 'action', width: 220, fixed: 'right' as const },
 ])
 
-// 服务类型 → 显示文本/颜色映射（代码值，无需翻译）
-const SERVICE_TYPE_LABEL: Record<string, string> = {
-  nacos2: 'Nacos 2.x',
-  nacos3: 'Nacos 3.x',
-  http: 'HTTP',
-  sse: 'SSE',
-}
-
+// 服务类型 → 显示文本/颜色映射（字典驱动，保留 fallback）
 function serviceTypeLabel(type: string): string {
-  return SERVICE_TYPE_LABEL[type] || type || '-'
+  return dictLabel(DictType.MCP_SERVICE_TYPE, type) || type || '-'
 }
 function serviceTypeColor(type: string): string {
-  const map: Record<string, string> = {
-    nacos2: 'blue',
-    nacos3: 'geekblue',
-    http: 'cyan',
-    sse: 'green',
-  }
-  return map[type] || 'default'
+  return dictColor(DictType.MCP_SERVICE_TYPE, type) || 'default'
 }
 function categoryLabel(cat: string): string {
-  const map: Record<string, string> = {
-    finance: t('mcpSquare.catFinance'),
-    sales: t('mcpSquare.catSales'),
-    legal: t('mcpSquare.catLegal'),
-    office: t('mcpSquare.catOffice'),
-    education: t('mcpSquare.catEducation'),
-  }
-  return map[cat] || cat
+  return dictLabel(DictType.MCP_CATEGORY, cat) || cat
 }
 
 async function loadData() {
@@ -576,6 +555,7 @@ function healthLabel(status: string): string {
 }
 
 onMounted(() => {
+  loadAdminDicts([DictType.MCP_SERVICE_TYPE, DictType.MCP_CATEGORY])
   loadData()
   loadSquareData()
 })
@@ -599,6 +579,38 @@ onMounted(() => {
   margin: 0;
   color: var(--fg-muted);
   font-size: 13px;
+}
+
+/* 套用 skill 视图顶栏/tab 标题风格：56px 高 + 激活下划线（非 card） */
+.mcp-tabs :deep(.ant-tabs-nav) {
+  height: 56px;
+  margin: -16px -16px 0;
+  padding: 0 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.mcp-tabs :deep(.ant-tabs-nav::before) {
+  border-bottom: none;
+}
+.mcp-tabs :deep(.ant-tabs-tab) {
+  height: 56px;
+  padding: 0 4px;
+  margin-right: 20px;
+  font-size: 14px;
+  color: var(--fg-secondary);
+  background: transparent;
+  border: none;
+}
+.mcp-tabs :deep(.ant-tabs-tab:hover) {
+  color: var(--accent);
+}
+.mcp-tabs :deep(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: var(--accent);
+  font-weight: 600;
+}
+.mcp-tabs :deep(.ant-tabs-ink-bar) {
+  background: var(--accent);
+  height: 2px;
 }
 .search-bar {
   display: flex;

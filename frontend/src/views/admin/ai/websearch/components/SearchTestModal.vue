@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="`搜索测试 - ${webSearch?.name || ''}`"
+    :title="t('webSearch.testTitle', { name: webSearch?.name || '' })"
     width="800px"
     :footer="null"
     :destroy-on-close="true"
@@ -11,15 +11,15 @@
       <!-- 供应商信息 -->
       <div class="provider-info" v-if="webSearch">
         <a-descriptions :column="3" size="small">
-          <a-descriptions-item label="平台">
+          <a-descriptions-item :label="t('webSearch.colPlatform')">
             <a-tag color="blue">{{ dictLabel(DictType.WEB_SEARCH_PLATFORM, webSearch.platform) || webSearch.platform }}</a-tag>
           </a-descriptions-item>
           <a-descriptions-item label="URL">
-            <span class="url-text">{{ webSearch.url || '默认' }}</span>
+            <span class="url-text">{{ webSearch.url || t('webSearch.defaultValue') }}</span>
           </a-descriptions-item>
-          <a-descriptions-item label="状态">
+          <a-descriptions-item :label="t('webSearch.colStatus')">
             <a-tag :color="webSearch.status === 1 ? 'success' : 'error'">
-              {{ webSearch.status === 1 ? '启用' : '禁用' }}
+              {{ webSearch.status === 1 ? t('webSearch.enabled') : t('webSearch.disabled') }}
             </a-tag>
           </a-descriptions-item>
         </a-descriptions>
@@ -29,8 +29,8 @@
       <div class="search-input-area">
         <a-input-search
           v-model:value="query"
-          placeholder="输入搜索关键词..."
-          enter-button="搜索"
+          :placeholder="t('webSearch.searchPlaceholder')"
+          :enter-button="t('webSearch.searchAction')"
           size="large"
           :loading="loading"
           :disabled="!enabled"
@@ -43,10 +43,10 @@
         <!-- 状态栏 -->
         <div class="result-status" v-if="!loading">
           <a-tag :color="error ? 'error' : 'success'" size="small">
-            {{ error ? '搜索失败' : '搜索完成' }}
+            {{ error ? t('webSearch.searchFailed') : t('webSearch.searchDone') }}
           </a-tag>
           <span class="meta" v-if="!error">
-            共 {{ results.length }} 条结果 · 耗时 {{ duration }}ms
+            {{ t('webSearch.resultSummary', { count: results.length, duration }) }}
           </span>
         </div>
 
@@ -59,13 +59,13 @@
             <div class="result-index">{{ index + 1 }}</div>
             <div class="result-content">
               <div class="result-title">
-                <a :href="item.url" target="_blank" rel="noopener">{{ item.title || '无标题' }}</a>
+                <a :href="item.url" target="_blank" rel="noopener">{{ item.title || t('webSearch.noTitle') }}</a>
               </div>
               <div class="result-url">{{ item.url }}</div>
               <div class="result-snippet">{{ item.snippet }}</div>
             </div>
             <div class="result-score" v-if="item.score">
-              <a-tooltip title="相关度评分">
+              <a-tooltip :title="t('webSearch.scoreTip')">
                 <a-tag color="purple">{{ (item.score * 100).toFixed(0) }}%</a-tag>
               </a-tooltip>
             </div>
@@ -73,11 +73,11 @@
         </div>
 
         <!-- 无结果 -->
-        <a-empty v-if="!error && results.length === 0 && !loading" description="未找到相关结果" />
+        <a-empty v-if="!error && results.length === 0 && !loading" :description="t('webSearch.noResults')" />
       </div>
 
       <!-- 初始状态 -->
-      <a-empty v-if="!hasResult && !loading" description="输入关键词开始搜索">
+      <a-empty v-if="!hasResult && !loading" :description="t('webSearch.inputHint')">
         <template #image>
           <SearchOutlined style="font-size: 48px; color: var(--fg-muted)" />
         </template>
@@ -88,6 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { SearchOutlined } from '@ant-design/icons-vue'
 import { testWebSearch, type AiWebSearch } from '@/api/ai-web-search'
 import { loadAdminDicts, dictLabel } from '@/composables/useAdminDict'
@@ -109,6 +110,8 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'success'): void
 }>()
+
+const { t } = useI18n()
 
 const visible = computed({
   get: () => props.open,
@@ -171,7 +174,7 @@ const handleSearch = async () => {
     }
   } catch (e: any) {
     duration.value = Date.now() - startTime
-    error.value = e.message || '搜索请求失败'
+    error.value = e.message || t('webSearch.requestFailed')
   } finally {
     loading.value = false
   }

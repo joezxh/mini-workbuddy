@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote_plus
 from pathlib import Path
 
@@ -340,6 +340,14 @@ class Settings(BaseSettings):
     QUERY_BATCH_SIZE: int = 500          # 批量查询分页大小
     QUERY_CACHE_ENABLED: bool = True      # 查询结果缓存
     QUERY_CACHE_TTL: int = 300           # 查询缓存5分钟
+
+    # SQLBot 私有化部署（NL2SQL 数据源代理）
+    # 未配置时 list_datasources 等接口会降级返回空列表，不阻断前端页面。
+    SQLBOT_API_URL: str = ""
+    SQLBOT_ACCESS_KEY: str = ""
+    SQLBOT_SECRET_KEY: str = ""
+    SQLBOT_DATASOURCE_ID: Optional[int] = None
+    SQLBOT_TIMEOUT: int = 30
 
     model_config = SettingsConfigDict(
         # 同时按相对 CWD 与按 _BASE_DIR 绝对路径查找 .env，

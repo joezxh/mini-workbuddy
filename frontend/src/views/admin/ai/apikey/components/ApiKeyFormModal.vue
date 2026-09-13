@@ -28,7 +28,9 @@
         :rules="[{ required: true, message: t('apiKeyMgmt.platformRule') }]"
       >
         <a-select v-model:value="formData.platform" :placeholder="t('apiKeyMgmt.platformRule')">
-          <a-select-option v-for="p in AI_PLATFORMS" :key="p" :value="p">{{ p }}</a-select-option>
+          <a-select-option v-for="it in platformItems" :key="it.item_code" :value="it.item_code">
+            {{ it.item_name }}
+          </a-select-option>
         </a-select>
       </a-form-item>
 
@@ -68,10 +70,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { createApiKey, updateApiKey, AI_PLATFORMS, type AiApiKey } from '@/api/ai-apikey'
+import { createApiKey, updateApiKey, type AiApiKey } from '@/api/ai-apikey'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 
 const { t } = useI18n()
 
@@ -94,10 +98,11 @@ const isEdit = computed(() => !!props.apiKey?.id)
 
 const formRef = ref()
 const saving = ref(false)
+const platformItems = computed(() => dictItems(DictType.AI_PLATFORM))
 
 const formData = reactive({
   name: '',
-  platform: 'OpenAI',
+  platform: 'openai',
   api_key: '',
   url: '',
   app_id: '',
@@ -111,7 +116,7 @@ watch(
   (val) => {
     if (val?.id) {
       formData.name = val.name || ''
-      formData.platform = val.platform || 'OpenAI'
+      formData.platform = val.platform || 'openai'
       formData.api_key = val.api_key || ''
       formData.url = val.url || ''
       formData.app_id = val.app_id || ''
@@ -120,7 +125,7 @@ watch(
     } else {
       // 重置表单
       formData.name = ''
-      formData.platform = 'OpenAI'
+      formData.platform = 'openai'
       formData.api_key = ''
       formData.url = ''
       formData.app_id = ''
@@ -165,4 +170,8 @@ const handleSubmit = async () => {
     saving.value = false
   }
 }
+
+onMounted(() => {
+  loadAdminDicts([DictType.AI_PLATFORM])
+})
 </script>

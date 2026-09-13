@@ -182,6 +182,8 @@ import {
   DeleteOutlined
 } from '@ant-design/icons-vue'
 import * as api from '@/api/agentTeam'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -198,12 +200,9 @@ const memberKeyword = ref('')
 const memberModal = ref(false)
 const memberSubmitting = ref(false)
 
-const modelOptions = [
-  { label: 'deepseek-chat', value: 'deepseek-chat' },
-  { label: 'gpt-4o', value: 'gpt-4o' },
-  { label: 'claude-3-5-sonnet', value: 'claude-3-5-sonnet' },
-  { label: 'qwen-max', value: 'qwen-max' }
-]
+const modelOptions = computed(() =>
+  dictItems(DictType.MODEL_TYPE).map(it => ({ label: it.item_name, value: it.item_code }))
+)
 
 const filteredMembers = computed(() => {
   const k = memberKeyword.value.trim().toLowerCase()
@@ -421,7 +420,10 @@ watch(() => props.teamId, () => {
   fetchDetail()
 })
 
-onMounted(fetchDetail)
+onMounted(() => {
+  loadAdminDicts([DictType.MODEL_TYPE])
+  fetchDetail()
+})
 </script>
 
 <style scoped lang="less">

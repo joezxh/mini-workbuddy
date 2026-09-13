@@ -32,14 +32,6 @@ export function useChartColors() {
   }
 
   const defaultEventTypeColors: Record<string, string> = {
-    'neighbor_dispute': '#4096ff',
-    'family_dispute': '#36cfc9',
-    'labor_dispute': '#73d13d',
-    'property_dispute': '#ffd666',
-    'economic_dispute': '#ff7875',
-    'medical_dispute': '#b37feb',
-    'education_dispute': '#13c2c2',
-    'land_dispute': '#fa8c16',
     'traffic_accident': '#eb2f96',
     'public_security': '#722ed1',
     'petition': '#52c41a',

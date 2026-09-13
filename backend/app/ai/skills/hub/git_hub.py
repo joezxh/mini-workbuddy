@@ -50,8 +50,6 @@ def _force_unlink(func, path: str, exc_info) -> None:  # noqa: ANN001
 # Hub 七大类 → 本工程 skill_category 字典表代码（best-effort 映射）
 _HUB_CATEGORY_MAP = {
     "key_person": "risk-assessment",
-    "mediation": "other",
-    "legal": "legal-reasoning",
     "evidence": "argumentation",
     "compliance": "other",
     "risk_event": "risk-assessment",

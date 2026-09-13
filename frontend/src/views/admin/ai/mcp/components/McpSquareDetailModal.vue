@@ -74,9 +74,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { McpSquareTemplate } from '@/api/ai-mcp'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictLabel, dictColor } from '@/composables/useAdminDict'
 
 const props = defineProps<{
   visible: boolean
@@ -98,13 +100,7 @@ const defaultClientConfigText = computed(() => {
   }
 })
 
-// 服务类型/协议类型为代码值，保留原映射
-const SERVICE_TYPE_LABEL: Record<string, string> = {
-  nacos2: 'Nacos 2.x',
-  nacos3: 'Nacos 3.x',
-  http: 'HTTP',
-  sse: 'SSE',
-}
+// 服务类型/分类为字典驱动
 // 与后端 PROTOCOL_TYPE_MAP 保持一致
 const PROTOCOL_TYPE_MAP: Record<string, string> = {
   nacos2: 'Nacos Registry',
@@ -114,26 +110,13 @@ const PROTOCOL_TYPE_MAP: Record<string, string> = {
 }
 
 function serviceTypeLabel(type: string): string {
-  return SERVICE_TYPE_LABEL[type] || type || '-'
+  return dictLabel(DictType.MCP_SERVICE_TYPE, type) || type || '-'
 }
 function serviceTypeColor(type: string): string {
-  const map: Record<string, string> = {
-    nacos2: 'blue',
-    nacos3: 'geekblue',
-    http: 'cyan',
-    sse: 'green',
-  }
-  return map[type] || 'default'
+  return dictColor(DictType.MCP_SERVICE_TYPE, type) || 'default'
 }
 function categoryLabel(cat: string): string {
-  const map: Record<string, string> = {
-    finance: t('mcpSquare.catFinance'),
-    sales: t('mcpSquare.catSales'),
-    legal: t('mcpSquare.catLegal'),
-    office: t('mcpSquare.catOffice'),
-    education: t('mcpSquare.catEducation'),
-  }
-  return map[cat] || cat
+  return dictLabel(DictType.MCP_CATEGORY, cat) || cat
 }
 function protocolTypeFromService(svc: string): string {
   return PROTOCOL_TYPE_MAP[svc] || '-'
@@ -142,6 +125,10 @@ function protocolTypeFromService(svc: string): string {
 function handleCancel() {
   emit('update:visible', false)
 }
+
+onMounted(() => {
+  loadAdminDicts([DictType.MCP_SERVICE_TYPE, DictType.MCP_CATEGORY])
+})
 </script>
 
 <style scoped>

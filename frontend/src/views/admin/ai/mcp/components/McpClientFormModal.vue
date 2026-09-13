@@ -13,15 +13,12 @@
       </a-form-item>
       <a-form-item :label="t('mcpSquare.clientType')" required>
         <a-select v-model:value="form.client_type" :placeholder="t('mcpSquare.selectType')">
-          <a-select-option value="stdio">Stdio</a-select-option>
-          <a-select-option value="http">HTTP</a-select-option>
-          <a-select-option value="sse">SSE</a-select-option>
+          <a-select-option v-for="it in transportItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item :label="t('mcpSquare.mcpType')" required>
         <a-select v-model:value="form.mcp_type" :placeholder="t('mcpSquare.selectMcpType')">
-          <a-select-option value="tool">Tool</a-select-option>
-          <a-select-option value="resource">Resource</a-select-option>
+          <a-select-option v-for="it in capabilityItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
         </a-select>
       </a-form-item>
       <a-form-item :label="t('skillHub.version')">
@@ -38,10 +35,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createMcpClient, updateMcpClient, type McpClient } from '@/api/ai-mcp'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 
 const props = defineProps<{
   visible: boolean
@@ -55,6 +54,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const transportItems = computed(() => dictItems(DictType.MCP_CLIENT_TRANSPORT))
+const capabilityItems = computed(() => dictItems(DictType.MCP_CAPABILITY))
+
+onMounted(() => {
+  loadAdminDicts([DictType.MCP_CLIENT_TRANSPORT, DictType.MCP_CAPABILITY])
+})
 
 const isEdit = computed(() => !!props.record)
 const submitting = ref(false)

@@ -1605,6 +1605,7 @@ function iconLabel(icon?: string) {
   justify-content: space-between;
   padding: 0 24px;
   height: 56px;
+  flex-shrink: 0;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border);
 }
@@ -1655,6 +1656,9 @@ function iconLabel(icon?: string) {
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* 主内容区：占用标题栏以下全部高度，内部各自滚动 */

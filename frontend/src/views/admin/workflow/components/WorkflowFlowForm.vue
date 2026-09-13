@@ -7,14 +7,25 @@
       <a-input v-model:value="form.flow_name" />
     </a-form-item>
     <a-row :gutter="16">
-      <a-col :span="12">
+      <a-col :span="8">
         <a-form-item label="平台类型" required>
-          <a-select v-model:value="form.platform_type" :options="platformOptions" />
+          <a-select v-model:value="form.platform_type" placeholder="请选择平台" show-search option-filter-prop="label">
+            <a-select-option v-for="it in platformItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
+          </a-select>
         </a-form-item>
       </a-col>
-      <a-col :span="12">
+      <a-col :span="8">
         <a-form-item label="流程类型" required>
-          <a-select v-model:value="form.flow_type" :options="flowTypeOptions" />
+          <a-select v-model:value="form.flow_type">
+            <a-select-option v-for="it in flowTypeItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-col>
+      <a-col :span="8">
+        <a-form-item label="流程类别">
+          <a-select v-model:value="form.workflow_category" placeholder="请选择类别" allow-clear show-search option-filter-prop="label">
+            <a-select-option v-for="it in categoryItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
+          </a-select>
         </a-form-item>
       </a-col>
     </a-row>
@@ -37,28 +48,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { createFlow, updateFlow, getPlatformTypes } from '@/api/workflow'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { createFlow, updateFlow } from '@/api/workflow'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 import { message } from 'ant-design-vue'
 
 const props = defineProps<{ initial: any }>()
 const emit = defineEmits(['saved'])
 
 const form = reactive<any>({
-  flow_code: '', flow_name: '', platform_type: 'dify', flow_type: 'Workflow',
+  flow_code: '', flow_name: '', platform_type: 'dify', flow_type: 'agent_workflow',
+  workflow_category: undefined,
   base_url: '', api_key: '', description: '',
 })
 const saving = ref(false)
-const platformOptions = ref<any[]>([])
-const flowTypeOptions = ref<any[]>([])
+
+const platformItems = computed(() => dictItems(DictType.WORKFLOW_PLATFORM))
+const flowTypeItems = computed(() => dictItems(DictType.FLOW_TYPE))
+const categoryItems = computed(() => dictItems(DictType.WORKFLOW_CATEGORY))
 
 onMounted(async () => {
   if (props.initial) {
     Object.assign(form, { ...props.initial, api_key: '' })
   }
-  const res = await getPlatformTypes()
-  platformOptions.value = res.data.platform_types.map((v: string) => ({ label: v, value: v }))
-  flowTypeOptions.value = res.data.flow_types.map((v: string) => ({ label: v, value: v }))
+  loadAdminDicts([DictType.WORKFLOW_PLATFORM, DictType.FLOW_TYPE, DictType.WORKFLOW_CATEGORY])
 })
 
 async function handleSave() {

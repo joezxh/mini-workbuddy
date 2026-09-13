@@ -29,7 +29,7 @@
         style="width:160px"
         @change="handleSearch"
       >
-        <a-select-option v-for="p in AI_PLATFORMS" :key="p" :value="p">{{ p }}</a-select-option>
+        <a-select-option v-for="it in platformItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
       </a-select>
       <a-select
         v-model:value="filters.status"
@@ -65,7 +65,7 @@
         </a-tooltip>
       </template>
       <template #platform="{ record }">
-        <a-tag color="blue">{{ record.platform }}</a-tag>
+        <a-tag :color="dictColor(DictType.AI_PLATFORM, record.platform) || 'blue'">{{ dictLabel(DictType.AI_PLATFORM, record.platform) }}</a-tag>
       </template>
       <template #status="{ record }">
         <a-tag :color="record.status === 1 ? 'success' : 'error'">
@@ -130,11 +130,14 @@ import {
   getApiKeyPage,
   updateApiKey,
   deleteApiKey,
-  AI_PLATFORMS,
   type AiApiKey
 } from '@/api/ai-apikey'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 
 const { t } = useI18n()
+
+const platformItems = computed(() => dictItems(DictType.AI_PLATFORM))
 
 // 列表数据
 const loading = ref(false)
@@ -173,6 +176,7 @@ const modelListVisible = ref(false)
 const currentKey = ref<AiApiKey | null>(null)
 
 onMounted(() => {
+  loadAdminDicts([DictType.AI_PLATFORM])
   loadData()
 })
 
@@ -282,20 +286,35 @@ const onFormSuccess = () => {
 
 .panel-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0 24px;
+  margin: 0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+  }
 
   h2 {
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--fg);
-    margin: 0 0 4px 0;
+    margin: 0;
+    white-space: nowrap;
   }
 
   .sub {
     font-size: 13px;
     color: var(--fg-secondary);
     margin: 0;
+    white-space: nowrap;
   }
 }
 

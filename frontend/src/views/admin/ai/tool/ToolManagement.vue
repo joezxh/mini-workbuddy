@@ -627,6 +627,38 @@ const removeMember = async (record: AiTool) => {
   .header-actions { display: flex; gap: 10px; }
 }
 
+/* 套用 skill 视图顶栏/tab 标题风格：56px 高 + 激活下划线（非 card） */
+.tool-tabs :deep(.ant-tabs-nav) {
+  height: 56px;
+  margin: 0;
+  padding: 0 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.tool-tabs :deep(.ant-tabs-nav::before) {
+  border-bottom: none;
+}
+.tool-tabs :deep(.ant-tabs-tab) {
+  height: 56px;
+  padding: 0 4px;
+  margin-right: 20px;
+  font-size: 14px;
+  color: var(--fg-secondary);
+  background: transparent;
+  border: none;
+}
+.tool-tabs :deep(.ant-tabs-tab:hover) {
+  color: var(--accent);
+}
+.tool-tabs :deep(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: var(--accent);
+  font-weight: 600;
+}
+.tool-tabs :deep(.ant-tabs-ink-bar) {
+  background: var(--accent);
+  height: 2px;
+}
+
 .search-bar {
   display: flex;
   gap: 10px;

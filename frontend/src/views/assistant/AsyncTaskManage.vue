@@ -140,6 +140,8 @@ import { listAsyncTasks, getAsyncTask, cancelAsyncTask, retryAsyncTask } from '@
 import { getUnifiedEvents } from '@/api/agentExecution'
 import type { AsyncTaskInfoDTO } from '@/api/aiAgent'
 import type { ExecutionEvent } from '@/types/shared'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictLabel, dictColor, dictItems } from '@/composables/useAdminDict'
 import DeepResearchExecutionPanel from './components/renderers/execution/DeepResearchExecutionPanel.vue'
 import ArtifactCard from './components/renderers/ArtifactCard.vue'
 import ScheduledTaskManage from './ScheduledTaskManage.vue'
@@ -159,11 +161,9 @@ const filterOptions = [
 const activeTab = ref<'async' | 'scheduled'>('async')
 /** 任务类别过滤：深度研究 / 单智能体 / 智能体团队（清空 = 全部类别） */
 const modeFilter = ref<string | undefined>(undefined)
-const modeFilterOptions = [
-  { label: '深度研究', value: 'deep_research' },
-  { label: '单智能体', value: 'agent' },
-  { label: '智能体团队', value: 'team' },
-]
+const modeFilterOptions = computed(() =>
+  dictItems(DictType.TARGET_MODE).map(it => ({ label: it.item_name, value: it.item_code }))
+)
 const retrying = ref(false)
 
 const loading = ref(false)
@@ -200,16 +200,16 @@ const seenEventIds = reactive(new Set<string>())
 let pollTimer: number | undefined
 
 function statusLabel(s: string) {
-  return ({ queued: '排队中', running: '研究中', completed: '已完成', failed: '失败', cancelled: '已取消' } as Record<string, string>)[s] || s
+  return dictLabel(DictType.EXECUTION_STATUS, s) || s
 }
 function badgeStatus(s: string) {
-  return ({ queued: 'default', running: 'processing', completed: 'success', failed: 'error', cancelled: 'warning' } as Record<string, string>)[s] || 'default'
+  return dictColor(DictType.EXECUTION_STATUS, s) || 'default'
 }
 function progressStatus(s: string) {
   return s === 'failed' ? 'exception' : s === 'completed' ? 'success' : 'active'
 }
 function modeLabel(m?: string) {
-  return ({ deep_research: '深度研究', agent: '智能体', team: '专家团队', skill: '技能' } as Record<string, string>)[m || ''] || (m || '—')
+  return dictLabel(DictType.TARGET_MODE, m) || (m || '—')
 }
 function isTerminal(s: string) {
   return TERMINAL.includes(s)
@@ -383,6 +383,7 @@ async function onRetry(record: AsyncTaskInfoDTO) {
 const drawerTitle = computed(() => `任务详情 · ${current.value?.taskName || current.value?.taskNo || ''}`)
 
 onMounted(() => {
+  loadAdminDicts([DictType.EXECUTION_STATUS, DictType.TARGET_MODE])
   void reload()
   // 列表级轮询：自动刷新进行中任务进度
   const listTimer = window.setInterval(() => {

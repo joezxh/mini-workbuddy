@@ -64,7 +64,7 @@ async def mock_deduction_stream() -> AsyncGenerator[Dict[str, Any], None]:
         {"stage": "完成", "progress": 100, "message": "推演完成", "result": {
             "scenarios": [
                 {"strategy": "当前措施不变", "risk_score": 85},
-                {"strategy": "强化调解", "risk_score": 40},
+                {"strategy": "强化干预", "risk_score": 40},
                 {"strategy": "法律途径", "risk_score": 55}
             ]
         }}

@@ -3,7 +3,7 @@
 设计:
 - BaseVectorStore: 抽象基类, 跨 collection upsert/search/delete
 - InMemoryVectorStore: 测试 / 本地开发用, 余弦相似度
-- 后续 Phase 2.x 接入 PGVectorStore (直接读写 legal_info.full_text_vector 等 pgvector 列)
+- 后续 Phase 2.x 接入 PGVectorStore (直接读写各业务表的 pgvector 列)
 """
 from __future__ import annotations
 import math

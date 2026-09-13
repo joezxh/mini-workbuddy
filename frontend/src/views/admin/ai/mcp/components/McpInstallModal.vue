@@ -63,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
@@ -71,7 +71,8 @@ import {
   type McpSquareTemplate,
   type McpSquareInstallData,
 } from '@/api/ai-mcp'
-
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictLabel } from '@/composables/useAdminDict'
 const props = defineProps<{
   visible: boolean
   template: McpSquareTemplate | null
@@ -107,27 +108,14 @@ const isHttpOrSse = computed(() => {
   return st === 'http' || st === 'sse'
 })
 
-// 服务类型为代码值，保留原映射
-const SERVICE_TYPE_LABEL: Record<string, string> = {
-  nacos2: 'Nacos 2.x',
-  nacos3: 'Nacos 3.x',
-  http: 'HTTP',
-  sse: 'SSE',
-}
+// 服务类型/分类为字典驱动
 function serviceTypeLabel(type?: string | null): string {
   if (!type) return '-'
-  return SERVICE_TYPE_LABEL[type] || type
+  return dictLabel(DictType.MCP_SERVICE_TYPE, type) || type
 }
 function categoryLabel(c?: string | null): string {
   if (!c) return ''
-  const map: Record<string, string> = {
-    finance: t('mcpSquare.catFinance'),
-    sales: t('mcpSquare.catSales'),
-    legal: t('mcpSquare.catLegal'),
-    office: t('mcpSquare.catOffice'),
-    education: t('mcpSquare.catEducation'),
-  }
-  return map[c] || c
+  return dictLabel(DictType.MCP_CATEGORY, c) || c
 }
 
 watch(() => props.visible, (val) => {
@@ -177,6 +165,10 @@ async function handleSubmit() {
 function handleCancel() {
   emit('update:visible', false)
 }
+
+onMounted(() => {
+  loadAdminDicts([DictType.MCP_SERVICE_TYPE, DictType.MCP_CATEGORY])
+})
 </script>
 
 <style scoped>

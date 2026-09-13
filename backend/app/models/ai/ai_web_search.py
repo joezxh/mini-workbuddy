@@ -1,6 +1,6 @@
 """AI Web Search 供应商模型（PostgreSQL）。
 
-参考 mediation-platform 的 WebSearchDO 实现。
+整理自通用 WebSearch 供应商模型实现。
 """
 from datetime import date, datetime
 from typing import Optional

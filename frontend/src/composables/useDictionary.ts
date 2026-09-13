@@ -379,20 +379,12 @@ export function useDictionary() {
     return map
   })
 
-  // 计算属性：事件类型映射（含全量纠纷类型兜底，确保字典未落库时也能正确显示中文）
+  // 计算属性：事件类型映射（含内置兜底，确保字典未落库时也能正确显示中文）
   const eventTypeMap = computed(() => {
     const map: Record<string, DictionaryItem> = {}
 
-    // 全量纠纷类型内建兼容映射
+    // 事件类型内置兼容映射
     const legacyEventTypes: Record<string, Partial<DictionaryItem>> = {
-      'neighbor_dispute': { item_name: '邻里纠纷', color: '#4096ff' },
-      'family_dispute': { item_name: '家庭婚姻纠纷', color: '#722ed1' },
-      'labor_dispute': { item_name: '劳资纠纷', color: '#eb2f96' },
-      'property_dispute': { item_name: '房产物业纠纷', color: '#fa8c16' },
-      'economic_dispute': { item_name: '经济纠纷', color: '#faad14' },
-      'medical_dispute': { item_name: '医疗纠纷', color: '#52c41a' },
-      'education_dispute': { item_name: '教育纠纷', color: '#13c2c2' },
-      'land_dispute': { item_name: '土地纠纷', color: '#1890ff' },
       'traffic_accident': { item_name: '交通事故', color: '#f5222d' },
       'public_security': { item_name: '治安事件', color: '#ff4d4f' },
       'petition': { item_name: '信访事件', color: '#ff7a45' },

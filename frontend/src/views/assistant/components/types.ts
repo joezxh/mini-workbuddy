@@ -4,26 +4,12 @@ import type { AiChatMessage } from '@/api/aiSession'
 /** 消息解析结果 */
 export interface ParsedMsg {
   thinking: string
-  isDispute: boolean
-  sections: Record<string, string>
   rawContent: string
-  references: MsgReferences
   toolHistory?: Array<{
     name: string
     input: any
     result?: string
   }>
-}
-
-/** 从 AI 输出中提取的引用参考信息 */
-export interface MsgReferences {
-  caseType: string     // <case_type> 纠纷类型
-  parties: string      // <party> 当事人信息
-  caseSummary: string  // <summary> 案情摘要
-  legalCases: string   // <legal_case> / <legal-case> 类案信息
-  legal: string        // <legal> 法律法规信息
-  strategy: string     // <strategy> 调解策略信息
-  hasAny: boolean      // 是否有任何引用内容
 }
 
 /** SQLBot 数据分析结果 */
@@ -128,7 +114,7 @@ export type ChatMessage = AiChatMessage & {
   /** 通用：标记该消息使用何种专属渲染器
    *  research-async：深度研究后台异步任务卡片
    *  research-legacy：旧版深度研究消息（过程面板 + 报告） */
-  renderKind?: 'thinking' | 'research' | 'scheduled' | 'general' | 'skill' | 'agent' | 'team' | 'dispute' | 'data'
+  renderKind?: 'thinking' | 'research' | 'scheduled' | 'general' | 'skill' | 'agent' | 'team' | 'data'
     | 'research-async' | 'research-legacy' | 'react'
   attachments?: Array<{
     file_id?: string
@@ -171,192 +157,6 @@ export interface SkillInfo {
   params?: Record<string, any>
 }
 
-/** 纠纷调解板块定义 */
-export interface DisputeSectionDef {
-  key: string
-  label: string
-  re: RegExp
-  emptyHint: string
-}
-
-export const DISPUTE_SECTION_DEFS: DisputeSectionDef[] = [
-  { key: 'case_overview', label: '📋 案情概述', re: /##\s*[📋🗒️]*\s*案情概述/, emptyHint: ' 正在提取案情信息...' },
-  { key: 'strategy',      label: '🎯 策略建议', re: /##\s*[🎯🏹]*\s*策略建议/,   emptyHint: ' 正在检索策略库...' },
-  { key: 'golden_words',  label: '💬 调解启示语', re: /##\s*[💬🗨️]*\s*调解启示语/, emptyHint: ' 正在检索金句库...' },
-  { key: 'legal_advisor', label: '⚖️ AI 法律顾问', re: /##\s*[⚖️⚡]*\s*AI\s*法律顾问/, emptyHint: ' 正在生成法律分析...' },
-]
-
-/** 从文本中提取结构化标签内容，并返回清洗后的文本和引用信息。
- *  支持的标签：<case_type>、<party>、<summary>、<legal_case>/<legal-case>、<legal>、<strategy> */
-function extractReferences(text: string): { cleaned: string; refs: MsgReferences } {
-  let caseType = ''
-  let parties = ''
-  let caseSummary = ''
-  let legalCases = ''
-  let legal = ''
-  let strategy = ''
-
-  // 提取各标签内容（支持未闭合标签 —— 流式输出中常见）
-  // <case_type>
-  const ctRe = /<case_type>([\s\S]*?)(<\/case_type>|$)/gi
-  // <party>
-  const ptRe = /<party>([\s\S]*?)(<\/party>|$)/gi
-  // <summary>
-  const smRe = /<summary>([\s\S]*?)(<\/summary>|$)/gi
-  // <legal_case> 或 <legal-case>（兼容两种写法）
-  const lcRe = /<legal[_-]case>([\s\S]*?)(<\/legal[_-]case>|$)/gi
-  // <legal>
-  const lgRe = /<legal>([\s\S]*?)(<\/legal>|$)/gi
-  // <strategy>
-  const stRe = /<strategy>([\s\S]*?)(<\/strategy>|$)/gi
-
-  let m: RegExpExecArray | null
-  while ((m = ctRe.exec(text)) !== null) caseType += m[1].trim() + '\n'
-  while ((m = ptRe.exec(text)) !== null) parties += m[1].trim() + '\n'
-  while ((m = smRe.exec(text)) !== null) caseSummary += m[1].trim() + '\n'
-  while ((m = lcRe.exec(text)) !== null) legalCases += m[1].trim() + '\n'
-  while ((m = lgRe.exec(text)) !== null) legal += m[1].trim() + '\n'
-  while ((m = stRe.exec(text)) !== null) strategy += m[1].trim() + '\n'
-
-  caseType = caseType.trim()
-  parties = parties.trim()
-  caseSummary = caseSummary.trim()
-  legalCases = legalCases.trim()
-  legal = legal.trim()
-  strategy = strategy.trim()
-
-  // 从文本中移除这些标签（同时清理 <legal_case> 和 <legal-case> 两种写法）
-  const cleaned = text
-    .replace(/<case_type>[\s\S]*?(<\/case_type>|$)/gi, '')
-    .replace(/<party>[\s\S]*?(<\/party>|$)/gi, '')
-    .replace(/<summary>[\s\S]*?(<\/summary>|$)/gi, '')
-    .replace(/<legal[_-]case>[\s\S]*?(<\/legal[_-]case>|$)/gi, '')
-    .replace(/<legal>[\s\S]*?(<\/legal>|$)/gi, '')
-    .replace(/<strategy>[\s\S]*?(<\/strategy>|$)/gi, '')
-    .trim()
-
-  const hasAny = !!(caseType || parties || caseSummary || legalCases || legal || strategy)
-  return {
-    cleaned,
-    refs: { caseType, parties, caseSummary, legalCases, legal, strategy, hasAny },
-  }
-}
-
-/**
- * 降级引用提取：当 AI 输出不含结构化标签时，从纯文本中通过关键词/正则模式自动提取引用摘要。
- * 用于通用对话模式（general）的引用卡片展示。
- */
-function extractReferencesFallback(text: string): MsgReferences {
-  const empty: MsgReferences = { caseType: '', parties: '', caseSummary: '', legalCases: '', legal: '', strategy: '', hasAny: false }
-  if (!text || text.length < 15) return empty
-
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-
-  // ── 1. 纠纷类型：匹配含"纠纷/争议/案件类型"等关键词的行 ──
-  let caseType = ''
-  const caseTypeKw = /(?:纠纷类型|案件类型|争议类型|纠纷)[：:\s]*(.+)/
-  for (const line of lines) {
-    const m = line.match(caseTypeKw)
-    if (m) { caseType = m[1].trim(); break }
-  }
-  if (!caseType) {
-    const typeMap: [RegExp, string][] = [
-      [/(?:劳动|欠薪|工资|薪酬)(?:纠纷|争议)/, '劳动纠纷'],
-      [/(?:邻里|相邻)(?:纠纷|争议|关系)/, '相邻权纠纷'],
-      [/(?:借贷|借款|债务)(?:纠纷|争议)/, '民间借贷纠纷'],
-      [/(?:婚姻|离婚|家庭)(?:纠纷|争议)/, '婚姻家庭纠纷'],
-      [/(?:合同|违约)(?:纠纷|争议)/, '合同纠纷'],
-      [/(?:侵权)(?:纠纷|争议|损害)/, '侵权责任纠纷'],
-      [/(?:物业)(?:纠纷|争议)/, '物业纠纷'],
-      [/(?:消费)(?:纠纷|争议|维权)/, '消费纠纷'],
-      [/(?:交通|车祸|车祸)(?:事故|纠纷|争议)/, '交通事故纠纷'],
-      [/(?:医疗)(?:纠纷|争议|事故)/, '医疗纠纷'],
-    ]
-    for (const [re, label] of typeMap) {
-      if (re.test(text)) { caseType = label; break }
-    }
-  }
-
-  // ── 2. 当事人信息：匹配 甲乙方/申请被申请人/原被告/"与"字结构 ──
-  let parties = ''
-  const partyLines: string[] = []
-  const partyRoleRe = /((?:甲方|乙方|申请人|被申请人|原告|被告|投诉人|被投诉人|甲方|乙方|第三人)[^\n,，。；]{0,60})/g
-  let pm: RegExpExecArray | null
-  while ((pm = partyRoleRe.exec(text)) !== null) {
-    const val = pm[1].trim()
-    if (val.length > 2 && !partyLines.includes(val)) partyLines.push(val)
-  }
-  if (partyLines.length > 0) {
-    parties = partyLines.slice(0, 6).join('\n')
-  } else {
-    // 尝试 "张三 与 李四" / "张三诉李四" 模式
-    const vsRe = /([\u4e00-\u9fa5]{2,4})\s*(?:与|诉|和)\s*([\u4e00-\u9fa5]{2,4})/
-    const vm = text.match(vsRe)
-    if (vm) parties = `${vm[1]} 与 ${vm[2]}`
-  }
-
-  // ── 3. 案情摘要：取第一段非空非标题的实质文本（≤200字） ──
-  let caseSummary = ''
-  for (const line of lines) {
-    if (line.startsWith('#') || line.length < 12) continue
-    if (/^(?:参考|相关|根据|依据|建议|策略|分析|总结|综上)/.test(line) && line.length < 30) continue
-    caseSummary = line.length > 200 ? line.slice(0, 200) + '…' : line
-    break
-  }
-
-  // ── 4. 法律法规：匹配 《法律名》及第N条 ──
-  const legalSet: string[] = []
-  const lawRe = /《([^》]{2,30})》(?:\s*第\s*[\d零一二三四五六七八九十百千]+\s*条)?/g
-  let lm: RegExpExecArray | null
-  while ((lm = lawRe.exec(text)) !== null) {
-    const full = lm[0].trim()
-    if (!legalSet.includes(full)) legalSet.push(full)
-  }
-  const legal = legalSet.slice(0, 8).join('\n')
-
-  // ── 5. 类案参考：匹配案号 (20XX)X...X号 或 "案例/判例" 相关行 ──
-  const caseSet: string[] = []
-  const caseNoRe = /(?:（\d{4}）|[(]\d{4}[)])[^\n]{2,50}号/g
-  let cm: RegExpExecArray | null
-  while ((cm = caseNoRe.exec(text)) !== null) {
-    const val = cm[0].trim()
-    if (!caseSet.includes(val)) caseSet.push(val)
-  }
-  if (caseSet.length === 0) {
-    // 尝试匹配含 "案例/判例/类案" 关键词的行
-    const caseKwRe = /(?:类案|案例|判例|参考案例|指导案例)[：:\s]*(.+)/
-    for (const line of lines) {
-      const m = line.match(caseKwRe)
-      if (m) { caseSet.push(m[0].trim()); if (caseSet.length >= 3) break }
-    }
-  }
-  const legalCases = caseSet.slice(0, 5).join('\n')
-
-  // ── 6. 调解策略/建议：匹配含策略/建议/方案等关键词的行 ──
-  const stratLines: string[] = []
-  const stratKwRe = /(?:调解?策略|处理建议|解决方案|调解方案|建议[：:]|策略[：:]|调解建议|工作建议)[：:\s]*(.+)/
-  for (const line of lines) {
-    const m = line.match(stratKwRe)
-    if (m) { stratLines.push(m[0].trim()); if (stratLines.length >= 3) break }
-  }
-  let strategy = stratLines.join('\n')
-
-  // 若没有明确策略标题，尝试含"建议"的短句
-  if (!strategy) {
-    const suggestions: string[] = []
-    for (const line of lines) {
-      if (/(?:建议|应当|可以|需要|注意)/.test(line) && line.length > 8 && line.length < 120) {
-        suggestions.push(line)
-        if (suggestions.length >= 3) break
-      }
-    }
-    strategy = suggestions.join('\n')
-  }
-
-  const hasAny = !!(caseType || parties || caseSummary || legalCases || legal || strategy)
-  return { caseType, parties, caseSummary, legalCases, legal, strategy, hasAny }
-}
-
 /** 消息解析函数 */
 export function parseMsg(text: string): ParsedMsg {
   let thinkingParts: string[] = []
@@ -384,49 +184,8 @@ export function parseMsg(text: string): ParsedMsg {
     }
   }
 
-  // 2. 提取引用标签（<legal-case>、<legal>、<strategy>）
-  let { cleaned: remainingClean, refs } = extractReferences(remaining)
-  remaining = remainingClean
-
-  // 2b. 降级提取：当标签提取无结果时，从纯文本中自动提取引用摘要
-  if (!refs.hasAny) {
-    const fallbackRefs = extractReferencesFallback(remaining)
-    if (fallbackRefs.hasAny) refs = fallbackRefs
-  }
-
-  // 3. 找到第一个纠纷章节标题
-  let firstIdx = remaining.length
-  let isDispute = false
-  for (const def of DISPUTE_SECTION_DEFS) {
-    const hit = def.re.exec(remaining)
-    if (hit && hit.index < firstIdx) { firstIdx = hit.index; isDispute = true }
-  }
-
-  // 4. 章节前的普通文字：不显示（不归入思考），直接丢弃
-  //    （之前版本会将 pre-section 文字放入思考块，现在仅在 <think> 标签内才算思考）
-
-  const sectionText = isDispute ? remaining.slice(firstIdx) : remaining
   const thinking = thinkingParts.filter(Boolean).join('\n\n---\n\n')
-
-  // 5. 解析各章节内容
-  const sections: Record<string, string> = {}
-  if (isDispute) {
-    const positions: Array<{ key: string; start: number }> = []
-    for (const def of DISPUTE_SECTION_DEFS) {
-      const hit = def.re.exec(sectionText)
-      if (hit) positions.push({ key: def.key, start: hit.index })
-    }
-    positions.sort((a, b) => a.start - b.start)
-    for (let i = 0; i < positions.length; i++) {
-      const { key, start } = positions[i]
-      const end = positions[i + 1]?.start ?? sectionText.length
-      const chunk = sectionText.slice(start, end)
-      const hdr = /##[^\n]*\n/.exec(chunk)
-      sections[key] = hdr ? chunk.slice(hdr.index + hdr[0].length).trim() : chunk.trim()
-    }
-  }
-
-  return { thinking, isDispute, sections, rawContent: isDispute ? sectionText : remaining, references: refs }
+  return { thinking, rawContent: remaining }
 }
 
 // ─────────────────────────────────────────────────────────────

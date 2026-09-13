@@ -3,16 +3,14 @@
   <div>
     <a-space style="margin-bottom: 16px">
       <a-select v-model:value="filterStatus" placeholder="状态" allowClear style="width: 140px" @change="loadData">
-        <a-select-option value="success">成功</a-select-option>
-        <a-select-option value="failed">失败</a-select-option>
-        <a-select-option value="running">运行中</a-select-option>
+        <a-select-option v-for="it in statusItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
       </a-select>
     </a-space>
     <a-table :columns="columns" :data-source="data" :loading="loading" :pagination="pagination"
              @change="handleTableChange" row-key="id">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
-          <a-tag :color="statusColor(record.status)">{{ record.status }}</a-tag>
+          <a-tag :color="dictColor(DictType.WORKFLOW_EXEC_STATUS, record.status)">{{ dictLabel(DictType.WORKFLOW_EXEC_STATUS, record.status) }}</a-tag>
         </template>
         <template v-if="column.key === 'latency_ms'">
           {{ record.latency_ms ? `${record.latency_ms} ms` : '-' }}
@@ -23,12 +21,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { listExecutions } from '@/api/workflow'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 
 const data = ref<any[]>([])
 const loading = ref(false)
 const filterStatus = ref<string | undefined>(undefined)
+const statusItems = computed(() => dictItems(DictType.WORKFLOW_EXEC_STATUS))
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
 
 const columns = [
@@ -39,10 +40,6 @@ const columns = [
   { title: '重试', dataIndex: 'retry_count', width: 80 },
   { title: '创建时间', dataIndex: 'created_at', width: 180 },
 ]
-
-function statusColor(s: string) {
-  return { success: 'green', failed: 'red', running: 'blue', pending: 'default', timeout: 'orange' }[s] || 'default'
-}
 
 async function loadData() {
   loading.value = true
@@ -57,5 +54,8 @@ function handleTableChange(pag: any) {
   pagination.current = pag.current; pagination.pageSize = pag.pageSize; loadData()
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadAdminDicts([DictType.WORKFLOW_EXEC_STATUS])
+  loadData()
+})
 </script>

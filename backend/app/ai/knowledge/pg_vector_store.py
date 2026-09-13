@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class VectorCollection:
     """一个向量集合的元数据描述。"""
     collection: str
-    model_id: str                       # 'app.models.kms_legal.LegalInfo'
+    model_id: str                       # 'app.models.my_module.MyModel'
     vector_col: str                     # 'full_text_vector'
     text_col: str                       # 'full_text'
     pk_col: str = "id"                  # 主键列名
@@ -56,13 +56,13 @@ class PGVectorStore(BaseVectorStore):
     用法:
         store = PGVectorStore(db=session)
         store.register_collection(VectorCollection(
-            collection="legal_law",
-            model_id="app.models.kms_legal.LegalInfo",
+            collection="my_collection",
+            model_id="app.models.my_module.MyModel",
             vector_col="full_text_vector",
             text_col="full_text",
-            metadata_cols={"law_title": "law_title"},
+            metadata_cols={"title": "title"},
         ))
-        results = await store.search("legal_law", query_vector, top_k=5)
+        results = await store.search("my_collection", query_vector, top_k=5)
     """
 
     def __init__(self, db: Session) -> None:

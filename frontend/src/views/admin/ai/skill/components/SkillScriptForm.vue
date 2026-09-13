@@ -27,7 +27,7 @@
       </a-form-item>
 
       <a-form-item :label="t('skillMgmt.command')" name="command" :rules="[{ required: true, message: t('skillMgmt.commandRequired') }]">
-        <a-input v-model:value="form.command" placeholder="如 python scripts/inspect.py --list" />
+        <a-input v-model:value="form.command" :placeholder="t('skillMgmt.commandPlaceholder')" />
       </a-form-item>
 
       <a-form-item :label="t('skillHub.description')" name="description">

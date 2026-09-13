@@ -6,10 +6,10 @@ Usage:
     from app.ai.skills.categories import SkillCategory
     
     # 获取分类代码
-    category = SkillCategory.LEGAL_REASONING
+    category = SkillCategory.RISK_ASSESSMENT
     
     # 验证分类是否有效
-    if SkillCategory.is_valid('legal-reasoning'):
+    if SkillCategory.is_valid('risk-assessment'):
         print("分类有效")
     
     # 获取所有有效分类
@@ -27,7 +27,6 @@ class SkillCategory:
     从数据库字典表动态加载分类定义，提供类型安全的分类访问。
     
     Attributes:
-        LEGAL_REASONING: 法律推理类技能
         DOCUMENT: 法律文书类技能
         RISK_ASSESSMENT: 风险评估类技能
         RETRIEVAL: 法律检索类技能
@@ -41,7 +40,6 @@ class SkillCategory:
     _cache_timestamp: Optional[float] = None
     
     # 分类代码常量（从字典表加载后动态设置）
-    LEGAL_REASONING = 'legal-reasoning'
     DOCUMENT = 'document'
     RISK_ASSESSMENT = 'risk-assessment'
     RETRIEVAL = 'retrieval'
@@ -53,7 +51,6 @@ class SkillCategory:
     def _default_categories(cls) -> Set[str]:
         """内置默认分类集合（数据库不可用 / 字典未启用时的兜底）。"""
         return {
-            cls.LEGAL_REASONING,
             cls.DOCUMENT,
             cls.RISK_ASSESSMENT,
             cls.RETRIEVAL,
@@ -102,7 +99,7 @@ class SkillCategory:
             
         Example:
             >>> categories = SkillCategory.all_categories()
-            >>> 'legal-reasoning' in categories
+            >>> 'risk-assessment' in categories
             True
         """
         return cls._load_from_database()
@@ -118,7 +115,7 @@ class SkillCategory:
             如果分类有效返回 True，否则返回 False
             
         Example:
-            >>> SkillCategory.is_valid('legal-reasoning')
+            >>> SkillCategory.is_valid('risk-assessment')
             True
             >>> SkillCategory.is_valid('invalid-category')
             False
@@ -139,8 +136,8 @@ class SkillCategory:
             ValueError: 如果分类无效
             
         Example:
-            >>> SkillCategory.validate('legal-reasoning')
-            'legal-reasoning'
+            >>> SkillCategory.validate('risk-assessment')
+            'risk-assessment'
             >>> SkillCategory.validate('invalid')
             ValueError: 无效的技能分类...
         """
@@ -182,9 +179,9 @@ class SkillCategory:
             包含分类详细信息的字典
             
         Example:
-            >>> info = SkillCategory.get_category_info('legal-reasoning')
+            >>> info = SkillCategory.get_category_info('risk-assessment')
             >>> info['item_name']
-            '法律推理'
+            '风险评估'
         """
         db = SessionLocal()
         try:

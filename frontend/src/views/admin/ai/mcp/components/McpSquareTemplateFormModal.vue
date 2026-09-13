@@ -20,20 +20,13 @@
 
       <a-form-item :label="t('mcpSquare.serviceType')" name="service_type">
         <a-select v-model:value="form.service_type" :placeholder="t('mcpSquare.selectServiceType')">
-          <a-select-option value="nacos2">Nacos 2.x</a-select-option>
-          <a-select-option value="nacos3">Nacos 3.x</a-select-option>
-          <a-select-option value="http">HTTP</a-select-option>
-          <a-select-option value="sse">SSE</a-select-option>
+          <a-select-option v-for="it in serviceTypeItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
         </a-select>
       </a-form-item>
 
       <a-form-item :label="t('mcpSquare.category')" name="category">
         <a-select v-model:value="form.category" :placeholder="t('mcpSquare.selectCategory')" allow-clear>
-          <a-select-option value="finance">{{ t('mcpSquare.catFinance') }}</a-select-option>
-          <a-select-option value="sales">{{ t('mcpSquare.catSales') }}</a-select-option>
-          <a-select-option value="legal">{{ t('mcpSquare.catLegal') }}</a-select-option>
-          <a-select-option value="office">{{ t('mcpSquare.catOffice') }}</a-select-option>
-          <a-select-option value="education">{{ t('mcpSquare.catEducation') }}</a-select-option>
+          <a-select-option v-for="it in categoryItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
         </a-select>
       </a-form-item>
 
@@ -64,9 +57,7 @@
           :placeholder="t('mcpSquare.selectCapabilities')"
           allow-clear
         >
-          <a-select-option value="tools">Tools</a-select-option>
-          <a-select-option value="resources">Resources</a-select-option>
-          <a-select-option value="prompts">Prompts</a-select-option>
+          <a-select-option v-for="it in capabilityItems" :key="it.item_code" :value="it.item_code">{{ it.item_name }}</a-select-option>
         </a-select>
       </a-form-item>
 
@@ -103,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import type { Rule } from 'ant-design-vue/es/form'
@@ -112,6 +103,8 @@ import {
   updateMcpSquare,
   type McpSquareTemplate,
 } from '@/api/ai-mcp'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 
 const props = defineProps<{
   visible: boolean
@@ -128,6 +121,10 @@ const submitting = ref(false)
 const formRef = ref()
 
 const { t } = useI18n()
+
+const serviceTypeItems = computed(() => dictItems(DictType.MCP_SERVICE_TYPE))
+const categoryItems = computed(() => dictItems(DictType.MCP_CATEGORY))
+const capabilityItems = computed(() => dictItems(DictType.MCP_CAPABILITY))
 
 const defaultForm = () => ({
   name: '',
@@ -247,4 +244,8 @@ async function handleSubmit() {
 function handleCancel() {
   emit('update:visible', false)
 }
+
+onMounted(() => {
+  loadAdminDicts([DictType.MCP_SERVICE_TYPE, DictType.MCP_CATEGORY, DictType.MCP_CAPABILITY])
+})
 </script>

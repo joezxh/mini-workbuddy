@@ -1,7 +1,7 @@
 <!--
   SkillExecutionPanel.vue — Skill 模式执行详情面板（Tab 标签页）
 
-  与 MediatorPanel / MediationDialogue 的执行详情面板 UI 完全对齐：
+  与执行详情面板 UI 完全对齐：
   - Tab 1「思考过程」：合并同一 thinking 块的所有增量事件为单一段落
   - Tab 2「执行事件」：工具调用（参数可折叠）+ 进度信息 + 产物
 
@@ -282,7 +282,7 @@ const stepEvents = computed(() =>
   [...allEvents.value.filter(e => e.type === 'step')].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)),
 )
 
-/** 工具调用 + 结果交错排列（与 MediationDialogue 对齐） */
+/** 工具调用 + 结果交错排列（与其他执行详情面板对齐） */
 const allToolEvents = computed(() => [...toolCallEvents.value, ...toolResultEvents.value])
 
 // ── Thinking 合并 ────────────────────────────────────────

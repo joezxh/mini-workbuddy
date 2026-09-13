@@ -1,5 +1,5 @@
 """字典数据 Schema"""
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationInfo
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 
@@ -44,8 +44,17 @@ class SysDictionaryItemResponse(SysDictionaryItemBase):
     item_id: int
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("level", "sort_order", mode="before")
+    @classmethod
+    def _coerce_int_default(cls, v: Any, info: ValidationInfo) -> Any:
+        """DB 中 level / sort_order 允许为 NULL，但响应约定为 int。
+        将显式 None 兜底为其字段默认值，避免 Pydantic 校验 500。"""
+        if v is not None:
+            return v
+        return 1 if info.field_name == "level" else 0
 
 
 class SysDictionaryBase(BaseModel):
@@ -153,12 +162,11 @@ class DictType:
     PERSON_TYPE = "person_type"  # 人员类型
     TAG = "tag"  # 标签
     PERSON_MANAGE_STATUS = "person_manage_status"  # 人员管控状态
-    EVENT_SOURCE_TYPE = "event_source_department"  # 事件来源部门类型(矛调/平安法治/110非警务警情...)
+    EVENT_SOURCE_TYPE = "event_source_department"  # 事件来源部门类型(平安法治/110非警务警情...)
     EVENT_SOURCE_TYPE = "event_source_type"  # 事件来源(人工录入/批量导入/接口对接/物联网感知)
     TASK_TYPE = "task_type"  # 定时任务类型
     ENTITY_TYPE = "entity_type"  # 企业实体类型
     LOCATION_TYPE = "location_type"  # 风险地点类型
-    GOLD_SAYING_TYPE = "gold_saying_type"  # 调解金句话术类型
     REPORT_TYPE = "report_type"  # AI 报告类型（处置分析/风险评估/趋势预测等）
     CLUSTER_DIMENSION = "cluster_dimension"  # 事件聚合维度（关键字/实体/人员/区域）
     ONTOLOGY_REL_TYPE = "ontology_rel_type"  # 本体关系类型（继承/实现/关联/聚合/组合/依赖）

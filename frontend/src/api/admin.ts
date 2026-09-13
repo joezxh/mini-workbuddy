@@ -84,9 +84,6 @@ export function migrateEvent() {
 export function migratePerson() {
   return request.post('/api/v1/admin/migration/person')
 }
-export function migrateDispute() {
-  return request.post('/api/v1/admin/migration/dispute')
-}
 
 // ============================================================
 // 源数据浏览（只读）- 指向 /api/v1/dws/* 路由
@@ -102,12 +99,6 @@ export function getDwsPersons(params: BasePageParams) {
 }
 export function getDwsPersonDetail(personId: string) {
   return request.get(`/api/v1/dws/persons/${personId}`)
-}
-export function getDwsDisputes(params: BasePageParams) {
-  return request.get('/api/v1/dws/disputes', { params })
-}
-export function getDwsDisputeDetail(pkId: string) {
-  return request.get(`/api/v1/dws/disputes/${pkId}`)
 }
 export function getDwsEnterprises(params: BasePageParams) {
   return request.get('/api/v1/dws/enterprises', { params })

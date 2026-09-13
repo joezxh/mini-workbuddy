@@ -1,0 +1,33 @@
+请对 ​frontend/src​ 目录下的所有 Vue 组件进行全面分析和重构：
+
+1. **全面扫描硬编码下拉选项**：遍历 ​frontend/src/views​ 目录下所有子目录的 Vue 组件文件，识别所有使用硬编码选项的下拉列表组件（包括 `<a-select-option>`、`<a-cascader-option>` 等 Ant Design Vue 选择器），整理出以下信息：
+   - 每个硬编码下拉列表的所在文件和具体位置（行号）
+   - 当前硬编码的所有选项值及对应显示文本
+   - 该字段在业务中的含义和用途
+
+2. **对比现有数据字典**：将识别出的硬编码选项与系统中已有的 `sys_dictionary` 数据字典表进行对比，判断哪些可以复用现有字典项，哪些需要新增字典定义。
+
+3. **为缺失字典生成 SQL 脚本**：对于没有对应数据字典定义的硬编码选项：
+   - 设计新的字典结构，包含 `sys_dictionary`（字典元数据）和 `sys_dictionary_item`（字典项）两张表的 INSERT 语句
+   - 字典命名规范：使用英文小写蛇形命名法（如 `ai_platform`、`execution_status`）
+   - 字典项设计：每个选项映射为一行记录，包含 `item_code`（唯一编码）、`item_name`（显示名称）、`color`（显示颜色）、`sort_order`（排序号）等字段
+   - SQL 格式要求：采用幂等插入模式（使用 `WHERE NOT EXISTS` 避免重复插入），确保可多次执行
+   - 输出完整的 SQL 初始化脚本文件（建议路径：`docs/sql/dict_missing_items.sql`）
+
+4. **更新枚举常量定义**：在 `frontend/src/api/dictionary.ts` 文件的 `DictType` 枚举中添加新增字典对应的枚举项，保持代码的一致性。
+
+5. **重构 Vue 组件代码**：将所有识别到的硬编码下拉选项替换为数据字典驱动的模式：
+   - 导入必要的字典 API：`DictType` 枚举、`loadAdminDicts`、`dictItems`、`dictLabel`、`dictColor` 等函数
+   - 在模板层：将 `<a-select-option v-for="..." :value="xxx">{{ xxx }}</a-select-option>` 替换为基于字典的动态渲染
+   - 在脚本层：添加 `onMounted` 钩子调用字典加载函数，添加计算属性获取字典项列表
+   - 状态标签渲染：对于使用颜色的状态标识，用 `dictColor()` 函数替代硬编码的颜色值
+
+6. **验证修改结果**：
+   - 检查 TypeScript 编译是否通过（运行 `npx vue-tsc --noEmit`）
+   - 确认所有相关文件中不存在未解析的引用或编译错误
+   - 验证国际化文本是否与字典名称保持一致
+
+最终输出物应包含：
+- 数据字典 SQL 初始化脚本（`docs/sql/dict_missing_items.sql`）
+- 所有重构后的 Vue 组件文件
+- 更新后的字典类型枚举定义文件

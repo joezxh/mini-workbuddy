@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑搜索供应商' : '新增搜索供应商'"
+    :title="isEdit ? t('webSearch.editProviderTitle') : t('webSearch.createProviderTitle')"
     width="880px"
     :confirm-loading="saving"
     @ok="handleSubmit"
@@ -17,21 +17,21 @@
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item
-            label="名称"
+            :label="t('webSearch.labelName')"
             name="name"
-            :rules="[{ required: true, message: '请输入供应商名称' }]"
+            :rules="[{ required: true, message: t('webSearch.nameRule') }]"
           >
-            <a-input v-model:value="formData.name" placeholder="如：博查搜索" />
+            <a-input v-model:value="formData.name" :placeholder="t('webSearch.namePlaceholder')" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
           <a-form-item
-            label="平台"
+            :label="t('webSearch.labelPlatform')"
             name="platform"
-            :rules="[{ required: true, message: '请选择平台' }]"
+            :rules="[{ required: true, message: t('webSearch.platformRule') }]"
           >
-            <a-select v-model:value="formData.platform" placeholder="请选择平台">
+            <a-select v-model:value="formData.platform" :placeholder="t('webSearch.platformPlaceholder')">
               <a-select-option v-for="it in dictItems(DictType.WEB_SEARCH_PLATFORM)" :key="it.item_code" :value="it.item_code">
                 {{ it.item_name }}
               </a-select-option>
@@ -41,54 +41,54 @@
 
         <a-col :span="12">
           <a-form-item label="AppId" name="app_id">
-            <a-input v-model:value="formData.app_id" placeholder="AppId（可选）" />
+            <a-input v-model:value="formData.app_id" :placeholder="t('webSearch.appIdPlaceholder')" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="排序" name="sort">
+          <a-form-item :label="t('webSearch.labelSort')" name="sort">
             <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="超时(秒)" name="timeout">
+          <a-form-item :label="t('webSearch.labelTimeout')" name="timeout">
             <a-input-number v-model:value="formData.timeout" :min="1" :max="300" style="width: 100%" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="最大结果数" name="max_results">
+          <a-form-item :label="t('webSearch.labelMaxResults')" name="max_results">
             <a-input-number v-model:value="formData.max_results" :min="1" :max="100" style="width: 100%" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="每日配额" name="daily_quota">
+          <a-form-item :label="t('webSearch.labelQuota')" name="daily_quota">
             <a-input-number v-model:value="formData.daily_quota" :min="0" style="width: 100%" />
-            <span class="field-hint">0 表示不限制</span>
+            <span class="field-hint">{{ t('webSearch.quotaHint') }}</span>
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="优先级" name="priority">
+          <a-form-item :label="t('webSearch.labelPriority')" name="priority">
             <a-input-number v-model:value="formData.priority" :min="0" :max="100" style="width: 100%" />
-            <span class="field-hint">数值越大越优先</span>
+            <span class="field-hint">{{ t('webSearch.priorityHint') }}</span>
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="密钥(可选)" name="api_secret">
-            <a-input-password v-model:value="formData.api_secret" placeholder="部分平台需要的额外密钥" />
+          <a-form-item :label="t('webSearch.secretLabel')" name="api_secret">
+            <a-input-password v-model:value="formData.api_secret" :placeholder="t('webSearch.secretPlaceholder')" />
           </a-form-item>
         </a-col>
 
         <a-col :span="12">
-          <a-form-item label="状态" name="status">
+          <a-form-item :label="t('webSearch.labelStatus')" name="status">
             <a-switch
               v-model:checked="formData.status"
-              checked-children="启用"
-              un-checked-children="禁用"
+              :checked-children="t('webSearch.enabled')"
+              :un-checked-children="t('webSearch.disabled')"
             />
           </a-form-item>
         </a-col>
@@ -97,12 +97,12 @@
           <a-form-item
             label="API Key"
             name="api_key"
-            :rules="[{ required: true, message: '请输入 API Key' }]"
+            :rules="[{ required: true, message: t('webSearch.apiKeyRule') }]"
             style="margin-bottom: 0"
           >
             <a-input-password
               v-model:value="formData.api_key"
-              placeholder="请输入 API Key"
+              :placeholder="t('webSearch.apiKeyRule')"
               :visibility-toggle="true"
             />
           </a-form-item>
@@ -110,7 +110,7 @@
 
         <a-col :span="24">
           <a-form-item label="URL" name="url" style="margin-bottom: 0">
-            <a-input v-model:value="formData.url" placeholder="API 地址（自定义平台必填）" />
+            <a-input v-model:value="formData.url" :placeholder="t('webSearch.urlPlaceholder')" />
           </a-form-item>
         </a-col>
       </a-row>
@@ -120,6 +120,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
 import { DictType } from '@/api/dictionary'
@@ -138,6 +139,8 @@ const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
   (e: 'success'): void
 }>()
+
+const { t } = useI18n()
 
 const visible = computed({
   get: () => props.open,
@@ -232,15 +235,15 @@ const handleSubmit = async () => {
 
     if (isEdit.value && props.webSearch?.id) {
       await updateWebSearch({ id: props.webSearch.id, ...payload })
-      message.success('更新成功')
+      message.success(t('webSearch.updateSuccess'))
     } else {
       await createWebSearch(payload)
-      message.success('创建成功')
+      message.success(t('webSearch.createSuccess'))
     }
     emit('success')
     visible.value = false
   } catch (e: any) {
-    message.error(e.message || '保存失败')
+    message.error(e.message || t('webSearch.saveFailed'))
   } finally {
     saving.value = false
   }

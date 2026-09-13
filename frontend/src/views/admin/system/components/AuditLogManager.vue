@@ -7,12 +7,16 @@
         </a-form-item>
         <a-form-item :label="t('sys.auditLog.labelOpType')">
           <a-select v-model:value="filters.operationType" style="width: 150px" allow-clear :placeholder="t('sys.auditLog.placeholderOpType')">
-            <a-select-option value="create">{{ t('sys.auditLog.opCreate') }}</a-select-option>
-            <a-select-option value="update">{{ t('sys.auditLog.opUpdate') }}</a-select-option>
-            <a-select-option value="delete">{{ t('sys.auditLog.opDelete') }}</a-select-option>
-            <a-select-option value="query">{{ t('sys.auditLog.opQuery') }}</a-select-option>
-            <a-select-option value="login">{{ t('sys.auditLog.opLogin') }}</a-select-option>
-            <a-select-option value="logout">{{ t('sys.auditLog.opLogout') }}</a-select-option>
+            <a-select-option v-for="it in dictItems(DictType.AUDIT_OPERATION_TYPE)" :key="it.item_code" :value="it.item_code">
+              {{ it.item_name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="操作模块">
+          <a-select v-model:value="filters.operationModule" style="width: 150px" allow-clear placeholder="全部模块">
+            <a-select-option v-for="it in dictItems(DictType.AUDIT_OPERATION_MODULE)" :key="it.item_code" :value="it.item_code">
+              {{ it.item_name }}
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item :label="t('sys.auditLog.labelAttachment')">
@@ -37,6 +41,14 @@
       row-key="logId"
     >
       <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'operationType'">
+          <a-tag :color="dictColor(DictType.AUDIT_OPERATION_TYPE, record.operationType) || 'default'">
+            {{ dictLabel(DictType.AUDIT_OPERATION_TYPE, record.operationType) }}
+          </a-tag>
+        </template>
+        <template v-else-if="column.key === 'operationModule'">
+          {{ dictLabel(DictType.AUDIT_OPERATION_MODULE, record.operationModule) || record.operationModule || '-' }}
+        </template>
         <template v-if="column.key === 'description'">
           <a-tooltip :title="record.operationDesc">
             <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
@@ -73,9 +85,13 @@
           <a-descriptions-item :label="t('sys.auditLog.logId')">{{ currentLog.logId }}</a-descriptions-item>
           <a-descriptions-item :label="t('sys.auditLog.username')">{{ currentLog.username || '-' }}</a-descriptions-item>
           <a-descriptions-item :label="t('sys.auditLog.opType')">
-            <a-tag color="blue">{{ currentLog.operationType }}</a-tag>
+            <a-tag :color="dictColor(DictType.AUDIT_OPERATION_TYPE, currentLog.operationType) || 'blue'">
+              {{ dictLabel(DictType.AUDIT_OPERATION_TYPE, currentLog.operationType) }}
+            </a-tag>
           </a-descriptions-item>
-          <a-descriptions-item :label="t('sys.auditLog.opModule')">{{ currentLog.operationModule }}</a-descriptions-item>
+          <a-descriptions-item :label="t('sys.auditLog.opModule')">
+            {{ dictLabel(DictType.AUDIT_OPERATION_MODULE, currentLog.operationModule) || currentLog.operationModule || '-' }}
+          </a-descriptions-item>
           <a-descriptions-item :label="t('sys.auditLog.requestIp')" :span="2">{{ currentLog.requestIp || '-' }}</a-descriptions-item>
           <a-descriptions-item :label="t('sys.auditLog.responseStatus')" :span="2">
             <a-tag :color="currentLog.status && currentLog.status < 400 ? 'success' : 'error'">
@@ -109,6 +125,8 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { getAuditLogs, type AuditLogItem } from '@/api/admin'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 import AttachmentSummary from './AttachmentSummary.vue'
 import TenantFilterSelect from './TenantFilterSelect.vue'
 
@@ -139,6 +157,7 @@ const tablePagination = computed(() => ({
 const filters = reactive({
   userId: '' as string | number,
   operationType: undefined as string | undefined,
+  operationModule: undefined as string | undefined,
   onlyWithAttachment: false,
 })
 
@@ -176,6 +195,7 @@ const fetchLogs = async () => {
     if (tid != null) params.tenant_id = tid
     if (filters.userId) params.user_id = filters.userId
     if (filters.operationType) params.operation_type = filters.operationType
+    if (filters.operationModule) params.operation_module = filters.operationModule
 
     const res = await getAuditLogs(params)
     if (res.code === 0) {
@@ -226,6 +246,7 @@ const handleTableChange = (pag: any) => {
 const resetFilters = () => {
   filters.userId = ''
   filters.operationType = undefined
+  filters.operationModule = undefined
   filters.onlyWithAttachment = false
   pagination.current = 1
   fetchLogs()
@@ -247,6 +268,7 @@ watch(selectedTenantId, () => {
 })
 
 onMounted(() => {
+  loadAdminDicts([DictType.AUDIT_OPERATION_TYPE, DictType.AUDIT_OPERATION_MODULE])
   if (props.filterUserId) {
     filters.userId = props.filterUserId
   }

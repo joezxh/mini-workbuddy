@@ -3,12 +3,12 @@
     <!-- 空状态 -->
     <div v-if="!currentSession" class="chat-empty">
       <div class="empty-icon"><RobotOutlined /></div>
-      <h3 class="empty-title">AI 调解助手</h3>
+      <h3 class="empty-title">AI 智能助手</h3>
       <p class="empty-desc">直接输入问题发送，或从左侧选择历史会话</p>
       <div class="quick-questions">
         <p class="quick-label"><BulbOutlined /> 示例提问</p>
         <div class="quick-btns">
-          <a-button v-for="q in defaultQuestions" :key="q" class="quick-btn" @click="$emit('send-message', q)">{{ q }}</a-button>
+          <a-button v-for="q in ((contextualSuggestions || []).length ? contextualSuggestions : defaultQuestions)" :key="q" class="quick-btn" @click="$emit('send-message', q)">{{ q }}</a-button>
         </div>
       </div>
     </div>
@@ -99,7 +99,7 @@
                   :artifacts="msg.artifacts"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :expanded="thinkingExpanded[msg.message_id]"
                   :session-type="currentSessionType"
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -119,7 +119,7 @@
                   :artifacts="msg.artifacts"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :expanded="thinkingExpanded[msg.message_id]"
                   :session-type="currentSessionType"
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -141,7 +141,7 @@
                   :artifacts="msg.artifacts"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :expanded="thinkingExpanded[msg.message_id]"
                   :session-type="currentSessionType"
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -156,7 +156,7 @@
                   :show-actions="false"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :expanded="thinkingExpanded[msg.message_id]"
                   :session-type="currentSessionType"
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -178,7 +178,7 @@
                   :artifacts="msg.artifacts"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :expanded="thinkingExpanded[msg.message_id]"
                   :session-type="currentSessionType"
                   @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -194,7 +194,7 @@
                   :unified-artifacts="msg.unifiedArtifacts"
                 />
                 <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, sections: {}, thinking: '', isDispute: false, references: {} as any }"
+                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
                   :session-type="currentSessionType"
                 />
               </template>
@@ -223,7 +223,7 @@
               />
               <GeneralRenderer
                 v-else
-                :parsed="msg.parsed || { thinking: '', isDispute: false, sections: {}, rawContent: msg.content, references: { caseType: '', parties: '', caseSummary: '', legalCases: '', legal: '', strategy: '', hasAny: false } }"
+                :parsed="msg.parsed || { thinking: '', rawContent: msg.content }"
                 :expanded="thinkingExpanded[msg.message_id]"
                 :session-type="currentSessionType"
                 @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
@@ -450,11 +450,11 @@
         </div>
       </div>
 
-      <!-- 空会话快捷提问 -->
-      <div v-if="!messages.length && !streaming" class="chat-quick-area">
-        <p class="quick-label"><BulbOutlined /> 快速开始：</p>
+      <!-- 空会话快捷提问 / 会话内相关示例提问（根据会话关键词检索得到） -->
+      <div v-if="(!messages.length || (contextualSuggestions || []).length) && !streaming" class="chat-quick-area">
+        <p class="quick-label"><BulbOutlined /> {{ (contextualSuggestions || []).length ? '相关示例提问：' : '快速开始：' }}</p>
         <div class="quick-btns">
-          <a-button v-for="q in defaultQuestions" :key="q" class="quick-btn" @click="$emit('send-message', q)">{{ q }}</a-button>
+          <a-button v-for="q in ((contextualSuggestions || []).length ? contextualSuggestions : defaultQuestions)" :key="q" class="quick-btn" @click="$emit('send-message', q)">{{ q }}</a-button>
         </div>
       </div>
     </template>
@@ -549,6 +549,8 @@ defineProps<{
   /** 错误信息 */
   error?: string
   defaultQuestions: string[]
+  /** 根据当前会话关键词检索得到的相关示例提问（有值时优先展示，替换默认示例） */
+  contextualSuggestions?: string[]
   typeLabel: (t: string) => string
   sessionTypeColor: (t: string) => string
   formatTime: (t: string) => string

@@ -86,20 +86,16 @@ export const DictType = {
   ENTITY_TYPE: 'entity_type',
   /** 风险地点类型 */
   LOCATION_TYPE: 'location_type',
-  /** 调解金句话术类型 */
-  GOLD_SAYING_TYPE: 'gold_saying_type',
   /** AI 报告类型（处置分析/风险评估/趋势预测等） */
   REPORT_TYPE: 'report_type',
   /** 事件脊合维度（关键字/实体/人员/区域） */
   CLUSTER_DIMENSION: 'cluster_dimension',
   /** 仿真类型（单事件/聚合事件/反事实） */
   SIM_TYPE: 'sim_type',
-  /** 仿真干预场景（无干预/调解干预/法律措施/舆情管控/经济补偿/反事实） */
+  /** 仿真干预场景（无干预/干预措施/法律措施/舆情管控/经济补偿/反事实） */
   SIM_SCENARIO: 'sim_scenario',
   /** 仿真会话状态（待运行/运行中/已暂停/已完成/失败） */
   SIM_STATUS: 'sim_status',
-  /** 纠纷调解时机阶段 */
-  DISPUTE_TIMING_PHASE: 'dispute_timing_phase',
   /** AI 助手会话类型 */
   SESSION_TYPE: 'session_type',
   /** 时间粒度（小时/天/周） */
@@ -128,6 +124,38 @@ export const DictType = {
   WEB_SEARCH_PLATFORM: 'web_search_platform',
   /** AI 对话模型类型（文本/图片生成/视频生成等，由数据字典动态维护） */
   MODEL_TYPE: 'model_type',
+  /** 审计日志操作类型（create/update/delete/query/login/logout/export/import/upload/analyze） */
+  AUDIT_OPERATION_TYPE: 'audit_operation_type',
+  /** 审计日志操作模块（auth/user/role/permission/report/dictionary/migration/system/dws/search/graph/ai_assistant） */
+  AUDIT_OPERATION_MODULE: 'audit_operation_module',
+  /** AI 模型供应商平台（OpenAI/通义千问/智谱/讯飞/百度/Claude/Gemini/Dify/Coze/其他） */
+  AI_PLATFORM: 'ai_platform',
+  /** MCP 服务注册类型（Nacos 2.x/Nacos 3.x/HTTP/SSE） */
+  MCP_SERVICE_TYPE: 'mcp_service_type',
+  /** MCP 广场模板分类（金融/销售/办公/教育/法律） */
+  MCP_CATEGORY: 'mcp_category',
+  /** 异步任务/工作流执行状态（排队中/执行中/已完成/失败/已取消） */
+  EXECUTION_STATUS: 'execution_status',
+  /** 工作流执行实例状态（成功/失败/运行中/等待中/超时） */
+  WORKFLOW_EXEC_STATUS: 'workflow_exec_status',
+  /** MCP 客户端传输协议（Stdio/HTTP/SSE） */
+  MCP_CLIENT_TRANSPORT: 'mcp_client_transport',
+  /** MCP 服务能力类型（Tools/Resources/Prompts） */
+  MCP_CAPABILITY: 'mcp_capability',
+  /** 调度任务状态（启用中/已暂停） */
+  SCHEDULED_TASK_STATUS: 'scheduled_task_status',
+  /** 调度类型（Cron 定时/固定间隔/单次执行） */
+  SCHEDULE_TYPE: 'schedule_type',
+  /** 异步任务执行类型（深度研究/智能体/专家团队/技能） */
+  TARGET_MODE: 'target_mode',
+  /** Agent 执行调用模式（Dify/Skill/Agent/Agent Team/SqlBot） */
+  AGENT_EXEC_MODE: 'agent_exec_mode',
+  /** 工作流流程类别 — 金融证券 AI 分析分类（合规审查/风险评估/市场分析/交易策略/投资者关系/投资组合管理/监管报告/其他） */
+  WORKFLOW_CATEGORY: 'workflow_category',
+  /** 工作流编排平台（Dify/Coze） */
+  WORKFLOW_PLATFORM: 'workflow_platform',
+  /** Dify 工作流类型（对话型 agent_chat / 任务型 agent_workflow） */
+  FLOW_TYPE: 'flow_type',
 }
 
 

@@ -144,88 +144,6 @@ export function adminBatchDeleteMessages(ids: number[]) {
   return request.post(`${BASE}/admin/ai-messages/batch-delete`, { ids })
 }
 
-// ── 实体批量查询（AI 输出后处理 Hover 弹窗） ────────────────────────────────
-
-export interface EntityLookupResult {
-  entities: Array<{
-    entity_id: number
-    entity_name: string
-    entity_type: string
-    legal_person: string
-    registered_capital: number | null
-    industry: string
-    risk_level: string
-    risk_score: number
-    registered_address: string
-    business_scope: string
-    unified_social_credit_code?: string
-  }>
-  persons: Array<{
-    person_id: number
-    real_name: string
-    gender: string
-    age: number | null
-    person_type: string
-    risk_level: string
-    risk_score: number
-    current_region_name: string
-    occupation: string
-    tags: string
-    is_key_person: boolean
-    id_card?: string
-  }>
-  locations: Array<{
-    location_id: number
-    location_name: string
-    location_type: string
-    region_name: string
-    address: string
-    risk_level: string
-    risk_score: number
-    description: string
-  }>
-}
-
-/** 批量查询企业/人员/地点实体详情 */
-export function lookupEntities(names: string[]) {
-  return request.post<EntityLookupResult>(`${BASE}/ai-assistant/entities/lookup`, { names })
-}
-
-/** 通过身份证号查找风险人员 */
-export function getPersonByIdCard(idCard: string) {
-  return request.get<EntityLookupResult['persons'][0] | null>(`${BASE}/ai-assistant/person-by-id-card`, { params: { id_card: idCard } })
-}
-
-/** 通过姓名查找风险人员 */
-export function getPersonByName(name: string) {
-  return request.get<EntityLookupResult['persons'][0] | null>(`${BASE}/ai-assistant/person-by-name`, { params: { name } })
-}
-
-/** 通过统一社会信用代码查找风险企业 */
-export function getEntityByCreditCode(creditCode: string) {
-  return request.get<EntityLookupResult['entities'][0] | null>(`${BASE}/ai-assistant/entity-by-credit-code`, { params: { credit_code: creditCode } })
-}
-
-/** 通过企业名称查找风险企业 */
-export function getEntityByName(name: string) {
-  return request.get<EntityLookupResult['entities'][0] | null>(`${BASE}/ai-assistant/entity-by-name`, { params: { name } })
-}
-
-/** 通过法律名称查找法律基本信息 */
-export function getLegalByTitle(title: string) {
-  return request.get<{
-    id: number
-    law_title: string
-    release_org?: string
-    release_date?: string
-    implement_date?: string
-    disable_date?: string
-    keywords?: string
-    legal_level?: number
-    timelines?: number
-  } | null>(`${BASE}/ai-assistant/legal-by-title`, { params: { title } })
-}
-
 // ── SQLBot 数据源 ────────────────────────────────────────────────────────────
 
 export interface SqlbotDatasource {
@@ -239,5 +157,28 @@ export function getSqlbotDatasources(refresh = false) {
   return request.get<{ datasources: SqlbotDatasource[] }>(
     `${BASE}/ai-assistant/chat/sqlbot/datasources`,
     { params: { refresh } }
+  )
+}
+
+// ── 示例提问推荐（自动请求 + 关键词匹配检索）──────────────────────────────────
+
+export interface ExampleQuestionRecommendResult {
+  questions: string[]
+  matched: boolean
+  source_keywords: string[]
+}
+
+/**
+ * 根据会话关键词向服务端发起匹配检索，返回最相关的示例提问。
+ * 关键词来源于「当前已打开会话」的内容，由前端提取后传入。
+ */
+export function recommendExampleQuestions(params: {
+  keywords: string[]
+  session_type?: string
+  limit?: number
+}) {
+  return request.post<ExampleQuestionRecommendResult>(
+    `${BASE}/ai-assistant/example-questions/recommend`,
+    params
   )
 }

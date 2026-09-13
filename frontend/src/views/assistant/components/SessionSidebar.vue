@@ -153,7 +153,6 @@ defineEmits<{
 .session-type-tag {
   font-size: 10px; padding: 0 5px; border-radius: 3px; font-weight: 500;
   &.general { background: var(--accent-soft); color: var(--accent); }
-  &.dispute { background: #f9f0ff; color: #722ed1; }
   &.data    { background: var(--warn-soft); color: var(--accent-2); }
 }
 .session-msg-count { font-size: 10px; color: var(--fg-muted); }

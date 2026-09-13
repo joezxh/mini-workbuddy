@@ -1,6 +1,6 @@
 """AI API Key and Chat Model models (PostgreSQL).
 
-参考 mediation-platform 的 ApiKeyDO 和 ModelDO 实现。
+提供 API Key 与对话模型（ChatModel）的持久化模型定义。
 """
 from datetime import datetime
 from typing import Optional

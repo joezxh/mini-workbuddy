@@ -12,7 +12,7 @@ CATEGORIES = [
     {"name": "相关人员"},   # 1
     {"name": "相关机构"},   # 2
     {"name": "相关地点"},   # 3
-    {"name": "纠纷类型"},   # 4
+    {"name": "其他"},   # 4
 ]
 
 TYPE_TO_CATEGORY: Dict[str, int] = {
@@ -20,7 +20,7 @@ TYPE_TO_CATEGORY: Dict[str, int] = {
     "Person": 1, "RiskPerson": 1,
     "Organization": 2, "RiskEntity": 2,
     "Location": 3,
-    "DisputeCategory": 4, "Other": 4,
+    "Other": 4,
 }
 
 CATEGORY_STYLES: Dict[int, Dict[str, Any]] = {

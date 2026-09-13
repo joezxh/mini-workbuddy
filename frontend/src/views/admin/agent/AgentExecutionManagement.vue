@@ -301,6 +301,8 @@ import {
   type ExecutionMode,
   type ExecutionStatus,
 } from '@/api/agentExecution'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 
 const loading = ref(false)
 const { t } = useI18n()
@@ -314,18 +316,12 @@ const filterDateRange = ref<[Dayjs, Dayjs] | null>(null)
 const filterTargetId = ref<string | undefined>()
 const targetLabel = ref<string | undefined>()
 
-const modeOptions = [
-  { value: 'dify', label: 'Dify' },
-  { value: 'skill', label: 'Skill' },
-  { value: 'agent', label: 'Agent' },
-  { value: 'agent_team', label: 'Agent Team' },
-  { value: 'sqlbot', label: 'SqlBot' },
-]
-const statusOptions = computed(() => [
-  { value: 'running', label: t('agentMgmt.stRunning') },
-  { value: 'completed', label: t('agentMgmt.stCompleted') },
-  { value: 'failed', label: t('agentMgmt.stFailed') },
-])
+const modeOptions = computed(() =>
+  dictItems(DictType.AGENT_EXEC_MODE).map(it => ({ value: it.item_code, label: it.item_name }))
+)
+const statusOptions = computed(() =>
+  dictItems(DictType.EXECUTION_STATUS).map(it => ({ value: it.item_code, label: it.item_name }))
+)
 
 const pagination = reactive({
   current: 1,
@@ -668,24 +664,15 @@ function formatTarget(record: AgentExecutionItem): string {
 }
 
 function statusColor(status?: string): string {
-  switch (status) {
-    case 'running': return 'processing'
-    case 'completed': return 'success'
-    case 'failed': return 'error'
-    default: return 'default'
-  }
+  return dictColor(DictType.EXECUTION_STATUS, status) || 'default'
 }
 
 function statusLabel(status?: string): string {
-  switch (status) {
-    case 'running': return t('agentMgmt.stRunning')
-    case 'completed': return t('agentMgmt.stCompleted')
-    case 'failed': return t('agentMgmt.stFailed')
-    default: return status || '-'
-  }
+  return dictLabel(DictType.EXECUTION_STATUS, status) || status || '-'
 }
 
 onMounted(() => {
+  loadAdminDicts([DictType.AGENT_EXEC_MODE, DictType.EXECUTION_STATUS])
   // 来自 AgentManagement「链路」按钮跳转：按 agent / skill 等精确过滤调用链路
   const execFilter = inject<{ mode?: string; targetId?: string; label?: string }>('executionFilter')
   if (execFilter?.targetId) {

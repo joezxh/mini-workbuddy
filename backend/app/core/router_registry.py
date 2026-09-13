@@ -110,6 +110,8 @@ ROUTER_SPECS: List[RouterSpec] = [
 
     # --- 13~16. 技能 / 密钥 / 工具 ---
     RouterSpec("app.routers.ai.ai_skill", prefix=f"{API_V1_PREFIX}/ai-assistant/skills", tags=["AI技能"]),
+    # 该模块已在自身声明完整前缀 /api/v1/ai-assistant，此处不叠加，否则路径会重复
+    RouterSpec("app.routers.ai.ai_assistant", tags=["AI助手"]),
     RouterSpec("app.routers.ai.ai_skill_hub", prefix=f"{API_V1_PREFIX}/ai-system/skill-hub", tags=["技能仓库"]),
     RouterSpec("app.routers.ai.ai_api_key", prefix=f"{API_V1_PREFIX}/admin", tags=["AI API密钥管理"]),
     RouterSpec("app.routers.ai.ai_tool", prefix=f"{API_V1_PREFIX}/admin", tags=["AI 工具管理"]),

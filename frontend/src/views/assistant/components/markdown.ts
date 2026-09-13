@@ -10,7 +10,7 @@ import DOMPurify from 'dompurify'
 import * as echarts from 'echarts'
 
 const md = new MarkdownIt({
-  html: true,  // 允许 HTML（支持 data-ref 标签）
+  html: true,  // 允许原始 HTML 通过
   linkify: true,
   typographer: true,
   highlight: (code: string, lang: string): string => {
@@ -59,8 +59,7 @@ export function renderMarkdown(text: string): string {
 
   const rawHtml = md.render(processed)
   return DOMPurify.sanitize(rawHtml, {
-    ADD_TAGS: ['data-ref', 'data-entity', 'data-entity-id'],
-    ADD_ATTR: ['data-ref', 'data-entity', 'data-entity-id', 'data-entity-type', 'data-echart-id'],
+    ADD_ATTR: ['data-echart-id'],
     ALLOW_DATA_ATTR: true,
   })
 }

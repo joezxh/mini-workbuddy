@@ -116,7 +116,7 @@
             <a-form-item :label="t('skillMgmt.customConditions')">
               <a-textarea
                 v-model:value="customConditionsJson"
-                placeholder='{"region": "华东"}'
+                :placeholder="t('skillMgmt.customConditionsPlaceholder')"
                 :auto-size="{ minRows: 2, maxRows: 4 }"
                 @change="handleCustomConditionsChange"
               />

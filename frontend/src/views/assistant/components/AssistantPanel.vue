@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-dispute-panel">
+  <div class="ai-assistant-panel">
     <!-- ── 左栏 ── -->
     <SessionSidebar
       :sessions="filteredSessions"
@@ -73,6 +73,7 @@
         :streaming-thinking-content="streamingThinkingContent"
         :streaming-tool-history="streamingToolHistory"
         :default-questions="defaultQuestions"
+        :contextual-suggestions="contextualSuggestions"
         :type-label="typeLabel"
         :session-type-color="sessionTypeColor"
         :format-time="formatTime"
@@ -162,13 +163,14 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { UnorderedListOutlined } from '@ant-design/icons-vue'
 import { message as antMsg } from 'ant-design-vue'
-import { parseMsg, DISPUTE_SECTION_DEFS, type ParsedMsg, type ChatMessage, type SkillInfo, type SqlBotData, type ThinkingStep, type ResearchSubQuestion, type ResearchReport, type AsyncTaskInfo, type UnifiedStep, type UnifiedArtifact, MODEL_SELECTABLE_TYPES } from './types'
+import { parseMsg, type ParsedMsg, type ChatMessage, type SkillInfo, type SqlBotData, type ThinkingStep, type ResearchSubQuestion, type ResearchReport, type AsyncTaskInfo, type UnifiedStep, type UnifiedArtifact, MODEL_SELECTABLE_TYPES } from './types'
 import {
   getMySessions, createSession, deleteSession as apiDeleteSession,
   pinSession as apiPinSession, updateSession as apiUpdateSession,
   getSessionMessages, clearSessionMessages as apiClearMessages,
   addSessionMessage,
   getSqlbotDatasources, type AiChatSession, type SqlbotDatasource,
+  recommendExampleQuestions,
 } from '@/api/aiSession'
 import { getAvailableModels, type AvailableModel } from '@/api/ai-apikey'
 import { getWorkspacesSimple, type WorkspaceSimple } from '@/api/workspace'
@@ -188,7 +190,7 @@ const sessions     = ref<AiChatSession[]>([])
 const loadingSessions = ref(false)
 const sessionSearch   = ref('')
 const currentSession  = ref<AiChatSession | null>(null)
-const sessionType     = ref('dispute')
+const sessionType     = ref('general')
 const sessionTypeOptions = ref<DictionaryItem[]>([])
 
 // ── 数据源选择 ─────────────────────────────────────────────────────────────
@@ -288,7 +290,7 @@ const editingTitleValue = ref('')
 
 const thinkingExpanded = reactive<Record<number, boolean>>({})
 const msgActiveTab = reactive<Record<number, string>>({})
-const streamingActiveTab = ref('case_overview')
+const streamingActiveTab = ref('')
 
 const streamingParsed = computed<ParsedMsg>(() => parseMsg(streamingText.value))
 /**
@@ -486,7 +488,20 @@ watch(sessionType, (newType) => {
     currentFileId.value = ''
     currentFileName.value = ''
   }
+  // 会话场景变化时，重新触发示例提问的自动检索
+  scheduleContextualSuggestions()
 })
+
+// 自动检索所需的去抖计时器与请求序号（需在 watch immediate 之前声明，避免 TDZ）
+let recommendTimer: ReturnType<typeof setTimeout> | null = null
+let recommendReqId = 0
+
+// 会话切换 / 消息内容变化时，自动触发「关键词提取 + 服务端匹配检索」
+watch(() => currentSession.value?.session_id, () => scheduleContextualSuggestions(), { immediate: true })
+watch(
+  () => (messages.value || []).map((m) => m.content).join('|'),
+  () => scheduleContextualSuggestions(),
+)
 
 function hasAttachments(msg: ChatMessage): boolean {
   if (msg.file?.id) return true
@@ -508,6 +523,93 @@ const defaultQuestions = [
   '被告李某[身份证号:320198709123245]于2013年05月14日向原告处申请办理信用卡，并签署《某银行 信用卡领用合约》，原告经审核向被告发放信用卡，卡号。透支金额：33048.02元 利息、滞纳金/违约金的计算标准： 利息：自原告记账日起按日利率万分之五计收利息至清偿日止； 滞纳金/违约金：按照被告每期账单最低还款额未还部分的5%计收滞纳金/违 约金；逾期时间：2024年01月19日 截至2025年05月13日，被告李某尚欠人民币本金13356.42元、人民币利息 1863.48元、人民币滞纳金/违约金529.38元；美元本金2034.64美元、美元利 息284.33美元、美元滞纳金/违约金80.9美元。',
 ]
 
+// ── 示例提问：自动请求 + 关键词提取 + 匹配检索 ────────────────────────────────
+// 默认示例提问作为「无关键词 / 未命中」时的回退，保持原功能不变。
+// 当「当前已打开会话」中存在消息时，从中提取关键词，自动向服务端发起匹配检索，
+// 用命中的相关示例提问替换默认内容。
+const contextualSuggestions = ref<string[]>([])
+
+/** 首次进入 / 空会话时的默认检索关键词（金融证券场景） */
+const DEFAULT_SEED_KEYWORDS = ['金融证券']
+
+
+
+/**
+ * 从会话消息文本中提取关键词：
+ * 优先命中的领域词、组织机构名、自然人姓名、金额、日期与证件号。
+ */
+function extractConversationKeywords(text: string, max = 8): string[] {
+  if (!text) return []
+  const found = new Set<string>()
+
+  // 1) 组织机构 / 企业名（含 公司 / 银行 / 厂 / 集团 / 企业 等后缀）
+  const orgRe = /[一-龥]{2,}(?:公司|银行|厂|集团|企业|科技|技术|通信|设备|有限|股份)/g
+  for (const m of text.match(orgRe) || []) {
+    if (m.length >= 4) found.add(m)
+  }
+
+  // 3) 自然人姓名（X先生 / X女士 / X某）
+  const personRe = /[一-龥]{1,3}(?:先生|女士|某)/g
+  for (const m of text.match(personRe) || []) found.add(m)
+
+  // 4) 金额（数字 + 元 / 万 / 美元 等）
+  const moneyRe = /[0-9]+(?:\.[0-9]+)?\s*(?:元|万元|美元|块钱|人民币)/g
+  for (const m of text.match(moneyRe) || []) found.add(m.trim())
+
+  // 5) 日期（YYYY年M月D日 或 YYYY-MM-DD）
+  const dateRe = /\d{4}年\d{1,2}月\d{1,2}日|\d{4}-\d{1,2}-\d{1,2}/g
+  for (const m of text.match(dateRe) || []) found.add(m)
+
+  // 6) 证件 / 信用代码（18 位）
+  const codeRe = /[A-Z0-9]{18}/g
+  for (const m of text.match(codeRe) || []) found.add(m)
+
+  return Array.from(found).slice(0, max)
+}
+
+/** 从当前会话消息合并出可提取关键词的文本 */
+function buildConversationText(): string {
+  return (messages.value || [])
+    .map((m) => (m.role === 'user' || m.role === 'assistant' ? m.content || '' : ''))
+    .join('\n')
+}
+
+/**
+ * 自动请求：根据当前会话关键词向服务端发起匹配检索。
+ * 首次进入 / 空会话（无会话关键词）时，使用「金融证券」作为默认检索关键词；
+ * 请求失败时清空上下文示例，由模板回退到默认示例提问，保持原功能不变。
+ */
+async function loadContextualSuggestions() {
+  // 提取当前会话关键词；无会话或空会话时回落到默认种子关键词
+  let keywords = currentSession.value
+    ? extractConversationKeywords(buildConversationText())
+    : []
+  if (!keywords.length) {
+    keywords = [...DEFAULT_SEED_KEYWORDS]
+  }
+
+  const reqId = ++recommendReqId
+  try {
+    const res = await recommendExampleQuestions({
+      keywords,
+      session_type: sessionType.value,
+      limit: 3,
+    })
+    if (reqId !== recommendReqId) return // 已被更新的请求取代
+    const qs = (res?.questions || []).filter((q) => !!q)
+    contextualSuggestions.value = qs
+  } catch {
+    // 请求失败：清空上下文示例，由模板回退到默认示例提问，保持原功能不变
+    contextualSuggestions.value = []
+  }
+}
+
+/** 会话 / 消息变化后防抖触发自动检索 */
+function scheduleContextualSuggestions() {
+  if (recommendTimer) clearTimeout(recommendTimer)
+  recommendTimer = setTimeout(() => void loadContextualSuggestions(), 600)
+}
+
 const filteredSessions = computed(() => {
   const kw = sessionSearch.value.trim().toLowerCase()
   return kw ? sessions.value.filter(s => (s.session_title || '').toLowerCase().includes(kw)) : sessions.value
@@ -515,11 +617,11 @@ const filteredSessions = computed(() => {
 
 function typeLabel(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.item_name ?? ({ general: '通用', dispute: '纠纷', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度', react: 'ReAct 计划' } as Record<string, string>)[t] ?? t
+  return item?.item_name ?? ({ general: '通用', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度', react: 'ReAct 计划' } as Record<string, string>)[t] ?? t
 }
 function sessionTypeColor(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.color ?? ({ general: 'cyan', dispute: 'purple', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano', react: 'lime' } as Record<string, string>)[t] ?? 'default'
+  return item?.color ?? ({ general: 'cyan', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano', react: 'lime' } as Record<string, string>)[t] ?? 'default'
 }
 function formatTime(t: string) { return t ? t.replace('T', ' ').slice(0, 16) : '' }
 async function copyText(t: string) { await navigator.clipboard.writeText(t); antMsg.success('已复制') }
@@ -570,7 +672,7 @@ async function switchSession(s: AiChatSession) {
   if (currentSession.value?.session_id === s.session_id) return
   currentSession.value = s; sessionType.value = s.session_type
   difyConvId.value = undefined; messages.value = []; msgPage.value = 1; msgTotal.value = 0
-  userTabSelected = false; streamingActiveTab.value = 'case_overview'
+  userTabSelected = false; streamingActiveTab.value = ''
   streamingSqlBotData.value = null
   await loadMessages()
 }
@@ -670,7 +772,7 @@ async function submitDeepResearchAsync(topic: string, sessionId: number) {
     const resp = await submitDeepResearch(topic, {
       session_id: sessionId,
       model_id: selectedModelId.value ?? null,
-      context: { knowledge_bases: ['legal'], max_sub_questions: 8, max_concurrency: 4 },
+      context: { max_sub_questions: 8, max_concurrency: 4 },
     })
     const task: AsyncTaskInfo = {
       taskId: resp.task_id,
@@ -738,7 +840,7 @@ async function sendMessage(text?: string) {
   }
 
   inputText.value = ''; streaming.value = true; streamingText.value = ''
-  userTabSelected = false; streamingActiveTab.value = 'case_overview'
+  userTabSelected = false; streamingActiveTab.value = ''
   analysisProgress.value = null
   streamingSqlBotData.value = null
   skillProgress.value = null
@@ -854,7 +956,7 @@ async function sendMessage(text?: string) {
         } : {}),
         // DEEP_RESEARCH 模式：联合检索的知识库类型
         ...(activeSessionType === 'deep_research' ? {
-          context: { knowledge_bases: ['legal'], max_sub_questions: 8, max_concurrency: 4 },
+          context: { max_sub_questions: 8, max_concurrency: 4 },
         } : {}),
       }),
     })
@@ -902,14 +1004,6 @@ async function sendMessage(text?: string) {
           } else if (eventType === 'token') {
             accAnswer += chunk.token; streamingText.value = accAnswer
             newDifyConvId = chunk.conversation_id || newDifyConvId
-            const sp = streamingParsed.value
-            if (sp.isDispute && !userTabSelected) {
-              let last = 'case_overview'
-              for (const d of DISPUTE_SECTION_DEFS) { if (sp.sections[d.key]) last = d.key }
-              // 引用内容出现时自动切到引用 Tab
-              if (sp.references?.hasAny) last = 'references'
-              streamingActiveTab.value = last
-            }
             scrollToBottom(false)
           } else if (eventType === 'team_result') {
             // team 模式最终结果：event_type=team_result，内容在 content 字段
@@ -922,7 +1016,7 @@ async function sendMessage(text?: string) {
               // 防止 done/completed/finally 重复 push
               if (!_assistantMsgSaved) {
                 const msgId = Date.now()
-                thinkingExpanded[msgId] = false; msgActiveTab[msgId] = 'case_overview'
+                thinkingExpanded[msgId] = false; msgActiveTab[msgId] = ''
                 const msg: ChatMessage = {
                   message_id: msgId, session_id: currentSession.value!.session_id,
                   role: 'assistant', content: accAnswer, message_type: 'text',
@@ -1139,7 +1233,7 @@ async function sendMessage(text?: string) {
             if (isSkillExecution && result && currentExecutionId.value && !_skillMsgSaved && !_assistantMsgSaved) {
               const msgId = Date.now()
               thinkingExpanded[msgId] = false
-              msgActiveTab[msgId] = 'case_overview'
+              msgActiveTab[msgId] = ''
               messages.value.push({
                 message_id: msgId,
                 session_id: currentSession.value!.session_id,
@@ -1209,7 +1303,7 @@ async function sendMessage(text?: string) {
             if (!isSkillExecution && result && !_assistantMsgSaved) {
               const msgId = Date.now()
               thinkingExpanded[msgId] = false
-              msgActiveTab[msgId] = 'case_overview'
+              msgActiveTab[msgId] = ''
               messages.value.push({
                 message_id: msgId,
                 session_id: currentSession.value!.session_id,
@@ -1450,7 +1544,7 @@ async function sendMessage(text?: string) {
     // 兜底：若 completed 事件未保存消息（如缺少 execution_id）且未手动 push，在此保存
     if (_pendingSkillAnswer && (accAnswer || isSkillExecution) && !_assistantMsgSaved) {
       const msgId = Date.now() + 1
-      thinkingExpanded[msgId] = false; msgActiveTab[msgId] = 'case_overview'
+      thinkingExpanded[msgId] = false; msgActiveTab[msgId] = ''
       messages.value.push({
         message_id: msgId, session_id: currentSession.value!.session_id,
         role: 'assistant', content: _pendingSkillAnswer, message_type: 'text',
@@ -1466,7 +1560,7 @@ async function sendMessage(text?: string) {
       scrollToBottom(); await loadSessions()
     } else if (accAnswer && !_assistantMsgSaved) {
       const msgId = Date.now() + 1
-      thinkingExpanded[msgId] = false; msgActiveTab[msgId] = 'case_overview'
+      thinkingExpanded[msgId] = false; msgActiveTab[msgId] = ''
       const msg: ChatMessage = {
         message_id: msgId, session_id: currentSession.value!.session_id,
         role: 'assistant', content: accAnswer, message_type: 'text',
@@ -1571,7 +1665,7 @@ onMounted(() => { loadSessions(); loadSessionTypes(); loadDatasourceOptions(); l
 </script>
 
 <style scoped lang="less">
-.ai-dispute-panel {
+.ai-assistant-panel {
   display: flex; flex: 1; min-width: 0; width: 100%; height: 100%; min-height: 0;
   background: var(--bg-input); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
 }

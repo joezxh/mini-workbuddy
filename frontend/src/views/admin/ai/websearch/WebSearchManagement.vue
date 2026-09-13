@@ -3,53 +3,53 @@
     <!-- 头部 -->
     <div class="panel-header">
       <div class="header-left">
-        <h2>联网搜索管理</h2>
-        <p class="sub">管理 AI 联网搜索供应商配置，支持博查、Anspire 等多种搜索平台</p>
+        <h2>{{ t('webSearch.pageTitle') }}</h2>
+        <p class="sub">{{ t('webSearch.pageSub') }}</p>
       </div>
       <a-button type="primary" @click="showCreateModal">
         <template #icon><PlusOutlined /></template>
-        新增供应商
+        {{ t('webSearch.addProvider') }}
       </a-button>
     </div>
 
-    <!-- 搜索栏 -->
-    <div class="search-bar">
-      <a-input-search
-        v-model:value="filters.name"
-        placeholder="搜索供应商名称"
-        allow-clear
-        style="width: 220px"
-        @search="handleSearch"
-        @clear="handleSearch"
-      />
-      <a-select
-        v-model:value="filters.platform"
-        placeholder="平台筛选"
-        allow-clear
-        style="width: 160px"
-        @change="handleSearch"
-      >
-        <a-select-option v-for="it in dictItems(DictType.WEB_SEARCH_PLATFORM)" :key="it.item_code" :value="it.item_code">
-          {{ it.item_name }}
-        </a-select-option>
-      </a-select>
-      <a-select
-        v-model:value="filters.status"
-        placeholder="状态筛选"
-        allow-clear
-        style="width: 120px"
-        @change="handleSearch"
-      >
-        <a-select-option :value="1">启用</a-select-option>
-        <a-select-option :value="0">禁用</a-select-option>
-      </a-select>
-      <a-button @click="handleReset"><ReloadOutlined /> 重置</a-button>
-    </div>
-
     <!-- 选项卡 -->
-    <a-tabs v-model:activeKey="activeTab" @change="handleTabChange">
+    <a-tabs v-model:activeKey="activeTab" class="web-search-tabs" @change="handleTabChange">
+      <template #tabBarExtraContent>
+        <div class="search-bar">
+          <a-input-search
+            v-model:value="filters.name"
+            :placeholder="t('webSearch.searchProvider')"
+            allow-clear
+            style="width: 180px"
+            @search="handleSearch"
+            @clear="handleSearch"
+          />
+          <a-select
+            v-model:value="filters.platform"
+            :placeholder="t('webSearch.platformFilter')"
+            allow-clear
+            style="width: 130px"
+            @change="handleSearch"
+          >
+            <a-select-option v-for="it in dictItems(DictType.WEB_SEARCH_PLATFORM)" :key="it.item_code" :value="it.item_code">
+              {{ it.item_name }}
+            </a-select-option>
+          </a-select>
+          <a-select
+            v-model:value="filters.status"
+            :placeholder="t('webSearch.statusFilter')"
+            allow-clear
+            style="width: 100px"
+            @change="handleSearch"
+          >
+            <a-select-option :value="1">{{ t('webSearch.enabled') }}</a-select-option>
+            <a-select-option :value="0">{{ t('webSearch.disabled') }}</a-select-option>
+          </a-select>
+          <a-button @click="handleReset"><ReloadOutlined /> {{ t('webSearch.reset') }}</a-button>
+        </div>
+      </template>
       <!-- 配置管理 -->
-      <a-tab-pane key="config" tab="配置管理">
+      <a-tab-pane key="config" :tab="t('webSearch.tabConfig')">
         <BackTable
           row-key="id"
           size="small"
@@ -73,20 +73,20 @@
             <a-tag color="blue">{{ dictLabel(DictType.WEB_SEARCH_PLATFORM, record.platform) || record.platform }}</a-tag>
           </template>
           <template #daily_quota="{ record }">
-            <span>{{ record.daily_quota > 0 ? record.daily_quota : '不限' }}</span>
+            <span>{{ record.daily_quota > 0 ? record.daily_quota : t('webSearch.unlimited') }}</span>
           </template>
           <template #status="{ record }">
             <a-tag :color="record.status === 1 ? 'success' : 'error'">
-              {{ record.status === 1 ? '启用' : '禁用' }}
+              {{ record.status === 1 ? t('webSearch.enabled') : t('webSearch.disabled') }}
             </a-tag>
           </template>
           <template #actions="{ record }">
             <a-space>
               <a-button type="link" size="small" @click="openTestModal(record)">
-                <ExperimentOutlined /> 测试
+                <ExperimentOutlined /> {{ t('webSearch.test') }}
               </a-button>
               <a-button type="link" size="small" @click="handleEdit(record)">
-                <EditOutlined /> 编辑
+                <EditOutlined /> {{ t('common.edit') }}
               </a-button>
               <a-button
                 type="link"
@@ -94,16 +94,16 @@
                 @click="toggleStatus(record)"
                 :style="{ color: record.status === 1 ? 'var(--warn)' : 'var(--ok)' }"
               >
-                {{ record.status === 1 ? '禁用' : '启用' }}
+                {{ record.status === 1 ? t('webSearch.disabled') : t('webSearch.enabled') }}
               </a-button>
               <a-popconfirm
-                title="确定删除该搜索供应商？"
-                ok-text="确定"
-                cancel-text="取消"
+                :title="t('webSearch.deleteConfirm')"
+                :ok-text="t('common.confirm')"
+                :cancel-text="t('common.cancel')"
                 @confirm="handleDelete(record)"
               >
                 <a-button type="link" size="small" danger>
-                  <DeleteOutlined /> 删除
+                  <DeleteOutlined /> {{ t('common.delete') }}
                 </a-button>
               </a-popconfirm>
             </a-space>
@@ -112,7 +112,7 @@
       </a-tab-pane>
 
       <!-- 配额用量 -->
-      <a-tab-pane key="quota" tab="配额用量">
+      <a-tab-pane key="quota" :tab="t('webSearch.tabQuota')">
         <a-card :loading="quotaLoading">
           <a-table
             row-key="id"
@@ -128,7 +128,7 @@
                   :status="record.daily_quota > 0 && record.usage_percent >= 90 ? 'exception' : 'active'"
                 />
                 <span class="quota-text">
-                  {{ record.daily_quota > 0 ? `${record.used_count} / ${record.daily_quota}` : '不限额度' }}
+                  {{ record.daily_quota > 0 ? `${record.used_count} / ${record.daily_quota}` : t('webSearch.unlimitedQuota') }}
                 </span>
               </template>
               <template v-else-if="column.dataIndex === 'remaining'">
@@ -140,11 +140,11 @@
       </a-tab-pane>
 
       <!-- 健康检查 -->
-      <a-tab-pane key="health" tab="健康检查">
+      <a-tab-pane key="health" :tab="t('webSearch.tabHealth')">
         <a-card :loading="healthLoading">
           <template #extra>
             <a-button size="small" @click="loadHealth">
-              <ReloadOutlined /> 刷新
+              <ReloadOutlined /> {{ t('webSearch.refresh') }}
             </a-button>
           </template>
           <a-table
@@ -157,7 +157,7 @@
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'status'">
                 <a-tag :color="record.status === 'normal' ? 'success' : record.status === 'warning' ? 'orange' : 'error'">
-                  {{ record.status === 'normal' ? '正常' : record.status === 'warning' ? '警告' : '异常' }}
+                  {{ record.status === 'normal' ? t('webSearch.healthNormal') : record.status === 'warning' ? t('webSearch.healthWarning') : t('webSearch.healthError') }}
                 </a-tag>
               </template>
             </template>
@@ -166,7 +166,7 @@
       </a-tab-pane>
 
       <!-- 搜索日志 -->
-      <a-tab-pane key="logs" tab="搜索日志">
+      <a-tab-pane key="logs" :tab="t('webSearch.tabLogs')">
         <a-card :loading="logLoading">
           <a-table
             row-key="id"
@@ -184,7 +184,7 @@
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'success_rate'">
                 <a-tag :color="record.success ? 'success' : 'error'">
-                  {{ record.success ? '成功' : '失败' }}
+                  {{ record.success ? t('webSearch.success') : t('webSearch.failed') }}
                 </a-tag>
                 <div class="quota-text" v-if="record.error">{{ record.error }}</div>
               </template>
@@ -211,7 +211,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -237,6 +238,8 @@ import {
 } from '@/api/ai-web-search'
 import { loadAdminDicts, dictItems, dictLabel } from '@/composables/useAdminDict'
 import { DictType } from '@/api/dictionary'
+
+const { t } = useI18n()
 
 // 选项卡
 const activeTab = ref('config')
@@ -271,46 +274,46 @@ const filters = reactive({
 })
 
 // 表格列
-const columns: any[] = [
-  { title: '名称', dataIndex: 'name', key: 'name', width: 160, ellipsis: true, align: 'center' as const },
+const columns = computed<any[]>(() => [
+  { title: t('webSearch.colName'), dataIndex: 'name', key: 'name', width: 160, ellipsis: true, align: 'center' as const },
   { title: 'API Key', dataIndex: 'api_key', key: 'api_key', width: 180, align: 'center' as const },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
-  { title: '超时(s)', dataIndex: 'timeout', key: 'timeout', width: 90, align: 'center' as const },
-  { title: '最大结果', dataIndex: 'max_results', key: 'max_results', width: 90, align: 'center' as const },
-  { title: '每日配额', dataIndex: 'daily_quota', key: 'daily_quota', width: 100, align: 'center' as const },
-  { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80, align: 'center' as const },
+  { title: t('webSearch.colPlatform'), dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
+  { title: t('webSearch.colTimeout'), dataIndex: 'timeout', key: 'timeout', width: 90, align: 'center' as const },
+  { title: t('webSearch.colMaxResults'), dataIndex: 'max_results', key: 'max_results', width: 90, align: 'center' as const },
+  { title: t('webSearch.colQuota'), dataIndex: 'daily_quota', key: 'daily_quota', width: 100, align: 'center' as const },
+  { title: t('webSearch.colPriority'), dataIndex: 'priority', key: 'priority', width: 80, align: 'center' as const },
   { title: 'URL', dataIndex: 'url', key: 'url', width: 240, ellipsis: true, align: 'center' as const },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 80, align: 'center' as const },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 170, align: 'center' as const },
-  { title: '操作', key: 'actions', width: 260, fixed: 'right', align: 'center' as const },
-]
+  { title: t('webSearch.colStatus'), dataIndex: 'status', key: 'status', width: 80, align: 'center' as const },
+  { title: t('webSearch.colCreatedAt'), dataIndex: 'created_at', key: 'created_at', width: 170, align: 'center' as const },
+  { title: t('webSearch.colActions'), key: 'actions', width: 260, fixed: 'right', align: 'center' as const },
+])
 
-const quotaColumns: any[] = [
-  { title: '供应商', dataIndex: 'name', key: 'name', width: 160, align: 'center' as const },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
-  { title: '每日配额', dataIndex: 'daily_quota', key: 'daily_quota', width: 120, align: 'center' as const },
-  { title: '已用量', dataIndex: 'used_count', key: 'used_count', width: 100, align: 'center' as const },
-  { title: '剩余', dataIndex: 'remaining', key: 'remaining', width: 100, align: 'center' as const },
-  { title: '用量进度', key: 'progress', width: 280, align: 'center' as const },
-]
+const quotaColumns = computed<any[]>(() => [
+  { title: t('webSearch.colProvider'), dataIndex: 'name', key: 'name', width: 160, align: 'center' as const },
+  { title: t('webSearch.colPlatform'), dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
+  { title: t('webSearch.colQuota'), dataIndex: 'daily_quota', key: 'daily_quota', width: 120, align: 'center' as const },
+  { title: t('webSearch.colUsed'), dataIndex: 'used_count', key: 'used_count', width: 100, align: 'center' as const },
+  { title: t('webSearch.colRemaining'), dataIndex: 'remaining', key: 'remaining', width: 100, align: 'center' as const },
+  { title: t('webSearch.colProgress'), key: 'progress', width: 280, align: 'center' as const },
+])
 
-const healthColumns: any[] = [
-  { title: '供应商', dataIndex: 'name', key: 'name', width: 160, align: 'center' as const },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
-  { title: '状态', key: 'status', width: 120, align: 'center' as const },
-  { title: '响应(ms)', dataIndex: 'response_time', key: 'response_time', width: 120, align: 'center' as const },
-  { title: '说明', dataIndex: 'message', key: 'message', ellipsis: true, align: 'center' as const },
-]
+const healthColumns = computed<any[]>(() => [
+  { title: t('webSearch.colProvider'), dataIndex: 'name', key: 'name', width: 160, align: 'center' as const },
+  { title: t('webSearch.colPlatform'), dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
+  { title: t('webSearch.colStatus'), key: 'status', width: 120, align: 'center' as const },
+  { title: t('webSearch.colResponse'), dataIndex: 'response_time', key: 'response_time', width: 120, align: 'center' as const },
+  { title: t('webSearch.colMessage'), dataIndex: 'message', key: 'message', ellipsis: true, align: 'center' as const },
+])
 
-const logColumns: any[] = [
-  { title: '供应商', dataIndex: 'service_name', key: 'service_name', width: 160, align: 'center' as const },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 100, align: 'center' as const },
-  { title: '关键词', dataIndex: 'query', key: 'query', width: 200, ellipsis: true, align: 'center' as const },
-  { title: '响应(ms)', dataIndex: 'response_time', key: 'response_time', width: 110, align: 'center' as const },
-  { title: '结果数', dataIndex: 'results_count', key: 'results_count', width: 90, align: 'center' as const },
-  { title: '成功率', key: 'success_rate', width: 120, align: 'center' as const },
-  { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 180, align: 'center' as const },
-]
+const logColumns = computed<any[]>(() => [
+  { title: t('webSearch.colProvider'), dataIndex: 'service_name', key: 'service_name', width: 160, align: 'center' as const },
+  { title: t('webSearch.colPlatform'), dataIndex: 'platform', key: 'platform', width: 100, align: 'center' as const },
+  { title: t('webSearch.colKeyword'), dataIndex: 'query', key: 'query', width: 200, ellipsis: true, align: 'center' as const },
+  { title: t('webSearch.colResponse'), dataIndex: 'response_time', key: 'response_time', width: 110, align: 'center' as const },
+  { title: t('webSearch.colResultCount'), dataIndex: 'results_count', key: 'results_count', width: 90, align: 'center' as const },
+  { title: t('webSearch.colSuccessRate'), key: 'success_rate', width: 120, align: 'center' as const },
+  { title: t('webSearch.colTime'), dataIndex: 'created_at', key: 'created_at', width: 180, align: 'center' as const },
+])
 
 // 弹窗状态
 const formVisible = ref(false)
@@ -337,7 +340,7 @@ const loadData = async () => {
     dataList.value = res.data
     pagination.total = res.total
   } catch (e: any) {
-    message.error(e.message || '加载失败')
+    message.error(e.message || t('webSearch.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -389,10 +392,10 @@ const toggleStatus = async (record: AiWebSearch) => {
       id: record.id,
       status: record.status === 1 ? 0 : 1,
     })
-    message.success(record.status === 1 ? '已禁用' : '已启用')
+    message.success(record.status === 1 ? t('webSearch.disabledMsg') : t('webSearch.enabledMsg'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '操作失败')
+    message.error(e.message || t('webSearch.operationFailed'))
   }
 }
 
@@ -400,10 +403,10 @@ const toggleStatus = async (record: AiWebSearch) => {
 const handleDelete = async (record: AiWebSearch) => {
   try {
     await deleteWebSearch(record.id)
-    message.success('删除成功')
+    message.success(t('webSearch.deleteSuccess'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('webSearch.deleteFailed'))
   }
 }
 
@@ -427,7 +430,7 @@ const loadQuota = async () => {
   try {
     quotaList.value = await getWebSearchQuota()
   } catch (e: any) {
-    message.error(e.message || '获取配额失败')
+    message.error(e.message || t('webSearch.quotaLoadFailed'))
   } finally {
     quotaLoading.value = false
   }
@@ -439,7 +442,7 @@ const loadHealth = async () => {
   try {
     healthList.value = await getWebSearchHealth()
   } catch (e: any) {
-    message.error(e.message || '健康检查失败')
+    message.error(e.message || t('webSearch.healthLoadFailed'))
   } finally {
     healthLoading.value = false
   }
@@ -456,7 +459,7 @@ const loadLogs = async () => {
     logList.value = res.data || []
     logTotal.value = res.total || 0
   } catch (e: any) {
-    message.error(e.message || '获取日志失败')
+    message.error(e.message || t('webSearch.logLoadFailed'))
   } finally {
     logLoading.value = false
   }
@@ -489,21 +492,71 @@ const onTestSuccess = () => {
 
 .panel-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0 24px;
+  margin: 0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+  }
 
   h2 {
-    font-size: 20px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--fg);
-    margin: 0 0 4px 0;
+    margin: 0;
+    white-space: nowrap;
   }
 
   .sub {
     font-size: 13px;
     color: var(--fg-secondary);
     margin: 0;
+    white-space: nowrap;
   }
+}
+
+/* 套用 skill 视图顶栏/tab 标题风格：56px 高 + 激活下划线（非 card） */
+.web-search-tabs :deep(.ant-tabs-nav) {
+  height: 56px;
+  margin: 0;
+  padding: 0 24px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+.web-search-tabs :deep(.ant-tabs-nav::before) {
+  border-bottom: none;
+}
+.web-search-tabs :deep(.ant-tabs-tab) {
+  height: 56px;
+  padding: 0 4px;
+  margin-right: 20px;
+  font-size: 14px;
+  color: var(--fg-secondary);
+  background: transparent;
+  border: none;
+}
+.web-search-tabs :deep(.ant-tabs-tab:hover) {
+  color: var(--accent);
+}
+.web-search-tabs :deep(.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: var(--accent);
+  font-weight: 600;
+}
+.web-search-tabs :deep(.ant-tabs-ink-bar) {
+  background: var(--accent);
+  height: 2px;
+}
+.web-search-tabs :deep(.ant-tabs-tabpane) {
+  padding-top: 16px;
 }
 
 .search-bar {
@@ -511,10 +564,6 @@ const onTestSuccess = () => {
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  background: var(--bg-surface);
-  padding: 16px;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .api-key-cell {

@@ -194,14 +194,15 @@ import {
 } from '@/api/aiAgent'
 import { getAgentRegistry } from '@/api/agent'
 import { getSkills, type SkillPackage } from '@/api/skill'
+import { DictType } from '@/api/dictionary'
+import { loadAdminDicts, dictItems, dictLabel, dictColor } from '@/composables/useAdminDict'
 
 const loading = ref(false)
 const items = ref<AgentScheduledTaskDTO[]>([])
 const statusFilter = ref<string | undefined>(undefined)
-const statusOptions = [
-  { label: '启用中', value: 'enabled' },
-  { label: '已暂停', value: 'paused' },
-]
+const statusOptions = computed(() =>
+  dictItems(DictType.SCHEDULED_TASK_STATUS).map(it => ({ label: it.item_name, value: it.item_code }))
+)
 const page = reactive({ current: 1, pageSize: 10, total: 0 })
 
 const columns = [
@@ -224,17 +225,12 @@ const pagination = computed(() => ({
 }))
 
 // ── 表单 ──
-const targetModeOptions = [
-  { label: '深度研究', value: 'deep_research' },
-  { label: '单智能体', value: 'agent' },
-  { label: '智能体团队', value: 'team' },
-  { label: '技能', value: 'skill' },
-]
-const scheduleTypeOptions = [
-  { label: 'Cron 定时', value: 'cron' },
-  { label: '固定间隔', value: 'interval' },
-  { label: '单次执行', value: 'once' },
-]
+const targetModeOptions = computed(() =>
+  dictItems(DictType.TARGET_MODE).map(it => ({ label: it.item_name, value: it.item_code }))
+)
+const scheduleTypeOptions = computed(() =>
+  dictItems(DictType.SCHEDULE_TYPE).map(it => ({ label: it.item_name, value: it.item_code }))
+)
 const agentOptions = ref<{ label: string; value: number }[]>([])
 
 // 技能（skill 模式）：包 → 脚本级联选择
@@ -278,10 +274,10 @@ const form = reactive(defaultForm())
 
 // ── 展示辅助 ──
 function modeLabel(m?: string) {
-  return ({ deep_research: '深度研究', agent: '智能体', team: '专家团队', skill: '技能' } as Record<string, string>)[m || ''] || (m || '—')
+  return dictLabel(DictType.TARGET_MODE, m) || (m || '—')
 }
 function modeColor(m?: string) {
-  return ({ deep_research: 'geekblue', agent: 'green', team: 'purple', skill: 'cyan' } as Record<string, string>)[m || ''] || 'default'
+  return dictColor(DictType.TARGET_MODE, m) || 'default'
 }
 function scheduleDesc(r: AgentScheduledTaskDTO) {
   if (r.scheduleType === 'cron') return `Cron：${r.cronExpression || '—'}`
@@ -463,6 +459,7 @@ async function onDelete(record: AgentScheduledTaskDTO) {
 }
 
 onMounted(() => {
+  loadAdminDicts([DictType.SCHEDULED_TASK_STATUS, DictType.TARGET_MODE, DictType.SCHEDULE_TYPE])
   void reload()
   // 加载智能体列表（agent 模式选择用）
   getAgentRegistry()
