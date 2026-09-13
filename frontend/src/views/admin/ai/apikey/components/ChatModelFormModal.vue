@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑模型' : '新增模型'"
+    :title="isEdit ? t('apiKeyMgmt.editModelTitle') : t('apiKeyMgmt.createModelTitle')"
     width="700px"
     :confirm-loading="saving"
     @ok="handleSubmit"
@@ -17,50 +17,50 @@
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item
-            label="模型名称"
+            :label="t('apiKeyMgmt.labelModelName')"
             name="name"
-            :rules="[{ required: true, message: '请输入模型名称' }]"
+            :rules="[{ required: true, message: t('apiKeyMgmt.modelNameRule') }]"
           >
-            <a-input v-model:value="formData.name" placeholder="如：GPT-4" />
+            <a-input v-model:value="formData.name" :placeholder="t('apiKeyMgmt.modelNamePlaceholder')" />
           </a-form-item>
         </a-col>
         <a-col :span="12">
           <a-form-item
-            label="模型 ID"
+            :label="t('apiKeyMgmt.labelModelId')"
             name="model"
-            :rules="[{ required: true, message: '请输入模型 ID' }]"
+            :rules="[{ required: true, message: t('apiKeyMgmt.modelIdRule') }]"
           >
-            <a-input v-model:value="formData.model" placeholder="如：gpt-4" />
+            <a-input v-model:value="formData.model" :placeholder="t('apiKeyMgmt.modelIdPlaceholder')" />
           </a-form-item>
         </a-col>
       </a-row>
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="模型编码" name="code">
-            <a-input v-model:value="formData.code" placeholder="编码（可选）" />
+          <a-form-item :label="t('apiKeyMgmt.labelModelCode')" name="code">
+            <a-input v-model:value="formData.code" :placeholder="t('apiKeyMgmt.codePlaceholder')" />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="类型" name="type">
-            <a-select v-model:value="formData.type" placeholder="请选择类型" allowClear>
+          <a-form-item :label="t('apiKeyMgmt.labelType')" name="type">
+            <a-select v-model:value="formData.type" :placeholder="t('apiKeyMgmt.typePlaceholder')" allowClear>
               <a-select-option
-                v-for="t in modelTypes"
-                :key="t.item_code"
-                :value="Number(t.item_value || t.item_code)"
+                v-for="tp in modelTypes"
+                :key="tp.item_code"
+                :value="Number(tp.item_value || tp.item_code)"
               >
-                {{ t.item_name }}
+                {{ tp.item_name }}
               </a-select-option>
             </a-select>
           </a-form-item>
         </a-col>
       </a-row>
 
-      <a-divider orientation="left">生成参数</a-divider>
+      <a-divider orientation="left">{{ t('apiKeyMgmt.sectionGenParams') }}</a-divider>
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="温度" name="temperature">
+          <a-form-item :label="t('apiKeyMgmt.labelTemperature')" name="temperature">
             <a-input-number
               v-model:value="formData.temperature"
               :min="0"
@@ -73,13 +73,13 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="最大 Token" name="max_tokens">
+          <a-form-item :label="t('apiKeyMgmt.labelMaxTokens')" name="max_tokens">
             <a-input-number
               v-model:value="formData.max_tokens"
               :min="1"
               :max="128000"
               style="width: 100%"
-              placeholder="最大回复长度"
+              :placeholder="t('apiKeyMgmt.maxTokensPlaceholder')"
             />
           </a-form-item>
         </a-col>
@@ -95,7 +95,7 @@
               :step="0.05"
               :precision="2"
               style="width: 100%"
-              placeholder="累积概率阈值"
+              :placeholder="t('apiKeyMgmt.topPPlaceholder')"
             />
           </a-form-item>
         </a-col>
@@ -105,7 +105,7 @@
               v-model:value="formData.top_k"
               :min="1"
               style="width: 100%"
-              placeholder="保留词数"
+              :placeholder="t('apiKeyMgmt.topKPlaceholder')"
             />
           </a-form-item>
         </a-col>
@@ -113,22 +113,22 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="随机种子" name="seed">
+          <a-form-item :label="t('apiKeyMgmt.labelSeed')" name="seed">
             <a-input-number
               v-model:value="formData.seed"
               :min="0"
               style="width: 100%"
-              placeholder="固定种子可复现"
+              :placeholder="t('apiKeyMgmt.seedPlaceholder')"
             />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="上下文数" name="max_contexts">
+          <a-form-item :label="t('apiKeyMgmt.labelMaxContexts')" name="max_contexts">
             <a-input-number
               v-model:value="formData.max_contexts"
               :min="1"
               style="width: 100%"
-              placeholder="最大对话轮次"
+              :placeholder="t('apiKeyMgmt.contextsPlaceholder')"
             />
           </a-form-item>
         </a-col>
@@ -136,32 +136,32 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="最大轮次" name="max_turns">
+          <a-form-item :label="t('apiKeyMgmt.labelMaxTurns')" name="max_turns">
             <a-input-number
               v-model:value="formData.max_turns"
               :min="1"
               style="width: 100%"
-              placeholder="最大轮次"
+              :placeholder="t('apiKeyMgmt.labelMaxTurns')"
             />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="维度" name="dimensions">
+          <a-form-item :label="t('apiKeyMgmt.labelDimensions')" name="dimensions">
             <a-input-number
               v-model:value="formData.dimensions"
               :min="1"
               style="width: 100%"
-              placeholder="向量维度"
+              :placeholder="t('apiKeyMgmt.dimPlaceholder')"
             />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <a-divider orientation="left">高级配置</a-divider>
+      <a-divider orientation="left">{{ t('apiKeyMgmt.sectionAdvanced') }}</a-divider>
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="重试次数" name="retry">
+          <a-form-item :label="t('apiKeyMgmt.labelRetry')" name="retry">
             <a-input-number
               v-model:value="formData.retry"
               :min="0"
@@ -171,13 +171,13 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="超时时间" name="timeout">
+          <a-form-item :label="t('apiKeyMgmt.labelTimeout')" name="timeout">
             <a-input-number
               v-model:value="formData.timeout"
               :min="1"
               :max="300"
               style="width: 100%"
-              addon-after="秒"
+              :addon-after="t('apiKeyMgmt.seconds')"
             />
           </a-form-item>
         </a-col>
@@ -185,18 +185,18 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="流式超时" name="stream_timeout">
+          <a-form-item :label="t('apiKeyMgmt.labelStreamTimeout')" name="stream_timeout">
             <a-input-number
               v-model:value="formData.stream_timeout"
               :min="1"
               :max="120"
               style="width: 100%"
-              addon-after="秒"
+              :addon-after="t('apiKeyMgmt.seconds')"
             />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="排序" name="sort">
+          <a-form-item :label="t('apiKeyMgmt.labelSort')" name="sort">
             <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
           </a-form-item>
         </a-col>
@@ -204,12 +204,12 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="支持思考" name="enable_thinking">
+          <a-form-item :label="t('apiKeyMgmt.labelThinking')" name="enable_thinking">
             <a-switch v-model:checked="formData.enable_thinking" />
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="支持搜索" name="enable_search">
+          <a-form-item :label="t('apiKeyMgmt.labelSearch')" name="enable_search">
             <a-switch v-model:checked="formData.enable_search" />
           </a-form-item>
         </a-col>
@@ -217,11 +217,11 @@
 
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-form-item label="状态" name="status">
+          <a-form-item :label="t('apiKeyMgmt.labelStatus')" name="status">
             <a-switch
               v-model:checked="formData.status"
-              checked-children="启用"
-              un-checked-children="禁用"
+              :checked-children="t('apiKeyMgmt.enabled')"
+              :un-checked-children="t('apiKeyMgmt.disabled')"
             />
           </a-form-item>
         </a-col>
@@ -232,9 +232,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createChatModel, updateChatModel, type AiChatModel } from '@/api/ai-apikey'
 import { useDictionary } from '@/composables/useDictionary'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -371,15 +374,15 @@ const handleSubmit = async () => {
     if (isEdit.value && props.model?.id) {
       payload.id = props.model.id
       await updateChatModel(payload)
-      message.success('更新成功')
+      message.success(t('apiKeyMgmt.updateSuccess'))
     } else {
       await createChatModel(payload)
-      message.success('创建成功')
+      message.success(t('apiKeyMgmt.createSuccess'))
     }
     emit('success')
     visible.value = false
   } catch (e: any) {
-    message.error(e.message || '保存失败')
+    message.error(e.message || t('apiKeyMgmt.saveFailed'))
   } finally {
     saving.value = false
   }

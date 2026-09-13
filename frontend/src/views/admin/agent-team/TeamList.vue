@@ -2,62 +2,62 @@
   <div class="team-list-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">智能体团队</h2>
-        <p class="page-sub">管理多智能体团队拓扑，支持模板实例化、成员编排与运行回放</p>
+        <h2 class="page-title">{{ t('teamMgmt.title') }}</h2>
+        <p class="page-sub">{{ t('teamMgmt.subtitle') }}</p>
       </div>
       <a-button type="primary" @click="openCreateModal">
-        <PlusOutlined /> 新建团队
+        <PlusOutlined /> {{ t('teamMgmt.createTeam') }}
       </a-button>
     </div>
 
     <a-spin :spinning="loading">
       <div class="team-grid">
         <a-card
-          v-for="t in teams"
-          :key="t.id"
+          v-for="team in teams"
+          :key="team.id"
           class="team-card"
           hoverable
-          @click="goEditor(t.id)"
+          @click="goEditor(team.id)"
         >
           <template #title>
             <div class="card-title">
               <ApartmentOutlined />
-              <span>{{ t.name || t.team_name }}</span>
+              <span>{{ team.name || team.team_name }}</span>
             </div>
           </template>
           <template #extra>
             <div @click.stop @mousedown.stop @pointerdown.stop>
               <a-switch
-                :checked="t.is_active"
-                checked-children="启用"
-                un-checked-children="停用"
+                :checked="team.is_active"
+                :checked-children="t('skillHub.enabled')"
+                :un-checked-children="t('teamMgmt.off')"
                 size="small"
-                @change="(val: boolean) => toggleActive(t, val)"
+                @change="(val: boolean) => toggleActive(team, val)"
               />
             </div>
           </template>
           <div class="card-body">
-            <p class="card-code">{{ t.team_code }}</p>
-            <p class="card-desc">{{ t.description || '暂无描述' }}</p>
+            <p class="card-code">{{ team.team_code }}</p>
+            <p class="card-desc">{{ team.description || t('agentMgmt.noDescription') }}</p>
             <div class="card-meta">
-              <a-tag v-if="t.category">{{ t.category }}</a-tag>
+              <a-tag v-if="team.category">{{ team.category }}</a-tag>
               <span class="member-count">
-                <TeamOutlined /> {{ t.member_count || 0 }} 名成员
+                <TeamOutlined /> {{ t('teamMgmt.memberCount', { count: team.member_count || 0 }) }}
               </span>
             </div>
           </div>
           <template #actions>
-            <a-button type="link" size="small" @click.stop="goEditor(t.id)">
-              <EditOutlined /> 编排
+            <a-button type="link" size="small" @click.stop="goEditor(team.id)">
+              <EditOutlined /> {{ t('teamMgmt.orchestrate') }}
             </a-button>
-            <a-button type="link" size="small" danger @click.stop="confirmDelete(t)">
-              <DeleteOutlined /> 删除
+            <a-button type="link" size="small" danger @click.stop="confirmDelete(team)">
+              <DeleteOutlined /> {{ t('common.delete') }}
             </a-button>
           </template>
         </a-card>
 
         <a-card v-if="!loading && teams.length === 0" class="empty-card">
-          <a-empty description="暂无团队，点击「新建团队」开始" />
+          <a-empty :description="t('teamMgmt.noTeams')" />
         </a-card>
       </div>
     </a-spin>
@@ -65,22 +65,22 @@
     <!-- 新建 / 编辑团队 -->
     <a-modal
       v-model:open="createVisible"
-      :title="editingId ? '编辑团队' : '新建团队'"
+      :title="editingId ? t('teamMgmt.editTeam') : t('teamMgmt.createTeam')"
       @ok="submitCreate"
       @cancel="createVisible = false"
       :confirm-loading="submitting"
     >
       <a-form :model="form" layout="vertical">
-        <a-form-item label="团队编码">
-          <a-input v-model:value="form.team_code" placeholder="留空自动生成，如 risk_triage_team" :disabled="!!editingId" />
+        <a-form-item :label="t('teamMgmt.teamCode')">
+          <a-input v-model:value="form.team_code" :placeholder="t('teamMgmt.teamCodePlaceholder')" :disabled="!!editingId" />
         </a-form-item>
-        <a-form-item label="团队名称" required>
-          <a-input v-model:value="form.team_name" placeholder="如 风险研判团队" />
+        <a-form-item :label="t('teamMgmt.teamName')" required>
+          <a-input v-model:value="form.team_name" :placeholder="t('teamMgmt.teamNamePlaceholder')" />
         </a-form-item>
-        <a-form-item label="分类">
-          <a-input v-model:value="form.category" placeholder="如 风险处置" />
+        <a-form-item :label="t('teamMgmt.category')">
+          <a-input v-model:value="form.category" :placeholder="t('teamMgmt.categoryPlaceholder')" />
         </a-form-item>
-        <a-form-item label="描述">
+        <a-form-item :label="t('skillHub.description')">
           <a-textarea v-model:value="form.description" :rows="3" />
         </a-form-item>
       </a-form>
@@ -90,6 +90,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -100,6 +101,7 @@ import {
 } from '@ant-design/icons-vue'
 import * as api from '@/api/agentTeam'
 
+const { t } = useI18n()
 const teams = ref<api.TeamOut[]>([])
 const loading = ref(false)
 const createVisible = ref(false)
@@ -118,7 +120,7 @@ const fetchTeams = async () => {
     const res = await api.listTeams({ is_active: undefined })
     teams.value = (res as any) || []
   } catch (e: any) {
-    message.error('加载团队列表失败：' + (e?.message || e))
+    message.error(t('teamMgmt.loadListFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -132,7 +134,7 @@ const openCreateModal = () => {
 
 const submitCreate = async () => {
   if (!form.value.team_name) {
-    message.warning('请填写团队名称')
+    message.warning(t('teamMgmt.nameRequired'))
     return
   }
   submitting.value = true
@@ -148,15 +150,15 @@ const submitCreate = async () => {
     }
     if (editingId.value) {
       await api.updateTeam(editingId.value, payload as any)
-      message.success('更新成功')
+      message.success(t('teamMgmt.updated'))
     } else {
       await api.createTeam(payload)
-      message.success('创建成功')
+      message.success(t('teamMgmt.created'))
     }
     createVisible.value = false
     fetchTeams()
   } catch (e: any) {
-    message.error('保存失败：' + (e?.message || e))
+    message.error(t('teamMgmt.saveFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   } finally {
     submitting.value = false
   }
@@ -169,23 +171,23 @@ const goEditor = (id: number) => {
   }))
 }
 
-const toggleActive = async (t: api.TeamOut, val: boolean) => {
+const toggleActive = async (team: api.TeamOut, val: boolean) => {
   try {
-    await api.updateTeam(t.id, { is_active: val } as any)
-    t.is_active = val
-    message.success(val ? '已启用' : '已停用')
+    await api.updateTeam(team.id, { is_active: val } as any)
+    team.is_active = val
+    message.success(val ? t('teamMgmt.enabledMsg') : t('teamMgmt.disabledMsg'))
   } catch (e: any) {
-    message.error('状态切换失败：' + (e?.message || e))
+    message.error(t('teamMgmt.toggleFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
     // 回滚 UI 状态
-    t.is_active = !val
+    team.is_active = !val
   }
 }
 
-const confirmDelete = (t: api.TeamOut) => {
-  if (!window.confirm(`确认删除团队「${t.name || t.team_name}」？此操作不可恢复。`)) return
-  api.deleteTeam(t.id)
-    .then(() => { message.success('已删除'); fetchTeams() })
-    .catch((e: any) => message.error('删除失败：' + (e?.message || e)))
+const confirmDelete = (team: api.TeamOut) => {
+  if (!window.confirm(t('teamMgmt.deleteConfirm', { name: team.name || team.team_name }))) return
+  api.deleteTeam(team.id)
+    .then(() => { message.success(t('teamMgmt.deleted')); fetchTeams() })
+    .catch((e: any) => message.error(t('teamMgmt.deleteFailed', { msg: e?.message || t('agentMgmt.unknownError') })))
 }
 
 onMounted(fetchTeams)

@@ -1,10 +1,10 @@
 <template>
   <div class="kb-ing">
     <div class="kb-ing__toolbar">
-      <a-select v-model:value="kbId" placeholder="选择数据集" style="width: 240px" @change="refresh">
+      <a-select v-model:value="kbId" :placeholder="t('kbMgmt.doc.selectDataset')" style="width: 240px" @change="refresh">
         <a-select-option v-for="d in datasets" :key="d.kb_id" :value="d.kb_id">{{ d.name }}</a-select-option>
       </a-select>
-      <a-button @click="refresh"><ReloadOutlined /> 刷新</a-button>
+      <a-button @click="refresh"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
     </div>
 
     <a-row :gutter="12" class="kb-ing__stats">
@@ -16,7 +16,7 @@
       </a-col>
     </a-row>
 
-    <a-empty v-if="!docs.length" :description="t('knowledge.common.empty')" />
+    <a-empty v-if="!docs.length" :description="t('kbMgmt.common.empty')" />
     <a-table v-else :columns="columns" :data-source="docs" size="small" :pagination="false">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
@@ -38,11 +38,11 @@ const datasets = ref<any[]>([])
 const kbId = ref<string>()
 const docs = ref<any[]>([])
 
-const columns = [
-  { title: '标题', dataIndex: 'title', key: 'title' },
-  { title: t('knowledge.common.status'), key: 'status', width: 110 },
-  { title: '切片数', dataIndex: 'chunk_count', key: 'chunk_count', width: 90 },
-]
+const columns = computed(() => [
+  { title: t('kbMgmt.common.title'), dataIndex: 'title', key: 'title' },
+  { title: t('kbMgmt.common.status'), key: 'status', width: 110 },
+  { title: t('kbMgmt.doc.chunkCount'), dataIndex: 'chunk_count', key: 'chunk_count', width: 90 },
+])
 
 const stats = computed(() => {
   const c: Record<string, number> = { pending: 0, processing: 0, ready: 0, error: 0 }

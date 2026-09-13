@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/user'
+import { useAppStore } from '@/stores/app'
+import { LOCALE_OPTIONS } from '@/i18n'
 import { BellOutlined, CheckOutlined } from '@ant-design/icons-vue'
 import {
   getNotifications, markNotificationsRead, cleanExpiredNotifications,
@@ -12,6 +14,7 @@ import ApiKeyManagement from '@/views/admin/ai/apikey/ApiKeyManagement.vue'
 import { message } from 'ant-design-vue'
 
 const userStore = useUserStore()
+const appStore = useAppStore()
 const { t } = useI18n()
 const activeTab = ref('profile')
 
@@ -25,7 +28,7 @@ const passwordState = ref({
 
 function validateConfirmPassword(_rule: unknown, val: string): Promise<void> {
   if (val !== passwordState.value.newPassword) {
-    return Promise.reject('两次密码不一致')
+    return Promise.reject(t('profile.passwordMismatch'))
   }
   return Promise.resolve()
 }
@@ -58,7 +61,7 @@ async function loadModels() {
   try {
     availableModels.value = await getAvailableModels()
   } catch (e: any) {
-    message.error(e.message || '加载模型失败')
+    message.error(e.message || t('profile.loadModelsFailed'))
   } finally {
     modelsLoading.value = false
   }
@@ -91,7 +94,7 @@ function openNotif() {
 }
 async function markAllRead() {
   await markNotificationsRead()
-  message.success('全部已读')
+  message.success(t('profile.markAllRead'))
   await loadNotifications()
 }
 async function markOneRead(id: number) {
@@ -100,7 +103,7 @@ async function markOneRead(id: number) {
 }
 async function cleanExpired() {
   const res = await cleanExpiredNotifications()
-  message.success(`已清理 ${res.removed} 条过期通知`)
+  message.success(t('profile.clearedNotifications', { count: res.removed }))
   await loadNotifications()
 }
 onMounted(() => {
@@ -124,13 +127,13 @@ onMounted(() => {
         <a-row :gutter="[24, 24]">
       <a-col :xs="24" :lg="8">
         <!-- User Info Card -->
-        <a-card title="个人信息" :bordered="false">
+        <a-card :title="t('profile.cardTitle')" :bordered="false">
           <div class="user-info">
             <a-avatar :size="80" class="user-avatar">
               {{ userStore.userInfo?.realName?.charAt(0) || 'U' }}
             </a-avatar>
             <h3 class="user-name">{{ userStore.userInfo?.realName }}</h3>
-            <p class="user-role">{{ userStore.userInfo?.roles?.[0] || '管理员' }}</p>
+            <p class="user-role">{{ userStore.userInfo?.roles?.[0] || t('profile.defaultRole') }}</p>
           </div>
 
           <a-divider />
@@ -138,22 +141,22 @@ onMounted(() => {
           <div class="info-list">
             <div class="info-item">
               <UserOutlined class="info-icon" />
-              <span class="info-label">用户名</span>
+              <span class="info-label">{{ t('profile.labelUsername') }}</span>
               <span class="info-value">{{ userStore.userInfo?.username }}</span>
             </div>
             <div class="info-item">
               <MailOutlined class="info-icon" />
-              <span class="info-label">邮箱</span>
+              <span class="info-label">{{ t('profile.labelEmail') }}</span>
               <span class="info-value">{{ userStore.userInfo?.email || '-' }}</span>
             </div>
             <div class="info-item">
               <PhoneOutlined class="info-icon" />
-              <span class="info-label">手机</span>
+              <span class="info-label">{{ t('profile.labelPhone') }}</span>
               <span class="info-value">{{ userStore.userInfo?.phone || '-' }}</span>
             </div>
             <div class="info-item">
               <CalendarOutlined class="info-icon" />
-              <span class="info-label">注册时间</span>
+              <span class="info-label">{{ t('profile.labelRegisterTime') }}</span>
               <span class="info-value">{{ userStore.userInfo?.createTime || '-' }}</span>
             </div>
           </div>
@@ -162,7 +165,7 @@ onMounted(() => {
 
       <a-col :xs="24" :lg="16">
         <!-- Settings Card -->
-        <a-card title="修改密码" :bordered="false">
+        <a-card :title="t('profile.cardChangePassword')" :bordered="false">
           <a-form
             ref="passwordFormRef"
             :model="passwordState"
@@ -170,29 +173,29 @@ onMounted(() => {
             @finish="handlePasswordChange"
           >
             <a-form-item
-              label="旧密码"
+              :label="t('profile.labelOldPassword')"
               name="oldPassword"
-              :rules="[{ required: true, message: '请输入旧密码' }]"
+              :rules="[{ required: true, message: t('profile.oldPasswordRequired') }]"
             >
               <a-input-password v-model:value="passwordState.oldPassword" />
             </a-form-item>
 
             <a-form-item
-              label="新密码"
+              :label="t('profile.labelNewPassword')"
               name="newPassword"
               :rules="[
-                { required: true, message: '请输入新密码' },
-                { min: 6, message: '密码至少6位' },
+                { required: true, message: t('profile.newPasswordRequired') },
+                { min: 6, message: t('profile.passwordMinLength') },
               ]"
             >
               <a-input-password v-model:value="passwordState.newPassword" />
             </a-form-item>
 
             <a-form-item
-              label="确认密码"
+              :label="t('profile.labelConfirmPassword')"
               name="confirmPassword"
               :rules="[
-                { required: true, message: '请确认密码' },
+                { required: true, message: t('profile.confirmPasswordRequired') },
                 { validator: validateConfirmPassword, trigger: 'change' },
               ]"
             >
@@ -201,27 +204,28 @@ onMounted(() => {
 
             <a-form-item>
               <a-button type="primary" html-type="submit" :loading="loading">
-                保存修改
+                {{ t('common.save') }}
               </a-button>
             </a-form-item>
           </a-form>
         </a-card>
 
         <!-- Preferences Card -->
-        <a-card title="偏好设置" :bordered="false" class="mt-16">
+        <a-card :title="t('profile.cardPreferences')" :bordered="false" class="mt-16">
           <a-form layout="vertical">
-            <a-form-item label="界面语言">
-              <a-select default-value="en-US">
-                <a-select-option value="zh-CN">简体中文</a-select-option>
-                <a-select-option value="en-US">English</a-select-option>
+            <a-form-item :label="t('profile.uiLanguage')">
+              <a-select :value="appStore.locale" @change="(v: any) => appStore.setAppLocale(v)">
+                <a-select-option v-for="opt in LOCALE_OPTIONS" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </a-select-option>
               </a-select>
             </a-form-item>
 
-            <a-form-item label="主题模式">
+            <a-form-item :label="t('profile.cardTheme')">
               <a-radio-group default-value="light">
-                <a-radio value="light">浅色</a-radio>
-                <a-radio value="dark">深色</a-radio>
-                <a-radio value="auto">跟随系统</a-radio>
+                <a-radio value="light">{{ t('profile.themeLight') }}</a-radio>
+                <a-radio value="dark">{{ t('profile.themeDark') }}</a-radio>
+                <a-radio value="auto">{{ t('profile.themeAuto') }}</a-radio>
               </a-radio-group>
             </a-form-item>
           </a-form>
@@ -238,7 +242,7 @@ onMounted(() => {
             :loading="modelsLoading"
             row-key="id"
             size="small"
-            :pagination="{ pageSize: 10, showTotal: (total: number) => `共 ${total} 条` }"
+            :pagination="{ pageSize: 10, showTotal: (total: number) => t('common.total', { total }) }"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'type'">{{ record.type ?? '-' }}</template>
@@ -261,14 +265,14 @@ onMounted(() => {
     <!-- 通知抽屉 -->
     <a-drawer
       v-model:open="notifOpen"
-      title="通知中心"
+      :title="t('profile.notificationTitle')"
       width="420"
       :footer="null"
     >
       <template #extra>
         <a-space>
-          <a-button size="small" @click="markAllRead"><CheckOutlined /> 全部已读</a-button>
-          <a-button size="small" @click="cleanExpired">清理过期</a-button>
+          <a-button size="small" @click="markAllRead"><CheckOutlined /> {{ t('profile.markAllRead') }}</a-button>
+          <a-button size="small" @click="cleanExpired">{{ t('profile.cleanExpired') }}</a-button>
         </a-space>
       </template>
       <a-spin :spinning="notifLoading">
@@ -281,7 +285,7 @@ onMounted(() => {
               <a-list-item-meta>
                 <template #title>
                   <span :style="{ fontWeight: item.isRead ? 400 : 700 }">{{ item.title }}</span>
-                  <a-tag v-if="!item.isRead" color="red" style="margin-left:8px">未读</a-tag>
+                  <a-tag v-if="!item.isRead" color="red" style="margin-left:8px">{{ t('profile.unread') }}</a-tag>
                 </template>
                 <template #description>
                   <div>{{ item.content }}</div>
@@ -289,11 +293,11 @@ onMounted(() => {
                 </template>
               </a-list-item-meta>
               <template #actions>
-                <a v-if="!item.isRead" @click="markOneRead(item.id)">标记已读</a>
+                <a v-if="!item.isRead" @click="markOneRead(item.id)">{{ t('profile.markRead') }}</a>
               </template>
             </a-list-item>
           </template>
-          <template #empty><a-empty description="暂无通知" /></template>
+          <template #empty><a-empty :description="t('profile.noNotifications')" /></template>
         </a-list>
       </a-spin>
     </a-drawer>

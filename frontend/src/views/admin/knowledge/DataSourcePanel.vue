@@ -1,22 +1,22 @@
 <template>
   <div class="kg-panel">
     <div class="kg-panel__header">
-      <h2 class="kg-panel__title">{{ t('knowledge.dataSource.title') }}</h2>
+      <h2 class="kg-panel__title">{{ t('kbMgmt.dataSource.title') }}</h2>
     </div>
     <a-tabs v-model:activeKey="active" class="kg-panel__tabs">
-      <a-tab-pane key="source" :tab="t('knowledge.common.name') + ' / 数据源'">
+      <a-tab-pane key="source" :tab="t('kbMgmt.common.name') + ' / ' + t('kbMgmt.dataSource.tabSource')">
         <SourceManagement />
       </a-tab-pane>
-      <a-tab-pane key="metadata" tab="元数据浏览">
+      <a-tab-pane key="metadata" :tab="t('kbMgmt.dataSource.tabMetadata')">
         <MetadataExplorer />
       </a-tab-pane>
-      <a-tab-pane key="standard" tab="元数据标准">
+      <a-tab-pane key="standard" :tab="t('kbMgmt.dataSource.tabStandard')">
         <StandardManagement />
       </a-tab-pane>
-      <a-tab-pane key="binding" tab="字段绑定">
+      <a-tab-pane key="binding" :tab="t('kbMgmt.dataSource.tabBinding')">
         <BindingWorkbench />
       </a-tab-pane>
-      <a-tab-pane key="sql" tab="SQL 工作台">
+      <a-tab-pane key="sql" :tab="t('kbMgmt.dataSource.tabSql')">
         <SqlWorkbench />
       </a-tab-pane>
     </a-tabs>

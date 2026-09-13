@@ -1,13 +1,13 @@
 <template>
   <div class="kg-panel">
     <div class="kg-panel__header">
-      <h2 class="kg-panel__title">{{ t('knowledge.kb.title') }}</h2>
+      <h2 class="kg-panel__title">{{ t('kbMgmt.kb.title') }}</h2>
     </div>
     <a-tabs v-model:activeKey="active" class="kg-panel__tabs">
-      <a-tab-pane key="dataset" tab="数据集管理"><DatasetManagement /></a-tab-pane>
-      <a-tab-pane key="document" tab="文档管理"><DocumentManagement /></a-tab-pane>
-      <a-tab-pane key="search" tab="检索测试"><SearchTester /></a-tab-pane>
-      <a-tab-pane key="ingestion" tab="索引状态"><IngestionJobs /></a-tab-pane>
+      <a-tab-pane key="dataset" :tab="t('kbMgmt.kb.tabDataset')"><DatasetManagement /></a-tab-pane>
+      <a-tab-pane key="document" :tab="t('kbMgmt.kb.tabDocument')"><DocumentManagement /></a-tab-pane>
+      <a-tab-pane key="search" :tab="t('kbMgmt.kb.tabSearch')"><SearchTester /></a-tab-pane>
+      <a-tab-pane key="ingestion" :tab="t('kbMgmt.kb.tabIngestion')"><IngestionJobs /></a-tab-pane>
     </a-tabs>
   </div>
 </template>

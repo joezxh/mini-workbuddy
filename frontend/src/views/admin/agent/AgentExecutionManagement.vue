@@ -1,13 +1,13 @@
 <template>
   <div class="agent-execution-management">
     <div class="page-header">
-      <h2 class="page-title">📋 会话调用记录</h2>
+      <h2 class="page-title">📋 {{ t('agentMgmt.execTitle') }}</h2>
       <div class="header-actions">
         <a-button @click="loadStats">
-          <BarChartOutlined /> 统计
+          <BarChartOutlined /> {{ t('agentMgmt.stats') }}
         </a-button>
         <a-button @click="loadData">
-          <ReloadOutlined :spin="loading" /> 刷新
+          <ReloadOutlined :spin="loading" /> {{ t('agentMgmt.refresh') }}
         </a-button>
       </div>
     </div>
@@ -21,14 +21,14 @@
         :message="targetLabel"
       >
         <template #action>
-          <a-button size="small" @click="clearTargetFilter">查看全部</a-button>
+          <a-button size="small" @click="clearTargetFilter">{{ t('agentMgmt.viewAll') }}</a-button>
         </template>
       </a-alert>
       <div class="list-toolbar">
         <a-space wrap>
           <a-input
             v-model:value="filterKeyword"
-            placeholder="搜索 Target / 输入 / 输出"
+            :placeholder="t('agentMgmt.searchExec')"
             allow-clear
             style="width: 240px"
             @press-enter="onSearch"
@@ -38,14 +38,14 @@
           </a-input>
           <a-input
             v-model:value="filterSessionId"
-            placeholder="会话 ID"
+            :placeholder="t('agentMgmt.sessionId')"
             allow-clear
             style="width: 150px"
             @press-enter="loadData"
           />
           <a-select
             v-model:value="filterMode"
-            placeholder="调用模式"
+            :placeholder="t('agentMgmt.callMode')"
             style="width: 160px"
             allow-clear
             @change="loadData"
@@ -56,7 +56,7 @@
           </a-select>
           <a-select
             v-model:value="filterStatus"
-            placeholder="状态"
+            :placeholder="t('skillHub.status')"
             style="width: 140px"
             allow-clear
             @change="loadData"
@@ -101,7 +101,7 @@
             </template>
             <template v-else-if="column.key === 'session'">
               <a-tag color="blue">#{{ (record as AgentExecutionItem).session_id }}</a-tag>
-              <span class="session-title">{{ (record as AgentExecutionItem).session_title || '新对话' }}</span>
+              <span class="session-title">{{ (record as AgentExecutionItem).session_title || t('agentMgmt.newConversation') }}</span>
             </template>
             <template v-else-if="column.key === 'user_input'">
               <span :title="(record as AgentExecutionItem).user_input">{{ truncate((record as AgentExecutionItem).user_input) }}</span>
@@ -119,14 +119,14 @@
             </template>
           </template>
         </a-table>
-        <a-empty v-if="!loading && records.length === 0" description="暂无调用记录" />
+        <a-empty v-if="!loading && records.length === 0" :description="t('agentMgmt.noExecRecords')" />
       </a-spin>
     </a-card>
 
     <!-- 详情抽屉 -->
     <a-drawer
       v-model:open="detailVisible"
-      title="调用详情"
+      :title="t('agentMgmt.execDetail')"
       width="860px"
       :footer="null"
       @close="detailVisible = false"
@@ -134,13 +134,13 @@
       <a-spin :spinning="detailLoading">
         <template v-if="detail">
           <a-descriptions bordered size="small" :column="2">
-            <a-descriptions-item label="执行ID" :span="2">
+            <a-descriptions-item :label="t('agentMgmt.execId')" :span="2">
               <span class="text-mono">{{ detail.execution_id }}</span>
             </a-descriptions-item>
-            <a-descriptions-item label="会话">
+            <a-descriptions-item :label="t('agentMgmt.colSession')">
               #{{ detail.session_id }} {{ detail.session_title || '' }}
             </a-descriptions-item>
-            <a-descriptions-item label="模式">
+            <a-descriptions-item :label="t('agentMgmt.mode')">
               <a-tag :color="modeColor(detail.execution_mode)">{{ detail.execution_mode }}</a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="Target">
@@ -148,35 +148,35 @@
                 {{ formatTarget(detail) }}
               </a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="状态">
+            <a-descriptions-item :label="t('skillHub.status')">
               <a-tag :color="statusColor(detail.status)">{{ statusLabel(detail.status) }}</a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="开始时间">{{ formatDate(detail.started_at) }}</a-descriptions-item>
-            <a-descriptions-item label="完成时间">{{ formatDate(detail.completed_at) }}</a-descriptions-item>
-            <a-descriptions-item label="耗时">
+            <a-descriptions-item :label="t('agentMgmt.startTime')">{{ formatDate(detail.started_at) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.finishTime')">{{ formatDate(detail.completed_at) }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.latency')">
               {{ detail.latency_ms != null ? `${detail.latency_ms} ms` : '-' }}
             </a-descriptions-item>
-            <a-descriptions-item label="用户">{{ detail.user_id ?? '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.labelUser')">{{ detail.user_id ?? '-' }}</a-descriptions-item>
           </a-descriptions>
 
           <!-- 分层 DAG 拓扑 -->
           <a-divider orientation="left">
-            调用链路拓扑
+            {{ t('agentMgmt.topoTitle') }}
             <span class="divider-hint" v-if="detail.events && detail.events.length">
-              （{{ detail.events.length }} 个节点）
+              {{ t('agentMgmt.nodeCount', { count: detail.events.length }) }}
             </span>
           </a-divider>
           <div v-if="hasTopology" class="topo-wrap">
             <div ref="topoChartRef" class="topo-chart"></div>
             <a-radio-group v-model:value="topoMode" size="small" class="topo-toggle">
-              <a-radio-button value="dag">分层拓扑</a-radio-button>
-              <a-radio-button value="flow">流程视图</a-radio-button>
+              <a-radio-button value="dag">{{ t('agentMgmt.topoDag') }}</a-radio-button>
+              <a-radio-button value="flow">{{ t('agentMgmt.topoFlow') }}</a-radio-button>
             </a-radio-group>
           </div>
-          <a-empty v-else description="该次调用无调用链拓扑数据" />
+          <a-empty v-else :description="t('agentMgmt.noTopo')" />
 
           <!-- 时间线 -->
-          <a-divider orientation="left">执行时间线</a-divider>
+          <a-divider orientation="left">{{ t('agentMgmt.timelineTitle') }}</a-divider>
           <a-timeline v-if="detail.events && detail.events.length" class="evt-timeline">
             <a-timeline-item
               v-for="ev in sortedEvents"
@@ -191,11 +191,11 @@
               <div v-if="ev.content" class="evt-content">{{ truncate(String(ev.content), 160) }}</div>
             </a-timeline-item>
           </a-timeline>
-          <a-empty v-else description="无节点事件" />
+          <a-empty v-else :description="t('agentMgmt.noEvents')" />
 
           <!-- 人工介入 -->
           <a-divider orientation="left" v-if="detail.hitl_pauses && detail.hitl_pauses.length">
-            人工介入 (HITL)
+            {{ t('agentMgmt.hitlTitle') }}
           </a-divider>
           <a-list
             v-if="detail.hitl_pauses && detail.hitl_pauses.length"
@@ -213,13 +213,13 @@
                     <span class="hitl-stage">{{ item.status || '-' }}</span>
                   </template>
                   <template #description>
-                    <div v-if="item.comment" class="hitl-reason">审批意见：{{ item.comment }}</div>
+                    <div v-if="item.comment" class="hitl-reason">{{ t('agentMgmt.approvalComment', { msg: item.comment }) }}</div>
                     <div v-if="item.payload" class="hitl-row">
-                      <span>请求负载：{{ truncate(formatJson(item.payload), 80) }}</span>
+                      <span>{{ t('agentMgmt.payloadLabel', { msg: truncate(formatJson(item.payload), 80) }) }}</span>
                     </div>
                     <div class="hitl-time">
-                      请求：{{ formatDate(item.created_at) }}
-                      <span v-if="item.resolved_at"> / 解决：{{ formatDate(item.resolved_at) }}</span>
+                      {{ t('agentMgmt.requestAt') }}{{ formatDate(item.created_at) }}
+                      <span v-if="item.resolved_at">{{ t('agentMgmt.resolvedAt', { time: formatDate(item.resolved_at) }) }}</span>
                     </div>
                   </template>
                 </a-list-item-meta>
@@ -227,13 +227,13 @@
             </template>
           </a-list>
 
-          <a-divider orientation="left">输入</a-divider>
+          <a-divider orientation="left">{{ t('agentMgmt.labelInput') }}</a-divider>
           <pre class="code-block">{{ detail.user_input || '-' }}</pre>
 
-          <a-divider orientation="left">输出 (Output)</a-divider>
+          <a-divider orientation="left">{{ t('agentMgmt.labelOutput') }}</a-divider>
           <pre class="code-block">{{ detail.output || '-' }}</pre>
 
-          <a-divider orientation="left" v-if="detail.error">错误 (Error)</a-divider>
+          <a-divider orientation="left" v-if="detail.error">{{ t('agentMgmt.labelError') }}</a-divider>
           <pre class="code-block error-block" v-if="detail.error">{{ detail.error }}</pre>
 
           <a-divider orientation="left" v-if="detail.metadata_json">Metadata</a-divider>
@@ -248,7 +248,7 @@
     <!-- 统计弹窗 -->
     <a-modal
       v-model:open="statsVisible"
-      title="调用统计"
+      :title="t('agentMgmt.statsModalTitle')"
       width="560px"
       :footer="null"
       @cancel="statsVisible = false"
@@ -256,17 +256,17 @@
       <a-spin :spinning="statsLoading">
         <template v-if="stats">
           <a-descriptions bordered size="small" :column="1">
-            <a-descriptions-item label="总调用数">{{ stats.total ?? '-' }}</a-descriptions-item>
-            <a-descriptions-item label="平均耗时">
+            <a-descriptions-item :label="t('agentMgmt.totalCalls')">{{ stats.total ?? '-' }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.avgDuration')">
               {{ stats.avg_latency_ms != null ? `${stats.avg_latency_ms} ms` : '-' }}
             </a-descriptions-item>
-            <a-descriptions-item label="按模式">
+            <a-descriptions-item :label="t('agentMgmt.byMode')">
               <a-tag v-for="(v, k) in stats.by_execution_mode" :key="`m-${k}`" :color="modeColor(k)">
                 {{ targetTypeLabel(k) }}: {{ v }}
               </a-tag>
               <span v-if="!stats.by_execution_mode || !Object.keys(stats.by_execution_mode).length" class="text-muted">-</span>
             </a-descriptions-item>
-            <a-descriptions-item label="按状态">
+            <a-descriptions-item :label="t('agentMgmt.byStatus')">
               <a-tag v-for="(v, k) in stats.by_status" :key="`s-${k}`" :color="statusColor(k)">
                 {{ statusLabel(k) }}: {{ v }}
               </a-tag>
@@ -281,6 +281,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   ReloadOutlined,
@@ -302,6 +303,7 @@ import {
 } from '@/api/agentExecution'
 
 const loading = ref(false)
+const { t } = useI18n()
 const records = ref<AgentExecutionItem[]>([])
 
 const filterKeyword = ref<string | undefined>()
@@ -319,11 +321,11 @@ const modeOptions = [
   { value: 'agent_team', label: 'Agent Team' },
   { value: 'sqlbot', label: 'SqlBot' },
 ]
-const statusOptions = [
-  { value: 'running', label: '运行中' },
-  { value: 'completed', label: '已完成' },
-  { value: 'failed', label: '失败' },
-]
+const statusOptions = computed(() => [
+  { value: 'running', label: t('agentMgmt.stRunning') },
+  { value: 'completed', label: t('agentMgmt.stCompleted') },
+  { value: 'failed', label: t('agentMgmt.stFailed') },
+])
 
 const pagination = reactive({
   current: 1,
@@ -331,16 +333,16 @@ const pagination = reactive({
   total: 0,
 })
 
-const columns = [
-  { title: '时间', key: 'started_at', width: 170 },
-  { title: '模式', key: 'execution_mode', width: 110 },
-  { title: '目标(Target)', key: 'target_id', width: 160 },
-  { title: '会话', key: 'session', width: 200 },
-  { title: '参数摘要', key: 'user_input', width: 200, ellipsis: true },
-  { title: '结果摘要', key: 'output', width: 200, ellipsis: true },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '耗时', key: 'latency_ms', width: 110 },
-]
+const columns = computed(() => [
+  { title: t('agentMgmt.colTime'), key: 'started_at', width: 170 },
+  { title: t('agentMgmt.mode'), key: 'execution_mode', width: 110 },
+  { title: t('agentMgmt.colTarget'), key: 'target_id', width: 160 },
+  { title: t('agentMgmt.colSession'), key: 'session', width: 200 },
+  { title: t('agentMgmt.colInput'), key: 'user_input', width: 200, ellipsis: true },
+  { title: t('agentMgmt.colOutput'), key: 'output', width: 200, ellipsis: true },
+  { title: t('skillHub.status'), key: 'status', width: 100 },
+  { title: t('agentMgmt.latency'), key: 'latency_ms', width: 110 },
+])
 
 // ---- 详情 ----
 const detailVisible = ref(false)
@@ -437,7 +439,7 @@ async function loadData() {
     records.value = res.items || []
     pagination.total = res.total || 0
   } catch (e: any) {
-    message.error('加载失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -450,7 +452,7 @@ async function loadStats() {
     const res = await getAgentExecutionStats()
     stats.value = res
   } catch (e: any) {
-    message.error('统计加载失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadStatsFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     statsLoading.value = false
   }
@@ -466,7 +468,7 @@ async function openDetail(record: AgentExecutionItem) {
     await nextTick()
     renderTopo()
   } catch (e: any) {
-    message.error('详情加载失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadExecDetailFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     detailLoading.value = false
   }
@@ -536,7 +538,7 @@ function renderTopo() {
       formatter: (p: any) => {
         if (p.dataType === 'edge') return `${p.data.source} → ${p.data.target}`
         const d = p.data
-        return `<b>${d.name}</b><br/>类型：${d.nodeType || '-'}<br/>状态：${d.status || '-'}`
+        return `<b>${d.name}</b><br/>${t('agentMgmt.tipType')}：${d.nodeType || '-'}<br/>${t('skillHub.status')}：${d.status || '-'}`
       },
     },
     series: [
@@ -647,12 +649,12 @@ function modeColor(mode?: string): string {
 // dify→Dify流程 / skill→技能包 / agent→Agent配置 / agent_team→团队 / sqlbot 固定 "0"
 function targetTypeLabel(mode?: string): string {
   switch (mode) {
-    case 'dify': return 'Dify流程'
-    case 'skill': return '技能包'
-    case 'agent': return 'Agent配置'
-    case 'agent_team': return '团队'
+    case 'dify': return t('agentMgmt.targetDify')
+    case 'skill': return t('agentMgmt.targetSkill')
+    case 'agent': return t('agentMgmt.targetAgent')
+    case 'agent_team': return t('agentMgmt.targetTeam')
     case 'sqlbot': return 'SqlBot'
-    default: return '目标'
+    default: return t('agentMgmt.targetFallback')
   }
 }
 
@@ -676,9 +678,9 @@ function statusColor(status?: string): string {
 
 function statusLabel(status?: string): string {
   switch (status) {
-    case 'running': return '运行中'
-    case 'completed': return '已完成'
-    case 'failed': return '失败'
+    case 'running': return t('agentMgmt.stRunning')
+    case 'completed': return t('agentMgmt.stCompleted')
+    case 'failed': return t('agentMgmt.stFailed')
     default: return status || '-'
   }
 }
@@ -688,7 +690,7 @@ onMounted(() => {
   const execFilter = inject<{ mode?: string; targetId?: string; label?: string }>('executionFilter')
   if (execFilter?.targetId) {
     filterTargetId.value = execFilter.targetId
-    targetLabel.value = execFilter.label || (execFilter.mode ? `当前过滤：${targetTypeLabel(execFilter.mode)} #${execFilter.targetId}` : `当前过滤：对象 #${execFilter.targetId}`)
+    targetLabel.value = execFilter.label || (execFilter.mode ? t('agentMgmt.filterLabel', { target: targetTypeLabel(execFilter.mode), id: execFilter.targetId }) : t('agentMgmt.filterObjectLabel', { id: execFilter.targetId }))
     if (execFilter.mode) filterMode.value = execFilter.mode as ExecutionMode
   }
   loadData()

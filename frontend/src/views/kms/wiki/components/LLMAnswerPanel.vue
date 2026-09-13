@@ -1,7 +1,7 @@
 <template>
   <div class="llm-answer-panel">
     <div class="markdown-body" v-html="renderedAnswer"></div>
-    <a-divider v-if="citations.length" orientation="left">引用来源</a-divider>
+    <a-divider v-if="citations.length" orientation="left">{{ t('kmsWiki.citations') }}</a-divider>
     <div class="citation-list" v-if="citations.length">
       <CitationCard
         v-for="c in citations"
@@ -15,6 +15,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
@@ -23,6 +24,7 @@ import type { CitationItem } from '../types/wiki'
 
 const props = defineProps<{ answer: string; citations: CitationItem[] }>()
 const router = useRouter()
+const { t } = useI18n()
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const renderedAnswer = computed(() =>

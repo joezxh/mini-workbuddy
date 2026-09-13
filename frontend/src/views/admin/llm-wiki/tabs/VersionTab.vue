@@ -3,7 +3,7 @@
     <a-select
       v-model:value="selectedArticleId"
       show-search
-      placeholder="选择文章查看版本历史"
+      :placeholder="t('wikiMgmt.ver.selectArticle')"
       style="width: 320px"
       :filter-option="filterOption"
       :options="articleOptions"
@@ -13,16 +13,18 @@
     <div style="margin-top: 16px" v-if="selectedArticleId">
       <VersionTimeline :article-id="selectedArticleId" :current-version="currentVersion" />
     </div>
-    <a-empty v-else description="请选择文章" style="margin-top: 40px" />
+    <a-empty v-else :description="t('wikiMgmt.ver.pleaseSelect')" style="margin-top: 40px" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { listArticles } from '@/api/wiki.ts'
 import VersionTimeline from '@/views/kms/wiki/components/VersionTimeline.vue'
 
+const { t } = useI18n()
 const articleOptions = ref<any[]>([])
 const selectedArticleId = ref<number | null>(null)
 const currentVersion = ref(0)
@@ -37,7 +39,7 @@ async function reload() {
       label: `v${a.version} · ${a.title}`,
     }))
   } catch (e) {
-    message.error('加载文章列表失败')
+    message.error(t('wikiMgmt.art.loadFailed'))
   } finally {
     loading.value = false
   }

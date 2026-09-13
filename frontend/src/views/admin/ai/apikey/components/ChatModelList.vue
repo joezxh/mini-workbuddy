@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="`关联模型 - ${apiKey?.name || ''}`"
+    :title="t('apiKeyMgmt.listTitle', { name: apiKey?.name || '' })"
     width="900px"
     :footer="null"
     @cancel="visible = false"
@@ -11,7 +11,7 @@
       <div class="action-bar">
         <a-input-search
           v-model:value="filters.name"
-          placeholder="搜索模型名称"
+          :placeholder="t('apiKeyMgmt.searchModel')"
           allow-clear
           style="width:200px"
           @search="loadData"
@@ -19,11 +19,11 @@
         />
         <a-space>
           <a-button :disabled="dataList.length === 0" @click="openTestModal">
-            <ExperimentOutlined /> 测试模型
+            <ExperimentOutlined /> {{ t('apiKeyMgmt.testModel') }}
           </a-button>
           <a-button type="primary" @click="showCreateModal">
             <template #icon><PlusOutlined /></template>
-            新增模型
+            {{ t('apiKeyMgmt.addModel') }}
           </a-button>
         </a-space>
       </div>
@@ -46,11 +46,11 @@
           </template>
           <template v-else-if="column.key === 'status'">
             <a-tag :color="record.status === 1 ? 'success' : 'error'">
-              {{ record.status === 1 ? '启用' : '禁用' }}
+              {{ record.status === 1 ? t('apiKeyMgmt.enabled') : t('apiKeyMgmt.disabled') }}
             </a-tag>
           </template>
           <template v-else-if="column.key === 'is_default'">
-            <a-tooltip :title="record.is_default ? '当前默认模型' : '设为默认'">
+            <a-tooltip :title="record.is_default ? t('apiKeyMgmt.isDefaultTip') : t('apiKeyMgmt.setDefaultTip')">
               <StarFilled v-if="record.is_default" style="color: var(--warn); font-size: 16px;" />
               <StarOutlined v-else style="color: var(--fg-muted); font-size: 16px; cursor: pointer;" @click="setDefault(record)" />
             </a-tooltip>
@@ -63,7 +63,7 @@
           </template>
           <template v-else-if="column.key === 'actions'">
             <a-space>
-              <a-button type="link" size="small" @click="handleEdit(record)">编辑</a-button>
+              <a-button type="link" size="small" @click="handleEdit(record)">{{ t('common.edit') }}</a-button>
               <a-button
                 type="link"
                 size="small"
@@ -71,7 +71,7 @@
                 :style="{ color: record.is_default ? 'var(--warn)' : 'var(--accent)' }"
                 :disabled="record.is_default"
               >
-                <StarFilled v-if="record.is_default" /> {{ record.is_default ? '默认' : '设为默认' }}
+                <StarFilled v-if="record.is_default" /> {{ record.is_default ? t('apiKeyMgmt.defaultLabel') : t('apiKeyMgmt.setDefaultLabel') }}
               </a-button>
               <a-button
                 type="link"
@@ -79,15 +79,15 @@
                 @click="toggleStatus(record)"
                 :style="{ color: record.status === 1 ? 'var(--warn)' : 'var(--ok)' }"
               >
-                {{ record.status === 1 ? '禁用' : '启用' }}
+                {{ record.status === 1 ? t('apiKeyMgmt.disabled') : t('apiKeyMgmt.enabled') }}
               </a-button>
               <a-popconfirm
                 :title="t('apiKeyMgmt.deleteModelConfirm')"
-                ok-text="确定"
-                cancel-text="取消"
+                :ok-text="t('common.confirm')"
+                :cancel-text="t('common.cancel')"
                 @confirm="handleDelete(record)"
               >
-                <a-button type="link" size="small" danger>删除</a-button>
+                <a-button type="link" size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
             </a-space>
           </template>
@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ExperimentOutlined, StarFilled, StarOutlined } from '@ant-design/icons-vue'
 import { getChatModelPage, updateChatModel, deleteChatModel, setChatModelDefault, type AiChatModel } from '@/api/ai-apikey'
@@ -137,6 +138,8 @@ interface AiApiKey {
   platform: string
 }
 
+const { t } = useI18n()
+
 const visible = computed({
   get: () => props.open,
   set: (val) => emit('update:open', val)
@@ -152,7 +155,7 @@ const pagination = reactive({
   pageSize: 10,
   total: 0,
   showSizeChanger: true,
-  showTotal: (total: number) => `共 ${total} 条`
+  showTotal: (total: number) => t('common.total', { total })
 })
 
 // 筛选
@@ -161,16 +164,16 @@ const filters = reactive({
 })
 
 // 表格列
-const columns = [
-  { title: '模型名称', dataIndex: 'name', key: 'name', width: 150, ellipsis: true },
-  { title: '模型 ID', dataIndex: 'model', key: 'model', width: 180, ellipsis: true },
-  { title: '类型', dataIndex: 'type', key: 'type', width: 80, align: 'center' as const },
-  { title: '默认', key: 'is_default', width: 70, align: 'center' as const },
-  { title: '温度', dataIndex: 'temperature', key: 'temperature', width: 80, align: 'center' as const },
-  { title: '最大 Token', dataIndex: 'max_tokens', key: 'max_tokens', width: 100, align: 'center' as const },
-  { title: '状态', key: 'status', width: 80, align: 'center' as const },
-  { title: '操作', key: 'actions', width: 240, align: 'center' as const }
-]
+const columns = computed(() => [
+  { title: t('apiKeyMgmt.colModelName'), dataIndex: 'name', key: 'name', width: 150, ellipsis: true },
+  { title: t('apiKeyMgmt.colModelId'), dataIndex: 'model', key: 'model', width: 180, ellipsis: true },
+  { title: t('apiKeyMgmt.colType'), dataIndex: 'type', key: 'type', width: 80, align: 'center' as const },
+  { title: t('apiKeyMgmt.colDefault'), key: 'is_default', width: 70, align: 'center' as const },
+  { title: t('apiKeyMgmt.colTemperature'), dataIndex: 'temperature', key: 'temperature', width: 80, align: 'center' as const },
+  { title: t('apiKeyMgmt.colMaxTokens'), dataIndex: 'max_tokens', key: 'max_tokens', width: 100, align: 'center' as const },
+  { title: t('apiKeyMgmt.colStatus'), key: 'status', width: 80, align: 'center' as const },
+  { title: t('apiKeyMgmt.colActions'), key: 'actions', width: 240, align: 'center' as const }
+])
 
 // 新增/编辑弹窗
 const formVisible = ref(false)
@@ -197,7 +200,7 @@ const loadData = async () => {
     dataList.value = res.data
     pagination.total = res.total
   } catch (e: any) {
-    message.error(e.message || '加载失败')
+    message.error(e.message || t('apiKeyMgmt.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -241,10 +244,10 @@ const toggleStatus = async (record: AiChatModel) => {
       id: record.id,
       status: record.status === 1 ? 0 : 1
     })
-    message.success(record.status === 1 ? '已禁用' : '已启用')
+    message.success(record.status === 1 ? t('apiKeyMgmt.disabledMsg') : t('apiKeyMgmt.enabledMsg'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '操作失败')
+    message.error(e.message || t('common.error'))
   }
 }
 
@@ -252,10 +255,10 @@ const toggleStatus = async (record: AiChatModel) => {
 const handleDelete = async (record: AiChatModel) => {
   try {
     await deleteChatModel(record.id)
-    message.success('删除成功')
+    message.success(t('apiKeyMgmt.deleteSuccess'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('apiKeyMgmt.deleteFailed'))
   }
 }
 
@@ -264,10 +267,10 @@ const setDefault = async (record: AiChatModel) => {
   if (record.is_default) return
   try {
     await setChatModelDefault(record.id)
-    message.success('已设为默认模型')
+    message.success(t('apiKeyMgmt.setDefaultSuccess'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '设为默认失败')
+    message.error(e.message || t('apiKeyMgmt.setDefaultFailed'))
   }
 }
 </script>

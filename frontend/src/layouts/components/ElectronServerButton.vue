@@ -5,10 +5,13 @@
 // 桌面端地址存在于主进程 userData/app-config.json，可在运行期修改，改完自动重载，
 // 不需要重新打包安装包。
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ApiOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { isElectron } from '@/utils/electron'
 import { getApiBase, getDesktopInfo, saveApiBase } from '@/utils/apiBase'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{ floating?: boolean }>(), { floating: false })
 
@@ -32,21 +35,21 @@ function open() {
 async function handleSave() {
   const next = apiBase.value.trim()
   if (!next) {
-    message.warning('请填写后端服务地址')
+    message.warning(t('appShell.addrRequired'))
     return
   }
   if (!/^https?:\/\//i.test(next)) {
-    message.warning('地址需以 http:// 或 https:// 开头')
+    message.warning(t('appShell.addrInvalid'))
     return
   }
   saving.value = true
   try {
     await saveApiBase(next)
-    message.success('已保存，正在重新加载…')
+    message.success(t('appShell.savedReloading'))
     setTimeout(() => window.location.reload(), 600)
   } catch (err) {
     console.error('[electron] 保存后端地址失败', err)
-    message.error('保存失败')
+    message.error(t('appShell.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -59,7 +62,7 @@ async function handleSave() {
       class="esb-btn"
       :class="{ 'esb-btn--float': props.floating }"
       type="button"
-      title="后端服务地址"
+      :title="t('appShell.addrTitle')"
       @click="open"
     >
       <ApiOutlined />
@@ -67,8 +70,8 @@ async function handleSave() {
 
     <a-modal
       v-model:open="visible"
-      title="后端服务地址"
-      ok-text="保存并重载"
+      :title="t('appShell.addrTitle')"
+      :ok-text="t('appShell.saveReload')"
       cancel-text="取消"
       :confirm-loading="saving"
       :width="460"

@@ -1,21 +1,22 @@
 <template>
   <a-modal
     :open="open"
-    :title="`版本对比：v${targetVersion} ↔ 当前(v${currentVersion})`"
+    :title="t('kmsWiki.diffTitle', { target: targetVersion, current: currentVersion })"
     width="80%"
     @update:open="(v) => { if (!v) emit('close') }"
   >
     <a-spin :spinning="loading">
-      <pre class="diff-pre">{{ diff || '两个版本内容一致，无差异' }}</pre>
+      <pre class="diff-pre">{{ diff || t('kmsWiki.noDiff') }}</pre>
     </a-spin>
     <template #footer>
-      <a-button @click="emit('close')">关闭</a-button>
+      <a-button @click="emit('close')">{{ t('common.close') }}</a-button>
     </template>
   </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { diffArticle } from '@/api/wiki'
 
 const props = defineProps<{
@@ -26,7 +27,7 @@ const props = defineProps<{
   open: boolean
 }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
-
+const { t } = useI18n()
 const diff = ref('')
 const loading = ref(false)
 

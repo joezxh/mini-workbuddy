@@ -1,27 +1,27 @@
 <template>
   <div class="binding-wb">
     <div class="binding-wb__filters">
-      <a-select v-model:value="sourceId" placeholder="选择数据源" style="width: 220px" @change="reset">
+      <a-select v-model:value="sourceId" :placeholder="t('kbMgmt.meta.selectSource')" style="width: 220px" @change="reset">
         <a-select-option v-for="s in sources" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
       </a-select>
-      <a-select v-model:value="database" placeholder="选择库" style="width: 200px">
+      <a-select v-model:value="database" :placeholder="t('kbMgmt.meta.selectDatabase')" style="width: 200px">
         <a-select-option v-for="d in databases" :key="d" :value="d">{{ d }}</a-select-option>
       </a-select>
-      <a-button type="primary" :disabled="!sourceId" @click="doBind"><LinkOutlined /> 运行绑定</a-button>
-      <a-button :disabled="!sourceId" @click="infer"><ApartmentOutlined /> 推断关系</a-button>
+      <a-button type="primary" :disabled="!sourceId" @click="doBind"><LinkOutlined /> {{ t('kbMgmt.bind.run') }}</a-button>
+      <a-button :disabled="!sourceId" @click="infer"><ApartmentOutlined /> {{ t('kbMgmt.bind.infer') }}</a-button>
     </div>
 
     <a-alert v-if="report" type="info" show-icon style="margin-bottom: 12px">
       <template #message>
-        绑定：表 {{ report.tables }} / 列 {{ report.columns }} · 已标注 {{ report.annotated }} · 已绑定 {{ report.bound }} · 更新 {{ report.updated }} · 人工跳过 {{ report.skipped_human }}
+        {{ t('kbMgmt.bind.report', { tables: report.tables, columns: report.columns, annotated: report.annotated, bound: report.bound, updated: report.updated, skipped: report.skipped_human }) }}
       </template>
     </a-alert>
 
     <div class="binding-wb__cols">
       <div class="binding-wb__col">
-        <h4>待绑定列（按语义类型 / PII 过滤）</h4>
-        <a-empty v-if="!pending.length" :description="t('knowledge.common.empty')" />
-        <a-list size="small" :data-source="pending" :locale="{ emptyText: t('knowledge.common.empty') }">
+        <h4>{{ t('kbMgmt.bind.pendingCols') }}</h4>
+        <a-empty v-if="!pending.length" :description="t('kbMgmt.common.empty')" />
+        <a-list size="small" :data-source="pending" :locale="{ emptyText: t('kbMgmt.common.empty') }">
           <template #renderItem="{ item }">
             <a-list-item>
               <span>{{ item.column }}</span>
@@ -32,8 +32,8 @@
         </a-list>
       </div>
       <div class="binding-wb__col">
-        <h4>标准项（按别名模糊匹配）</h4>
-        <a-list size="small" :data-source="standards" :locale="{ emptyText: t('knowledge.common.empty') }">
+        <h4>{{ t('kbMgmt.bind.standardItems') }}</h4>
+        <a-list size="small" :data-source="standards" :locale="{ emptyText: t('kbMgmt.common.empty') }">
           <template #renderItem="{ item }">
             <a-list-item>
               <span>{{ item.name }}</span>
@@ -75,18 +75,18 @@ async function doBind() {
   try {
     const r: any = await api.bindSource(sourceId.value, database.value)
     report.value = r.data || r
-    message.success('绑定完成')
+    message.success(t('kbMgmt.bind.done'))
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '绑定失败')
+    message.error(e?.response?.data?.detail || t('kbMgmt.bind.failed'))
   }
 }
 async function infer() {
   if (!sourceId.value) return
   try {
     await api.inferRelations(sourceId.value, database.value, true)
-    message.success('关系推断完成')
+    message.success(t('kbMgmt.bind.inferDone'))
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '推断失败')
+    message.error(e?.response?.data?.detail || t('kbMgmt.bind.inferFailed'))
   }
 }
 onMounted(async () => {

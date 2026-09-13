@@ -182,7 +182,7 @@ def _flatten_create(req: "AgentConfigCreate") -> dict:
         "skills": list(tools_cfg.skills) if tools_cfg and tools_cfg.skills else [],
         "mcp_servers": list(tools_cfg.mcp_servers) if tools_cfg and tools_cfg.mcp_servers else [],
         "knowledge_bases": list(tools_cfg.knowledge_bases) if tools_cfg and tools_cfg.knowledge_bases else [],
-        "llm_config": _as_dict(model_cfg),
+        "model_config": _as_dict(model_cfg),
         "hitl_config": execution.hitl_config if execution else None,
         "react_config": execution.react_config if execution else None,
         "context_config": execution.context_config if execution else None,

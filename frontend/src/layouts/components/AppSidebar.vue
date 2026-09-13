@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '@/stores/app'
@@ -9,6 +10,7 @@ import type { MenuNode } from '@/types/menu'
 import SidebarItem from './SidebarItem.vue'
 import AppLogo from './AppLogo.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const app = useAppStore()
 const user = useUserStore()
@@ -56,11 +58,11 @@ function onSelect(path: string) {
             @select="onSelect"
           />
         </template>
-        <div v-else class="rail-empty">暂无可用菜单</div>
+        <div v-else class="rail-empty">{{ t('appShell.noMenus') }}</div>
       </template>
     </nav>
 
-    <button class="rail-collapse" :title="collapsed ? '展开侧栏' : '收起侧栏'" @click="toggle">
+    <button class="rail-collapse" :title="collapsed ? t('appShell.expandSidebar') : t('appShell.collapseSidebar')" @click="toggle">
       <span class="rail-collapse__icon">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path

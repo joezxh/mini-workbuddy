@@ -3,17 +3,17 @@
     <!-- 顶栏 -->
     <div class="conv-header">
       <div class="left">
-        <a-button type="link" @click="goBack"><ArrowLeftOutlined /> 返回</a-button>
+        <a-button type="link" @click="goBack"><ArrowLeftOutlined /> {{ t('common.back') }}</a-button>
         <span class="title">{{ teamName }}</span>
         <a-tag :color="runState === 'running' ? 'processing' : 'default'">
-          {{ runState === 'running' ? '运行中' : runState === 'done' ? '已完成' : runState === 'error' ? '异常' : '空闲' }}
+          {{ runState === 'running' ? t('teamMgmt.stRunning') : runState === 'done' ? t('teamMgmt.stCompleted') : runState === 'error' ? t('teamMgmt.stError') : t('teamMgmt.stIdle') }}
         </a-tag>
       </div>
       <div class="right">
         <a-button v-if="runId" @click="openReplay">
-          <HistoryOutlined /> 回放
+          <HistoryOutlined /> {{ t('teamMgmt.replay') }}
         </a-button>
-        <a-button @click="clearChat"><ClearOutlined /> 清空</a-button>
+        <a-button @click="clearChat"><ClearOutlined /> {{ t('teamMgmt.clear') }}</a-button>
       </div>
     </div>
 
@@ -21,8 +21,8 @@
       <!-- 左：运行态拓扑 -->
       <div class="topo-panel">
         <div class="panel-title">
-          运行态拓扑
-          <a-tooltip title="实时反映各节点（agent）状态">
+          {{ t('teamMgmt.topoTitle') }}
+          <a-tooltip :title="t('teamMgmt.topoTip')">
             <InfoCircleOutlined class="tip" />
           </a-tooltip>
         </div>
@@ -37,10 +37,10 @@
             <div class="tn-code">{{ node.node_key }}</div>
             <div class="tn-status">{{ statusLabel(node.status) }}</div>
           </div>
-          <a-empty v-if="topoNodes.length === 0" description="等待运行" />
+          <a-empty v-if="topoNodes.length === 0" :description="t('teamMgmt.waitingRun')" />
         </div>
         <div class="panel-title" style="margin-top:16px">
-          事件流
+          {{ t('teamMgmt.eventStream') }}
           <a-tag v-if="lastEventTime" size="small" color="blue" style="margin-left:8px">
             {{ lastEventTime }}
           </a-tag>
@@ -65,7 +65,7 @@
             <div class="msg-body">{{ msg.content }}</div>
           </div>
           <div v-if="streamingText" class="chat-msg agent streaming">
-            <div class="msg-head"><span class="msg-author">团队</span></div>
+            <div class="msg-head"><span class="msg-author">{{ t('teamMgmt.team') }}</span></div>
             <div class="msg-body">{{ streamingText }}</div>
           </div>
         </div>
@@ -73,14 +73,14 @@
         <!-- 干预条 -->
         <div class="intervention-bar">
           <a-dropdown>
-            <a-button size="small"><ThunderboltOutlined /> 干预</a-button>
+            <a-button size="small"><ThunderboltOutlined /> {{ t('teamMgmt.intervene') }}</a-button>
             <template #overlay>
               <a-menu @click="onIntervene">
-                <a-menu-item key="pause">暂停运行</a-menu-item>
-                <a-menu-item key="resume">恢复运行</a-menu-item>
-                <a-menu-item key="cancel">取消运行</a-menu-item>
-                <a-menu-item key="inject_message">插话（注入消息）</a-menu-item>
-                <a-menu-item key="skip_node">跳过节点</a-menu-item>
+                <a-menu-item key="pause">{{ t('teamMgmt.actPause') }}</a-menu-item>
+                <a-menu-item key="resume">{{ t('teamMgmt.actResume') }}</a-menu-item>
+                <a-menu-item key="cancel">{{ t('teamMgmt.actCancel') }}</a-menu-item>
+                <a-menu-item key="inject_message">{{ t('teamMgmt.actInject') }}</a-menu-item>
+                <a-menu-item key="skip_node">{{ t('teamMgmt.actSkip') }}</a-menu-item>
               </a-menu>
             </template>
           </a-dropdown>
@@ -89,12 +89,12 @@
         <!-- 输入区（@提及） -->
         <div class="input-area">
           <div class="mention-hint" v-if="showMentionHint">
-            可用 @ 提及成员：{{ members.map(m => '@' + m.role_name).join('  ') }}
+            {{ t('teamMgmt.mentionHint') }}{{ members.map(m => '@' + m.role_name).join('  ') }}
           </div>
           <a-textarea
             v-model:value="inputText"
             :rows="3"
-            placeholder="输入指令，使用 @角色名 进行定向 @提及（如 @风险分析师 请优先评估...）"
+            :placeholder="t('teamMgmt.inputPlaceholder')"
             @keydown="onInputKeydown"
             @input="onInput"
           />
@@ -102,7 +102,7 @@
             <a-select
               v-model:value="modelId"
               :options="modelOptions.map(m => ({ label: `${m.name} (${m.model})`, value: m.id }))"
-              placeholder="选择大模型"
+              :placeholder="t('teamMgmt.selectModel')"
               style="width: 240px"
               allow-clear
             />
@@ -111,7 +111,7 @@
               :loading="runState === 'running'"
               @click="sendMessage"
             >
-              <SendOutlined /> {{ runState === 'running' ? '运行中' : '发送' }}
+              <SendOutlined /> {{ runState === 'running' ? t('teamMgmt.stRunning') : t('teamMgmt.send') }}
             </a-button>
           </div>
         </div>
@@ -119,21 +119,21 @@
     </div>
 
     <!-- 干预弹窗 -->
-    <a-modal v-model:open="hintModal" title="人工干预" @ok="submitIntervention">
+    <a-modal v-model:open="hintModal" :title="t('teamMgmt.interventionTitle')" @ok="submitIntervention">
       <a-form layout="vertical">
-        <a-form-item label="干预类型">
+        <a-form-item :label="t('teamMgmt.interventionType')">
           <a-select v-model:value="interventionForm.intervention_type" :options="interventionTypes" />
         </a-form-item>
-        <a-form-item v-if="interventionForm.intervention_type === 'skip_node'" label="定向节点 (node_key)">
+        <a-form-item v-if="interventionForm.intervention_type === 'skip_node'" :label="t('teamMgmt.targetNode')">
           <a-select
             v-model:value="interventionForm.node_key"
             :options="memberOptions"
             allow-clear
-            placeholder="选择要跳过的节点"
+            :placeholder="t('teamMgmt.skipNodePlaceholder')"
           />
         </a-form-item>
-        <a-form-item v-if="interventionForm.intervention_type === 'inject_message'" label="干预内容">
-          <a-textarea v-model:value="hintText" :rows="4" placeholder="输入注入消息内容" />
+        <a-form-item v-if="interventionForm.intervention_type === 'inject_message'" :label="t('teamMgmt.interventionContent')">
+          <a-textarea v-model:value="hintText" :rows="4" :placeholder="t('teamMgmt.injectPlaceholder')" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -143,6 +143,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   ArrowLeftOutlined,
@@ -158,9 +159,10 @@ import { getToken } from '@/utils/auth'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const teamId = Number(route.params.teamId)
 const runId = ref<string>(String(route.params.runId || ''))
-const teamName = ref('团队对话')
+const teamName = ref(t('teamMgmt.defaultTeamName'))
 
 const chatScroll = ref<HTMLElement | null>(null)
 const messages = ref<{
@@ -205,36 +207,36 @@ const lastEventTime = ref('')
 
 const eventTypeLabel = (et: string): string => {
   const map: Record<string, string> = {
-    team_start: '团队启动',
-    team_done: '团队完成',
-    team_error: '团队异常',
-    dispatch_plan: '生成计划',
-    plan_revised: '修订计划',
-    plan_dispatch: '派发计划',
-    plan_execute: '执行计划',
-    batch_start: '批次开始',
-    batch_done: '批次完成',
-    team_layer_start: '层开始',
-    team_layer_done: '层完成',
-    worker_start: '专家启动',
-    worker_done: '专家完成',
-    react_iteration: '编排轮次',
-    thinking: '思考中',
-    text_chunk: '文本流',
-    agent_start: '专家启动',
-    agent_done: '专家完成',
-    error: '错误',
+    team_start: t('teamMgmt.evTeamStart'),
+    team_done: t('teamMgmt.evTeamDone'),
+    team_error: t('teamMgmt.evTeamError'),
+    dispatch_plan: t('teamMgmt.evDispatchPlan'),
+    plan_revised: t('teamMgmt.evPlanRevised'),
+    plan_dispatch: t('teamMgmt.evPlanDispatch'),
+    plan_execute: t('teamMgmt.evPlanExecute'),
+    batch_start: t('teamMgmt.evBatchStart'),
+    batch_done: t('teamMgmt.evBatchDone'),
+    team_layer_start: t('teamMgmt.evLayerStart'),
+    team_layer_done: t('teamMgmt.evLayerDone'),
+    worker_start: t('teamMgmt.evWorkerStart'),
+    worker_done: t('teamMgmt.evWorkerDone'),
+    react_iteration: t('teamMgmt.evReactIteration'),
+    thinking: t('teamMgmt.evThinking'),
+    text_chunk: t('teamMgmt.evTextChunk'),
+    agent_start: t('teamMgmt.evWorkerStart'),
+    agent_done: t('teamMgmt.evWorkerDone'),
+    error: t('teamMgmt.evError'),
   }
   return map[et] || et
 }
 
-const interventionTypes = [
-  { label: '暂停运行', value: 'pause' },
-  { label: '恢复运行', value: 'resume' },
-  { label: '取消运行', value: 'cancel' },
-  { label: '插话（注入消息）', value: 'inject_message' },
-  { label: '跳过节点', value: 'skip_node' }
-]
+const interventionTypes = computed(() => [
+  { label: t('teamMgmt.actPause'), value: 'pause' },
+  { label: t('teamMgmt.actResume'), value: 'resume' },
+  { label: t('teamMgmt.actCancel'), value: 'cancel' },
+  { label: t('teamMgmt.actInject'), value: 'inject_message' },
+  { label: t('teamMgmt.actSkip'), value: 'skip_node' }
+])
 const memberOptions = computed(() =>
   members.value.map(m => ({ label: `${m.role_name} (${m.node_key})`, value: m.node_key }))
 )
@@ -257,9 +259,9 @@ const upsertNode = (node_key: string, role: string, status: string) => {
   }
 }
 const statusLabel = (s: string) => ({
-  idle: '空闲', running: '执行中', done: '完成', failed: '失败',
-  paused: '暂停', skipped: '跳过', error: '错误'
-}[s] || s || '空闲')
+  idle: t('teamMgmt.nodeIdle'), running: t('teamMgmt.nodeRunning'), done: t('teamMgmt.nodeDone'), failed: t('teamMgmt.nodeFailed'),
+  paused: t('teamMgmt.nodePaused'), skipped: t('teamMgmt.nodeSkipped'), error: t('teamMgmt.nodeError')
+}[s] || s || t('teamMgmt.nodeIdle'))
 
 // ── SSE 解析（POST 流式，替换 EventSource GET）──────────
 const fetchChat = async (payload: { message: string; conversation_id?: string }) => {
@@ -284,7 +286,7 @@ const fetchChat = async (payload: { message: string; conversation_id?: string })
     })
     if (!resp.ok || !resp.body) {
       runState.value = 'error'
-      eventLog.value.push({ event_type: 'error', text: `对话请求失败 (HTTP ${resp.status})` })
+      eventLog.value.push({ event_type: 'error', text: t('teamMgmt.requestFailed', { code: resp.status }) })
       return
     }
     const reader = resp.body.getReader()
@@ -306,13 +308,13 @@ const fetchChat = async (payload: { message: string; conversation_id?: string })
       runState.value = 'done'
       // 兜底：流结束或已标记 done，若仍有累积文本未落库为消息，强制推送
       if (!finalMessagePushed.value && streamingText.value.trim()) {
-        pushMessage('team', '团队', streamingText.value)
+        pushMessage('team', t('teamMgmt.team'), streamingText.value)
         streamingText.value = ''
       }
     }
   } catch (e: any) {
     runState.value = 'error'
-    eventLog.value.push({ event_type: 'error', text: '对话连接中断：' + (e?.message || e) })
+    eventLog.value.push({ event_type: 'error', text: t('teamMgmt.connectionLost', { msg: e?.message || e }) })
   } finally {
     es = null
   }
@@ -341,17 +343,17 @@ const handleChunk = (raw: string) => {
     runState.value = 'done'
     // 只在仍有累积文本且未推送过最终消息时才推送，避免 team_done/done/completed 多个结束帧重复生成气泡
     if (!finalMessagePushed.value && streamingText.value) {
-      pushMessage('team', '团队', streamingText.value)
+      pushMessage('team', t('teamMgmt.team'), streamingText.value)
       streamingText.value = ''
     }
     return
   }
   if (data.event_type === 'error' || data.event_type === 'team_error') {
     runState.value = 'error'
-    const errMsg = String(data.content || data.message || '运行异常')
+    const errMsg = String(data.content || data.message || t('teamMgmt.runError'))
     eventLog.value.push({ event_type: 'error', text: errMsg })
     // 明确显示为系统错误消息气泡，避免静默空白
-    pushMessage('system', '系统', '⚠️ ' + errMsg)
+    pushMessage('system', t('teamMgmt.system'), '⚠️ ' + errMsg)
     return
   }
   // 普通文本 / 思考 / 进度事件
@@ -412,7 +414,7 @@ const onInputKeydown = (e: KeyboardEvent) => {
 const sendMessage = () => {
   const text = inputText.value.trim()
   if (!text) return
-  pushMessage('user', '我', text)
+  pushMessage('user', t('teamMgmt.me'), text)
   inputText.value = ''
   showMentionHint.value = false
   // 发新消息时清空旧 runId，让后端创建新 run；新 runId 由 SSE 首个事件的 metadata.run_id 带回
@@ -439,16 +441,16 @@ const onIntervene = ({ key }: { key: string }) => {
 }
 const submitIntervention = async () => {
   if (!runId.value) {
-    message.warning('请先发起一次对话，生成运行记录后再干预')
+    message.warning(t('teamMgmt.needRunFirst'))
     return
   }
   const type = interventionForm.intervention_type
   if (type === 'skip_node' && !interventionForm.node_key) {
-    message.warning('跳过节点需指定定向节点')
+    message.warning(t('teamMgmt.needSkipNode'))
     return
   }
   if (type === 'inject_message' && !hintText.value.trim()) {
-    message.warning('插话类型需填写干预内容')
+    message.warning(t('teamMgmt.needInjectContent'))
     return
   }
   const payload = type === 'inject_message' ? { message: hintText.value } : {}
@@ -460,17 +462,17 @@ const submitIntervention = async () => {
       payload,
       operator_name: 'operator'
     })
-    message.success('干预已提交，将在下一轮生效')
+    message.success(t('teamMgmt.interventionSubmitted'))
     hintModal.value = false
     hintText.value = ''
   } catch (e: any) {
-    message.error('干预失败：' + (e?.message || e))
+    message.error(t('teamMgmt.interventionFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   }
 }
 
 // ── 回放 ─────────────────────────────────────────────
 const openReplay = () => {
-  if (!runId.value) { message.warning('暂无可回放的运行'); return }
+  if (!runId.value) { message.warning(t('teamMgmt.noRunToReplay')); return }
   router.push(`/admin/agent-team/run/${runId.value}/replay`)
 }
 const goBack = () => router.push('/admin/agent-team')
@@ -479,10 +481,10 @@ const goBack = () => router.push('/admin/agent-team')
 const init = async () => {
   try {
     const res = await api.getTeam(teamId)
-    teamName.value = (res as any).team_name || '团队对话'
+    teamName.value = (res as any).team_name || t('teamMgmt.defaultTeamName')
     members.value = (res as any).members || []
   } catch (e: any) {
-    message.error('加载团队失败：' + (e?.message || e))
+    message.error(t('teamMgmt.loadFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   }
   // 若带 runId 进入（刷新 / 从列表/回放重进），恢复历史对话
   if (runId.value) {
@@ -500,7 +502,7 @@ const init = async () => {
       await nextTick()
       scrollToBottom()
     } catch (e: any) {
-      message.error('恢复历史对话失败：' + (e?.message || e))
+      message.error(t('teamMgmt.restoreFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
     }
   }
 }

@@ -1,14 +1,14 @@
 <template>
   <div class="version-timeline">
-    <a-list :data-source="versions" :loading="loading" size="small" :locale="{ emptyText: '暂无版本记录' }">
+    <a-list :data-source="versions" :loading="loading" size="small" :locale="{ emptyText: t('wikiMgmt.noVersions') }">
       <template #renderItem="{ item }">
         <a-list-item>
           <a-list-item-meta
             :title="`v${item.version} - ${item.title}`"
-            :description="`${item.change_note || '无说明'} · 操作:${item.operation_type} · ${formatDate(item.created_at)}`"
+            :description="`${item.change_note || t('kmsWiki.noNote')} · ${t('kmsWiki.operation')}:${item.operation_type} · ${formatDate(item.created_at)}`"
           />
           <template #actions>
-            <a @click="showDiff(item)">对比</a>
+            <a @click="showDiff(item)">{{ t('kmsWiki.compare') }}</a>
             <VersionRollbackButton
               :article-id="articleId"
               :version-id="item.id"
@@ -35,6 +35,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { getArticleVersions } from '@/api/wiki'
 import VersionRollbackButton from './VersionRollbackButton.vue'
@@ -42,6 +43,7 @@ import VersionDiffView from './VersionDiffView.vue'
 import type { VersionItem } from '../types/wiki'
 
 const props = defineProps<{ articleId: number; currentVersion: number }>()
+const { t } = useI18n()
 
 const versions = ref<VersionItem[]>([])
 const loading = ref(false)

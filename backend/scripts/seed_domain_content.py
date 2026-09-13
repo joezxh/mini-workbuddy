@@ -16,7 +16,7 @@ TOKEN = ""
 TIMEOUT = 120
 
 
-def api(method: str, path: str, ok_codes=(200,), **kw):
+def api(method: str, path: str, ok_codes=(200, 201), **kw):
     headers = kw.pop("headers", {})
     if TOKEN:
         headers["Authorization"] = f"Bearer {TOKEN}"
@@ -296,10 +296,9 @@ def step_create_agents(domains: list, dry: bool, domain_ids: dict):
             "name": spec.name,
             "agent_type": "SKILL",
             "category": DOMAIN_LABEL[spec.domain],
-            "execution_mode": "skill",
             "description": spec.description,
-            "system_prompt": spec.system_prompt,
-            "tools": {"skills": [skill_id]},
+            "strategy": {"execution_mode": "skill", "system_prompt": spec.system_prompt},
+            "tools": {"tools": [], "skills": [skill_id]},
         })
         print(f"✔ 创建 Agent {spec.name}（{spec.agent_code}，技能 {skill_id}）")
         created += 1
@@ -385,12 +384,17 @@ def step_mcp_square(domains: list, dry: bool):
             template_id = r.get("id")
             print(f"✔ 创建 MCP 模板 {tpl['name']} -> id={template_id}")
             created += 1
-        # 预装
+        # 预装（幂等：按 template_id 查重，避免重复接入态）
         if tpl["name"] == PREINSTALL.get(tpl["category"]) and not dry:
             try:
-                api("POST", "/api/v1/admin/ai/mcp-square/install", json={"template_id": template_id})
-                print(f"  ✔ 预装接入态：{tpl['name']}")
-                installed += 1
+                ex = api("GET", "/api/v1/admin/ai/mcp-api-key/page?page=1&page_size=100")
+                ex_items = ex.get("data") or ex.get("items") or (ex if isinstance(ex, list) else [])
+                if any(str(it.get("template_id")) == str(template_id) for it in ex_items):
+                    print(f"  → 已预装，跳过：{tpl['name']}")
+                else:
+                    api("POST", "/api/v1/admin/ai/mcp-square/install", json={"template_id": template_id})
+                    print(f"  ✔ 预装接入态：{tpl['name']}")
+                    installed += 1
             except Exception as e:  # noqa: BLE001
                 print(f"  ✗ 预装失败 {tpl['name']}: {e}")
     print(f"✔ MCP 广场：新建模板 {created} / 已存在 {skipped} / 预装 {installed}")

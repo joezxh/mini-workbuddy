@@ -1,5 +1,5 @@
 <template>
-  <a-list :data-source="items" :loading="loading" size="small" :locale="{ emptyText: '暂无检索结果' }">
+  <a-list :data-source="items" :loading="loading" size="small" :locale="{ emptyText: t('kmsWiki.noResults') }">
     <template #renderItem="{ item }">
       <a-list-item>
         <a-list-item-meta>
@@ -9,7 +9,7 @@
           <template #description>
             <div class="snippet">{{ item.snippet }}</div>
             <a-tag v-if="item.score" color="blue" size="small">
-              相关度 {{ item.score }}
+              {{ t('kmsWiki.relevance') }} {{ item.score }}
             </a-tag>
           </template>
         </a-list-item-meta>
@@ -20,10 +20,12 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { SearchItem } from '../types/wiki'
 
 defineProps<{ items: SearchItem[]; loading?: boolean }>()
 const router = useRouter()
+const { t } = useI18n()
 
 function open(item: SearchItem) {
   router.push(`/wiki/${item.slug}`)

@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    :title="isEdit ? '编辑 API 密钥' : '新增 API 密钥'"
+    :title="isEdit ? t('apiKeyMgmt.editKeyTitle') : t('apiKeyMgmt.createKeyTitle')"
     width="600px"
     :confirm-loading="saving"
     @ok="handleSubmit"
@@ -15,19 +15,19 @@
       style="margin-top: 20px"
     >
       <a-form-item
-        label="密钥名称"
+        :label="t('apiKeyMgmt.labelKeyName')"
         name="name"
-        :rules="[{ required: true, message: '请输入密钥名称' }]"
+        :rules="[{ required: true, message: t('apiKeyMgmt.keyNameRule') }]"
       >
-        <a-input v-model:value="formData.name" placeholder="请输入密钥名称" />
+        <a-input v-model:value="formData.name" :placeholder="t('apiKeyMgmt.keyNameRule')" />
       </a-form-item>
 
       <a-form-item
-        label="平台"
+        :label="t('apiKeyMgmt.labelPlatform')"
         name="platform"
-        :rules="[{ required: true, message: '请选择平台' }]"
+        :rules="[{ required: true, message: t('apiKeyMgmt.platformRule') }]"
       >
-        <a-select v-model:value="formData.platform" placeholder="请选择平台">
+        <a-select v-model:value="formData.platform" :placeholder="t('apiKeyMgmt.platformRule')">
           <a-select-option v-for="p in AI_PLATFORMS" :key="p" :value="p">{{ p }}</a-select-option>
         </a-select>
       </a-form-item>
@@ -35,32 +35,32 @@
       <a-form-item
         label="API Key"
         name="api_key"
-        :rules="[{ required: true, message: '请输入 API Key' }]"
+        :rules="[{ required: true, message: t('apiKeyMgmt.apiKeyRule') }]"
       >
         <a-input-password
           v-model:value="formData.api_key"
-          placeholder="请输入 API Key"
+          :placeholder="t('apiKeyMgmt.apiKeyRule')"
           :visibility-toggle="true"
         />
       </a-form-item>
 
       <a-form-item label="URL" name="url">
-        <a-input v-model:value="formData.url" placeholder="API 地址，如：https://api.openai.com/v1" />
+        <a-input v-model:value="formData.url" :placeholder="t('apiKeyMgmt.urlPlaceholder')" />
       </a-form-item>
 
       <a-form-item label="AppId" name="app_id">
-        <a-input v-model:value="formData.app_id" placeholder="AppId（可选）" />
+        <a-input v-model:value="formData.app_id" :placeholder="t('apiKeyMgmt.appIdPlaceholder')" />
       </a-form-item>
 
-      <a-form-item label="排序" name="sort">
+      <a-form-item :label="t('apiKeyMgmt.labelSort')" name="sort">
         <a-input-number v-model:value="formData.sort" :min="0" style="width: 100%" />
       </a-form-item>
 
-      <a-form-item label="状态" name="status">
+      <a-form-item :label="t('apiKeyMgmt.labelStatus')" name="status">
         <a-switch
           v-model:checked="formData.status"
-          checked-children="启用"
-          un-checked-children="禁用"
+          :checked-children="t('apiKeyMgmt.enabled')"
+          :un-checked-children="t('apiKeyMgmt.disabled')"
         />
       </a-form-item>
     </a-form>
@@ -69,8 +69,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { createApiKey, updateApiKey, AI_PLATFORMS, type AiApiKey } from '@/api/ai-apikey'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   open: boolean
@@ -149,15 +152,15 @@ const handleSubmit = async () => {
 
     if (isEdit.value && props.apiKey?.id) {
       await updateApiKey({ id: props.apiKey.id, ...payload })
-      message.success('更新成功')
+      message.success(t('apiKeyMgmt.updateSuccess'))
     } else {
       await createApiKey(payload)
-      message.success('创建成功')
+      message.success(t('apiKeyMgmt.createSuccess'))
     }
     emit('success')
     visible.value = false
   } catch (e: any) {
-    message.error(e.message || '保存失败')
+    message.error(e.message || t('apiKeyMgmt.saveFailed'))
   } finally {
     saving.value = false
   }

@@ -2,13 +2,13 @@
   <div class="agent-management">
     <!-- 顶部工具栏 -->
     <div class="page-header">
-      <h2 class="page-title">🤖 专家管理</h2>
+      <h2 class="page-title">🤖 {{ t('agentMgmt.pageTitle') }}</h2>
       <div class="header-actions">
         <a-button @click="loadStats">
-          <ReloadOutlined :spin="loadingStats" /> 刷新监控
+          <ReloadOutlined :spin="loadingStats" /> {{ t('agentMgmt.refreshMonitor') }}
         </a-button>
         <a-button type="primary" @click="openCreateModal">
-          <PlusOutlined /> 新建专家
+          <PlusOutlined /> {{ t('agentMgmt.createAgent') }}
         </a-button>
       </div>
     </div>
@@ -17,39 +17,39 @@
     <a-row :gutter="16" class="stats-row">
       <a-col :span="6">
         <a-card size="small" class="stat-card">
-          <div class="stat-label">专家总数</div>
+          <div class="stat-label">{{ t('agentMgmt.statTotalAgents') }}</div>
           <div class="stat-value">{{ stats.total_agents || 0 }}</div>
           <div class="stat-meta">
-            <span class="active">启用 {{ stats.active_agents || 0 }}</span>
-            <span class="inactive">禁用 {{ stats.inactive_agents || 0 }}</span>
+            <span class="active">{{ t('agentMgmt.enabledCount', { count: stats.active_agents || 0 }) }}</span>
+            <span class="inactive">{{ t('agentMgmt.disabledCount', { count: stats.inactive_agents || 0 }) }}</span>
           </div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card size="small" class="stat-card">
-          <div class="stat-label">在线会话数</div>
+          <div class="stat-label">{{ t('agentMgmt.statActiveSessions') }}</div>
           <div class="stat-value">{{ stats.active_sessions || 0 }}</div>
           <div class="stat-meta">
-            <span>总会话 {{ stats.total_sessions || 0 }}</span>
+            <span>{{ t('agentMgmt.totalSessions', { count: stats.total_sessions || 0 }) }}</span>
           </div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card size="small" class="stat-card">
-          <div class="stat-label">今日调用次数</div>
+          <div class="stat-label">{{ t('agentMgmt.statTodayInvocations') }}</div>
           <div class="stat-value">{{ stats.today_invocations || 0 }}</div>
           <div class="stat-meta">
-            <span class="success">成功 {{ stats.today_success || 0 }}</span>
-            <span class="error">失败 {{ stats.today_error || 0 }}</span>
+            <span class="success">{{ t('agentMgmt.successCount', { count: stats.today_success || 0 }) }}</span>
+            <span class="error">{{ t('agentMgmt.failedCount', { count: stats.today_error || 0 }) }}</span>
           </div>
         </a-card>
       </a-col>
       <a-col :span="6">
         <a-card size="small" class="stat-card">
-          <div class="stat-label">平均耗时</div>
+          <div class="stat-label">{{ t('agentMgmt.avgDuration') }}</div>
           <div class="stat-value">{{ stats.avg_duration_ms || 0 }}ms</div>
           <div class="stat-meta">
-            <span>链路追踪 {{ stats.total_traces || 0 }} 条</span>
+            <span>{{ t('agentMgmt.traceCount', { count: stats.total_traces || 0 }) }}</span>
           </div>
         </a-card>
       </a-col>
@@ -61,7 +61,7 @@
         <a-space>
           <a-select
             v-model:value="filterType"
-            placeholder="实现类型"
+            :placeholder="t('agentMgmt.implType')"
             style="width: 140px"
             allow-clear
             @change="loadAgents"
@@ -72,7 +72,7 @@
           </a-select>
           <a-select
             v-model:value="filterCategory"
-            placeholder="用途分类"
+            :placeholder="t('agentMgmt.category')"
             style="width: 140px"
             allow-clear
             @change="loadAgents"
@@ -83,22 +83,22 @@
           </a-select>
           <a-select
             v-model:value="filterStatus"
-            placeholder="状态"
+            :placeholder="t('skillHub.status')"
             style="width: 120px"
             allow-clear
             @change="loadAgents"
           >
-            <a-select-option :value="true">启用</a-select-option>
-            <a-select-option :value="false">禁用</a-select-option>
+            <a-select-option :value="true">{{ t('skillHub.enabled') }}</a-select-option>
+            <a-select-option :value="false">{{ t('skillHub.disabled') }}</a-select-option>
           </a-select>
           <a-input-search
             v-model:value="keyword"
-            placeholder="搜索专家名称..."
+            :placeholder="t('agentMgmt.searchAgent')"
             style="width: 240px"
             allow-clear
             @search="loadAgents"
           />
-          <a-button @click="resetFilter">重置</a-button>
+          <a-button @click="resetFilter">{{ t('common.reset') }}</a-button>
         </a-space>
       </div>
 
@@ -127,7 +127,7 @@
                 <a-tag color="blue">{{ record.model_config.provider }}</a-tag>
                 <span class="model-name">{{ record.model_config.model }}</span>
                 <a-tag v-if="record.model_config.model_code" color="green">
-                  系统密钥
+                  {{ t('agentMgmt.systemKey') }}
                 </a-tag>
               </div>
               <span v-else class="muted">—</span>
@@ -136,8 +136,8 @@
               <a-switch
                 :checked="record.is_active"
                 @change="(val: boolean) => toggleActive(record, val)"
-                checked-children="启用"
-                un-checked-children="禁用"
+                :checked-children="t('skillHub.enabled')"
+                :un-checked-children="t('skillHub.disabled')"
               />
             </template>
             <template v-else-if="column.key === 'invocation_count'">
@@ -148,34 +148,34 @@
             </template>
             <template v-else-if="column.key === 'action'">
               <a-space>
-                <a-tooltip title="查看详情">
+                <a-tooltip :title="t('agentMgmt.viewDetail')">
                   <a-button type="link" size="small" @click="openDetailDrawer(record)">
-                    <EyeOutlined /> 详情
+                    <EyeOutlined /> {{ t('agentMgmt.detail') }}
                   </a-button>
                 </a-tooltip>
-                <a-tooltip title="编辑">
+                <a-tooltip :title="t('common.edit')">
                   <a-button type="link" size="small" @click="openEditModal(record)">
-                    <EditOutlined /> 编辑
+                    <EditOutlined /> {{ t('common.edit') }}
                   </a-button>
                 </a-tooltip>
-                <a-tooltip title="查看链路">
+                <a-tooltip :title="t('agentMgmt.viewTrace')">
                   <a-button type="link" size="small" @click="openTraceDrawer(record)">
-                    <BranchesOutlined /> 链路
+                    <BranchesOutlined /> {{ t('agentMgmt.trace') }}
                   </a-button>
                 </a-tooltip>
-                <a-tooltip title="配置技能规则">
+                <a-tooltip :title="t('agentMgmt.configSkillRule')">
                   <a-button type="link" size="small" @click="openSkillRuleModal(record)">
-                    <ToolOutlined /> 规则
+                    <ToolOutlined /> {{ t('agentMgmt.rule') }}
                   </a-button>
                 </a-tooltip>
                 <a-popconfirm
-                  title="确认删除该专家？"
-                  ok-text="确认"
-                  cancel-text="取消"
+                  :title="t('agentMgmt.deleteAgentConfirm')"
+                  :ok-text="t('common.confirm')"
+                  :cancel-text="t('common.cancel')"
                   @confirm="handleDelete(record)"
                 >
                   <a-button type="link" size="small" danger>
-                    <DeleteOutlined /> 删除
+                    <DeleteOutlined /> {{ t('common.delete') }}
                   </a-button>
                 </a-popconfirm>
               </a-space>
@@ -202,16 +202,16 @@
     <!-- 技能规则抽屉 -->
     <a-drawer
       v-model:open="skillRuleDrawerVisible"
-      :title="`技能规则 - ${skillRuleAgent?.name || ''}`"
+      :title="t('agentMgmt.skillRuleTitle', { name: skillRuleAgent?.name || '' })"
       width="720"
       :destroy-on-close="true"
     >
       <div class="agent-rule-toolbar">
         <a-button type="primary" size="small" @click="openCreateAgentRule">
-          <PlusOutlined /> 新建规则
+          <PlusOutlined /> {{ t('agentMgmt.createRule') }}
         </a-button>
         <a-button size="small" @click="skillRuleAgent && loadAgentRules(skillRuleAgent.name)">
-          <ReloadOutlined /> 刷新
+          <ReloadOutlined /> {{ t('agentMgmt.refresh') }}
         </a-button>
       </div>
 
@@ -237,23 +237,23 @@
             <template v-else-if="column.key === 'action'">
               <a-space>
                 <a-button type="link" size="small" @click="openEditAgentRule(record)">
-                  <EditOutlined /> 编辑
+                  <EditOutlined /> {{ t('common.edit') }}
                 </a-button>
                 <a-popconfirm
-                  title="确认删除该规则？"
-                  ok-text="确认"
-                  cancel-text="取消"
+                  :title="t('skillHub.deleteRuleConfirm')"
+                  :ok-text="t('common.confirm')"
+                  :cancel-text="t('common.cancel')"
                   @confirm="handleDeleteAgentRule(record)"
                 >
                   <a-button type="link" size="small" danger>
-                    <DeleteOutlined /> 删除
+                    <DeleteOutlined /> {{ t('common.delete') }}
                   </a-button>
                 </a-popconfirm>
               </a-space>
             </template>
           </template>
         </a-table>
-        <a-empty v-if="!agentRulesLoading && agentRules.length === 0" description="该专家暂无技能规则" />
+        <a-empty v-if="!agentRulesLoading && agentRules.length === 0" :description="t('agentMgmt.noSkillRules')" />
       </a-spin>
     </a-drawer>
 
@@ -269,7 +269,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, inject } from 'vue'
+import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -300,6 +301,7 @@ import AgentDetailDrawer from './components/AgentDetailDrawer.vue'
 import SkillRuleFormModal from '@/views/admin/ai/skill/components/SkillRuleFormModal.vue'
 
 // ── 状态 ─────────────────────────────────────────────────────────────────────
+const { t } = useI18n()
 const loading = ref(false)
 const loadingStats = ref(false)
 const agents = ref<AgentConfig[]>([])
@@ -330,7 +332,7 @@ const pagination = reactive({
   pageSize: 20,
   total: 0,
   showSizeChanger: true,
-  showTotal: (total: number) => `共 ${total} 条`,
+  showTotal: (total: number) => t('common.total', { total }),
 })
 
 const formModalVisible = ref(false)
@@ -348,24 +350,24 @@ const ruleFormVisible = ref(false)
 const editingRule = ref<SkillRule | null>(null)
 
 // ── 表格列 ───────────────────────────────────────────────────────────────────
-const columns = [
+const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
-  { title: '专家编码', dataIndex: 'agent_code', key: 'agent_code', width: 160 },
-  { title: '名称', dataIndex: 'name', key: 'name', width: 180 },
-  { title: '实现类型', dataIndex: 'agent_type', key: 'agent_type', width: 110 },
-  { title: '用途分类', dataIndex: 'category', key: 'category', width: 120 },
-  { title: '模型配置', key: 'model_config', width: 220 },
-  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 100 },
-  { title: '调用次数', key: 'invocation_count', width: 110 },
-  { title: '平均耗时', key: 'avg_duration', width: 110 },
-  { title: '排序', dataIndex: 'sort_order', key: 'sort_order', width: 80 },
+  { title: t('agentMgmt.agentCode'), dataIndex: 'agent_code', key: 'agent_code', width: 160 },
+  { title: t('agentMgmt.colName'), dataIndex: 'name', key: 'name', width: 180 },
+  { title: t('agentMgmt.implType'), dataIndex: 'agent_type', key: 'agent_type', width: 110 },
+  { title: t('agentMgmt.category'), dataIndex: 'category', key: 'category', width: 120 },
+  { title: t('agentMgmt.colModelConfig'), key: 'model_config', width: 220 },
+  { title: t('skillHub.status'), dataIndex: 'is_active', key: 'is_active', width: 100 },
+  { title: t('agentMgmt.colInvocationCount'), key: 'invocation_count', width: 110 },
+  { title: t('agentMgmt.avgDuration'), key: 'avg_duration', width: 110 },
+  { title: t('agentMgmt.colSort'), dataIndex: 'sort_order', key: 'sort_order', width: 80 },
   {
-    title: '操作',
+    title: t('agentMgmt.colActions'),
     key: 'action',
     width: 320,
     fixed: 'right' as const,
   },
-]
+])
 
 // ── 字典映射辅助函数 ───────────────────────────────────────────────────────────
 function dictLabel(items: DictionaryItem[], code: string) {
@@ -391,7 +393,7 @@ async function loadAgents() {
     agents.value = res.items || []
     pagination.total = res.total || 0
   } catch (e: any) {
-    message.error('加载专家列表失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadAgentsFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -452,21 +454,21 @@ async function toggleActive(record: AgentConfig, val: boolean) {
   try {
     const updated = await toggleAgent(record.id, val)
     Object.assign(record, updated)
-    message.success(val ? '已启用' : '已禁用')
+    message.success(val ? t('agentMgmt.enabledMsg') : t('agentMgmt.disabledMsg'))
     loadStats()
   } catch (e: any) {
-    message.error('更新状态失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.updateStatusFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   }
 }
 
 async function handleDelete(record: AgentConfig) {
   try {
     await deleteAgent(record.id)
-    message.success('删除成功')
+    message.success(t('agentMgmt.deleteSuccess'))
     loadAgents()
     loadStats()
   } catch (e: any) {
-    message.error('删除失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.deleteFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   }
 }
 
@@ -487,14 +489,14 @@ async function openTraceDrawer(record: AgentConfig) {
   // 跳转到「调用记录」Tab，并按该 agent（agent_config.id）精确过滤调用链路
   const openExecutionTab = inject<(mode?: string, targetId?: string, label?: string) => void>('openExecutionTab')
   if (!openExecutionTab) {
-    message.error('调用记录组件未加载，无法跳转')
+    message.error(t('agentMgmt.execTabMissing'))
     return
   }
   const targetId = String(record.id)
   openExecutionTab(
     'agent',
     targetId,
-    `当前过滤：Agent「${record.name}」(#${targetId}) 的调用链路`
+    t('agentMgmt.filterAgentLabel', { name: record.name, id: targetId })
   )
 }
 
@@ -514,7 +516,7 @@ async function loadAgentRules(agentName: string) {
     }) as any
     agentRules.value = res.items || []
   } catch (e: any) {
-    message.error('加载规则失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadRulesFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     agentRulesLoading.value = false
   }
@@ -534,19 +536,19 @@ async function toggleAgentRuleActive(record: SkillRule, val: boolean) {
   try {
     await updateSkillRule(record.id, { is_active: val })
     record.is_active = val
-    message.success(val ? '已启用' : '已禁用')
+    message.success(val ? t('agentMgmt.enabledMsg') : t('agentMgmt.disabledMsg'))
   } catch (e: any) {
-    message.error('更新失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.updateFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   }
 }
 
 async function handleDeleteAgentRule(record: SkillRule) {
   try {
     await deleteSkillRule(record.id)
-    message.success('删除成功')
+    message.success(t('agentMgmt.deleteSuccess'))
     if (skillRuleAgent.value) loadAgentRules(skillRuleAgent.value.name)
   } catch (e: any) {
-    message.error('删除失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.deleteFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   }
 }
 
@@ -555,13 +557,13 @@ function handleAgentRuleFormSuccess() {
   if (skillRuleAgent.value) loadAgentRules(skillRuleAgent.value.name)
 }
 
-const agentRuleColumns = [
-  { title: '规则名称', dataIndex: 'name', key: 'name', width: 160 },
-  { title: '技能包', dataIndex: 'package_id', key: 'package_id', width: 140 },
-  { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
-  { title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80 },
-  { title: '操作', key: 'action', width: 120, fixed: 'right' as const },
-]
+const agentRuleColumns = computed(() => [
+  { title: t('skillHub.ruleName'), dataIndex: 'name', key: 'name', width: 160 },
+  { title: t('agentMgmt.targetSkill'), dataIndex: 'package_id', key: 'package_id', width: 140 },
+  { title: t('skillHub.rulePriority'), dataIndex: 'priority', key: 'priority', width: 80 },
+  { title: t('skillHub.status'), dataIndex: 'is_active', key: 'is_active', width: 80 },
+  { title: t('agentMgmt.colActions'), key: 'action', width: 120, fixed: 'right' as const },
+])
 
 function priorityColor(p: number): string {
   if (p <= 10) return 'red'
@@ -573,7 +575,7 @@ function priorityColor(p: number): string {
 // formatConditions and truncate are kept for potential future use
 // @ts-ignore
 function formatConditions(c: any): string {
-  if (!c) return '无条件'
+  if (!c) return t('agentMgmt.noCondition')
   return JSON.stringify(c, null, 2)
 }
 

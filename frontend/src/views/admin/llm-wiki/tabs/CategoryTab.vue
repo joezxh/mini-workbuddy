@@ -1,6 +1,6 @@
 <template>
   <div>
-    <a-button type="primary" @click="openCreate">新建分类</a-button>
+    <a-button type="primary" @click="openCreate">{{ t('wikiMgmt.cat.create') }}</a-button>
     <a-tree
       :tree-data="treeData"
       :field-names="{ title: 'name', key: 'id', children: 'children' }"
@@ -9,29 +9,29 @@
     >
       <template #title="{ name, id }">
         <span>{{ name }}</span>
-        <a style="margin-left: 12px" @click.stop="openEdit(id)">编辑</a>
-        <a-popconfirm title="确认删除?" @confirm="remove(id)">
-          <a danger style="margin-left: 8px" @click.stop>删除</a>
+        <a style="margin-left: 12px" @click.stop="openEdit(id)">{{ t('common.edit') }}</a>
+        <a-popconfirm :title="t('wikiMgmt.deleteConfirm')" @confirm="remove(id)">
+          <a danger style="margin-left: 8px" @click.stop>{{ t('common.delete') }}</a>
         </a-popconfirm>
       </template>
     </a-tree>
 
     <a-modal
       v-model:open="modalOpen"
-      :title="editing ? '编辑分类' : '新建分类'"
+      :title="editing ? t('wikiMgmt.cat.edit') : t('wikiMgmt.cat.create')"
       @ok="save"
       :confirm-loading="saving"
     >
       <a-form layout="vertical">
-        <a-form-item label="名称" required>
-          <a-input v-model:value="form.name" placeholder="分类名称" />
+        <a-form-item :label="t('kbMgmt.common.name')" required>
+          <a-input v-model:value="form.name" :placeholder="t('wikiMgmt.cat.namePlaceholder')" />
         </a-form-item>
-        <a-form-item label="父级分类">
+        <a-form-item :label="t('wikiMgmt.cat.parent')">
           <a-tree-select
             v-model:value="form.parent_id"
             :tree-data="treeData"
             :field-names="{ label: 'name', value: 'id', children: 'children' }"
-            placeholder="顶级分类"
+            :placeholder="t('wikiMgmt.cat.topLevel')"
             allow-clear
             style="width: 100%"
           />
@@ -43,9 +43,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { getCategoryTree, createCategory, updateCategory, deleteCategory } from '@/api/wiki.ts'
 
+const { t } = useI18n()
 const treeData = ref<any[]>([])
 const modalOpen = ref(false)
 const saving = ref(false)
@@ -57,7 +59,7 @@ async function reload() {
     const res = await getCategoryTree()
     treeData.value = res || []
   } catch (e) {
-    message.error('加载分类失败')
+    message.error(t('wikiMgmt.cat.loadFailed'))
   }
 }
 function openCreate() {
@@ -83,7 +85,7 @@ function findNode(list: any[], id: number): any {
 }
 async function save() {
   if (!form.value.name.trim()) {
-    message.warning('请输入名称')
+    message.warning(t('wikiMgmt.nameRequired'))
     return
   }
   saving.value = true
@@ -91,11 +93,11 @@ async function save() {
     const payload = { name: form.value.name, parent_id: form.value.parent_id || undefined }
     if (editing.value) await updateCategory(editing.value, payload)
     else await createCategory(payload)
-    message.success('已保存')
+    message.success(t('wikiMgmt.saved'))
     modalOpen.value = false
     reload()
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '保存失败')
+    message.error(e?.response?.data?.detail || t('wikiMgmt.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -103,10 +105,10 @@ async function save() {
 async function remove(id: number) {
   try {
     await deleteCategory(id)
-    message.success('已删除')
+    message.success(t('kbMgmt.common.deleted'))
     reload()
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '删除失败（请先移除子分类/文章）')
+    message.error(e?.response?.data?.detail || t('wikiMgmt.cat.deleteFailed'))
   }
 }
 onMounted(reload)

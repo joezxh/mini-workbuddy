@@ -1,18 +1,18 @@
 <template>
   <div class="onto-review">
     <div class="onto-review__bar">
-      <a-select v-model:value="ontoId" placeholder="选择本体" style="width: 240px" @change="refresh">
+      <a-select v-model:value="ontoId" :placeholder="t('kbMgmt.model.selectOntology')" style="width: 240px" @change="refresh">
         <a-select-option v-for="o in ontos" :key="o.id" :value="o.id">{{ o.name }}</a-select-option>
       </a-select>
-      <a-button @click="refresh"><ReloadOutlined /> {{ t('knowledge.common.refresh') }}</a-button>
+      <a-button @click="refresh"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
     </div>
 
-    <a-divider>待评审项（status=suggested）</a-divider>
+    <a-divider>{{ t('kbMgmt.review.pendingDivider') }}</a-divider>
     <a-table :columns="reviewCols" :data-source="reviews" size="small" :pagination="false">
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'action'">
-          <a-button size="small" type="primary" @click="decide(record, 'accepted')">接受</a-button>
-          <a-button size="small" danger @click="decide(record, 'rejected')">拒绝</a-button>
+          <a-button size="small" type="primary" @click="decide(record, 'accepted')">{{ t('kbMgmt.review.accept') }}</a-button>
+          <a-button size="small" danger @click="decide(record, 'rejected')">{{ t('kbMgmt.review.reject') }}</a-button>
         </template>
         <template v-else-if="column.key === 'evidence'">
           <JsonViewer :value="record.evidence_json" :copyable="false" :compact="true" />
@@ -20,12 +20,12 @@
       </template>
     </a-table>
 
-    <a-divider>版本历史（快照对比）</a-divider>
+    <a-divider>{{ t('kbMgmt.review.versionsDivider') }}</a-divider>
     <div class="onto-review__versions">
-      <a-select v-model:value="leftV" placeholder="左版本" style="width: 200px" @change="diff">
+      <a-select v-model:value="leftV" :placeholder="t('kbMgmt.review.leftVersion')" style="width: 200px" @change="diff">
         <a-select-option v-for="v in versions" :key="v.id" :value="v.id">{{ v.label }}</a-select-option>
       </a-select>
-      <a-select v-model:value="rightV" placeholder="右版本" style="width: 200px" @change="diff">
+      <a-select v-model:value="rightV" :placeholder="t('kbMgmt.review.rightVersion')" style="width: 200px" @change="diff">
         <a-select-option v-for="v in versions" :key="v.id" :value="v.id">{{ v.label }}</a-select-option>
       </a-select>
     </div>
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
@@ -52,13 +52,13 @@ const rightV = ref<number>()
 const leftSnap = ref<any>(null)
 const rightSnap = ref<any>(null)
 
-const reviewCols = [
+const reviewCols = computed(() => [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
-  { title: t('knowledge.common.name'), dataIndex: 'name', key: 'name' },
-  { title: '置信度', dataIndex: 'confidence', key: 'confidence', width: 90 },
-  { title: '证据', key: 'evidence' },
-  { title: t('knowledge.common.actions'), key: 'action', width: 150 },
-]
+  { title: t('kbMgmt.common.name'), dataIndex: 'name', key: 'name' },
+  { title: t('kbMgmt.review.confidence'), dataIndex: 'confidence', key: 'confidence', width: 90 },
+  { title: t('kbMgmt.review.evidence'), key: 'evidence' },
+  { title: t('kbMgmt.common.actions'), key: 'action', width: 150 },
+])
 
 async function loadOntos() {
   try {
@@ -76,17 +76,17 @@ async function refresh() {
     reviews.value = rv.data || rv || []
     versions.value = (vs.data || vs || []).map((v: any) => ({ id: v.id, label: v.label || `v${v.id}`, snap: v.snapshot }))
   } catch {
-    message.warning('评审/版本需后端 router')
+    message.warning(t('kbMgmt.review.routerMissing'))
   }
 }
 async function decide(row: any, decision: 'accepted' | 'rejected') {
   if (!ontoId.value) return
   try {
     await api.reviewItem(ontoId.value, row.id, decision)
-    message.success(decision === 'accepted' ? '已接受' : '已拒绝')
+    message.success(decision === 'accepted' ? t('kbMgmt.review.accepted') : t('kbMgmt.review.rejected'))
     refresh()
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '评审失败（需后端 router）')
+    message.error(e?.response?.data?.detail || t('kbMgmt.review.reviewFailed'))
   }
 }
 function diff() {

@@ -1,11 +1,11 @@
 <template>
   <div class="kg-panel">
     <div class="kg-panel__header">
-      <h2 class="kg-panel__title">{{ t('knowledge.externalKb.title') }}</h2>
+      <h2 class="kg-panel__title">{{ t('kbMgmt.externalKb.title') }}</h2>
     </div>
     <a-tabs v-model:activeKey="active" class="kg-panel__tabs">
-      <a-tab-pane key="instance" tab="实例管理"><InstanceManagement /></a-tab-pane>
-      <a-tab-pane key="sync" tab="同步任务"><SyncJobs /></a-tab-pane>
+      <a-tab-pane key="instance" :tab="t('kbMgmt.externalKb.tabInstances')"><InstanceManagement /></a-tab-pane>
+      <a-tab-pane key="sync" :tab="t('kbMgmt.externalKb.tabSyncJobs')"><SyncJobs /></a-tab-pane>
     </a-tabs>
   </div>
 </template>

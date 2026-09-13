@@ -173,18 +173,22 @@ function handleAction(to: string) {
 const auditLogs = ref<AuditLogItem[]>([])
 const auditLoading = ref(false)
 
-// 操作类型字典（亮色映射）
-const operationTypeMap = ref<Record<string, { label: string; color: string }>>({
+// 操作类型字典（亮色映射）——基础映射使用 computed 以响应语言切换，
+// 字典接口加载到的后端动态映射单独存放，最终展示时覆盖基础映射
+const dictTypeMap = ref<Record<string, { label: string; color: string }>>({})
+const operationTypeMap = computed<Record<string, { label: string; color: string }>>(() => ({
   create: { label: t('dashboard.opCreate'), color: 'green' },
   update: { label: t('dashboard.opUpdate'), color: 'blue' },
   delete: { label: t('dashboard.opDelete'), color: 'red' },
   query: { label: t('dashboard.opQuery'), color: 'default' },
   login: { label: t('dashboard.opLogin'), color: 'cyan' },
   logout: { label: t('dashboard.opLogout'), color: 'orange' },
-})
+  ...dictTypeMap.value,
+}))
 
-// 操作模块字典
-const operationModuleMap = ref<Record<string, string>>({
+// 操作模块字典（同理：静态映射 computed + 字典覆盖）
+const dictModuleMap = ref<Record<string, string>>({})
+const operationModuleMap = computed<Record<string, string>>(() => ({
   user: t('dashboard.modUser'),
   role: t('dashboard.modRole'),
   permission: t('dashboard.modPermission'),
@@ -194,7 +198,8 @@ const operationModuleMap = ref<Record<string, string>>({
   ai_session: t('dashboard.modAiSession'),
   agent: t('dashboard.modAgent'),
   wiki: t('dashboard.modWiki'),
-})
+  ...dictModuleMap.value,
+}))
 
 // 从字典接口加载操作类型和模块映射
 const loadDictMappings = async () => {
@@ -209,7 +214,7 @@ const loadDictMappings = async () => {
           create: 'green', update: 'blue', delete: 'red',
           query: 'default', login: 'cyan', logout: 'orange'
         }
-        operationTypeMap.value[item.item_code] = {
+        dictTypeMap.value[item.item_code] = {
           label: item.item_name,
           color: item.color || colorMap[item.item_code] || 'default'
         }
@@ -217,7 +222,7 @@ const loadDictMappings = async () => {
     }
     if (moduleItems && moduleItems.length > 0) {
       moduleItems.forEach((item: any) => {
-        operationModuleMap.value[item.item_code] = item.item_name
+        dictModuleMap.value[item.item_code] = item.item_name
       })
     }
   } catch (_) {

@@ -527,7 +527,7 @@ async function loadData() {
       dataSource.value = res.data || []
     }
   } catch (e: any) {
-    message.error(`${t('sys.permission.loadError')}：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.loadError')}：${e?.message || t('sysMgmt.unknownError')}`)
     dataSource.value = []
   } finally {
     loading.value = false
@@ -562,7 +562,7 @@ async function handleStatusChange(record: MenuItem, val: boolean | string | numb
       message.error(res.message || t('sys.permission.statusUpdateError'))
     }
   } catch (e: any) {
-    message.error(`${t('sys.permission.statusUpdateError')}：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.statusUpdateError')}：${e?.message || t('sysMgmt.unknownError')}`)
   } finally {
     statusUpdating[record.id] = false
   }
@@ -578,7 +578,7 @@ async function handleDelete(id: number) {
       message.error(res.message || t('sys.permission.deleteError'))
     }
   } catch (e: any) {
-    message.error(`${t('sys.permission.deleteError')}：${e?.message || '未知错误'}`)
+    message.error(`${t('sys.permission.deleteError')}：${e?.message || t('sysMgmt.unknownError')}`)
   }
 }
 
@@ -681,7 +681,7 @@ async function openForm(type: 'create' | 'update', id?: number, parentId?: numbe
         }
       }
     } catch (e: any) {
-      message.error(`${t('sys.permission.loadDetailError')}：${e?.message || '未知错误'}`)
+      message.error(`${t('sys.permission.loadDetailError')}：${e?.message || t('sysMgmt.unknownError')}`)
     } finally {
       formLoading.value = false
     }
@@ -759,7 +759,7 @@ async function submitForm() {
   } catch (e: any) {
     const respData = e?.response?.data || {}
     const detail = respData.detail || respData.message || respData.msg
-    const text = typeof detail === 'string' ? detail : (detail && detail.msg) || e?.message || '未知错误'
+    const text = typeof detail === 'string' ? detail : (detail && detail.msg) || e?.message || t('sysMgmt.unknownError')
     message.error(`${formType.value === 'create' ? t('sys.permission.createError') : t('sys.permission.updateError')}：${text}`)
   } finally {
     formLoading.value = false

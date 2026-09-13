@@ -1,7 +1,7 @@
 <template>
   <a-modal
     v-model:open="visible"
-    title="模型测试"
+    :title="t('apiKeyMgmt.testTitle')"
     width="1100px"
     :footer="null"
     :destroy-on-close="true"
@@ -11,8 +11,8 @@
       <!-- 模型选择区 -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">选择模型</span>
-          <a-tag color="blue">已选 {{ selectedModels.length }} 个</a-tag>
+          <span class="section-title">{{ t('apiKeyMgmt.selectModel') }}</span>
+          <a-tag color="blue">{{ t('apiKeyMgmt.selectedCount', { count: selectedModels.length }) }}</a-tag>
         </div>
         <a-checkbox-group v-model:value="selectedModelIds" class="model-checkbox-group">
           <a-checkbox
@@ -33,20 +33,20 @@
       <!-- 输入区 -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">提示词</span>
+          <span class="section-title">{{ t('apiKeyMgmt.promptLabel') }}</span>
         </div>
         <a-textarea
           v-model:value="prompt"
-          placeholder="输入测试提示词..."
+          :placeholder="t('apiKeyMgmt.promptPlaceholder')"
           :rows="3"
           :maxlength="4000"
           show-count
         />
         <a-collapse :bordered="false" ghost class="advanced-collapse">
-          <a-collapse-panel key="1" header="高级选项">
+          <a-collapse-panel key="1" :header="t('apiKeyMgmt.advancedOptions')">
             <a-input
               v-model:value="systemPrompt"
-              placeholder="系统提示词（可选）"
+              :placeholder="t('apiKeyMgmt.systemPromptPlaceholder')"
               :rows="2"
               style="margin-bottom: 8px"
             />
@@ -57,20 +57,20 @@
       <!-- 操作按钮 -->
       <div class="action-bar">
         <a-button type="primary" :loading="isRunning" :disabled="!canRun" @click="runTest">
-          <SendOutlined /> 开始测试
+          <SendOutlined /> {{ t('apiKeyMgmt.startTest') }}
         </a-button>
         <a-button v-if="isRunning" danger @click="stopTest">
-          <StopOutlined /> 停止
+          <StopOutlined /> {{ t('apiKeyMgmt.stop') }}
         </a-button>
         <a-button @click="clearResults">
-          <ClearOutlined /> 清空结果
+          <ClearOutlined /> {{ t('apiKeyMgmt.clearResults') }}
         </a-button>
       </div>
 
       <!-- 结果展示区 -->
       <div class="results-section" v-if="Object.keys(results).length > 0">
         <div class="section-header">
-          <span class="section-title">测试结果</span>
+          <span class="section-title">{{ t('apiKeyMgmt.testResults') }}</span>
         </div>
         <div class="results-grid" :class="{ 'multi-grid': Object.keys(results).length > 1 }">
           <div
@@ -90,7 +90,7 @@
             <!-- 文本输出 -->
             <div v-if="result.type === 'text'" class="result-content">
               <div v-if="result.reasoning" class="reasoning-block">
-                <div class="reasoning-label">💭 思考过程</div>
+                <div class="reasoning-label">💭 {{ t('apiKeyMgmt.thinking') }}</div>
                 <div class="reasoning-text">{{ result.reasoning }}</div>
               </div>
               <div class="content-text" v-html="renderMarkdown(result.content)"></div>
@@ -100,11 +100,11 @@
             <!-- Embedding 输出 -->
             <div v-else-if="result.type === 'embedding'" class="result-content">
               <a-descriptions :column="2" size="small" bordered>
-                <a-descriptions-item label="维度">{{ result.dimensions }}</a-descriptions-item>
-                <a-descriptions-item label="Token 数">{{ result.tokenCount || '-' }}</a-descriptions-item>
+                <a-descriptions-item :label="t('apiKeyMgmt.labelDimensions')">{{ result.dimensions }}</a-descriptions-item>
+                <a-descriptions-item :label="t('apiKeyMgmt.labelTokenCount')">{{ result.tokenCount || '-' }}</a-descriptions-item>
               </a-descriptions>
               <div class="embedding-preview">
-                <div class="embedding-label">向量预览（前 {{ result.preview?.length || 0 }} 维）：</div>
+                <div class="embedding-label">{{ t('apiKeyMgmt.vectorPreview', { count: result.preview?.length || 0 }) }}</div>
                 <div class="embedding-values">
                   <span v-for="(v, i) in result.preview" :key="i" class="embedding-val">
                     [{{ i }}] {{ typeof v === 'number' ? v.toFixed(6) : v }}
@@ -126,9 +126,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { SendOutlined, StopOutlined, ClearOutlined } from '@ant-design/icons-vue'
 import { fetchModelTestStream, type AiChatModel } from '@/api/ai-apikey'
+
+const { t } = useI18n()
 
 interface TestResult {
   modelName: string
@@ -189,9 +192,9 @@ watch(
 
 function typeName(type?: number): string {
   if (type === 5) return 'Embedding'
-  if (type === 3) return '图片'
-  if (type === 4) return '语音'
-  return '对话'
+  if (type === 3) return t('apiKeyMgmt.typeImage')
+  if (type === 4) return t('apiKeyMgmt.typeVoice')
+  return t('apiKeyMgmt.typeChat')
 }
 
 function typeTagColor(type?: number): string {
@@ -202,9 +205,9 @@ function typeTagColor(type?: number): string {
 }
 
 function statusText(status: string): string {
-  if (status === 'running') return '响应中...'
-  if (status === 'done') return '完成'
-  if (status === 'error') return '错误'
+  if (status === 'running') return t('apiKeyMgmt.statusRunning')
+  if (status === 'done') return t('apiKeyMgmt.statusDone')
+  if (status === 'error') return t('apiKeyMgmt.statusError')
   return status
 }
 
@@ -261,7 +264,7 @@ async function processModelStream(model: AiChatModel, signal: AbortSignal, start
     )
 
     const reader = res.body?.getReader()
-    if (!reader) throw new Error('无法获取响应流')
+    if (!reader) throw new Error(t('apiKeyMgmt.streamError'))
 
     const decoder = new TextDecoder()
     let buffer = ''
@@ -293,7 +296,7 @@ async function processModelStream(model: AiChatModel, signal: AbortSignal, start
           if (data.error) {
             r.status = 'error'
             r.type = 'error'
-            r.errorMessage = data.message || '未知错误'
+            r.errorMessage = data.message || t('apiKeyMgmt.unknownError')
             r.duration = Date.now() - startTime
             continue
           }
@@ -341,7 +344,7 @@ async function processModelStream(model: AiChatModel, signal: AbortSignal, start
     if (r) {
       r.status = 'error'
       r.type = 'error'
-      r.errorMessage = e.message || '请求失败'
+      r.errorMessage = e.message || t('apiKeyMgmt.requestFailed')
       r.duration = Date.now() - startTime
     }
   }
@@ -361,7 +364,7 @@ function stopTest() {
   abortControllers.value.forEach(c => c.abort())
   abortControllers.value = []
   isRunning.value = false
-  message.info('已停止测试')
+  message.info(t('apiKeyMgmt.testStopped'))
 }
 
 function clearResults() {

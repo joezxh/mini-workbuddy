@@ -2,16 +2,16 @@
   <div class="article-edit" v-if="article">
     <div class="edit-header">
       <a-breadcrumb>
-        <a-breadcrumb-item><a @click="$router.push('/wiki')">知识库</a></a-breadcrumb-item>
+        <a-breadcrumb-item><a @click="$router.push('/wiki')">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
         <a-breadcrumb-item>
           <a @click="$router.push(`/wiki/${article.slug}`)">{{ article.title }}</a>
         </a-breadcrumb-item>
-        <a-breadcrumb-item>编辑</a-breadcrumb-item>
+        <a-breadcrumb-item>{{ t('common.edit') }}</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="edit-actions">
-        <a-button @click="$router.back()">取消</a-button>
+        <a-button @click="$router.back()">{{ t('common.cancel') }}</a-button>
         <a-button type="primary" @click="handleSave" :loading="saving">
-          保存
+          {{ t('common.save') }}
         </a-button>
       </div>
     </div>
@@ -20,19 +20,19 @@
       <a-col :span="18">
         <a-card>
           <a-form layout="vertical">
-            <a-form-item label="标题">
-              <a-input v-model:value="article.title" size="large" placeholder="文章标题" />
+            <a-form-item :label="t('kbMgmt.common.title')">
+              <a-input v-model:value="article.title" size="large" :placeholder="t('kmsWiki.titlePlaceholder')" />
             </a-form-item>
-            <a-form-item label="正文 (Markdown)">
+            <a-form-item :label="t('kmsWiki.body')">
               <a-textarea
                 v-model:value="article.content"
                 :rows="20"
-                placeholder="输入 Markdown 内容..."
+                :placeholder="t('kmsWiki.bodyPlaceholder')"
                 style="font-family: monospace"
               />
             </a-form-item>
-            <a-form-item label="编辑说明">
-              <a-input v-model:value="changeNote" placeholder="简要说明本次修改内容" />
+            <a-form-item :label="t('kmsWiki.changeNote')">
+              <a-input v-model:value="changeNote" :placeholder="t('kmsWiki.changeNotePlaceholder')" />
             </a-form-item>
           </a-form>
         </a-card>
@@ -40,44 +40,44 @@
 
       <a-col :span="6">
         <!-- 分类 -->
-        <a-card title="分类" size="small">
+        <a-card :title="t('wikiMgmt.tabCategory')" size="small">
           <a-tree-select
             v-model:value="article.category_id"
             :tree-data="categories"
             :field-names="{ label: 'name', value: 'id', children: 'children' }"
-            placeholder="选择分类"
+            :placeholder="t('kmsWiki.selectCategory')"
             allow-clear
             style="width: 100%"
           />
         </a-card>
 
         <!-- 标签 -->
-        <a-card title="标签" size="small" style="margin-top: 16px">
+        <a-card :title="t('kmsWiki.tags')" size="small" style="margin-top: 16px">
           <a-select
             v-model:value="article.tags"
             mode="tags"
-            placeholder="输入标签"
+            :placeholder="t('kmsWiki.tagsInputPlaceholder')"
             style="width: 100%"
           />
         </a-card>
 
         <!-- OWL 类 -->
-        <a-card title="OWL 本体类" size="small" style="margin-top: 16px">
+        <a-card :title="t('kmsWiki.owlClasses')" size="small" style="margin-top: 16px">
           <a-select
             v-model:value="article.owl_class_uris"
             mode="tags"
-            placeholder="输入 OWL Class URI"
+            placeholder="OWL Class URI"
             style="width: 100%"
           />
-          <div class="hint-text">关联本体类, 用于语义检索</div>
+          <div class="hint-text">{{ t('kmsWiki.owlHint') }}</div>
         </a-card>
 
         <!-- 状态 -->
-        <a-card title="发布状态" size="small" style="margin-top: 16px">
+        <a-card :title="t('kmsWiki.publishStatus')" size="small" style="margin-top: 16px">
           <a-radio-group v-model:value="article.status">
-            <a-radio :value="0">草稿</a-radio>
-            <a-radio :value="1">发布</a-radio>
-            <a-radio :value="-1">归档</a-radio>
+            <a-radio :value="0">{{ t('wikiMgmt.art.draft') }}</a-radio>
+            <a-radio :value="1">{{ t('wikiMgmt.art.published') }}</a-radio>
+            <a-radio :value="-1">{{ t('wikiMgmt.art.archived') }}</a-radio>
           </a-radio-group>
         </a-card>
       </a-col>
@@ -88,12 +88,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getArticleBySlug, updateArticle, listCategories } from '@/api/wiki'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 const article = ref<any>(null)
 const categories = ref<any[]>([])
@@ -120,11 +122,11 @@ async function loadArticle() {
       const detailRes = await getArticleBySlug(found.slug)
       article.value = detailRes.data
     } else {
-      message.error('文章不存在')
+      message.error(t('kmsWiki.notFound'))
       router.push('/wiki')
     }
   } catch (e) {
-    message.error('加载文章失败')
+    message.error(t('wikiMgmt.art.loadFailed'))
     router.push('/wiki')
   }
 }
@@ -141,7 +143,7 @@ async function loadCategories() {
 async function handleSave() {
   if (!article.value) return
   if (!article.value.title?.trim()) {
-    message.warning('标题不能为空')
+    message.warning(t('kmsWiki.titleRequired'))
     return
   }
   saving.value = true
@@ -155,10 +157,10 @@ async function handleSave() {
       status: article.value.status,
       change_note: changeNote.value || undefined,
     })
-    message.success('保存成功')
+    message.success(t('wikiMgmt.saved'))
     router.push(`/wiki/${article.value.slug}`)
   } catch (e: any) {
-    message.error(e.response?.data?.detail || '保存失败')
+    message.error(e.response?.data?.detail || t('wikiMgmt.saveFailed'))
   } finally {
     saving.value = false
   }

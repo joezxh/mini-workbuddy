@@ -2,7 +2,7 @@
   <div>
     <a-input-search
       v-model:value="kw"
-      placeholder="按标题搜索文章"
+      :placeholder="t('wikiMgmt.art.searchPlaceholder')"
       style="max-width: 320px; margin-bottom: 12px"
       @search="reload"
       allow-clear
@@ -17,13 +17,13 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'status'">
           <a-tag :color="record.status === 1 ? 'green' : record.status === -1 ? 'default' : 'orange'">
-            {{ record.status === 1 ? '发布' : record.status === -1 ? '归档' : '草稿' }}
+            {{ record.status === 1 ? t('wikiMgmt.art.published') : record.status === -1 ? t('wikiMgmt.art.archived') : t('wikiMgmt.art.draft') }}
           </a-tag>
         </template>
         <template v-else-if="column.key === 'action'">
-          <a @click="router.push(`/wiki/${record.slug}`)">查看</a>
+          <a @click="router.push(`/wiki/${record.slug}`)">{{ t('wikiMgmt.art.view') }}</a>
           <a-divider type="vertical" />
-          <a @click="router.push(`/wiki/edit/${record.id}`)">编辑</a>
+          <a @click="router.push(`/wiki/edit/${record.id}`)">{{ t('common.edit') }}</a>
         </template>
       </template>
     </a-table>
@@ -31,20 +31,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { listArticles } from '@/api/wiki.ts'
 
+const { t } = useI18n()
 const router = useRouter()
-const columns = [
+const columns = computed(() => [
   { title: 'ID', dataIndex: 'id', key: 'id' },
-  { title: '标题', dataIndex: 'title', key: 'title' },
+  { title: t('kbMgmt.common.title'), dataIndex: 'title', key: 'title' },
   { title: 'Slug', dataIndex: 'slug', key: 'slug' },
-  { title: '版本', dataIndex: 'version', key: 'version' },
-  { title: '状态', key: 'status' },
-  { title: '操作', key: 'action' },
-]
+  { title: t('wikiMgmt.tabVersion'), dataIndex: 'version', key: 'version' },
+  { title: t('kbMgmt.common.status'), key: 'status' },
+  { title: t('kbMgmt.common.actions'), key: 'action' },
+])
 const rows = ref<any[]>([])
 const loading = ref(false)
 const kw = ref('')
@@ -57,7 +59,7 @@ async function reload() {
     const res = await listArticles(params)
     rows.value = res.items || []
   } catch (e) {
-    message.error('加载文章失败')
+    message.error(t('wikiMgmt.art.loadFailed'))
   } finally {
     loading.value = false
   }

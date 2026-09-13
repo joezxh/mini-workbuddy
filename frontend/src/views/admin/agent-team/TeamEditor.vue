@@ -4,17 +4,17 @@
     <div class="editor-header">
       <div class="left">
         <a-button type="link" @click="goBack">
-          <ArrowLeftOutlined /> 返回
+          <ArrowLeftOutlined /> {{ t('common.back') }}
         </a-button>
-        <span class="title">{{ team?.team_name || '团队编排' }}</span>
+        <span class="title">{{ team?.team_name || t('teamMgmt.editorTitle') }}</span>
         <a-tag v-if="team" color="blue">{{ team.team_code }}</a-tag>
       </div>
       <div class="right">
         <a-button @click="validateTopology">
-          <CheckCircleOutlined /> 校验拓扑
+          <CheckCircleOutlined /> {{ t('teamMgmt.validateTopology') }}
         </a-button>
         <a-button type="primary" :loading="saving" @click="saveTopology">
-          <SaveOutlined /> 保存编排
+          <SaveOutlined /> {{ t('teamMgmt.saveOrchestration') }}
         </a-button>
       </div>
     </div>
@@ -22,10 +22,10 @@
     <div class="editor-body no-canvas">
       <!-- 左侧：成员面板 -->
       <div class="side-panel">
-        <div class="panel-title">成员面板</div>
+        <div class="panel-title">{{ t('teamMgmt.memberPanel') }}</div>
         <a-input-search
           v-model:value="memberKeyword"
-          placeholder="搜索成员 / agent"
+          :placeholder="t('teamMgmt.searchMember')"
           size="small"
           class="member-search"
         />
@@ -44,12 +44,12 @@
               </span>
               <a-tag v-if="m.agent_code" size="small">{{ m.agent_code }}</a-tag>
             </div>
-            <div class="member-sub">{{ m.node_key }} · {{ m.model || '默认模型' }}</div>
+            <div class="member-sub">{{ m.node_key }} · {{ m.model || t('teamMgmt.defaultModel') }}</div>
           </div>
-          <a-empty v-if="filteredMembers.length === 0" description="无成员" :image="undefined" />
+          <a-empty v-if="filteredMembers.length === 0" :description="t('teamMgmt.noMembers')" :image="undefined" />
         </div>
         <a-button block class="add-member-btn" @click="openMemberModal">
-          <PlusOutlined /> 添加成员
+          <PlusOutlined /> {{ t('teamMgmt.addMember') }}
         </a-button>
       </div>
 
@@ -81,48 +81,48 @@
           </template>
         </VueFlow>
 
-        <div class="canvas-tip">拖拽左侧成员到画布生成节点 · 连线建立依赖</div>
+        <div class="canvas-tip">{{ t('teamMgmt.canvasTip') }}</div>
       </div>
 
       <!-- 右侧：节点属性 -->
       <div class="side-panel right">
-        <div class="panel-title">节点属性</div>
-        <a-empty v-if="!selectedMember" description="点击左侧成员查看属性" />
+        <div class="panel-title">{{ t('teamMgmt.nodeProps') }}</div>
+        <a-empty v-if="!selectedMember" :description="t('teamMgmt.clickMemberHint')" />
         <div v-else class="property-form">
           <a-form layout="vertical" :model="nodeForm">
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="节点键 (node_key)">
+                <a-form-item :label="t('teamMgmt.nodeKey')">
                   <a-input v-model:value="nodeForm.node_key" disabled />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="角色名">
+                <a-form-item :label="t('teamMgmt.roleName')">
                   <a-input v-model:value="nodeForm.role_name" />
                 </a-form-item>
               </a-col>
             </a-row>
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="Agent 编码">
+                <a-form-item :label="t('teamMgmt.agentCode')">
                   <a-input v-model:value="nodeForm.agent_code" />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="模型">
+                <a-form-item :label="t('teamMgmt.model')">
                   <a-select v-model:value="nodeForm.model" :options="modelOptions" allow-clear />
                 </a-form-item>
               </a-col>
             </a-row>
-            <a-form-item label="是否 Leader">
+            <a-form-item :label="t('teamMgmt.isLeader')">
               <a-switch v-model:checked="nodeForm.is_leader" />
             </a-form-item>
-            <a-form-item label="系统提示词">
+            <a-form-item :label="t('teamMgmt.systemPrompt')">
               <a-textarea v-model:value="nodeForm.system_prompt" :rows="6" />
             </a-form-item>
           </a-form>
           <a-button danger block @click="removeSelectedNode">
-            <DeleteOutlined /> 删除节点
+            <DeleteOutlined /> {{ t('teamMgmt.deleteNode') }}
           </a-button>
         </div>
       </div>
@@ -131,24 +131,24 @@
     <!-- 添加成员弹窗 -->
     <a-modal
       v-model:open="memberModal"
-      title="添加成员"
+      :title="t('teamMgmt.addMember')"
       @ok="submitMember"
       :confirm-loading="memberSubmitting"
     >
       <a-form layout="vertical">
-        <a-form-item label="节点键 (node_key)" required>
-          <a-input v-model:value="memberForm.node_key" placeholder="如 risk_analyst" />
+        <a-form-item :label="t('teamMgmt.nodeKey')" required>
+          <a-input v-model:value="memberForm.node_key" :placeholder="t('teamMgmt.nodeKeyPlaceholder')" />
         </a-form-item>
-        <a-form-item label="角色名" required>
-          <a-input v-model:value="memberForm.role_name" placeholder="如 风险分析师" />
+        <a-form-item :label="t('teamMgmt.roleName')" required>
+          <a-input v-model:value="memberForm.role_name" :placeholder="t('teamMgmt.roleNamePlaceholder')" />
         </a-form-item>
-        <a-form-item label="Agent 编码">
+        <a-form-item :label="t('teamMgmt.agentCode')">
           <a-input v-model:value="memberForm.agent_code" />
         </a-form-item>
-        <a-form-item label="模型">
+        <a-form-item :label="t('teamMgmt.model')">
           <a-select v-model:value="memberForm.model" :options="modelOptions" allow-clear />
         </a-form-item>
-        <a-form-item label="设为 Leader">
+        <a-form-item :label="t('teamMgmt.setLeader')">
           <a-switch v-model:checked="memberForm.is_leader" />
         </a-form-item>
       </a-form>
@@ -159,6 +159,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   VueFlow,
@@ -183,6 +184,7 @@ import {
 import * as api from '@/api/agentTeam'
 
 const router = useRouter()
+const { t } = useI18n()
 const props = defineProps<{ teamId: number }>()
 const teamId = computed(() => Number(props.teamId))
 
@@ -246,7 +248,7 @@ const fetchDetail = async () => {
     }))
     syncNodesFromMembers()
   } catch (e: any) {
-    message.error('加载团队失败：' + (e?.message || e))
+    message.error(t('teamMgmt.loadFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   }
 }
 
@@ -283,7 +285,7 @@ const onDrop = (ev: DragEvent) => {
   const m = members.value.find(x => x.node_key === key)
   if (!m) return
   if (nodes.value.some(n => n.id === m.node_key)) {
-    message.warning('该成员已在画布中')
+    message.warning(t('teamMgmt.memberInCanvas'))
     return
   }
   const position = project({ x: ev.clientX, y: ev.clientY })
@@ -322,7 +324,7 @@ const removeSelectedNode = () => {
     e => e.source !== selectedMember.value && e.target !== selectedMember.value
   )
   selectedMember.value = null
-  message.success('已移除节点')
+  message.success(t('teamMgmt.nodeRemoved'))
 }
 
 // ── 保存 ─────────────────────────────────────────────
@@ -343,7 +345,7 @@ const saveTopology = async () => {
       const m = members.value.find(x => x.node_key === n.id) || ({} as api.TeamMember)
       const agentConfigId = (m as any).agent_id
       if (!agentConfigId) {
-        throw new Error(`节点「${n.data.label || n.id}」未关联 Agent，无法保存拓扑`)
+        throw new Error(t('teamMgmt.nodeNoAgent', { name: n.data.label || n.id }))
       }
       return {
         node_key: n.id,
@@ -371,9 +373,9 @@ const saveTopology = async () => {
       edges: graphEdges,
       layout
     })
-    message.success('编排已保存')
+    message.success(t('teamMgmt.saved'))
   } catch (e: any) {
-    message.error('保存失败：' + (e?.message || e))
+    message.error(t('teamMgmt.saveFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   } finally {
     saving.value = false
   }
@@ -382,9 +384,9 @@ const saveTopology = async () => {
 const validateTopology = async () => {
   try {
     await api.validateTeam(teamId.value)
-    message.success('拓扑校验通过')
+    message.success(t('teamMgmt.validateOk'))
   } catch (e: any) {
-    message.error('校验未通过：' + (e?.message || e))
+    message.error(t('teamMgmt.validateFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   }
 }
 
@@ -395,11 +397,11 @@ const openMemberModal = () => {
 }
 const submitMember = () => {
   if (!memberForm.value.node_key || !memberForm.value.role_name) {
-    message.warning('请填写节点键与角色名')
+    message.warning(t('teamMgmt.nodeKeyRoleRequired'))
     return
   }
   if (members.value.some(m => m.node_key === memberForm.value.node_key)) {
-    message.warning('节点键已存在')
+    message.warning(t('teamMgmt.nodeKeyExists'))
     return
   }
   const m: api.TeamMember = {
@@ -412,7 +414,7 @@ const submitMember = () => {
   members.value.push(m)
   syncNodesFromMembers()
   memberModal.value = false
-  message.success('成员已添加，记得保存编排')
+  message.success(t('teamMgmt.memberAdded'))
 }
 
 watch(() => props.teamId, () => {

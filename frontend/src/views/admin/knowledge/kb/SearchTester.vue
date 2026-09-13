@@ -1,21 +1,21 @@
 <template>
   <div class="kb-search">
     <div class="kb-search__bar">
-      <a-select v-model:value="kbId" placeholder="选择数据集" style="width: 240px">
+      <a-select v-model:value="kbId" :placeholder="t('kbMgmt.doc.selectDataset')" style="width: 240px">
         <a-select-option v-for="d in datasets" :key="d.kb_id" :value="d.kb_id">{{ d.name }}</a-select-option>
       </a-select>
-      <a-input v-model:value="query" placeholder="输入检索 query" style="flex: 1" @press-enter="run" />
+      <a-input v-model:value="query" :placeholder="t('kbMgmt.search.queryPlaceholder')" style="flex: 1" @press-enter="run" />
       <a-input-number v-model:value="topK" :min="1" :max="20" />
-      <a-switch v-model:checked="compare" /> <span class="muted">对比模式</span>
-      <a-button type="primary" :disabled="!kbId" @click="run"><SearchOutlined /> 检索</a-button>
+      <a-switch v-model:checked="compare" /> <span class="muted">{{ t('kbMgmt.search.compareMode') }}</span>
+      <a-button type="primary" :disabled="!kbId" @click="run"><SearchOutlined /> {{ t('kbMgmt.search.searchBtn') }}</a-button>
     </div>
 
     <div class="kb-search__result" v-if="!compare">
-      <a-list :data-source="results" :locale="{ emptyText: t('knowledge.common.empty') }">
+      <a-list :data-source="results" :locale="{ emptyText: t('kbMgmt.common.empty') }">
         <template #renderItem="{ item, index }">
           <a-list-item>
             <a-list-item-meta :description="item.content">
-              <template #title>#{{ index + 1 }} · score {{ item.score?.toFixed?.(3) }} · 来源 {{ item.source }}</template>
+              <template #title>#{{ index + 1 }} · score {{ item.score?.toFixed?.(3) }} · {{ t('kbMgmt.search.source') }} {{ item.source }}</template>
             </a-list-item-meta>
           </a-list-item>
         </template>
@@ -24,16 +24,16 @@
 
     <div class="kb-search__cmp" v-else>
       <div class="kb-search__cmp-col">
-        <h4>纯向量</h4>
-        <a-list size="small" :data-source="vecResults" :locale="{ emptyText: t('knowledge.common.empty') }">
+        <h4>{{ t('kbMgmt.search.vecOnly') }}</h4>
+        <a-list size="small" :data-source="vecResults" :locale="{ emptyText: t('kbMgmt.common.empty') }">
           <template #renderItem="{ item, index }">
             <a-list-item>#{{ index + 1 }} {{ item.content?.slice(0, 60) }}</a-list-item>
           </template>
         </a-list>
       </div>
       <div class="kb-search__cmp-col">
-        <h4>向量 + 混合</h4>
-        <a-list size="small" :data-source="hybResults" :locale="{ emptyText: t('knowledge.common.empty') }">
+        <h4>{{ t('kbMgmt.search.vecHybrid') }}</h4>
+        <a-list size="small" :data-source="hybResults" :locale="{ emptyText: t('kbMgmt.common.empty') }">
           <template #renderItem="{ item, index }">
             <a-list-item>#{{ index + 1 }} {{ item.content?.slice(0, 60) }}</a-list-item>
           </template>
@@ -77,7 +77,7 @@ async function run() {
       results.value = r.data?.results || r.results || []
     }
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || '检索失败')
+    message.error(e?.response?.data?.detail || t('kbMgmt.search.searchFailed'))
   }
 }
 onMounted(loadDatasets)

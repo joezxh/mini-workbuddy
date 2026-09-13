@@ -67,6 +67,8 @@ import {
   CloudUploadOutlined,
 } from '@ant-design/icons-vue'
 
+const { t } = useI18n()
+
 const props = withDefaults(defineProps<{
   newData?: {
     attachment_info?: {

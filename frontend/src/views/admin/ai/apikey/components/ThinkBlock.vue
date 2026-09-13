@@ -8,7 +8,7 @@
         <span v-else class="think-icon-done">💡</span>
       </span>
       <span class="think-label">
-        {{ thinking ? '{{ t('apiKeyMgmt.thinkingInProgress') }}' : '已深度思考' }}
+        {{ thinking ? t('apiKeyMgmt.thinkingInProgress') : t('apiKeyMgmt.thoughtDone') }}
       </span>
       <span class="think-toggle">
         <svg
@@ -32,7 +32,10 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   content: string

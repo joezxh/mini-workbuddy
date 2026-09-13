@@ -1,13 +1,13 @@
 <template>
   <div class="kg-panel">
     <div class="kg-panel__header">
-      <h2 class="kg-panel__title">{{ t('knowledge.ontology.title') }}</h2>
+      <h2 class="kg-panel__title">{{ t('kbMgmt.ontology.title') }}</h2>
     </div>
     <a-tabs v-model:activeKey="active" class="kg-panel__tabs">
-      <a-tab-pane key="list" tab="本体列表"><OntologyList /></a-tab-pane>
-      <a-tab-pane key="class" tab="类层级"><ClassHierarchy /></a-tab-pane>
-      <a-tab-pane key="modeling" tab="建模工作台"><ModelingWorkbench /></a-tab-pane>
-      <a-tab-pane key="review" tab="评审与版本"><ReviewVersion /></a-tab-pane>
+      <a-tab-pane key="list" :tab="t('kbMgmt.ontology.tabList')"><OntologyList /></a-tab-pane>
+      <a-tab-pane key="class" :tab="t('kbMgmt.ontology.tabClass')"><ClassHierarchy /></a-tab-pane>
+      <a-tab-pane key="modeling" :tab="t('kbMgmt.ontology.tabModeling')"><ModelingWorkbench /></a-tab-pane>
+      <a-tab-pane key="review" :tab="t('kbMgmt.ontology.tabReview')"><ReviewVersion /></a-tab-pane>
     </a-tabs>
   </div>
 </template>

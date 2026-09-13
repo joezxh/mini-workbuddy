@@ -1,7 +1,7 @@
 <template>
   <a-drawer
     v-model:open="visible"
-    :title="`Agent 详情 - ${agentData?.name || ''}`"
+    :title="t('agentMgmt.detailTitle', { name: agentData?.name || '' })"
     placement="right"
     :width="640"
     :body-style="{ padding: '16px' }"
@@ -9,88 +9,88 @@
     <a-spin :spinning="loading">
       <template v-if="agentData">
         <!-- 基本信息 -->
-        <a-card size="small" title="基本信息" class="detail-card">
+        <a-card size="small" :title="t('agentMgmt.basicInfo')" class="detail-card">
           <a-descriptions :column="2" size="small">
             <a-descriptions-item label="ID">{{ agentData.id }}</a-descriptions-item>
-            <a-descriptions-item label="编码">
+            <a-descriptions-item :label="t('agentMgmt.labelCode')">
               <code>{{ agentData.agent_code }}</code>
             </a-descriptions-item>
-            <a-descriptions-item label="名称">{{ agentData.name }}</a-descriptions-item>
-            <a-descriptions-item label="类型">
+            <a-descriptions-item :label="t('agentMgmt.colName')">{{ agentData.name }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.labelType')">
               <a-tag :color="typeColor(agentData.agent_type)">
                 {{ typeLabel(agentData.agent_type) }}
               </a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="状态">
+            <a-descriptions-item :label="t('skillHub.status')">
               <a-tag :color="agentData.is_active ? 'green' : 'default'">
-                {{ agentData.is_active ? '已启用' : '已禁用' }}
+                {{ agentData.is_active ? t('agentMgmt.enabledMsg') : t('agentMgmt.disabledMsg') }}
               </a-tag>
             </a-descriptions-item>
-            <a-descriptions-item label="排序">{{ agentData.sort_order }}</a-descriptions-item>
-            <a-descriptions-item label="创建时间" :span="2">
+            <a-descriptions-item :label="t('agentMgmt.colSort')">{{ agentData.sort_order }}</a-descriptions-item>
+            <a-descriptions-item :label="t('agentMgmt.createdAt')" :span="2">
               {{ formatDate(agentData.created_at) }}
             </a-descriptions-item>
-            <a-descriptions-item label="描述" :span="2">
-              {{ agentData.description || '暂无描述' }}
+            <a-descriptions-item :label="t('skillHub.description')" :span="2">
+              {{ agentData.description || t('agentMgmt.noDescription') }}
             </a-descriptions-item>
           </a-descriptions>
         </a-card>
 
         <!-- 可视化配置 -->
-        <a-card size="small" title="可视化配置" class="detail-card">
+        <a-card size="small" :title="t('agentMgmt.visConfig')" class="detail-card">
           <a-descriptions :column="1" size="small" bordered>
-            <a-descriptions-item label="系统提示词">
-              <pre class="config-json">{{ agentData.system_prompt || '（未配置）' }}</pre>
+            <a-descriptions-item :label="t('agentMgmt.systemPrompt')">
+              <pre class="config-json">{{ agentData.system_prompt || t('agentMgmt.notConfigured') }}</pre>
             </a-descriptions-item>
-            <a-descriptions-item label="模型">
+            <a-descriptions-item :label="t('agentMgmt.labelModel')">
               {{ agentData.model_config?.provider || '-' }} / {{ agentData.model_config?.model || '-' }}
               <span v-if="agentData.model_config?.temperature !== undefined">
                 · temp {{ agentData.model_config.temperature }}
               </span>
             </a-descriptions-item>
-            <a-descriptions-item label="执行模式">
+            <a-descriptions-item :label="t('agentMgmt.executionMode')">
               {{ agentData.execution_mode || '-' }}
             </a-descriptions-item>
-            <a-descriptions-item label="绑定工具">
+            <a-descriptions-item :label="t('agentMgmt.bindTools')">
               <a-tag v-for="t in (agentData.tools || [])" :key="t" color="blue">{{ t }}</a-tag>
-              <span v-if="!(agentData.tools || []).length">无</span>
+              <span v-if="!(agentData.tools || []).length">{{ t('agentMgmt.none') }}</span>
             </a-descriptions-item>
-            <a-descriptions-item label="绑定技能">
+            <a-descriptions-item :label="t('agentMgmt.bindSkills')">
               <a-tag v-for="s in (agentData.skills || [])" :key="s" color="green">{{ s }}</a-tag>
-              <span v-if="!(agentData.skills || []).length">无</span>
+              <span v-if="!(agentData.skills || []).length">{{ t('agentMgmt.none') }}</span>
             </a-descriptions-item>
-            <a-descriptions-item label="MCP 服务">
+            <a-descriptions-item :label="t('agentMgmt.labelMcpServices')">
               <a-tag v-for="m in (agentData.mcp_servers || [])" :key="m.name || JSON.stringify(m)" color="orange">
                 {{ m.name || m }}
               </a-tag>
-              <span v-if="!(agentData.mcp_servers || []).length">无</span>
+              <span v-if="!(agentData.mcp_servers || []).length">{{ t('agentMgmt.none') }}</span>
             </a-descriptions-item>
           </a-descriptions>
         </a-card>
 
         <!-- 类型配置 -->
-        <a-card size="small" title="原始配置 (config)" class="detail-card">
+        <a-card size="small" :title="t('agentMgmt.rawConfig')" class="detail-card">
           <pre class="config-json">{{ formatConfig(agentData.config) }}</pre>
         </a-card>
 
         <!-- 监控统计 -->
-        <a-card size="small" title="运行统计" class="detail-card">
+        <a-card size="small" :title="t('agentMgmt.runStats')" class="detail-card">
           <a-row :gutter="16">
             <a-col :span="8">
               <div class="metric">
-                <div class="metric-label">调用次数</div>
+                <div class="metric-label">{{ t('agentMgmt.colInvocationCount') }}</div>
                 <div class="metric-value">{{ metrics.invocation_count || 0 }}</div>
               </div>
             </a-col>
             <a-col :span="8">
               <div class="metric">
-                <div class="metric-label">成功率</div>
+                <div class="metric-label">{{ t('agentMgmt.successRate') }}</div>
                 <div class="metric-value">{{ metrics.success_rate || '0' }}%</div>
               </div>
             </a-col>
             <a-col :span="8">
               <div class="metric">
-                <div class="metric-label">平均耗时</div>
+                <div class="metric-label">{{ t('agentMgmt.avgDuration') }}</div>
                 <div class="metric-value">{{ metrics.avg_duration || 0 }}ms</div>
               </div>
             </a-col>
@@ -98,13 +98,13 @@
         </a-card>
 
         <!-- 最近链路 -->
-        <a-card size="small" title="最近链路" class="detail-card">
+        <a-card size="small" :title="t('agentMgmt.recentTraces')" class="detail-card">
           <template #extra>
             <a-button size="small" type="link" @click="loadTraces">
               <ReloadOutlined :spin="loadingTraces" />
             </a-button>
           </template>
-          <a-empty v-if="recentTraces.length === 0" description="暂无链路" :image-size="60" />
+          <a-empty v-if="recentTraces.length === 0" :description="t('agentMgmt.noTraces')" :image-size="60" />
           <a-list v-else size="small" :data-source="recentTraces">
             <template #renderItem="{ item }">
               <a-list-item class="trace-item">
@@ -124,7 +124,7 @@
                   </template>
                 </a-list-item-meta>
                 <template #actions>
-                  <a @click="openTrace(item.trace_id)">查看</a>
+                  <a @click="openTrace(item.trace_id)">{{ t('agentMgmt.view') }}</a>
                 </template>
               </a-list-item>
             </template>
@@ -144,6 +144,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { ReloadOutlined } from '@ant-design/icons-vue'
 import { getAgentDetail, type AgentConfig } from '@/api/agentConfig'
@@ -155,6 +156,7 @@ const props = defineProps<{
 }>()
 
 const visible = defineModel<boolean>('visible', { default: false })
+const { t } = useI18n()
 
 const loading = ref(false)
 const agentData = ref<AgentConfig | null>(null)
@@ -184,7 +186,7 @@ async function loadAgent() {
     agentData.value = await getAgentDetail(props.agentId)
     await loadTraces()
   } catch (e: any) {
-    message.error('加载 Agent 详情失败：' + (e.message || '未知错误'))
+    message.error(t('agentMgmt.loadDetailFailed', { msg: e.message || t('agentMgmt.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -226,9 +228,9 @@ function openTrace(traceId: string) {
 
 function typeLabel(type: string) {
   return ({
-    CHAT: '💬 会话型',
-    WORKFLOW: '⚡ 工作流型',
-    SKILL: '🔧 技能型',
+    CHAT: t('agentMgmt.typeChat'),
+    WORKFLOW: t('agentMgmt.typeWorkflow'),
+    SKILL: t('agentMgmt.typeSkill'),
   } as Record<string, string>)[type] ?? type
 }
 

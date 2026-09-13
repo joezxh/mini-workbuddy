@@ -1,0 +1,1112 @@
+{
+ "kbMgmt": {
+  "kbMgmt.dataSource.title": {
+   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.dataSource.title') }}</h2>",
+   "ph": []
+  },
+  "kbMgmt.common.name": {
+   "ctx": "<a-tab-pane key=\"source\" :tab=\"t('kbMgmt.common.name') + ' / ' + t('kbMgmt.dataSource.tabSource')\">",
+   "ph": []
+  },
+  "kbMgmt.dataSource.tabSource": {
+   "ctx": "<a-tab-pane key=\"source\" :tab=\"t('kbMgmt.common.name') + ' / ' + t('kbMgmt.dataSource.tabSource')\">",
+   "ph": []
+  },
+  "kbMgmt.dataSource.tabMetadata": {
+   "ctx": "<a-tab-pane key=\"metadata\" :tab=\"t('kbMgmt.dataSource.tabMetadata')\">",
+   "ph": []
+  },
+  "kbMgmt.dataSource.tabStandard": {
+   "ctx": "<a-tab-pane key=\"standard\" :tab=\"t('kbMgmt.dataSource.tabStandard')\">",
+   "ph": []
+  },
+  "kbMgmt.dataSource.tabBinding": {
+   "ctx": "<a-tab-pane key=\"binding\" :tab=\"t('kbMgmt.dataSource.tabBinding')\">",
+   "ph": []
+  },
+  "kbMgmt.dataSource.tabSql": {
+   "ctx": "<a-tab-pane key=\"sql\" :tab=\"t('kbMgmt.dataSource.tabSql')\">",
+   "ph": []
+  },
+  "kbMgmt.externalKb.title": {
+   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.externalKb.title') }}</h2>",
+   "ph": []
+  },
+  "kbMgmt.externalKb.tabInstances": {
+   "ctx": "<a-tab-pane key=\"instance\" :tab=\"t('kbMgmt.externalKb.tabInstances')\"><InstanceManagement /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.externalKb.tabSyncJobs": {
+   "ctx": "<a-tab-pane key=\"sync\" :tab=\"t('kbMgmt.externalKb.tabSyncJobs')\"><SyncJobs /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.kb.title": {
+   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.kb.title') }}</h2>",
+   "ph": []
+  },
+  "kbMgmt.kb.tabDataset": {
+   "ctx": "<a-tab-pane key=\"dataset\" :tab=\"t('kbMgmt.kb.tabDataset')\"><DatasetManagement /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.kb.tabDocument": {
+   "ctx": "<a-tab-pane key=\"document\" :tab=\"t('kbMgmt.kb.tabDocument')\"><DocumentManagement /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.kb.tabSearch": {
+   "ctx": "<a-tab-pane key=\"search\" :tab=\"t('kbMgmt.kb.tabSearch')\"><SearchTester /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.kb.tabIngestion": {
+   "ctx": "<a-tab-pane key=\"ingestion\" :tab=\"t('kbMgmt.kb.tabIngestion')\"><IngestionJobs /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.ontology.title": {
+   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.ontology.title') }}</h2>",
+   "ph": []
+  },
+  "kbMgmt.ontology.tabList": {
+   "ctx": "<a-tab-pane key=\"list\" :tab=\"t('kbMgmt.ontology.tabList')\"><OntologyList /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.ontology.tabClass": {
+   "ctx": "<a-tab-pane key=\"class\" :tab=\"t('kbMgmt.ontology.tabClass')\"><ClassHierarchy /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.ontology.tabModeling": {
+   "ctx": "<a-tab-pane key=\"modeling\" :tab=\"t('kbMgmt.ontology.tabModeling')\"><ModelingWorkbench /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.ontology.tabReview": {
+   "ctx": "<a-tab-pane key=\"review\" :tab=\"t('kbMgmt.ontology.tabReview')\"><ReviewVersion /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.meta.selectSource": {
+   "ctx": "<a-select v-model:value=\"sourceId\" :placeholder=\"t('kbMgmt.meta.selectSource')\" style=\"width: 220px\" @change=\"reset\">",
+   "ph": []
+  },
+  "kbMgmt.meta.selectDatabase": {
+   "ctx": "<a-select v-model:value=\"database\" :placeholder=\"t('kbMgmt.meta.selectDatabase')\" style=\"width: 200px\">",
+   "ph": []
+  },
+  "kbMgmt.bind.run": {
+   "ctx": "<a-button type=\"primary\" :disabled=\"!sourceId\" @click=\"doBind\"><LinkOutlined /> {{ t('kbMgmt.bind.run') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.bind.infer": {
+   "ctx": "<a-button :disabled=\"!sourceId\" @click=\"infer\"><ApartmentOutlined /> {{ t('kbMgmt.bind.infer') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.bind.report": {
+   "ctx": "{{ t('kbMgmt.bind.report', { tables: report.tables, columns: report.columns, annotated: report.annotated, bound: report.bound, updated: report.updated, skipped: report.skipped_human }) }}",
+   "ph": []
+  },
+  "kbMgmt.bind.pendingCols": {
+   "ctx": "<h4>{{ t('kbMgmt.bind.pendingCols') }}</h4>",
+   "ph": []
+  },
+  "kbMgmt.common.empty": {
+   "ctx": "<a-empty v-if=\"!pending.length\" :description=\"t('kbMgmt.common.empty')\" />",
+   "ph": []
+  },
+  "kbMgmt.bind.standardItems": {
+   "ctx": "<h4>{{ t('kbMgmt.bind.standardItems') }}</h4>",
+   "ph": []
+  },
+  "kbMgmt.bind.done": {
+   "ctx": "message.success(t('kbMgmt.bind.done'))",
+   "ph": []
+  },
+  "kbMgmt.bind.failed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.bind.failed'))",
+   "ph": []
+  },
+  "kbMgmt.bind.inferDone": {
+   "ctx": "message.success(t('kbMgmt.bind.inferDone'))",
+   "ph": []
+  },
+  "kbMgmt.bind.inferFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.bind.inferFailed'))",
+   "ph": []
+  },
+  "kbMgmt.meta.scanMetadata": {
+   "ctx": "<ScanOutlined /> {{ t('kbMgmt.meta.scanMetadata') }}",
+   "ph": []
+  },
+  "kbMgmt.meta.withProfile": {
+   "ctx": "<a-switch v-model:checked=\"withProfile\" /> <span class=\"muted\">{{ t('kbMgmt.meta.withProfile') }}</span>",
+   "ph": []
+  },
+  "kbMgmt.meta.table": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.meta.table')\">{{ selected.table_name }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.common.type": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.common.type')\">{{ selected.table_type }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.meta.comment": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.meta.comment')\">{{ selected.table_comment || '—' }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.meta.rowCount": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.meta.rowCount')\">{{ selected.row_count ?? '—' }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.meta.columnCount": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.meta.columnCount')\">{{ selected.column_count ?? '—' }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.meta.domain": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.meta.domain')\">{{ selected.domain || '—' }}</a-descriptions-item>",
+   "ph": []
+  },
+  "kbMgmt.meta.columnProfile": {
+   "ctx": "<a-divider>{{ t('kbMgmt.meta.columnProfile') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.meta.profilePending": {
+   "ctx": "<JsonViewer :value=\"selected.profile_json || t('kbMgmt.meta.profilePending')\" :copyable=\"false\" />",
+   "ph": []
+  },
+  "kbMgmt.meta.selectTableHint": {
+   "ctx": "<a-empty v-else class=\"meta-explorer__placeholder\" :description=\"t('kbMgmt.meta.selectTableHint')\" />",
+   "ph": []
+  },
+  "kbMgmt.meta.scanSubmitted": {
+   "ctx": "message.success(t('kbMgmt.meta.scanSubmitted'))",
+   "ph": []
+  },
+  "kbMgmt.meta.scanFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.meta.scanFailed'))",
+   "ph": []
+  },
+  "kbMgmt.common.create": {
+   "ctx": "<PlusOutlined /> {{ t('kbMgmt.common.create') }}",
+   "ph": []
+  },
+  "kbMgmt.common.refresh": {
+   "ctx": "<a-button @click=\"load\"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.common.online": {
+   "ctx": "{{ record.status === 'online' ? t('kbMgmt.common.online') : t('kbMgmt.common.offline') }}",
+   "ph": []
+  },
+  "kbMgmt.common.offline": {
+   "ctx": "{{ record.status === 'online' ? t('kbMgmt.common.online') : t('kbMgmt.common.offline') }}",
+   "ph": []
+  },
+  "kbMgmt.ds.testConn": {
+   "ctx": "<a-button size=\"small\" @click=\"test(record)\"><ThunderboltOutlined /> {{ t('kbMgmt.ds.testConn') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.common.edit": {
+   "ctx": "<a-button size=\"small\" @click=\"openForm(record)\">{{ t('kbMgmt.common.edit') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.common.deleteConfirm": {
+   "ctx": "<a-popconfirm :title=\"t('kbMgmt.common.deleteConfirm')\" @confirm=\"remove(record)\">",
+   "ph": []
+  },
+  "kbMgmt.common.delete": {
+   "ctx": "<a-button size=\"small\" danger>{{ t('kbMgmt.common.delete') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.ds.host": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.host')\" required><a-input v-model:value=\"form.host\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ds.port": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.port')\" required><a-input-number v-model:value=\"form.port\" :min=\"1\" :max=\"65535\" style=\"width:100%\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ds.username": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.username')\"><a-input v-model:value=\"form.username\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ds.password": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.password')\">",
+   "ph": []
+  },
+  "kbMgmt.ds.passwordHint": {
+   "ctx": "<a-input-password v-model:value=\"form.password\" :placeholder=\"t('kbMgmt.ds.passwordHint')\" />",
+   "ph": []
+  },
+  "kbMgmt.ds.defaultDb": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.defaultDb')\"><a-input v-model:value=\"form.database\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ds.charset": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ds.charset')\"><a-input v-model:value=\"form.charset\" placeholder=\"utf8mb4\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ds.address": {
+   "ctx": "{ title: t('kbMgmt.ds.address'), key: 'addr', customRender: ({ record }: any) => `${record.host}:${record.port}` },",
+   "ph": []
+  },
+  "kbMgmt.common.status": {
+   "ctx": "{ title: t('kbMgmt.common.status'), key: 'status', width: 90 },",
+   "ph": []
+  },
+  "kbMgmt.common.actions": {
+   "ctx": "{ title: t('kbMgmt.common.actions'), key: 'action', width: 200 },",
+   "ph": []
+  },
+  "kbMgmt.common.error": {
+   "ctx": "error.value = e?.message || t('kbMgmt.common.error')",
+   "ph": []
+  },
+  "kbMgmt.ds.saveSuccess": {
+   "ctx": "message.success(t('kbMgmt.ds.saveSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.ds.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || e?.message || t('kbMgmt.ds.saveFailed'))",
+   "ph": []
+  },
+  "kbMgmt.common.deleted": {
+   "ctx": "message.success(t('kbMgmt.common.deleted'))",
+   "ph": []
+  },
+  "kbMgmt.common.deleteFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.common.deleteFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ds.testOk": {
+   "ctx": "message.success(t('kbMgmt.ds.testOk'))",
+   "ph": []
+  },
+  "kbMgmt.ds.testNotImplemented": {
+   "ctx": "message.warning(t('kbMgmt.ds.testNotImplemented'))",
+   "ph": []
+  },
+  "kbMgmt.sql.isolationNotice": {
+   "ctx": "<template #message>{{ t('kbMgmt.sql.isolationNotice') }}</template>",
+   "ph": []
+  },
+  "kbMgmt.sql.roTab": {
+   "ctx": "<a-tab-pane key=\"ro\" :tab=\"t('kbMgmt.sql.roTab')\">",
+   "ph": []
+  },
+  "kbMgmt.sql.source": {
+   "ctx": "<a-select v-model:value=\"sourceId\" :placeholder=\"t('kbMgmt.sql.source')\" style=\"width: 220px\">",
+   "ph": []
+  },
+  "kbMgmt.sql.execute": {
+   "ctx": "<a-button type=\"primary\" :disabled=\"!sourceId\" @click=\"run\"><PlayCircleOutlined /> {{ t('kbMgmt.sql.execute') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.sql.roPlaceholder": {
+   "ctx": "<a-textarea v-model:value=\"roSql\" :rows=\"5\" :placeholder=\"t('kbMgmt.sql.roPlaceholder')\" />",
+   "ph": []
+  },
+  "kbMgmt.sql.woTab": {
+   "ctx": "<a-tab-pane key=\"wr\" :tab=\"t('kbMgmt.sql.woTab')\">",
+   "ph": []
+  },
+  "kbMgmt.sql.dryRun": {
+   "ctx": "<a-button @click=\"dryRun\"><BugOutlined /> {{ t('kbMgmt.sql.dryRun') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.sql.submitReq": {
+   "ctx": "<a-button type=\"primary\" :disabled=\"!sourceId\" @click=\"submitReq\"><SendOutlined /> {{ t('kbMgmt.sql.submitReq') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.sql.impactTitle": {
+   "ctx": "<a-card v-if=\"impact\" size=\"small\" :title=\"t('kbMgmt.sql.impactTitle')\" style=\"margin-bottom: 12px\">",
+   "ph": []
+  },
+  "kbMgmt.sql.myRequests": {
+   "ctx": "<h4>{{ t('kbMgmt.sql.myRequests') }}</h4>",
+   "ph": []
+  },
+  "kbMgmt.sql.execToken": {
+   "ctx": "<a-button v-if=\"record.status === 'approved'\" size=\"small\" @click=\"exec(record)\">{{ t('kbMgmt.sql.execToken') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.sql.sqlPreview": {
+   "ctx": "{ title: t('kbMgmt.sql.sqlPreview'), dataIndex: 'sql_preview', key: 'sql_preview' },",
+   "ph": []
+  },
+  "kbMgmt.sql.queryFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.sql.queryFailed'))",
+   "ph": []
+  },
+  "kbMgmt.sql.dryRunNote": {
+   "ctx": "impact.value = { note: t('kbMgmt.sql.dryRunNote') }",
+   "ph": []
+  },
+  "kbMgmt.sql.reqSubmitted": {
+   "ctx": "message.success(t('kbMgmt.sql.reqSubmitted'))",
+   "ph": []
+  },
+  "kbMgmt.sql.submitFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.sql.submitFailed'))",
+   "ph": []
+  },
+  "kbMgmt.sql.tokenPrompt": {
+   "ctx": "const input = window.prompt(t('kbMgmt.sql.tokenPrompt'))",
+   "ph": []
+  },
+  "kbMgmt.sql.execOk": {
+   "ctx": "message.success(t('kbMgmt.sql.execOk'))",
+   "ph": []
+  },
+  "kbMgmt.sql.execFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.sql.execFailed'))",
+   "ph": []
+  },
+  "kbMgmt.std.seed": {
+   "ctx": "<a-button @click=\"seed\"><DatabaseOutlined /> {{ t('kbMgmt.std.seed') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.std.semanticType": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.std.semanticType')\"><a-input v-model:value=\"form.semantic_type\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.std.dataTypeExpect": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.std.dataTypeExpect')\"><a-input v-model:value=\"form.data_type_expect\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.std.securityLevel": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.std.securityLevel')\"><a-input v-model:value=\"form.security_level\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.std.aliases": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.std.aliases')\"><a-input v-model:value=\"aliasesText\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.std.saveSuccess": {
+   "ctx": "message.success(t('kbMgmt.std.saveSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.std.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.std.saveFailed'))",
+   "ph": []
+  },
+  "kbMgmt.std.deleteNotImplemented": {
+   "ctx": "message.info(t('kbMgmt.std.deleteNotImplemented'))",
+   "ph": []
+  },
+  "kbMgmt.std.seeded": {
+   "ctx": "message.success(t('kbMgmt.std.seeded'))",
+   "ph": []
+  },
+  "kbMgmt.std.seedFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.std.seedFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ext.syncEnabled": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ext.syncEnabled')\">",
+   "ph": []
+  },
+  "kbMgmt.ext.targetDataset": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ext.targetDataset')\" v-if=\"form.sync_enabled\"><a-input v-model:value=\"form.kb_dataset\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ext.syncInterval": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ext.syncInterval')\" v-if=\"form.sync_enabled\"><a-input-number v-model:value=\"form.sync_interval_min\" :min=\"1\" style=\"width:100%\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ext.syncCol": {
+   "ctx": "{ title: t('kbMgmt.ext.syncCol'), key: 'sync_enabled', width: 80 },",
+   "ph": []
+  },
+  "kbMgmt.ext.lastSync": {
+   "ctx": "{ title: t('kbMgmt.ext.lastSync'), dataIndex: 'last_sync_at', key: 'last_sync_at', width: 160 },",
+   "ph": []
+  },
+  "kbMgmt.ext.routerMissing": {
+   "ctx": "message.warning(t('kbMgmt.ext.routerMissing'))",
+   "ph": []
+  },
+  "kbMgmt.ext.saveSuccess": {
+   "ctx": "message.success(t('kbMgmt.ext.saveSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.ext.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.ext.saveFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ext.deleteFailed": {
+   "ctx": "message.error(t('kbMgmt.ext.deleteFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ext.syncToggled": {
+   "ctx": "message.success(t('kbMgmt.ext.syncToggled'))",
+   "ph": []
+  },
+  "kbMgmt.ext.syncRouterMissing": {
+   "ctx": "message.warning(t('kbMgmt.ext.syncRouterMissing'))",
+   "ph": []
+  },
+  "kbMgmt.ext.filterByInstance": {
+   "ctx": "<a-select v-model:value=\"instanceId\" :placeholder=\"t('kbMgmt.ext.filterByInstance')\" allow-clear style=\"width: 220px\" @change=\"load\">",
+   "ph": []
+  },
+  "kbMgmt.ext.instanceCol": {
+   "ctx": "{ title: t('kbMgmt.ext.instanceCol'), dataIndex: 'instance_name', key: 'instance_name' },",
+   "ph": []
+  },
+  "kbMgmt.ext.added": {
+   "ctx": "{ title: t('kbMgmt.ext.added'), dataIndex: 'added', key: 'added', width: 80 },",
+   "ph": []
+  },
+  "kbMgmt.ext.updated": {
+   "ctx": "{ title: t('kbMgmt.ext.updated'), dataIndex: 'updated', key: 'updated', width: 80 },",
+   "ph": []
+  },
+  "kbMgmt.ext.deletedCol": {
+   "ctx": "{ title: t('kbMgmt.ext.deletedCol'), dataIndex: 'deleted', key: 'deleted', width: 80 },",
+   "ph": []
+  },
+  "kbMgmt.ext.duration": {
+   "ctx": "{ title: t('kbMgmt.ext.duration'), dataIndex: 'duration_ms', key: 'duration_ms', width: 100 },",
+   "ph": []
+  },
+  "kbMgmt.common.errorCol": {
+   "ctx": "{ title: t('kbMgmt.common.errorCol'), key: 'error' },",
+   "ph": []
+  },
+  "kbMgmt.ext.syncJobsRouterMissing": {
+   "ctx": "message.warning(t('kbMgmt.ext.syncJobsRouterMissing'))",
+   "ph": []
+  },
+  "kbMgmt.dataset.rebuildIndex": {
+   "ctx": "<a-button size=\"small\" @click=\"rebuild(record)\">{{ t('kbMgmt.dataset.rebuildIndex') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.dataset.embeddingModel": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.dataset.embeddingModel')\">",
+   "ph": []
+  },
+  "kbMgmt.dataset.chunker": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.dataset.chunker')\">",
+   "ph": []
+  },
+  "kbMgmt.dataset.dimension": {
+   "ctx": "{ title: t('kbMgmt.dataset.dimension'), dataIndex: 'dimension', key: 'dimension', width: 90 },",
+   "ph": []
+  },
+  "kbMgmt.dataset.docCount": {
+   "ctx": "{ title: t('kbMgmt.dataset.docCount'), dataIndex: 'doc_count', key: 'doc_count', width: 90 },",
+   "ph": []
+  },
+  "kbMgmt.dataset.createSuccess": {
+   "ctx": "message.success(t('kbMgmt.dataset.createSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.dataset.createFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.dataset.createFailed'))",
+   "ph": []
+  },
+  "kbMgmt.dataset.rebuildHint": {
+   "ctx": "message.info(t('kbMgmt.dataset.rebuildHint', { name: row.name }))",
+   "ph": []
+  },
+  "kbMgmt.doc.selectDataset": {
+   "ctx": "<a-select v-model:value=\"kbId\" :placeholder=\"t('kbMgmt.doc.selectDataset')\" style=\"width: 240px\" @change=\"loadDocs\">",
+   "ph": []
+  },
+  "kbMgmt.doc.uploadHint": {
+   "ctx": "<p class=\"ant-upload-text\">{{ t('kbMgmt.doc.uploadHint') }}</p>",
+   "ph": []
+  },
+  "kbMgmt.doc.uploadSubHint": {
+   "ctx": "<p class=\"ant-upload-hint\">{{ t('kbMgmt.doc.uploadSubHint') }}</p>",
+   "ph": []
+  },
+  "kbMgmt.doc.chunkPreview": {
+   "ctx": "<a-button size=\"small\" @click=\"preview(record)\">{{ t('kbMgmt.doc.chunkPreview') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.doc.reupload": {
+   "ctx": "<a-button v-if=\"record.status === 'error'\" size=\"small\" @click=\"reupload(record)\">{{ t('kbMgmt.doc.reupload') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.common.title": {
+   "ctx": "{ title: t('kbMgmt.common.title'), dataIndex: 'title', key: 'title' },",
+   "ph": []
+  },
+  "kbMgmt.doc.chunkCount": {
+   "ctx": "{ title: t('kbMgmt.doc.chunkCount'), dataIndex: 'chunk_count', key: 'chunk_count', width: 90 },",
+   "ph": []
+  },
+  "kbMgmt.doc.uploaded": {
+   "ctx": "message.success(t('kbMgmt.doc.uploaded', { name: file.name }))",
+   "ph": []
+  },
+  "kbMgmt.doc.uploadFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.doc.uploadFailed'))",
+   "ph": []
+  },
+  "kbMgmt.doc.reuploadHint": {
+   "ctx": "message.info(t('kbMgmt.doc.reuploadHint'))",
+   "ph": []
+  },
+  "kbMgmt.doc.chunkPreviewPending": {
+   "ctx": "chunks.value = row.chunks || [{ index: 1, content: row.content_preview || t('kbMgmt.doc.chunkPreviewPending') }]",
+   "ph": []
+  },
+  "kbMgmt.search.queryPlaceholder": {
+   "ctx": "<a-input v-model:value=\"query\" :placeholder=\"t('kbMgmt.search.queryPlaceholder')\" style=\"flex: 1\" @press-enter=\"run\" />",
+   "ph": []
+  },
+  "kbMgmt.search.compareMode": {
+   "ctx": "<a-switch v-model:checked=\"compare\" /> <span class=\"muted\">{{ t('kbMgmt.search.compareMode') }}</span>",
+   "ph": []
+  },
+  "kbMgmt.search.searchBtn": {
+   "ctx": "<a-button type=\"primary\" :disabled=\"!kbId\" @click=\"run\"><SearchOutlined /> {{ t('kbMgmt.search.searchBtn') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.search.source": {
+   "ctx": "<template #title>#{{ index + 1 }} · score {{ item.score?.toFixed?.(3) }} · {{ t('kbMgmt.search.source') }} {{ item.source }}</template>",
+   "ph": []
+  },
+  "kbMgmt.search.vecOnly": {
+   "ctx": "<h4>{{ t('kbMgmt.search.vecOnly') }}</h4>",
+   "ph": []
+  },
+  "kbMgmt.search.vecHybrid": {
+   "ctx": "<h4>{{ t('kbMgmt.search.vecHybrid') }}</h4>",
+   "ph": []
+  },
+  "kbMgmt.search.searchFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.search.searchFailed'))",
+   "ph": []
+  },
+  "kbMgmt.model.selectOntology": {
+   "ctx": "<a-select v-model:value=\"ontoId\" :placeholder=\"t('kbMgmt.model.selectOntology')\" style=\"width: 240px\" @change=\"loadClasses\">",
+   "ph": []
+  },
+  "kbMgmt.cls.addClass": {
+   "ctx": "<a-button type=\"primary\" :disabled=\"!ontoId\" @click=\"addClass\"><PlusOutlined /> {{ t('kbMgmt.cls.addClass') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.cls.validate": {
+   "ctx": "<a-button :disabled=\"!ontoId\" @click=\"validate\">{{ t('kbMgmt.cls.validate') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.cls.routerMissing": {
+   "ctx": "message.warning(t('kbMgmt.cls.routerMissing'))",
+   "ph": []
+  },
+  "kbMgmt.cls.namePrompt": {
+   "ctx": "const name = window.prompt(t('kbMgmt.cls.namePrompt'))",
+   "ph": []
+  },
+  "kbMgmt.cls.added": {
+   "ctx": "message.success(t('kbMgmt.cls.added'))",
+   "ph": []
+  },
+  "kbMgmt.cls.addFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.cls.addFailed'))",
+   "ph": []
+  },
+  "kbMgmt.cls.deleteFailed": {
+   "ctx": "message.error(t('kbMgmt.cls.deleteFailed'))",
+   "ph": []
+  },
+  "kbMgmt.cls.validateOk": {
+   "ctx": "validateMsg.value = classes.value.length ? t('kbMgmt.cls.validateOk', { count: classes.value.length }) : t('kbMgmt.cls.noClasses')",
+   "ph": []
+  },
+  "kbMgmt.cls.noClasses": {
+   "ctx": "validateMsg.value = classes.value.length ? t('kbMgmt.cls.validateOk', { count: classes.value.length }) : t('kbMgmt.cls.noClasses')",
+   "ph": []
+  },
+  "kbMgmt.model.objTab": {
+   "ctx": "<a-tab-pane key=\"obj\" :tab=\"t('kbMgmt.model.objTab')\">",
+   "ph": []
+  },
+  "kbMgmt.model.add": {
+   "ctx": "<a-button type=\"primary\" size=\"small\" @click=\"addObj\"><PlusOutlined /> {{ t('kbMgmt.model.add') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.model.suggested": {
+   "ctx": "<template #actions v-if=\"item.source === 'rule'\"><a-tag color=\"blue\">{{ t('kbMgmt.model.suggested') }}</a-tag></template>",
+   "ph": []
+  },
+  "kbMgmt.model.propTab": {
+   "ctx": "<a-tab-pane key=\"prop\" :tab=\"t('kbMgmt.model.propTab')\">",
+   "ph": []
+  },
+  "kbMgmt.model.propPending": {
+   "ctx": "<a-empty :description=\"t('kbMgmt.model.propPending')\" />",
+   "ph": []
+  },
+  "kbMgmt.model.relTab": {
+   "ctx": "<a-tab-pane key=\"rel\" :tab=\"t('kbMgmt.model.relTab')\">",
+   "ph": []
+  },
+  "kbMgmt.model.cqTab": {
+   "ctx": "<a-tab-pane key=\"cq\" :tab=\"t('kbMgmt.model.cqTab')\">",
+   "ph": []
+  },
+  "kbMgmt.model.routerMissing": {
+   "ctx": "message.warning(t('kbMgmt.model.routerMissing'))",
+   "ph": []
+  },
+  "kbMgmt.model.objNamePrompt": {
+   "ctx": "const name = window.prompt(t('kbMgmt.model.objNamePrompt'))",
+   "ph": []
+  },
+  "kbMgmt.model.added": {
+   "ctx": "message.success(t('kbMgmt.model.added'))",
+   "ph": []
+  },
+  "kbMgmt.model.addFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.model.addFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ont.exportTtl": {
+   "ctx": "<a-button size=\"small\" @click=\"doExport(record)\">{{ t('kbMgmt.ont.exportTtl') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.ont.importTtl": {
+   "ctx": "><a-button size=\"small\">{{ t('kbMgmt.ont.importTtl') }}</a-button></a-upload>",
+   "ph": []
+  },
+  "kbMgmt.ont.code": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ont.code')\" required><a-input v-model:value=\"form.code\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ont.namespace": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ont.namespace')\"><a-input v-model:value=\"form.namespace\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ont.version": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.ont.version')\"><a-input v-model:value=\"form.version\" /></a-form-item>",
+   "ph": []
+  },
+  "kbMgmt.ont.routerMissing": {
+   "ctx": "message.warning(t('kbMgmt.ont.routerMissing'))",
+   "ph": []
+  },
+  "kbMgmt.ont.saveSuccess": {
+   "ctx": "message.success(t('kbMgmt.ont.saveSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.ont.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.ont.saveFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ont.deleteFailed": {
+   "ctx": "message.error(t('kbMgmt.ont.deleteFailed'))",
+   "ph": []
+  },
+  "kbMgmt.ont.exportRouterMissing": {
+   "ctx": "message.warning(t('kbMgmt.ont.exportRouterMissing'))",
+   "ph": []
+  },
+  "kbMgmt.ont.importSuccess": {
+   "ctx": "message.success(t('kbMgmt.ont.importSuccess'))",
+   "ph": []
+  },
+  "kbMgmt.ont.importFailed": {
+   "ctx": "message.error(t('kbMgmt.ont.importFailed'))",
+   "ph": []
+  },
+  "kbMgmt.review.pendingDivider": {
+   "ctx": "<a-divider>{{ t('kbMgmt.review.pendingDivider') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.review.accept": {
+   "ctx": "<a-button size=\"small\" type=\"primary\" @click=\"decide(record, 'accepted')\">{{ t('kbMgmt.review.accept') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.review.reject": {
+   "ctx": "<a-button size=\"small\" danger @click=\"decide(record, 'rejected')\">{{ t('kbMgmt.review.reject') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.review.versionsDivider": {
+   "ctx": "<a-divider>{{ t('kbMgmt.review.versionsDivider') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.review.leftVersion": {
+   "ctx": "<a-select v-model:value=\"leftV\" :placeholder=\"t('kbMgmt.review.leftVersion')\" style=\"width: 200px\" @change=\"diff\">",
+   "ph": []
+  },
+  "kbMgmt.review.rightVersion": {
+   "ctx": "<a-select v-model:value=\"rightV\" :placeholder=\"t('kbMgmt.review.rightVersion')\" style=\"width: 200px\" @change=\"diff\">",
+   "ph": []
+  },
+  "kbMgmt.review.confidence": {
+   "ctx": "{ title: t('kbMgmt.review.confidence'), dataIndex: 'confidence', key: 'confidence', width: 90 },",
+   "ph": []
+  },
+  "kbMgmt.review.evidence": {
+   "ctx": "{ title: t('kbMgmt.review.evidence'), key: 'evidence' },",
+   "ph": []
+  },
+  "kbMgmt.review.routerMissing": {
+   "ctx": "message.warning(t('kbMgmt.review.routerMissing'))",
+   "ph": []
+  },
+  "kbMgmt.review.accepted": {
+   "ctx": "message.success(decision === 'accepted' ? t('kbMgmt.review.accepted') : t('kbMgmt.review.rejected'))",
+   "ph": []
+  },
+  "kbMgmt.review.rejected": {
+   "ctx": "message.success(decision === 'accepted' ? t('kbMgmt.review.accepted') : t('kbMgmt.review.rejected'))",
+   "ph": []
+  },
+  "kbMgmt.review.reviewFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.review.reviewFailed'))",
+   "ph": []
+  }
+ },
+ "wikiMgmt": {
+  "wikiMgmt.tabKb": {
+   "ctx": "<a-tab-pane key=\"kb\" :tab=\"t('wikiMgmt.tabKb')\" />",
+   "ph": []
+  },
+  "wikiMgmt.tabCategory": {
+   "ctx": "<a-tab-pane key=\"category\" :tab=\"t('wikiMgmt.tabCategory')\" />",
+   "ph": []
+  },
+  "wikiMgmt.tabArticle": {
+   "ctx": "<a-tab-pane key=\"article\" :tab=\"t('wikiMgmt.tabArticle')\" />",
+   "ph": []
+  },
+  "wikiMgmt.tabRag": {
+   "ctx": "<a-tab-pane key=\"rag\" :tab=\"t('wikiMgmt.tabRag')\" />",
+   "ph": []
+  },
+  "wikiMgmt.tabVersion": {
+   "ctx": "<a-tab-pane key=\"version\" :tab=\"t('wikiMgmt.tabVersion')\" />",
+   "ph": []
+  },
+  "wikiMgmt.art.searchPlaceholder": {
+   "ctx": ":placeholder=\"t('wikiMgmt.art.searchPlaceholder')\"",
+   "ph": []
+  },
+  "wikiMgmt.art.published": {
+   "ctx": "{{ record.status === 1 ? t('wikiMgmt.art.published') : record.status === -1 ? t('wikiMgmt.art.archived') : t('wikiMgmt.art.draft') }}",
+   "ph": []
+  },
+  "wikiMgmt.art.archived": {
+   "ctx": "{{ record.status === 1 ? t('wikiMgmt.art.published') : record.status === -1 ? t('wikiMgmt.art.archived') : t('wikiMgmt.art.draft') }}",
+   "ph": []
+  },
+  "wikiMgmt.art.draft": {
+   "ctx": "{{ record.status === 1 ? t('wikiMgmt.art.published') : record.status === -1 ? t('wikiMgmt.art.archived') : t('wikiMgmt.art.draft') }}",
+   "ph": []
+  },
+  "wikiMgmt.art.view": {
+   "ctx": "<a @click=\"router.push(`/wiki/${record.slug}`)\">{{ t('wikiMgmt.art.view') }}</a>",
+   "ph": []
+  },
+  "wikiMgmt.art.loadFailed": {
+   "ctx": "message.error(t('wikiMgmt.art.loadFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.cat.create": {
+   "ctx": "<a-button type=\"primary\" @click=\"openCreate\">{{ t('wikiMgmt.cat.create') }}</a-button>",
+   "ph": []
+  },
+  "wikiMgmt.deleteConfirm": {
+   "ctx": "<a-popconfirm :title=\"t('wikiMgmt.deleteConfirm')\" @confirm=\"remove(id)\">",
+   "ph": []
+  },
+  "wikiMgmt.cat.edit": {
+   "ctx": ":title=\"editing ? t('wikiMgmt.cat.edit') : t('wikiMgmt.cat.create')\"",
+   "ph": []
+  },
+  "wikiMgmt.cat.namePlaceholder": {
+   "ctx": "<a-input v-model:value=\"form.name\" :placeholder=\"t('wikiMgmt.cat.namePlaceholder')\" />",
+   "ph": []
+  },
+  "wikiMgmt.cat.parent": {
+   "ctx": "<a-form-item :label=\"t('wikiMgmt.cat.parent')\">",
+   "ph": []
+  },
+  "wikiMgmt.cat.topLevel": {
+   "ctx": ":placeholder=\"t('wikiMgmt.cat.topLevel')\"",
+   "ph": []
+  },
+  "wikiMgmt.cat.loadFailed": {
+   "ctx": "message.error(t('wikiMgmt.cat.loadFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.nameRequired": {
+   "ctx": "message.warning(t('wikiMgmt.nameRequired'))",
+   "ph": []
+  },
+  "wikiMgmt.saved": {
+   "ctx": "message.success(t('wikiMgmt.saved'))",
+   "ph": []
+  },
+  "wikiMgmt.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('wikiMgmt.saveFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.cat.deleteFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('wikiMgmt.cat.deleteFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.kb.create": {
+   "ctx": "<a-button type=\"primary\" @click=\"openCreate\">{{ t('wikiMgmt.kb.create') }}</a-button>",
+   "ph": []
+  },
+  "wikiMgmt.enabled": {
+   "ctx": "{{ record.status === 1 ? t('wikiMgmt.enabled') : t('wikiMgmt.disabled') }}",
+   "ph": []
+  },
+  "wikiMgmt.disabled": {
+   "ctx": "{{ record.status === 1 ? t('wikiMgmt.enabled') : t('wikiMgmt.disabled') }}",
+   "ph": []
+  },
+  "wikiMgmt.kb.edit": {
+   "ctx": ":title=\"editing ? t('wikiMgmt.kb.edit') : t('wikiMgmt.kb.create')\"",
+   "ph": []
+  },
+  "wikiMgmt.kb.namePlaceholder": {
+   "ctx": "<a-input v-model:value=\"form.name\" :placeholder=\"t('wikiMgmt.kb.namePlaceholder')\" />",
+   "ph": []
+  },
+  "wikiMgmt.kb.loadFailed": {
+   "ctx": "message.error(t('wikiMgmt.kb.loadFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.rag.queryPlaceholder": {
+   "ctx": ":placeholder=\"t('wikiMgmt.rag.queryPlaceholder')\"",
+   "ph": []
+  },
+  "wikiMgmt.rag.modeHybrid": {
+   "ctx": "<a-radio-button value=\"hybrid\">{{ t('wikiMgmt.rag.modeHybrid') }}</a-radio-button>",
+   "ph": []
+  },
+  "wikiMgmt.rag.modeSemantic": {
+   "ctx": "<a-radio-button value=\"semantic\">{{ t('wikiMgmt.rag.modeSemantic') }}</a-radio-button>",
+   "ph": []
+  },
+  "wikiMgmt.rag.modeKeyword": {
+   "ctx": "<a-radio-button value=\"keyword\">{{ t('wikiMgmt.rag.modeKeyword') }}</a-radio-button>",
+   "ph": []
+  },
+  "wikiMgmt.rag.askAi": {
+   "ctx": "<template #icon><BulbOutlined /></template>{{ t('wikiMgmt.rag.askAi') }}",
+   "ph": []
+  },
+  "wikiMgmt.rag.resultsTab": {
+   "ctx": "<a-tab-pane key=\"result\" :tab=\"t('wikiMgmt.rag.resultsTab')\">",
+   "ph": []
+  },
+  "wikiMgmt.rag.aiTab": {
+   "ctx": "<a-tab-pane key=\"ai\" :tab=\"t('wikiMgmt.rag.aiTab')\">",
+   "ph": []
+  },
+  "wikiMgmt.rag.askHint": {
+   "ctx": "<a-empty v-else :description=\"t('wikiMgmt.rag.askHint')\" />",
+   "ph": []
+  },
+  "wikiMgmt.rag.recentLogs": {
+   "ctx": "<a-divider>{{ t('wikiMgmt.rag.recentLogs') }}</a-divider>",
+   "ph": []
+  },
+  "wikiMgmt.rag.time": {
+   "ctx": "{ title: t('wikiMgmt.rag.time'), dataIndex: 'created_at', key: 'created_at' },",
+   "ph": []
+  },
+  "wikiMgmt.rag.query": {
+   "ctx": "{ title: t('wikiMgmt.rag.query'), dataIndex: 'query', key: 'query' },",
+   "ph": []
+  },
+  "wikiMgmt.rag.mode": {
+   "ctx": "{ title: t('wikiMgmt.rag.mode'), dataIndex: 'mode', key: 'mode' },",
+   "ph": []
+  },
+  "wikiMgmt.rag.hits": {
+   "ctx": "{ title: t('wikiMgmt.rag.hits'), dataIndex: 'result_count', key: 'result_count' },",
+   "ph": []
+  },
+  "wikiMgmt.rag.askFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('wikiMgmt.rag.askFailed'))",
+   "ph": []
+  },
+  "wikiMgmt.ver.selectArticle": {
+   "ctx": ":placeholder=\"t('wikiMgmt.ver.selectArticle')\"",
+   "ph": []
+  },
+  "wikiMgmt.ver.pleaseSelect": {
+   "ctx": "<a-empty v-else :description=\"t('wikiMgmt.ver.pleaseSelect')\" style=\"margin-top: 40px\" />",
+   "ph": []
+  },
+  "wikiMgmt.noVersions": {
+   "ctx": "<a-list :data-source=\"versions\" :loading=\"loading\" size=\"small\" :locale=\"{ emptyText: t('wikiMgmt.noVersions') }\">",
+   "ph": []
+  }
+ },
+ "kmsWiki": {
+  "kmsWiki.title": {
+   "ctx": "<a-breadcrumb-item><a @click=\"$router.push('/wiki')\">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>",
+   "ph": []
+  },
+  "kmsWiki.titlePlaceholder": {
+   "ctx": "<a-input v-model:value=\"article.title\" size=\"large\" :placeholder=\"t('kmsWiki.titlePlaceholder')\" />",
+   "ph": []
+  },
+  "kmsWiki.body": {
+   "ctx": "<a-form-item :label=\"t('kmsWiki.body')\">",
+   "ph": []
+  },
+  "kmsWiki.bodyPlaceholder": {
+   "ctx": ":placeholder=\"t('kmsWiki.bodyPlaceholder')\"",
+   "ph": []
+  },
+  "kmsWiki.changeNote": {
+   "ctx": "<a-form-item :label=\"t('kmsWiki.changeNote')\">",
+   "ph": []
+  },
+  "kmsWiki.changeNotePlaceholder": {
+   "ctx": "<a-input v-model:value=\"changeNote\" :placeholder=\"t('kmsWiki.changeNotePlaceholder')\" />",
+   "ph": []
+  },
+  "kmsWiki.selectCategory": {
+   "ctx": ":placeholder=\"t('kmsWiki.selectCategory')\"",
+   "ph": []
+  },
+  "kmsWiki.tags": {
+   "ctx": "<a-card :title=\"t('kmsWiki.tags')\" size=\"small\" style=\"margin-top: 16px\">",
+   "ph": []
+  },
+  "kmsWiki.tagsInputPlaceholder": {
+   "ctx": ":placeholder=\"t('kmsWiki.tagsInputPlaceholder')\"",
+   "ph": []
+  },
+  "kmsWiki.owlClasses": {
+   "ctx": "<a-card :title=\"t('kmsWiki.owlClasses')\" size=\"small\" style=\"margin-top: 16px\">",
+   "ph": []
+  },
+  "kmsWiki.owlHint": {
+   "ctx": "<div class=\"hint-text\">{{ t('kmsWiki.owlHint') }}</div>",
+   "ph": []
+  },
+  "kmsWiki.publishStatus": {
+   "ctx": "<a-card :title=\"t('kmsWiki.publishStatus')\" size=\"small\" style=\"margin-top: 16px\">",
+   "ph": []
+  },
+  "kmsWiki.notFound": {
+   "ctx": "message.error(t('kmsWiki.notFound'))",
+   "ph": []
+  },
+  "kmsWiki.titleRequired": {
+   "ctx": "message.warning(t('kmsWiki.titleRequired'))",
+   "ph": []
+  },
+  "kmsWiki.views": {
+   "ctx": "v{{ article.version }} · {{ t('kmsWiki.views', { count: article.view_count }) }} · {{ formatDate(article.updated_at) }}",
+   "ph": []
+  },
+  "kmsWiki.backlinks": {
+   "ctx": "<a-card :title=\"t('kmsWiki.backlinks')\" size=\"small\" v-if=\"article.backlinks?.length\" style=\"margin-top: 16px\">",
+   "ph": []
+  },
+  "kmsWiki.wikiLinks": {
+   "ctx": "<a-card :title=\"t('kmsWiki.wikiLinks')\" size=\"small\" v-if=\"article.wiki_links?.length\" style=\"margin-top: 16px\">",
+   "ph": []
+  },
+  "kmsWiki.versionHistory": {
+   "ctx": ":title=\"t('kmsWiki.versionHistory')\"",
+   "ph": []
+  },
+  "kmsWiki.noNote": {
+   "ctx": ":description=\"`${item.change_note || t('kmsWiki.noNote')} · ${formatDate(item.created_at)}`\"",
+   "ph": []
+  },
+  "kmsWiki.noContent": {
+   "ctx": "if (!article.value?.content) return `<p>${t('kmsWiki.noContent')}</p>`",
+   "ph": []
+  },
+  "kmsWiki.loadVersionsFailed": {
+   "ctx": "message.error(t('kmsWiki.loadVersionsFailed'))",
+   "ph": []
+  },
+  "kmsWiki.searchPlaceholder": {
+   "ctx": ":placeholder=\"t('kmsWiki.searchPlaceholder')\"",
+   "ph": []
+  },
+  "kmsWiki.createArticle": {
+   "ctx": "{{ t('kmsWiki.createArticle') }}",
+   "ph": []
+  },
+  "kmsWiki.noSummary": {
+   "ctx": ":description=\"item.summary || t('kmsWiki.noSummary')\"",
+   "ph": []
+  },
+  "kmsWiki.slugPlaceholder": {
+   "ctx": "<a-input v-model:value=\"newArticle.slug\" :placeholder=\"t('kmsWiki.slugPlaceholder')\" />",
+   "ph": []
+  },
+  "kmsWiki.summary": {
+   "ctx": "<a-form-item :label=\"t('kmsWiki.summary')\">",
+   "ph": []
+  },
+  "kmsWiki.summaryPlaceholder": {
+   "ctx": "<a-textarea v-model:value=\"newArticle.summary\" :rows=\"2\" :placeholder=\"t('kmsWiki.summaryPlaceholder')\" />",
+   "ph": []
+  },
+  "kmsWiki.tagsPlaceholder": {
+   "ctx": ":placeholder=\"t('kmsWiki.tagsPlaceholder')\"",
+   "ph": []
+  },
+  "kmsWiki.searchFailed": {
+   "ctx": "message.error(t('kmsWiki.searchFailed'))",
+   "ph": []
+  },
+  "kmsWiki.citations": {
+   "ctx": "<a-divider v-if=\"citations.length\" orientation=\"left\">{{ t('kmsWiki.citations') }}</a-divider>",
+   "ph": []
+  },
+  "kmsWiki.searchAiPlaceholder": {
+   "ctx": ":placeholder=\"t('kmsWiki.searchAiPlaceholder')\"",
+   "ph": []
+  },
+  "kmsWiki.noResults": {
+   "ctx": "<a-list :data-source=\"items\" :loading=\"loading\" size=\"small\" :locale=\"{ emptyText: t('kmsWiki.noResults') }\">",
+   "ph": []
+  },
+  "kmsWiki.relevance": {
+   "ctx": "{{ t('kmsWiki.relevance') }} {{ item.score }}",
+   "ph": []
+  },
+  "kmsWiki.diffTitle": {
+   "ctx": ":title=\"t('kmsWiki.diffTitle', { target: targetVersion, current: currentVersion })\"",
+   "ph": []
+  },
+  "kmsWiki.noDiff": {
+   "ctx": "<pre class=\"diff-pre\">{{ diff || t('kmsWiki.noDiff') }}</pre>",
+   "ph": []
+  },
+  "kmsWiki.rollbackConfirm": {
+   "ctx": ":title=\"t('kmsWiki.rollbackConfirm', { version: versionNumber })\"",
+   "ph": []
+  },
+  "kmsWiki.rollbackDescription": {
+   "ctx": ":description=\"t('kmsWiki.rollbackDescription', { from: versionNumber, to: (currentVersion || 0) + 1 })\"",
+   "ph": []
+  },
+  "kmsWiki.rollbackToVersion": {
+   "ctx": "{{ t('kmsWiki.rollbackToVersion') }}",
+   "ph": []
+  },
+  "kmsWiki.rolledBack": {
+   "ctx": "message.success(t('kmsWiki.rolledBack'))",
+   "ph": []
+  },
+  "kmsWiki.rollbackFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kmsWiki.rollbackFailed'))",
+   "ph": []
+  },
+  "kmsWiki.operation": {
+   "ctx": ":description=\"`${item.change_note || t('kmsWiki.noNote')} · ${t('kmsWiki.operation')}:${item.operation_type} · ${formatDate(item.created_at)}`\"",
+   "ph": []
+  },
+  "kmsWiki.compare": {
+   "ctx": "<a @click=\"showDiff(item)\">{{ t('kmsWiki.compare') }}</a>",
+   "ph": []
+  }
+ }
+}

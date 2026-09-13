@@ -3,12 +3,12 @@
     <!-- 头部 -->
     <div class="panel-header">
       <div class="header-left">
-        <h2>API 密钥管理</h2>
-        <p class="sub">管理 AI 平台的 API 密钥配置，支持 OpenAI、通义千问、智谱等多种平台</p>
+        <h2>{{ t('apiKeyMgmt.pageTitle') }}</h2>
+        <p class="sub">{{ t('apiKeyMgmt.pageSub') }}</p>
       </div>
       <a-button type="primary" @click="showCreateModal">
         <template #icon><PlusOutlined /></template>
-        新增密钥
+        {{ t('apiKeyMgmt.addKey') }}
       </a-button>
     </div>
 
@@ -16,7 +16,7 @@
     <div class="search-bar">
       <a-input-search
         v-model:value="filters.name"
-        placeholder="搜索密钥名称"
+        :placeholder="t('apiKeyMgmt.searchKey')"
         allow-clear
         style="width:240px"
         @search="handleSearch"
@@ -24,7 +24,7 @@
       />
       <a-select
         v-model:value="filters.platform"
-        :placeholder="t('apiKeyMgmt.platformFilter')"
+        :placeholder="t('webSearch.platformFilter')"
         allow-clear
         style="width:160px"
         @change="handleSearch"
@@ -33,15 +33,15 @@
       </a-select>
       <a-select
         v-model:value="filters.status"
-        :placeholder="t('apiKeyMgmt.statusFilter')"
+        :placeholder="t('webSearch.statusFilter')"
         allow-clear
         style="width:120px"
         @change="handleSearch"
       >
-        <a-select-option :value="1">启用</a-select-option>
-        <a-select-option :value="0">禁用</a-select-option>
+        <a-select-option :value="1">{{ t('apiKeyMgmt.enabled') }}</a-select-option>
+        <a-select-option :value="0">{{ t('apiKeyMgmt.disabled') }}</a-select-option>
       </a-select>
-      <a-button @click="handleReset"><ReloadOutlined /> 重置</a-button>
+      <a-button @click="handleReset"><ReloadOutlined /> {{ t('common.reset') }}</a-button>
     </div>
 
     <!-- 表格 -->
@@ -69,16 +69,16 @@
       </template>
       <template #status="{ record }">
         <a-tag :color="record.status === 1 ? 'success' : 'error'">
-          {{ record.status === 1 ? '启用' : '禁用' }}
+          {{ record.status === 1 ? t('apiKeyMgmt.enabled') : t('apiKeyMgmt.disabled') }}
         </a-tag>
       </template>
       <template #actions="{ record }">
         <a-space>
           <a-button type="link" size="small" @click="openModelList(record)">
-            <RobotOutlined /> 模型
+            <RobotOutlined /> {{ t('apiKeyMgmt.models') }}
           </a-button>
           <a-button type="link" size="small" @click="handleEdit(record)">
-            <EditOutlined /> 编辑
+            <EditOutlined /> {{ t('common.edit') }}
           </a-button>
           <a-button
             type="link"
@@ -86,16 +86,16 @@
             @click="toggleStatus(record)"
             :style="{ color: record.status === 1 ? 'var(--warn)' : 'var(--ok)' }"
           >
-            {{ record.status === 1 ? '禁用' : '启用' }}
+            {{ record.status === 1 ? t('apiKeyMgmt.disabled') : t('apiKeyMgmt.enabled') }}
           </a-button>
           <a-popconfirm
-            title="确定删除该 API 密钥？"
-            ok-text="确定"
-            cancel-text="取消"
+            :title="t('apiKeyMgmt.deleteConfirm')"
+            :ok-text="t('common.confirm')"
+            :cancel-text="t('common.cancel')"
             @confirm="handleDelete(record)"
           >
             <a-button type="link" size="small" danger>
-              <DeleteOutlined /> 删除
+              <DeleteOutlined /> {{ t('common.delete') }}
             </a-button>
           </a-popconfirm>
         </a-space>
@@ -119,7 +119,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import BackTable from '@/components/common/BackTable/index.vue'
@@ -132,6 +133,8 @@ import {
   AI_PLATFORMS,
   type AiApiKey
 } from '@/api/ai-apikey'
+
+const { t } = useI18n()
 
 // 列表数据
 const loading = ref(false)
@@ -151,15 +154,15 @@ const filters = reactive({
 })
 
 // 表格列
-const columns: any[] = [
-  { title: '密钥名称', dataIndex: 'name', key: 'name', width: 180, ellipsis: true, align: 'center' as const },
-  { title: '平台', dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
+const columns = computed<any[]>(() => [
+  { title: t('apiKeyMgmt.colKeyName'), dataIndex: 'name', key: 'name', width: 180, ellipsis: true, align: 'center' as const },
+  { title: t('apiKeyMgmt.colPlatform'), dataIndex: 'platform', key: 'platform', width: 120, align: 'center' as const },
   { title: 'API Key', dataIndex: 'api_key', key: 'api_key', width: 180, align: 'center' as const },
   { title: 'URL', dataIndex: 'url', key: 'url', width: 200, ellipsis: true, align: 'center' as const },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 80, align: 'center' as const },
-  { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 170, align: 'center' as const },
-  { title: '操作', key: 'actions', width: 280, fixed: 'right', align: 'center' as const }
-]
+  { title: t('apiKeyMgmt.colStatus'), dataIndex: 'status', key: 'status', width: 80, align: 'center' as const },
+  { title: t('apiKeyMgmt.colCreatedAt'), dataIndex: 'created_at', key: 'created_at', width: 170, align: 'center' as const },
+  { title: t('apiKeyMgmt.colActions'), key: 'actions', width: 280, fixed: 'right', align: 'center' as const }
+])
 
 // 新增/编辑弹窗
 const formVisible = ref(false)
@@ -187,7 +190,7 @@ const loadData = async () => {
     dataList.value = res.data
     pagination.total = res.total
   } catch (e: any) {
-    message.error(e.message || '加载失败')
+    message.error(e.message || t('apiKeyMgmt.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -239,10 +242,10 @@ const toggleStatus = async (record: AiApiKey) => {
       id: record.id,
       status: record.status === 1 ? 0 : 1
     })
-    message.success(record.status === 1 ? '已禁用' : '已启用')
+    message.success(record.status === 1 ? t('apiKeyMgmt.disabledMsg') : t('apiKeyMgmt.enabledMsg'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '操作失败')
+    message.error(e.message || t('common.error'))
   }
 }
 
@@ -250,10 +253,10 @@ const toggleStatus = async (record: AiApiKey) => {
 const handleDelete = async (record: AiApiKey) => {
   try {
     await deleteApiKey(record.id)
-    message.success('删除成功')
+    message.success(t('apiKeyMgmt.deleteSuccess'))
     loadData()
   } catch (e: any) {
-    message.error(e.message || '删除失败')
+    message.error(e.message || t('apiKeyMgmt.deleteFailed'))
   }
 }
 

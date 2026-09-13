@@ -2,12 +2,12 @@
   <div class="team-replay">
     <div class="replay-header">
       <div class="left">
-        <a-button type="link" @click="goBack"><ArrowLeftOutlined /> 返回</a-button>
-        <span class="title">运行回放 · {{ runId }}</span>
+        <a-button type="link" @click="goBack"><ArrowLeftOutlined /> {{ t('common.back') }}</a-button>
+        <span class="title">{{ t('teamMgmt.replayTitle', { id: runId }) }}</span>
         <a-tag :color="run?.status === 'completed' ? 'green' : 'default'">{{ run?.status }}</a-tag>
       </div>
       <div class="right">
-        <a-button @click="openRerun"><RetweetOutlined /> 分支重跑</a-button>
+        <a-button @click="openRerun"><RetweetOutlined /> {{ t('teamMgmt.branchRerun') }}</a-button>
       </div>
     </div>
 
@@ -59,16 +59,16 @@
           </div>
         </div>
       </div>
-      <a-empty v-else description="暂无回放数据" />
+      <a-empty v-else :description="t('teamMgmt.noReplayData')" />
     </a-spin>
 
     <!-- 分支重跑弹窗 -->
-    <a-modal v-model:open="rerunModal" title="分支重跑" @ok="submitRerun" :confirm-loading="rerunLoading">
+    <a-modal v-model:open="rerunModal" :title="t('teamMgmt.branchRerun')" @ok="submitRerun" :confirm-loading="rerunLoading">
       <a-form layout="vertical">
-        <a-form-item label="重跑起点节点 (branch_from_node)">
-          <a-select v-model:value="rerunForm.branch_from_node" :options="nodeOptions" allow-clear placeholder="留空表示从团队起点" />
+        <a-form-item :label="t('teamMgmt.rerunFromNode')">
+          <a-select v-model:value="rerunForm.branch_from_node" :options="nodeOptions" allow-clear :placeholder="t('teamMgmt.rerunFromPlaceholder')" />
         </a-form-item>
-        <a-form-item label="覆盖输入 (可选)">
+        <a-form-item :label="t('teamMgmt.overrideInput')">
           <a-textarea v-model:value="rerunForm.input_text" :rows="3" />
         </a-form-item>
       </a-form>
@@ -79,6 +79,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
   ArrowLeftOutlined,
@@ -93,6 +94,7 @@ import * as api from '@/api/agentTeam'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const runId = ref<string>(String(route.params.runId))
 
 const loading = ref(false)
@@ -118,7 +120,7 @@ const fetchTimeline = async () => {
     timeline.value = (res as any).timeline || []
     run.value = (res as any).run
   } catch (e: any) {
-    message.error('加载回放失败：' + (e?.message || e))
+    message.error(t('teamMgmt.loadReplayFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -150,10 +152,10 @@ const submitRerun = async () => {
     })
     rerunModal.value = false
     const newRunId = (res as any).run_id
-    message.success('已创建分支运行，跳转对话')
+    message.success(t('teamMgmt.rerunCreated'))
     router.push(`/admin/agent-team/${run.value?.team_id}/run/${newRunId}`)
   } catch (e: any) {
-    message.error('重跑失败：' + (e?.message || e))
+    message.error(t('teamMgmt.rerunFailed', { msg: e?.message || t('agentMgmt.unknownError') }))
   } finally {
     rerunLoading.value = false
   }

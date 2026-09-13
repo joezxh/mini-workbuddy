@@ -2,22 +2,22 @@
   <div class="article-view" v-if="article">
     <div class="article-toolbar">
       <a-breadcrumb>
-        <a-breadcrumb-item><a @click="$router.push('/wiki')">知识库</a></a-breadcrumb-item>
+        <a-breadcrumb-item><a @click="$router.push('/wiki')">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
         <a-breadcrumb-item>{{ article.title }}</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="toolbar-actions">
         <a-button @click="$router.push(`/wiki/edit/${article.id}`)">
           <template #icon><EditOutlined /></template>
-          编辑
+          {{ t('common.edit') }}
         </a-button>
         <a-button @click="showVersions = true">
           <template #icon><HistoryOutlined /></template>
-          版本 ({{ article.version }})
+          {{ t('wikiMgmt.tabVersion') }} ({{ article.version }})
         </a-button>
-        <a-popconfirm title="确认删除?" @confirm="handleDelete">
+        <a-popconfirm :title="t('wikiMgmt.deleteConfirm')" @confirm="handleDelete">
           <a-button danger>
             <template #icon><DeleteOutlined /></template>
-            删除
+            {{ t('common.delete') }}
           </a-button>
         </a-popconfirm>
       </div>
@@ -31,7 +31,7 @@
           <div class="article-meta-bar">
             <a-tag v-for="tag in article.tags" :key="tag" color="blue">{{ tag }}</a-tag>
             <span class="meta-info">
-              v{{ article.version }} · {{ article.view_count }} 次浏览 · {{ formatDate(article.updated_at) }}
+              v{{ article.version }} · {{ t('kmsWiki.views', { count: article.view_count }) }} · {{ formatDate(article.updated_at) }}
             </span>
           </div>
           <a-divider />
@@ -43,14 +43,14 @@
       <!-- 侧边栏 -->
       <a-col :span="6">
         <!-- OWL 类标注 -->
-        <a-card title="OWL 本体类" size="small" v-if="article.owl_class_uris?.length">
+        <a-card :title="t('kmsWiki.owlClasses')" size="small" v-if="article.owl_class_uris?.length">
           <a-tag v-for="uri in article.owl_class_uris" :key="uri" color="purple">
             {{ extractLabel(uri) }}
           </a-tag>
         </a-card>
 
         <!-- 反向链接 -->
-        <a-card title="反向链接" size="small" v-if="article.backlinks?.length" style="margin-top: 16px">
+        <a-card :title="t('kmsWiki.backlinks')" size="small" v-if="article.backlinks?.length" style="margin-top: 16px">
           <a-list :data-source="article.backlinks" size="small">
             <template #renderItem="{ item }">
               <a-list-item>
@@ -61,7 +61,7 @@
         </a-card>
 
         <!-- Wiki 链接 -->
-        <a-card title="相关链接" size="small" v-if="article.wiki_links?.length" style="margin-top: 16px">
+        <a-card :title="t('kmsWiki.wikiLinks')" size="small" v-if="article.wiki_links?.length" style="margin-top: 16px">
           <a-list :data-source="article.wiki_links" size="small">
             <template #renderItem="{ item }">
               <a-list-item>
@@ -76,7 +76,7 @@
     <!-- 版本历史抽屉 -->
     <a-drawer
       v-model:open="showVersions"
-      title="版本历史"
+      :title="t('kmsWiki.versionHistory')"
       :width="480"
     >
       <a-list
@@ -88,7 +88,7 @@
           <a-list-item>
             <a-list-item-meta
               :title="`v${item.version} - ${item.title}`"
-              :description="`${item.change_note || '无说明'} · ${formatDate(item.created_at)}`"
+              :description="`${item.change_note || t('kmsWiki.noNote')} · ${formatDate(item.created_at)}`"
             />
           </a-list-item>
         </template>
@@ -100,6 +100,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { EditOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
@@ -110,6 +111,7 @@ import dayjs from 'dayjs'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const article = ref<any>(null)
@@ -118,7 +120,7 @@ const showVersions = ref(false)
 const loadingVersions = ref(false)
 
 const renderedContent = computed(() => {
-  if (!article.value?.content) return '<p>暂无内容</p>'
+  if (!article.value?.content) return `<p>${t('kmsWiki.noContent')}</p>`
   const raw = md.render(article.value.content)
   return DOMPurify.sanitize(raw)
 })
@@ -132,7 +134,7 @@ async function loadArticle() {
     const res = await getArticleBySlug(slug)
     article.value = res.data
   } catch (e: any) {
-    message.error('文章不存在')
+    message.error(t('kmsWiki.notFound'))
     router.push('/wiki')
   }
 }
@@ -141,10 +143,10 @@ async function handleDelete() {
   if (!article.value) return
   try {
     await deleteArticle(article.value.id)
-    message.success('删除成功')
+    message.success(t('kbMgmt.common.deleted'))
     router.push('/wiki')
   } catch (e) {
-    message.error('删除失败')
+    message.error(t('kbMgmt.common.deleteFailed'))
   }
 }
 
@@ -156,7 +158,7 @@ watch(showVersions, async (val) => {
       const res = await getArticleVersions(article.value.id)
       versions.value = res.data || []
     } catch (e) {
-      message.error('加载版本历史失败')
+      message.error(t('kmsWiki.loadVersionsFailed'))
     } finally {
       loadingVersions.value = false
     }
