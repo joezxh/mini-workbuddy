@@ -89,6 +89,13 @@ const routes: RouteRecordRaw[] = [
         name: 'WorkflowManagement',
         component: () => import('@/views/admin/workflow/WorkflowManagement.vue'),
         meta: { title: '工作流管理', icon: 'ApiOutlined', requiresAdmin: true }
+      },
+      {
+        // 调解语音 RTC 演示（迁移自 risk_control）
+        path: 'duplex/voice-demo',
+        name: 'DuplexVoiceDemo',
+        component: () => import('@/views/duplex/VoiceDemo.vue'),
+        meta: { title: '调解语音 RTC 演示' }
       }
     ]
   },

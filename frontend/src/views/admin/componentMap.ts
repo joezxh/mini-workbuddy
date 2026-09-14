@@ -23,6 +23,12 @@ import TenantPackagePanel from '@/views/admin/system/TenantPackagePanel.vue'
 import TeamList from '@/views/admin/agent-team/TeamList.vue'
 import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
+// 调解语音 RTC（迁移自 risk_control）
+import VoiceDemo from '@/views/duplex/VoiceDemo.vue'
+import VoiceSessionConfig from '@/views/admin/duplex/config/VoiceSessionConfig.vue'
+import VoiceModelConfig from '@/views/admin/duplex/config/VoiceModelConfig.vue'
+import AgentConfigPanel from '@/views/admin/ai-config/agents/AgentConfigPanel.vue'
+import ToolPolicyEditor from '@/views/admin/ai/components/ToolPolicyEditor.vue'
 
 export const componentMap: Record<string, Component> = {
   dashboard: markRaw(DashboardPanel),
@@ -45,4 +51,10 @@ export const componentMap: Record<string, Component> = {
   'tenant-management': markRaw(TenantPanel),
   'tenant-package-management': markRaw(TenantPackagePanel),
   'workflow-management': markRaw(WorkflowManagement),
+  // 调解语音 RTC（迁移自 risk_control）
+  'voice-demo': markRaw(VoiceDemo),
+  'voice-roles': markRaw(VoiceSessionConfig),
+  'voice-models': markRaw(VoiceModelConfig),
+  'voice-agents': markRaw(AgentConfigPanel),
+  'voice-tool-policy': markRaw(ToolPolicyEditor),
 }
