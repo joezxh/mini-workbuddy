@@ -76,7 +76,7 @@ def get_owl_engine(
         raise HTTPException(status_code=400, detail=TENANT_REQUIRED_DETAIL)
 
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     return WikiOwlEngine.from_store(
         OntologyRepository(db, tenant_id, auto_commit=auto_commit)

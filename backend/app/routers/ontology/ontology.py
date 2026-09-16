@@ -54,7 +54,7 @@ def _slug(s: str) -> str:
 
 def _engine_for(db: Session, tenant_id: int, ont: Ontology):
     """按本体的 code 构造持久化仓储 + OWL 引擎（懒导入避免启动期重依赖）。"""
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
     from app.ai.knowledge.owl_engine import WikiOwlEngine
 
     repo = OntologyRepository(db, tenant_id, code=ont.code)

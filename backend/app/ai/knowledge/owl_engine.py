@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 if TYPE_CHECKING:  # 仅类型提示，避免运行时循环导入
-    from app.services.ontology.ontology_repository import (
+    from app.repositories.ontology.ontology_repository import (
         ClassRecord,
         OntologyStoreProtocol,
     )
@@ -219,7 +219,7 @@ class WikiOwlEngine:
         self._ontology_ns = Namespace(ontology_ns)
 
         if store is None:
-            from app.services.ontology.ontology_repository import InMemoryOntologyStore
+            from app.repositories.ontology.ontology_repository import InMemoryOntologyStore
 
             logger.warning(
                 "WikiOwlEngine 未传入持久化 store，使用内存后端（重启即丢，仅用于离线/测试）"
@@ -258,7 +258,7 @@ class WikiOwlEngine:
         写入落在 `ttl_content`（唯一真相源），索引随后由原文重建（评审 R2-01）。
         """
         with self._lock:
-            from app.services.ontology.ontology_repository import validate_uri
+            from app.repositories.ontology.ontology_repository import validate_uri
 
             parents = list(parent_uris or [])
             validate_uri(uri)
@@ -401,7 +401,7 @@ class WikiOwlEngine:
         标注同样写进 `ttl_content`（唯一真相源），索引随后由原文重建。
         """
         with self._lock:
-            from app.services.ontology.ontology_repository import (
+            from app.repositories.ontology.ontology_repository import (
                 validate_target_id,
                 validate_uri,
             )

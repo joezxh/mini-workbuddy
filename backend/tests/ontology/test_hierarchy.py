@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.ai.knowledge.owl_engine import HierarchyNode, WikiOwlEngine
-from app.services.ontology.ontology_repository import OntologyRepository
+from app.repositories.ontology.ontology_repository import OntologyRepository
 
 NS = "http://example.org/ontology#"
 ROOT = NS + "Root"

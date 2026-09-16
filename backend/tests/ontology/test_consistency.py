@@ -15,7 +15,7 @@ from app.services.ontology.modeling_service import (
     ConsistencyReport,
     ModelingService,
 )
-from app.services.ontology.ontology_repository import OntologyRepository
+from app.repositories.ontology.ontology_repository import OntologyRepository
 
 from .conftest import TENANT_A, TENANT_B
 

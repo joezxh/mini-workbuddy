@@ -73,7 +73,7 @@ def test_classes_survive_new_engine_instance(db_target: str) -> None:
     确保数据来自数据库而非任何进程内缓存。
     """
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     from .conftest import engine_for, open_session
 
@@ -108,7 +108,7 @@ def test_classes_survive_new_engine_instance(db_target: str) -> None:
 def test_classes_survive_across_sessions(engine, db) -> None:
     """同一文件库、不同会话之间数据可见。"""
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     from .conftest import open_session
 
@@ -133,7 +133,7 @@ def test_tenant_id_none_is_logged_as_shared_partition(db, caplog) -> None:
     但必须**显式告警**而不是静默共享。本用例把该行为与告警固化下来。
     """
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     uri = "http://example.org/ontology#Shared"
     with caplog.at_level("WARNING"):
@@ -156,7 +156,7 @@ def test_unregister_clears_annotation_references(db) -> None:
     仍返回指向已删除类的文章。
     """
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     uri = "http://example.org/ontology#Risk"
     engine = WikiOwlEngine.from_store(OntologyRepository(db, 9004))
@@ -180,7 +180,7 @@ def test_unregister_clears_annotation_references(db) -> None:
 def test_unregister_is_persisted(engine, db) -> None:
     """删除操作同样持久化：新实例里类已消失。"""
     from app.ai.knowledge.owl_engine import WikiOwlEngine
-    from app.services.ontology.ontology_repository import OntologyRepository
+    from app.repositories.ontology.ontology_repository import OntologyRepository
 
     from .conftest import open_session
 

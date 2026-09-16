@@ -1,0 +1,79 @@
+# =============================================================
+# Mem0 本地部署（API + Dashboard）
+#
+# 复用本地 mwb-infra-network 中的 PostgreSQL 和 Neo4j
+#
+# 启动：docker compose up -d --build
+# 停止：docker compose down
+# 查看：docker compose ps
+#
+# API Docs  ：http://localhost:8888/docs
+# Dashboard ：http://localhost:3001
+# =============================================================
+
+name: mem0-local
+
+services:
+  # -----------------------------------------------------------
+  # Mem0 API 服务（FastAPI + 向量记忆 + 图记忆）
+  # -----------------------------------------------------------
+  mem0-api:
+    build:
+      context: D:\projects\github\mem0\server
+      dockerfile: D:\projects\MinWorkBuddy\docker\mem0\api\Dockerfile
+    container_name: mem0-api
+    ports:
+      - "8888:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - POSTGRES_HOST=mwb-postgres-pgvector
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=mem0
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_COLLECTION_NAME=memories
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USERNAME=${NEO4J_USERNAME}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - APP_DB_NAME=mem0_app
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - DASHBOARD_URL=http://localhost:3001
+      - MEM0_TELEMETRY=false
+      - MEM0_DIR=/app/data
+      - HISTORY_DB_PATH=/app/data/history.db
+    networks:
+      - mwb-infra-network
+    volumes:
+      - mem0-data:/app/data
+    restart: unless-stopped
+
+  # -----------------------------------------------------------
+  # Mem0 Dashboard（Next.js 管理控制台）
+  # -----------------------------------------------------------
+  mem0-dashboard:
+    build:
+      context: D:\projects\github\mem0\server\dashboard
+      dockerfile: D:\projects\MinWorkBuddy\docker\mem0\dashboard\Dockerfile
+    container_name: mem0-dashboard
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8888
+      - API_INTERNAL_URL=http://mem0-api:8000
+      - NEXT_PUBLIC_INSTANCE_NAME=Mem0
+    depends_on:
+      - mem0-api
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+
+networks:
+  mwb-infra-network:
+    external: true
+
+volumes:
+  mem0-data:

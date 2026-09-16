@@ -130,7 +130,7 @@ class OntologyQueryTool(OntologyToolBase):
     ) -> ToolChunk:
         from app.ai.knowledge.owl_engine import WikiOwlEngine
         from app.services.ontology.modeling_service import ModelingService
-        from app.services.ontology.ontology_repository import OntologyRepository
+        from app.repositories.ontology.ontology_repository import OntologyRepository
 
         db = self._session()
         try:

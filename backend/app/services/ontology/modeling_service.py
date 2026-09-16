@@ -43,7 +43,7 @@ from app.models.ontology.model import (
 )
 from app.models.ontology.ontology import Ontology
 from app.services.dataops.rule_engine import CONF_AUTO_ACCEPT, CONF_SUGGEST_MIN
-from app.services.ontology.ontology_repository import OntologyRepository
+from app.repositories.ontology.ontology_repository import OntologyRepository
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,7 @@ from app.ai.knowledge.owl_engine import (
     DEFAULT_ONTOLOGY_NS,
     WikiOwlEngine,
 )
-from app.services.ontology.ontology_repository import OntologyRepository
+from app.repositories.ontology.ontology_repository import OntologyRepository
 
 from .conftest import TENANT_A
 

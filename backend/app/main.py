@@ -73,48 +73,12 @@ async def lifespan(app: FastAPI):
     _loop.set_default_executor(_executor)
     logger.info(f"已设置全局线程池 max_workers={settings.THREAD_POOL_MAX_WORKERS} [{_time.monotonic()-_startup_t0:.2f}s]")
 
-    # 表名迁移：重命名旧表以匹配新的模型命名规范（仅在旧表存在且新表不存在时执行）
+    # 表名迁移：重命名旧表以匹配新的模型命名规范
     if settings.AUTO_CREATE_TABLES:
         try:
-            from sqlalchemy import text as _text, inspect as _inspect
             from app.db.database import engine as _engine
-            _insp = _inspect(_engine)
-            _existing = set(_insp.get_table_names())
-            _rename_map = {
-                # sys_ 前缀：用户与权限
-                'user': 'sys_user',
-                'role': 'sys_role',
-                'user_role': 'sys_user_role',
-                'region': 'sys_region',
-                'menu': 'sys_menu',
-                'role_menu': 'sys_role_menu',
-                'audit_log': 'sys_audit_log',
-                'user_notification': 'sys_user_notification',
-                # sys_ 前缀：字典
-                'dictionary': 'sys_dictionary',
-                'dictionary_item': 'sys_dictionary_item',
-                # ai_ 前缀
-                'workspace': 'ai_workspace',
-                'web_search': 'ai_web_search',
-                'web_search_log': 'ai_web_search_log',
-                # sys_ 前缀：基础设施文件
-                'infra_file': 'sys_infra_file',
-                'infra_file_content': 'sys_infra_file_content',
-                # ai_ 前缀：MCP / Tool
-                'mcp_api_key': 'ai_mcp_api_key',
-                'mcp_client': 'ai_mcp_client',
-                'mcp_square_template': 'ai_mcp_square_template',
-                'tool_definition': 'ai_tool_definition',
-                'tool_group': 'ai_tool_group',
-                'tool_group_member': 'ai_tool_group_member',
-            }
-            with _engine.begin() as _conn:
-                for _old, _new in _rename_map.items():
-                    if _old in _existing and _new not in _existing:
-                        _conn.execute(_text(f'ALTER TABLE {_old} RENAME TO {_new}'))
-                        logger.info(f'已重命名表: {_old} → {_new}')
-            if any(o in _existing for o in _rename_map):
-                logger.info("表名迁移完成")
+            from app.db.startup_migrations import rename_legacy_tables
+            rename_legacy_tables(_engine)
         except Exception as _rename_err:
             logger.warning(f"表名迁移异常(可忽略): {_rename_err}")
 
@@ -139,43 +103,8 @@ async def lifespan(app: FastAPI):
 
         # 轻量列迁移：补齐后加列
         try:
-            from sqlalchemy import text as _text
-            with engine.begin() as _conn:
-                _conn.execute(_text(
-                    "ALTER TABLE agent_async_task ADD COLUMN IF NOT EXISTS execution_id VARCHAR(100)"
-                ))
-                _conn.execute(_text(
-                    "CREATE INDEX IF NOT EXISTS ix_agent_async_task_execution_id "
-                    "ON agent_async_task (execution_id)"
-                ))
-                _conn.execute(_text(
-                    "ALTER TABLE agent_scheduled_task ADD COLUMN IF NOT EXISTS skill_info TEXT"
-                ))
-                _conn.execute(_text(
-                    "ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS i18n_key VARCHAR(100)"
-                ))
-                # 知识库归属字段：category/article/search_log 补 knowledge_id
-                _conn.execute(_text(
-                    "ALTER TABLE kms_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
-                ))
-                _conn.execute(_text(
-                    "CREATE INDEX IF NOT EXISTS ix_kms_category_knowledge_id "
-                    "ON kms_category (knowledge_id)"
-                ))
-                _conn.execute(_text(
-                    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
-                ))
-                _conn.execute(_text(
-                    "CREATE INDEX IF NOT EXISTS ix_kms_article_knowledge_id "
-                    "ON kms_article (knowledge_id)"
-                ))
-                _conn.execute(_text(
-                    "ALTER TABLE kms_search_log ADD COLUMN IF NOT EXISTS knowledge_id BIGINT"
-                ))
-                _conn.execute(_text(
-                    "CREATE INDEX IF NOT EXISTS ix_kms_search_log_knowledge_id "
-                    "ON kms_search_log (knowledge_id)"
-                ))
+            from app.db.startup_migrations import add_new_columns
+            add_new_columns(engine)
         except Exception as _col_err:
             logger.warning(f"补齐新列失败(忽略): {_col_err}")
 
