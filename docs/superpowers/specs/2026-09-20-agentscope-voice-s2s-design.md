@@ -186,7 +186,7 @@ providers/agentscope.py（新，唯一的真实 RealtimeProvider 实现）
 |---|---|---|
 | `D:\projects\github\agentscope\examples\web_ui` | **不是** realtime 语音示例——是 React 19 聊天控制台（REST + SSE，无 WS 音频流）；全仓无 `BrowserTransport` 实现 | 借鉴其**模式**而非代码：`useMessages` 的事件聚合（REPLY_START 建 bubble → `appendEvent` 增量 → REPLY_END 收口）、`ConfirmCard` 确认卡片（`UserConfirmResultEvent{confirm_results:[{confirmed, tool_call, rules}]}` JSON 形状与 realtime `user_confirm` 控制帧 data 完全同构）、`interrupting` phase + 10s 安全超时的健壮性模式 |
 | `examples/realtime/local_mic.py` + `src/agentscope/realtime/_transport/_local.py` | 官方唯一的 TransportBase 实现（声卡版） | BrowserTransport 的**实现模板**：上行限深队列（100 块满丢最旧）、下行 `_pending` 缓冲按 item_id 归零记账、`clear_audio()` 取队首 30ms 线性淡出后返回 `PlayoutPosition` |
-| `D:\work\qwen-audio-agent`（web/src/realtime） | 生产级 WebUI：`useRealtimeVoice.js`（37KB 语音总控）、ScriptProcessorNode(2048) 采集、连续时间轴播放队列、麦克风生命周期管理 | 与本项目前端同构度高；其麦克风韧性（设备切换/track ended 1.5s 宽限/退避重试）列为后续可选增强，不进本期范围 |
+| `D:\work\qwen-audio-agent`（web/src/realtime） | 生产级 WebUI：`useRealtimeVoice.js`（37KB 语音总控）、ScriptProcessorNode(2048) 采集、连续时间轴播放队列、`microphone-capture.js` 麦克风生命周期管理 | 与本项目前端同构度高；**麦克风韧性（设备切换/track ended/退避重试）经用户确认进本期范围**，设计见 §9.7 |
 | 本项目 `frontend/src`（现有实现） | 采集链（AEC/NS/AGC + DcBlocker + NoiseGate + 流式重采样 + PCM16）与播放链（连续时间轴 cursor + DSP + 打断即停）已**优于**官方与 qwen-audio-agent 的基础版本 | **主链路整体保留**，不做 AudioWorklet 重写（非目标） |
 
 ### 9.2 前端组件依赖图（现状）
@@ -222,7 +222,8 @@ VoiceDemo.vue ─► VoiceChannel.vue ─► VoiceToolbar.vue / VoiceWaveform.vu
 | 文件 | 改动 |
 |---|---|
 | `types/voice.ts` | `VoiceProvider` 收敛为 `'dashscope' \| 'openai'`（删 `s2s`/`local`/`loopback`，`openai` 由死枚举转真实）；`VoiceEventType` 增加 `'tool.confirm_required'`；新增 `ToolConfirmPayload{confirm_id, tool_name, arguments, timeout_ms}`；`ToolCall` 增加 `status: 'pending'\|'executed'\|'rejected'` |
-| `composables/useVoiceChannel.ts` | `handleFrame` 新增 `case 'tool.confirm_required'`（入 pending）；新增动作 `respondToolConfirm(callId, approved)` → 上行 `{"type":"tool.confirm","data":{"confirm_id","approved"}}`（§3.2）；`onInterrupt`/`playback_cancelled` 分支清理 pending |
+| `composables/useVoiceChannel.ts` | `handleFrame` 新增 `case 'tool.confirm_required'`（入 pending）；新增动作 `respondToolConfirm(callId, approved)` → 上行 `{"type":"tool.confirm","data":{"confirm_id","approved"}}`（§3.2）；`onInterrupt`/`playback_cancelled` 分支清理 pending；麦克风获取逻辑重构为消费 `useMicLifecycle` 的 MediaStream（见 §9.7），WS 连接不随设备切换重建 |
+| `components/voice/VoiceToolbar.vue` | 状态展示扩展：`recovering`（含重试倒计时提示）与 `unavailable`（含错误原因文案：权限被拒/设备缺失/设备占用/不支持）；`ChannelStatus` 类型相应扩展 |
 | `views/duplex/VoiceDemo.vue` | provider 选项重写为 dashscope/openai；删除 `modelsFor` 平台过滤与 s2s 自适应三段（L49-88 相关）；过时 M2 里程碑文案更新 |
 | `components/voice/TurnTimeline.vue` | 新增待确认卡片：参数预览 + 同意/拒绝按钮，emit 到 VoiceChannel → `respondToolConfirm`；样式参考 assistant 模块 `ToolCallRow` 与 agentscope web_ui `ConfirmCard` 模式 |
 | `api/voice.ts` | `buildVoiceWsUrl` 默认 provider 保持 `dashscope`（无需改值，校验注释更新） |
@@ -233,6 +234,7 @@ VoiceDemo.vue ─► VoiceChannel.vue ─► VoiceToolbar.vue / VoiceWaveform.vu
 | 内容 | 说明 |
 |---|---|
 | `tool.confirm_required` 确认 UI（在 TurnTimeline 内） | 见 §9.4 |
+| `composables/useMicLifecycle.ts` | 麦克风捕获生命周期（设备切换/track ended/退避重试），见 §9.7 |
 
 **删除（前端死代码清理）**：
 
@@ -270,5 +272,29 @@ VoiceDemo.vue ─► VoiceChannel.vue ─► VoiceToolbar.vue / VoiceWaveform.vu
 ### 9.6 前端测试
 
 - 保留：`audioDsp.spec.ts`。
-- 新增：`useToolCalls` 的 confirm 流转测试（pending → confirmed → executed / rejected / 超时清理 / 打断清理）；`VoiceDemo` provider 选项渲染快照更新。
-- 联调：见交付物 4 的冒烟指南（VoiceDemo 页面：连接 → 对话 → 打断 → 触发带确认的工具 → 确认/拒绝 → 文字输入对 Omni 模型的禁用提示）。
+- 新增：`useToolCalls` 的 confirm 流转测试（pending → confirmed → executed / rejected / 超时清理 / 打断清理）；`useMicLifecycle` 的生命周期测试（mock `mediaDevices`/定时器：track ended 立即重启、mute 1.5s 宽限与 unmute 取消、devicechange 去抖并重置重试计数、不可恢复错误直接 fatal、重试耗尽转 unavailable、generation 过期捕获丢弃）；`VoiceDemo` provider 选项渲染快照更新。
+- 联调：见交付物 4 的冒烟指南（VoiceDemo 页面：连接 → 对话 → 打断 → 触发带确认的工具 → 确认/拒绝 → 文字输入对 Omni 模型的禁用提示 → 拔插麦克风设备/静音轨道观察自动恢复）。
+
+### 9.7 麦克风韧性设计（参考 qwen-audio-agent `createMicrophoneCaptureLifecycle`）
+
+**核心原则**：麦克风捕获生命周期独立于 WS 通道与播放链——设备切换或采集故障**只重建媒体流与 WebAudio 采集链，不重连 WebSocket、不打断播放**。
+
+**新 composable：`composables/useMicLifecycle.ts`**（qwen-audio-agent 模式的 TS/Vue 移植，纯逻辑、定时器可注入以便测试）：
+
+| 机制 | 行为 |
+|---|---|
+| 设备切换 | 监听 `navigator.mediaDevices.devicechange` → 300ms 去抖 → 重建 MediaStream；**重置重试计数**（设备切换是主动行为，不累计退避） |
+| track ended | 立即重启（0 延迟）——典型场景：USB 麦克风拔出、独占模式被抢占 |
+| track mute | `mute` 事件启动 **1.5s 宽限定时器**，宽限后仍 muted 才重启（过滤系统弹窗/静音开关的瞬时 mute）；`unmute` 取消定时器 |
+| 退避重试 | `getUserMedia` 可恢复错误按 **500ms → 1s → 2s → 4s** 四次重试；耗尽后转 `unavailable`（不再自动重试，等手动重试或设备变化触发） |
+| 不可恢复错误 | `NotAllowedError`（权限拒绝）/ `NotSupportedError` / `SecurityError` / `TypeError` 直接 fatal，不重试 |
+| 错误分类 | `permission_denied` / `device_missing`（NotFoundError）/ `device_unavailable`（NotReadableError）/ `unsupported` / `unknown`，供 UI 文案 |
+| 代际仲裁 | `generation` 计数：迟到的 acquire 结果（已 stop 或已被更新的 restart 取代）直接 release 丢弃，防止旧设备流泄漏 |
+| 状态机 | `starting → ready ⇄ recovering → unavailable`，每次转移携带 `{state, reason, error?, recoverable?}` 回调 |
+
+**与 `useVoiceChannel` 的集成**：
+
+1. `useVoiceChannel` 现有内联的 `getUserMedia` + AudioContext + ScriptProcessor 采集链拆分：**媒体流获取与 track 监听归 `useMicLifecycle`**；`useVoiceChannel` 保留 AudioContext（48kHz 复用，不随设备重建）并在每次拿到新 MediaStream 时仅重连 `createMediaStreamSource` → 既有 DSP 上行链。
+2. `ChannelStatus` 扩展 `recovering | unavailable` 两态，透出 `micErrorKind`；`VoiceToolbar` 据此显示提示（如"麦克风已切换，正在恢复…"/"无法访问麦克风：权限被拒"）。
+3. 用户手动开关麦（`toggleMic`）语义不变：仍由 `useVoiceChannel` 门控上行发送；lifecycle 的 restart 仅替换底层流，不改变开关状态。
+4. 断开连接（`disconnect`）时 `useMicLifecycle.stop()`，与现有清理路径合并。
