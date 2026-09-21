@@ -5,7 +5,7 @@
 - ✅ 删除 `_is_context_length_error()` (22 行)
 - ✅ 删除上下文长度降级重试逻辑 (108 行)
 - ✅ 删除 `_get_model_max_input_tokens()` (49 行)  
-- ✅ 使用 `EventStreamHandler` 基类统一事件处理
+- ✅ 统一 `handle()` 事件分发（安装版 agentscope 无 EventStreamHandler 基类）
 - ✅ 依赖 AgentScope 原生上下文窗口管理
 - 代码缩减：1076 行 → ~650 行 (-40%)
 """
