@@ -40,3 +40,17 @@ def test_publish_always_debug_logs(capsys):
     bus = EventBus(event_service=svc)
     bus.publish(_env("model_call", [EventLevel.LOG]))
     # 不抛异常即视为通过（日志绑定由 loguru 处理，此处验证无副作用）
+
+
+class RaisingEventService:
+    """record_envelope 总是抛异常的假服务，验证 handler 异常隔离。"""
+
+    def record_envelope(self, env):
+        raise RuntimeError("db handler boom")
+
+
+def test_handler_exception_does_not_propagate():
+    """DB handler 抛异常时 publish 不抛出（EventBus 核心保证）。"""
+    bus = EventBus(event_service=RaisingEventService())
+    # 不抛出即通过
+    bus.publish(_env("tool_call", [EventLevel.DB, EventLevel.STREAM], EventCategory.TOOL))
