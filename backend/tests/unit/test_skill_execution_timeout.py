@@ -60,6 +60,8 @@ def _patch_all(monkeypatch, svc, *, events, delay):
     monkeypatch.setattr(exec_mod, "record_execution_failed", lambda db, *a, **kw: None)
     monkeypatch.setattr(exec_mod, "SessionLocal", lambda: None)
     monkeypatch.setattr(exec_mod, "EventBus", _fake_bus)
+    # 事件服务换 Fake，避免 drain 任务在进程关闭时连接真实 DB
+    monkeypatch.setattr(exec_mod, "ExecutionEventService", _fake_event_service)
     return buses
 
 
@@ -120,8 +122,9 @@ def test_client_disconnect_finalizes_record(monkeypatch):
     async def run():
         gen = svc.execute("demo", "hi")
         got = []
-        # 消费前两个 SSE 事件（start / progress），此时执行尚未进入 Agent 循环
-        for _ in range(2):
+        # 消费到 progress（engine_decision / start / progress）即断：
+        # Task 11 起 engine_decision 是首个事件，此处按类型等待而非按序号
+        while not any(e.type == "progress" for e in got):
             evt = await asyncio.wait_for(gen.__anext__(), timeout=5)
             got.append(evt)
         # 模拟客户端断连：aclose() 在挂起的 yield 处抛 GeneratorExit
@@ -129,7 +132,7 @@ def test_client_disconnect_finalizes_record(monkeypatch):
         return got
 
     got = asyncio.run(run())
-    assert got and [e.type for e in got] == ["start", "progress"]
+    assert got and got[-1].type == "progress"
     kinds = [c[0] for c in records.calls]
     # 断连路径：主记录被收尾为 failed（且仅一次），并记录 metrics；不应记 done
     assert kinds.count("failed") == 1
@@ -170,3 +173,16 @@ class _FakeDB:
 
     def close(self):
         self._closed.append(True)
+
+
+class _fake_event_service:
+    """Fake ExecutionEventService：吞掉信封，避免测试触达真实 DB。"""
+
+    def __init__(self, *a, **kw):
+        pass
+
+    def record_envelope(self, env):
+        return None
+
+    async def stop(self):
+        pass

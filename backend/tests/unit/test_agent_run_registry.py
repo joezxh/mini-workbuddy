@@ -97,6 +97,8 @@ def _patch(monkeypatch, svc, records):
     # Task 8 起执行主记录的 SessionLocal 在模块顶部导入，patch exec_mod 命名空间
     monkeypatch.setattr(exec_mod, "SessionLocal", lambda: None)
     monkeypatch.setattr(exec_mod, "EventBus", _fake_bus)
+    # 事件服务换 Fake，避免 drain 任务在进程关闭时连接真实 DB
+    monkeypatch.setattr(exec_mod, "ExecutionEventService", _fake_event_service)
     monkeypatch.setattr(svc, "_record_metrics", lambda *a, **kw: None)
     return buses
 
@@ -132,3 +134,16 @@ def test_execute_cancel_emits_interrupt_events(monkeypatch):
     assert failed, "取消路径应落 interrupt_reason=user_cancel"
     # 取消后注册表应已清理
     assert get_run_registry().get("exec-cancel") is None
+
+
+class _fake_event_service:
+    """Fake ExecutionEventService：吞掉信封，避免测试触达真实 DB。"""
+
+    def __init__(self, *a, **kw):
+        pass
+
+    def record_envelope(self, env):
+        return None
+
+    async def stop(self):
+        pass

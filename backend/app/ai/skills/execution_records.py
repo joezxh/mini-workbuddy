@@ -125,3 +125,19 @@ def record_execution_failed(
         except Exception:
             pass
         logger.warning("record_execution_failed 失败 %s: %s", execution_id, e)
+
+
+def record_execution_status(db: Any, execution_id: str, status: str) -> None:
+    """仅更新执行状态（HITL 暂停/恢复等中间态）。吞异常。"""
+    try:
+        row = _get_row(db, execution_id)
+        if row is None:
+            return
+        row.status = status
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning("record_execution_status 失败 %s: %s", execution_id, e)

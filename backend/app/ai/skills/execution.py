@@ -33,17 +33,38 @@ from app.ai.skills.execution_records import (
     record_execution_done,
     record_execution_failed,
     record_execution_start,
+    record_execution_status,
 )
 from app.schemas.agent.event_types import (
     EventCategory,
     EventEnvelope,
     EventLevel,
+    normalize_event_type,
+    route_of,
 )
 
 logger = logging.getLogger(__name__)
 
 # 技能包根目录
 _SKILLS_BASE = Path(__file__).resolve().parent.parent.parent.parent / "data" / "skills"
+
+# 引擎路由表（spec §5.5）：execution_mode → 引擎标识；None 表示 P0 未接入
+_ENGINE_ROUTES: dict[str, Optional[str]] = {
+    "llm": "agentscope",
+    "skill": "agentscope",
+    "plan": "react",
+    "react": "react",
+    "team": "team",
+    "knowledge": "research",
+    "harness": "research",
+    "workflow": None,
+}
+
+
+def resolve_execution_mode(requested: str | None = None) -> str:
+    """解析执行模式：非法值回退 llm（spec §5.5 多模式动态切换）。"""
+    mode = (requested or "llm").strip().lower()
+    return mode if mode in _ENGINE_ROUTES else "llm"
 
 
 @dataclass
@@ -106,6 +127,9 @@ class SkillEventHandler:
         self.reply_id: str | None = None
         self.usage = {"input_tokens": 0, "output_tokens": 0}
         self.iterations = 0
+        # HITL 状态（Task 10）：暂停时携带待确认工具调用；interrupt 恢复后置位
+        self.hitl_tool_calls: list[dict] = []
+        self.interrupted_flag: bool = False
 
     # ── 发布辅助 ─────────────────────────────────────────────────────
 
@@ -133,6 +157,7 @@ class SkillEventHandler:
             ToolCallStartEvent, ToolCallEndEvent,
             ToolResultTextDeltaEvent, ToolResultDataDeltaEvent, ToolResultEndEvent,
             ModelCallEndEvent,
+            RequireUserConfirmEvent, RequireExternalExecutionEvent,
         )
 
         if isinstance(event, ReplyStartEvent):
@@ -233,6 +258,24 @@ class SkillEventHandler:
                           "iteration": self.iterations},
             )
 
+        elif isinstance(event, (RequireUserConfirmEvent, RequireExternalExecutionEvent)):
+            # HITL 暂停（spec §5.4）：SSE 通知前端确认面板；信封与 DB 记录
+            # 由 execute 主循环在 yield hitl_pause 时统一处理
+            tool_calls = [
+                {"id": getattr(tc, "id", ""), "name": getattr(tc, "name", ""),
+                 "input": getattr(tc, "input", "{}"),
+                 "suggested_rules": [str(r) for r in
+                                     (getattr(tc, "suggested_rules", None) or [])]}
+                for tc in (getattr(event, "tool_calls", None) or [])
+            ]
+            self.hitl_tool_calls = tool_calls
+            self.reply_id = getattr(event, "reply_id", None) or self.reply_id
+            from app.ai.events.hitl import PAUSE_TIMEOUT_MINUTES
+            self._emit_sse("hitl_pause", {
+                "reply_id": self.reply_id, "tool_calls": tool_calls,
+                "timeout_minutes": PAUSE_TIMEOUT_MINUTES,
+            })
+
         elif isinstance(event, ExceedMaxItersEvent):
             self._publish_db(
                 "iteration_limit", EventCategory.RUNTIME,
@@ -244,6 +287,9 @@ class SkillEventHandler:
             final_text = "".join(self._final_text_parts or self.text_parts)
             error = getattr(event, "error", None)
             finished = str(getattr(event, "finished_reason", None) or "completed")
+            if self.interrupted_flag and finished == "completed":
+                # interrupt 恢复路径：框架可能仍报 completed，按人工中断记录
+                finished = "interrupted"
             if error is not None:
                 message = str(getattr(error, "message", "") or error)
                 self._publish_db(
@@ -277,6 +323,7 @@ class SkillExecutionService:
 
     def __init__(
         self,
+        db: Any | None = None,
         workspace: Any | None = None,
         tool_manager: Any | None = None,
         model_config: dict | None = None,
@@ -286,6 +333,7 @@ class SkillExecutionService:
         from app.ai.workspace.manager import get_workspace_adapter
         from app.ai.tool_manager.manager import get_tool_manager
 
+        self._db = db
         self.workspace = workspace or get_workspace_adapter(auto_discover=True)
         self.tool_manager = tool_manager or get_tool_manager()
         self.model_config = model_config
@@ -303,6 +351,7 @@ class SkillExecutionService:
         model_id: int | None = None,
         execution_id: str | None = None,
         trace_id: str | None = None,
+        execution_mode: str | None = None,
     ) -> AsyncGenerator[SkillEvent, None]:
         """流式执行技能（分级事件 + 主记录 + 超时熔断）。"""
         _exec_start = time.perf_counter()
@@ -349,6 +398,9 @@ class SkillExecutionService:
             source="skill_execution", source_id=skill_name, ui_hint="timeline",
         ))
 
+        # 模式解析（spec §5.5）：提前解析，信封与路由在 try 内发出
+        mode = resolve_execution_mode(execution_mode)
+
         try:
             # 加载 Skill
             skill = await self._load_skill(skill_name)
@@ -363,6 +415,31 @@ class SkillExecutionService:
                 yield SkillEvent(type="error", data={"message": f"技能不存在：{skill_name}"})
                 _error_text = f"技能不存在：{skill_name}"
                 # 不直接 return 裸退：经 finally 统一收尾（record failed + metrics + close）
+                return
+
+            # ── 模式解析与引擎路由（spec §5.5 多模式动态切换）─────────────
+            engine_code = f"skill:{mode}"
+            self.bus.publish(EventEnvelope(
+                execution_id=execution_id, trace_id=trace_id,
+                event_type="engine_decision", category=EventCategory.AGENT,
+                levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                content={"engine_code": engine_code, "mode": mode},
+                source="skill_execution", source_id=skill_name, ui_hint="timeline",
+            ))
+            yield SkillEvent(type="engine_decision",
+                             data={"engine_code": engine_code, "mode": mode})
+
+            if _ENGINE_ROUTES[mode] is None:
+                self.bus.publish(EventEnvelope(
+                    execution_id=execution_id, trace_id=trace_id,
+                    event_type="error", category=EventCategory.ERROR,
+                    levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                    content={"message": f"执行模式 {mode} 暂不支持（workflow 待接入）"},
+                    source="skill_execution", source_id=skill_name,
+                ))
+                yield SkillEvent(type="error",
+                                 data={"message": f"执行模式 {mode} 暂不支持"})
+                _error_text = f"执行模式 {mode} 暂不支持"
                 return
 
             yield SkillEvent(type="start", data={
@@ -392,12 +469,35 @@ class SkillExecutionService:
                 toolkit = self._build_toolkit(extra_tools, skill.get("allowed_tools"))
                 system_prompt = self._build_system_prompt(skill, session_id, user_id)
                 model = self._build_model(model_id)
-                agent = self._create_agent(skill_name, system_prompt, model, toolkit)
                 user_msg = UserMsg(name="user", content=user_message)
 
-                async def _consume() -> None:
-                    async for event in agent.reply_stream(inputs=user_msg):
-                        await handler.handle(event)
+                if _ENGINE_ROUTES[mode] == "agentscope":
+                    agent = self._create_agent(skill_name, system_prompt, model, toolkit)
+
+                    async def _consume() -> None:
+                        async for event in agent.reply_stream(inputs=user_msg):
+                            await handler.handle(event)
+                else:
+                    # 非 llm 模式：委托 AgentFactory 对应封装器，dict 事件归一化入信封
+                    agent = self._create_mode_agent(mode, model_id)
+
+                    async def _consume() -> None:
+                        async for ev in agent.reply_stream(inputs=user_msg):
+                            etype = normalize_event_type(str(ev.get("type", "progress")))
+                            route = route_of(etype)
+                            data = ev.get("data", {})
+                            self.bus.publish(EventEnvelope(
+                                execution_id=execution_id, trace_id=trace_id,
+                                event_type=etype, category=route.category,
+                                levels=sorted(route.levels),
+                                content=data if isinstance(data, dict) else {"value": str(data)},
+                                source="skill_execution", source_id=skill_name,
+                                ui_hint=route.ui_hint,
+                            ))
+                            out_q.put_nowait(SkillEvent(
+                                type=str(ev.get("type", "progress")),
+                                data=data if isinstance(data, dict) else {"value": str(data)},
+                            ))
 
                 consumer = asyncio.create_task(_consume())
 
@@ -420,8 +520,9 @@ class SkillExecutionService:
                         break
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        # 完成与超时同时到达：正常完成优先
-                        if consumer.done() and out_q.empty():
+                        # 完成与超时同时到达：正常完成优先（HITL 暂停中不算完成）
+                        if (consumer.done() and out_q.empty()
+                                and handle.status != "waiting_hitl"):
                             break
                         timed_out = True
                         consumer.cancel()
@@ -431,21 +532,58 @@ class SkillExecutionService:
                         evt = await asyncio.wait_for(asyncio.shield(out_q.get()),
                                                      timeout=remaining)
                         if evt is None:
-                            # 哨兵：consumer 已结束（含取消），立即退出主循环；
-                            # 哨兵绝不 yield 到 SSE
+                            # 哨兵：当前 consumer 已结束。HITL 暂停中不算结束
+                            # ——等待 resume 换新 consumer；哨兵绝不 yield 到 SSE
+                            if handle.status == "waiting_hitl":
+                                continue
                             break
+                        if evt.type == "hitl_pause":
+                            # HITL 暂停（spec §5.4）：DB 记录 + 状态标记 + 信封
+                            # + HITL 超时接管总超时
+                            from app.ai.events.hitl import record_pause, PAUSE_TIMEOUT_MINUTES
+                            try:
+                                record_pause(_record_db, execution_id=execution_id,
+                                             reply_id=handler.reply_id,
+                                             tool_calls=evt.data.get("tool_calls"))
+                            except Exception:
+                                pass
+                            handle.status = "waiting_hitl"
+                            handle.reply_id = handler.reply_id
+                            record_execution_status(_record_db, execution_id,
+                                                    "waiting_hitl")
+                            deadline = time.monotonic() + PAUSE_TIMEOUT_MINUTES * 60
+                            self.bus.publish(EventEnvelope(
+                                execution_id=execution_id, trace_id=trace_id,
+                                event_type="hitl_pause", category=EventCategory.HITL,
+                                levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                                content={"tool_calls": evt.data.get("tool_calls"),
+                                         "timeout_minutes": PAUSE_TIMEOUT_MINUTES},
+                                reply_id=handler.reply_id, ui_hint="confirm",
+                                source="skill_execution", source_id=skill_name,
+                            ))
+                        elif evt.type == "hitl_resume":
+                            record_execution_status(_record_db, execution_id, "running")
+                            self.bus.publish(EventEnvelope(
+                                execution_id=execution_id, trace_id=trace_id,
+                                event_type="hitl_resume", category=EventCategory.HITL,
+                                levels=[EventLevel.DB, EventLevel.STREAM],
+                                content={"action": evt.data.get("action")},
+                                source="skill_execution", source_id=skill_name,
+                            ))
                         yield evt
                     except asyncio.TimeoutError:
-                        # 完成与超时同时到达：正常完成优先
-                        if consumer.done() and out_q.empty():
+                        # 完成与超时同时到达：正常完成优先（HITL 暂停中不算完成）
+                        if (consumer.done() and out_q.empty()
+                                and handle.status != "waiting_hitl"):
                             break
                         timed_out = True
                         consumer.cancel()
                         await asyncio.gather(consumer, return_exceptions=True)
                         break
 
-                # 传播消费者异常
-                exc = consumer.exception() if consumer.done() and not consumer.cancelled() else None
+                # 传播消费者异常（恢复后的新 consumer 优先）
+                _active = handle.task if handle is not None else consumer
+                exc = _active.exception() if _active.done() and not _active.cancelled() else None
                 if exc is not None and not timed_out:
                     raise exc
                 # 消费者被取消（registry.cancel 触达）→ 不算成功完成
@@ -533,6 +671,14 @@ class SkillExecutionService:
             except Exception:
                 logger.debug("run registry unregister failed: %s", execution_id)
 
+            # 停止事件写入器（flush 剩余事件后退出 drain loop）——
+            # 不 stop 会导致 drain 任务泄漏到进程结束
+            if self.event_service is not None:
+                try:
+                    await self.event_service.stop()
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("event service stop failed: %s", e)
+
             # 关闭数据库会话（含技能不存在早退路径）
             if _record_db is not None:
                 try:
@@ -549,13 +695,26 @@ class SkillExecutionService:
     ) -> Any:
         """创建 Agent 实例（原生 API）。"""
         from agentscope.agent import Agent
-        
+
         return Agent(
             name=name,
             system_prompt=system_prompt,
             model=model,
             toolkit=toolkit,
         )
+
+    def _create_mode_agent(self, mode: str, model_id: int | None) -> Any:
+        """非 llm 模式：委托 AgentFactory 对应封装器（spec §5.5 引擎路由）。"""
+        if self._db is None:
+            raise RuntimeError(f"执行模式 {mode} 需要 db 会话")
+        from app.ai.agent_factory import AgentFactory
+
+        session_type = {"react": "react", "team": "team",
+                        "research": "deep_research"}[_ENGINE_ROUTES[mode]]
+        return AgentFactory(self._db).create_agent(session_type, {
+            "name": f"skill_{mode}",
+            "model_id_db": model_id,
+        })
 
     async def _load_skill(self, skill_name: str) -> dict[str, Any] | None:
         """加载 Skill（保持原有逻辑不变）。"""
