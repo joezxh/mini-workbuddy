@@ -4,6 +4,7 @@
       <VoiceToolbar
         :status="status"
         :mic-on="micOn"
+        :mic-state="micState"
         @connect="connect"
         @disconnect="disconnect"
         @toggle-mic="onToggleMic"
@@ -65,6 +66,7 @@ const {
   transcripts,
   audioLevel,
   micOn,
+  micState,
   toolCalls,
   connect,
   disconnect,
