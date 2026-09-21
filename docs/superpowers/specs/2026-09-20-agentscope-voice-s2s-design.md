@@ -1,7 +1,7 @@
 # AgentScope 2.0.8 内核替换全双工语音 Provider — 设计文档
 
 - 日期：2026-09-20
-- 状态：已批准（用户确认；前端设计模块于同日补充）
+- 状态：已批准（用户确认；前端设计模块同日补充；2026-09-21 依仓库最新代码复核修订——语音目标路径零变更，新增 §2.3 版本事实与 §8 交叉工作流条目）
 - 范围：`backend/app/duplex/voice/**`、`backend/app/config/_voice.py`、`backend/requirements.txt`、`frontend/src`（语音相关增量）、文档
 - 非目标：主链路协议变更与前端迁移、Dify 集成保留、本地分体式 ASR/LLM/TTS 管线保留、网关鉴权接入、AudioWorklet 重写
 
@@ -70,7 +70,9 @@ providers/agentscope.py（新，唯一的真实 RealtimeProvider 实现）
 |---|---|---|
 | model_id 为 `qwen3.5-omni-*-realtime` / `qwen3-omni-flash-realtime` / `qwen-omni-turbo-realtime` | `DashScopeRealtimeModel` | `DashScopeCredential(api_key)` |
 | model_id 为 `qwen-audio-3.0-realtime-*` | `DashScopeAudioRealtimeModel` | 同上 |
-| model_id 为 `gpt-realtime-*` 且 provider=openai | `OpenAIRealtimeModel` | `OpenAICredential(api_key)` |
+| model_id 为 `gpt-realtime-*` 且 provider=openai | `OpenAIRealtimeModel`（**2.0.8 暂不可用**，见下） | `OpenAICredential(api_key)` |
+
+> **⚠️ 版本事实（2026-09-21 对照本地安装包核实）**：agentscope 2.0.8 发布版的 `agentscope.realtime` **不含 `OpenAIRealtimeModel`**（官方文档与 GitHub main 分支超前于发布版）。处理方式：保留 `openai` 的注册位、fallback 映射与前端选项不变；模型工厂对 `gpt-realtime-*` 分支做惰性导入并在 `ImportError` 时抛出明确 `NotImplementedError`（提示需升级 agentscope > 2.0.8）。框架升级后零代码自动启用；`openai` 平台无模型行时 `resolve_voice_config` 返回未配置，`select()` 不会误选。
 
 - api_key / base_url 仍从数据库 `ai_api_key` / `ai_chat_model`（type=7 语音实时）解析（`voice_config.py` 现有逻辑保留，白名单改为模型类 `list_models()` 卡片推导）。
 - 音色等 `parameters`（如 `DashScopeRealtimeModel.Parameters(voice=...)`）来自 `duplex_voice_config` 角色配置。
@@ -177,6 +179,8 @@ providers/agentscope.py（新，唯一的真实 RealtimeProvider 实现）
 | `agentscope[realtime]` extra 可能引入声卡依赖 | 仅安装服务端所需子集，必要时直接依赖 `agentscope==2.0.8` 并手动补最小依赖 |
 | Qwen-Omni 不支持文本输入 | `supports_text_input=False` 时 `input.message` 返回明确 error 帧，前端文字输入功能对该模型禁用提示 |
 | 删除 Dify 路径影响存量配置 | `AiAgentConfig.type=dify` 的存量行在启动校验时给出明确警告日志 |
+| agentscope 2.0.8 发布版缺 `OpenAIRealtimeModel`（文档/GitHub main 超前） | `openai` 保留注册位与前端选项，模型工厂惰性导入 + 明确 `NotImplementedError`；升级框架后零代码启用（§2.3） |
+| 交叉工作流：agent-event-p0（EventBus/HITL/cancel，已合并）与 multi-mode-session-context（会话记忆/上下文，已批准未实施） | 前者改动集中于 `backend/app/ai/**`，与语音路径零文件冲突（2026-09-21 `git diff` 复核）；后者落地后 `RealtimeAgent.state`（AgentState）可对接其记忆层——列为后续增强，不进本期 |
 
 ## 9. 前端设计模块
 

@@ -15,13 +15,16 @@
 - 前端测试：`cd d:\projects\MinWorkBuddy\frontend; npx vitest run <path>`
 - 前端 lint：`cd d:\projects\MinWorkBuddy\frontend; npm run lint`
 
-**已验证 API 事实**（实施时直接引用，勿凭记忆改写）：
-- agentscope（`backend/.venv/Lib/site-packages/agentscope/`）：`realtime.TransportBase`（抽象方法 `start/close/incoming/send_audio(pcm,item_id)/clear_audio()->PlayoutPosition/playout()`）；`AudioFrame(pcm)`；`ControlFrame(type: ControlFrameType.TEXT|USER_CONFIRM|INTERRUPT, data: dict)`；`PlayoutPosition(item_id, played_ms, first_played_at)`
+**基点说明（2026-09-21 复核）**：main 已合并 agent-event-p0（20 个提交，HEAD `0288054`，全部位于 `backend/app/ai/**` HITL/EventBus 与前端 assistant 视图）。经 `git diff --stat 637d441..HEAD` 复核，**本计划全部目标路径（`backend/app/duplex/**`、`backend/app/config`、前端语音路径、协议）零变更**；`agentscope==2.0.8` 固定（含 `mcp>=1.15.0,<2.0.0`）已在工作区 requirements 未提交改动中就位，由 Task 6 收编提交。工作区另有一份已批准未实施的会话上下文架构 spec（multi-mode-session-context），与本计划无文件冲突。
+
+**已验证 API 事实**（2026-09-21 对照本地安装包逐项核实，实施时直接引用，勿凭文档或 GitHub main 分支改写）：
+- **安装包 2.0.8 的 `agentscope.realtime` 导出**（`dir()` 实测）：`TransportBase / AudioFrame / ControlFrame / ControlFrameType / PlayoutPosition / TransportFrame / TruncationSupport / RealtimeModelBase / RealtimeModelCard / LocalAudioTransport / DashScopeRealtimeModel / DashScopeAudioRealtimeModel / ModelDisconnectedError / VADBase / SpeechTransition` 及模型侧 ModelEvent。**没有 `OpenAIRealtimeModel` / `GeminiRealtimeModel` / `XAIRealtimeModel`**（官方文档与 GitHub main 超前于 2.0.8 发布版）
+- `TransportBase` 抽象方法：`start/close/incoming/send_audio(pcm, item_id)/clear_audio()->PlayoutPosition/playout()`；`AudioFrame(pcm)`；`ControlFrame(type: ControlFrameType.TEXT|USER_CONFIRM|INTERRUPT, data: dict)`；`PlayoutPosition(item_id, played_ms, first_played_at)`
 - `agentscope.agent.RealtimeAgent(name, system_prompt, model, toolkit=None, state=None, vad=None, aggregator=None)`：`await connect()/close()`、`async for ev in agent.reply_stream(transport)`、`await agent.send(str|Msg|UserConfirmResultEvent|UserInterruptEvent)`、`await agent.interrupt()`、`agent.model.supports_text_input`
-- `agentscope.event`：`ReplyStartEvent(session_id, reply_id, name, role)`、`ReplyEndEvent(reply_id, finished_reason, error)`、`TextBlockDeltaEvent(reply_id, block_id, delta)`、`DataBlockDeltaEvent(reply_id, block_id, media_type, data|url)`（data 为 base64）、`ToolCallStartEvent(reply_id, tool_call_id, tool_call_name)`、`ToolResultEndEvent(reply_id, tool_call_id, state, metadata)`、`RequireUserConfirmEvent(reply_id, tool_calls: List[ToolCallBlock])`、`UserConfirmResultEvent(reply_id, confirm_results)`
-- `agentscope.message`：`ToolCallBlock(id, name, input: str(JSON), state)`、`ConfirmResult(confirmed, tool_call, rules=None)`
-- `agentscope.tool`：`Toolkit(tools=[ToolBase], mcps=[MCPClient])`；`ToolBase` 协议属性 `name/description/input_schema/is_concurrency_safe/is_read_only`（+`is_mcp/mcp_name`），覆写 `async def call(**kwargs) -> ToolChunk`；`ToolChunk(content: List[TextBlock|DataBlock], state, is_last=True)`
-- `agentscope.credential`：`DashScopeCredential(api_key)`、`OpenAICredential(api_key)`；`agentscope.realtime`：`DashScopeRealtimeModel(model=, credential=, parameters=Parameters(voice=))`、`DashScopeAudioRealtimeModel(model=, credential=)`、`OpenAIRealtimeModel(model=, credential=)`；模型属性 `input_sample_rate/output_sample_rate/card`
+- `agentscope.event`（已实测导入）：`ReplyStartEvent(session_id, reply_id, name, role)`、`ReplyEndEvent(reply_id, finished_reason, error)`、`TextBlockDeltaEvent(reply_id, block_id, delta)`、`DataBlockDeltaEvent(reply_id, block_id, media_type, data|url)`（data 为 base64）、`ToolCallStartEvent(reply_id, tool_call_id, tool_call_name)`、`ToolResultEndEvent(reply_id, tool_call_id, state, metadata)`、`RequireUserConfirmEvent(reply_id, tool_calls: List[ToolCallBlock])`、`UserConfirmResultEvent(reply_id, confirm_results)`、**`ConfirmResult(confirmed, tool_call, rules=None)`**、**`ToolResultState` 枚举也定义于 event 模块内部**（但**未**从 `agentscope.event.__init__` 导出；正确导入路径为 `agentscope.message`，见下）
+- `agentscope.message`：`ToolCallBlock(id, name, input: str(JSON), state)`、**`ToolResultState`**（`tool/_response.py` 即从 `..message` 导入）
+- `agentscope.tool` 导出（实测）：`Toolkit / ToolBase / ToolChunk / ToolGroup / FunctionTool / MCPTool / Bash / Read / ...`（**无 `ToolResultState`**）。`FunctionTool(func, name=None, description=None, input_schema=None, is_concurrency_safe=True, is_read_only=False, ...)`——自动从函数签名提取元数据并把返回值规范为 `ToolChunk`，是包装 MCP 工具回调的首选
+- `agentscope.credential`：`DashScopeCredential(api_key)`；`agentscope.realtime.DashScopeRealtimeModel(model=, credential=, parameters=Parameters(voice=))`、`DashScopeAudioRealtimeModel(model=, credential=)`；模型属性 `input_sample_rate/output_sample_rate/card`
 - 本仓库：`RealtimeProvider` ABC（`app/duplex/voice/providers/base.py`：`connect/send_audio/send_text/configure_session/events/close/get_capabilities`）；`ProviderEvent(type, data, capabilities)`；`ProviderRegistry`（`register/_ensure_defaults/resolve/resolve_backup/is_configured/select` + 模块尾 `_register_defaults()`）；`get_provider(key)`/`register_provider(key, cls)`；网关 `websocket_gateway.py`（`_normalize_outbound` 识别 `audio_delta/transcript/tts_transcript/transcript_delta/transcript_final/speech_started/speech_stopped/response_started/playback_cancelled`，其余透传）；`voice_config.py`（`_voice_row_platform/_voice_row_usable/resolve_voice_config`、`VALID_DASHSCOPE_REALTIME_MODELS`、`S2S_PLATFORM` 常量）；`McpSessionResolver.resolve_tools()` → `MCPAdapter().get_tool_schemas()`（`[{name, description, inputSchema}]`）；`MCPAdapter.call_tool(name, args)`；`ProviderCapabilities`（`server_vad/native_transcription/barge_in_mode/input_sample_rate/output_sample_rate` 等）
 
 ---
@@ -425,7 +428,14 @@ def build_realtime_model(provider_key: str, model_name: str, api_key: str,
             model=model_name, credential=DashScopeCredential(api_key=api_key),
             parameters=DashScopeRealtimeModel.Parameters(voice=voice))
     if model_name.startswith("gpt-realtime"):
-        from agentscope.realtime import OpenAIRealtimeModel
+        # agentscope 2.0.8 发布版不含 OpenAIRealtimeModel（GitHub main 已有）。
+        # 惰性导入：框架升级后此处自动启用，无需改代码。
+        try:
+            from agentscope.realtime import OpenAIRealtimeModel
+        except ImportError as e:
+            raise NotImplementedError(
+                f"当前 agentscope 版本不含 OpenAIRealtimeModel（gpt-realtime "
+                f"模型需升级 agentscope > 2.0.8 后使用）: {e}") from e
         return OpenAIRealtimeModel(
             model=model_name, credential=OpenAICredential(api_key=api_key))
     raise ValueError(f"未知实时模型: {model_name}（provider={provider_key}）")
@@ -573,8 +583,7 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
         if entry is None:
             return
         reply_id, tool_call = entry
-        from agentscope.event import UserConfirmResultEvent
-        from agentscope.message import ConfirmResult
+        from agentscope.event import ConfirmResult, UserConfirmResultEvent
         payload = UserConfirmResultEvent(
             reply_id=reply_id,
             confirm_results=[ConfirmResult(confirmed=approved,
@@ -1001,12 +1010,7 @@ git commit -m "feat(voice): 网关增量——interrupt 透传/tool.confirm 上�
 - Create: `backend/app/duplex/voice/toolkit_builder.py`
 - Test: `backend/tests/duplex/voice/test_toolkit_builder.py`
 
-- [ ] **Step 1: 核对 ToolResultState 成员名**
-
-Run: `cd d:\projects\MinWorkBuddy\backend; .venv\Scripts\python.exe -c "from agentscope.tool import ToolResultState; print(list(ToolResultState))"`
-Expected: 打印枚举成员（实现中 `FINISHED` 用实际完成态成员名替换，如 `COMPLETED`）
-
-- [ ] **Step 2: 写失败测试**
+- [ ] **Step 1: 写失败测试**
 
 ```python
 """toolkit_builder：MCPAdapter 工具 schema → AgentScope ToolBase 包装。"""
@@ -1059,12 +1063,14 @@ async def test_build_toolkit_registers_all_schemas():
     assert names == {"t1", "t2"}
 ```
 
-- [ ] **Step 3: 运行确认失败**
+- [ ] **Step 2: 运行确认失败**
 
 Run: `cd d:\projects\MinWorkBuddy\backend; .venv\Scripts\python.exe -m pytest tests/duplex/voice/test_toolkit_builder.py -v`
 Expected: FAIL（模块不存在）
 
-- [ ] **Step 4: 实现 toolkit_builder.py**
+- [ ] **Step 3: 实现 toolkit_builder.py**
+
+已核实事实：`ToolResultState` 从 `agentscope.message` 导入（`agentscope.tool` 不导出它），完成态成员为 `SUCCESS`（实测成员值 `['success','error','interrupted','denied','running']`）；`agentscope.tool` 另有 `FunctionTool(func, name, description, input_schema, ...)` 可自动包装函数（备选方案，本实现用手写 ToolBase 子类以显式控制成功/失败态）。
 
 ```python
 """RealtimeAgent Toolkit 构建（spec §2.4）。
@@ -1115,13 +1121,13 @@ class McpToolWrapper:
         return call
 
     async def call(self, **kwargs):
-        from agentscope.message import TextBlock
-        from agentscope.tool import ToolChunk, ToolResultState
+        from agentscope.message import TextBlock, ToolResultState
+        from agentscope.tool import ToolChunk
         try:
             result = await self._resolve_call_fn()(self.name, kwargs)
             text = result if isinstance(result, str) else _dumps(result)
             return ToolChunk(content=[TextBlock(type="text", text=text)],
-                             state=ToolResultState.COMPLETED)  # Step 1 核对后的成员名
+                             state=ToolResultState.SUCCESS)
         except Exception as e:  # noqa: BLE001 - 工具失败不中断语音流
             logger.warning(f"语音工具 {self.name} 执行失败: {e}")
             return ToolChunk(
@@ -1136,7 +1142,7 @@ def build_toolkit(tool_schemas: List[Dict[str, Any]],
     return Toolkit(tools=[McpToolWrapper(s, call_fn) for s in tool_schemas])
 ```
 
-- [ ] **Step 5: 运行确认通过 + Commit**
+- [ ] **Step 4: 运行确认通过 + Commit**
 
 Run: `cd d:\projects\MinWorkBuddy\backend; .venv\Scripts\python.exe -m pytest tests/duplex/voice/test_toolkit_builder.py -v`
 Expected: 3 passed
@@ -1180,9 +1186,10 @@ git rm -r app/duplex/voice/providers/pipeline/
 
 - [ ] **Step 5: requirements.txt 更新**
 
+- **收编既有未提交改动**（2026-09-21 复核确认已在工作区）：`agentscope==2.0.8` 固定 + `mcp>=1.15.0,<2.0.0`（requirements.txt）与 `agentscope>=2.0.8,<3.0`（requirements-dev.txt）——这些本就是语音迁移的配套改动，随本任务一并提交；提交前 `git diff backend/requirements*.txt` 确认无其它无关混入
 - 删除 `onnxruntime>=1.17.0`
 - `torch`/`torchaudio`：先 `Get-ChildItem backend/app -Recurse -Include *.py | Select-String -Pattern "import torch|from torch|torchaudio"`——仅 funasr/cosyvoice 使用则删，否则保留
-- `agentscope==2.0.8` 行验证 realtime 导入：`.venv\Scripts\python.exe -c "from agentscope.realtime import DashScopeRealtimeModel, OpenAIRealtimeModel"`——成功则不改行，仅补注释「realtime 内核」
+- `agentscope==2.0.8` 行验证 realtime 导入：`.venv\Scripts\python.exe -c "from agentscope.realtime import DashScopeRealtimeModel, DashScopeAudioRealtimeModel"`——成功则不改行，仅补注释「realtime 内核（2.0.8 暂不含 OpenAIRealtimeModel，见 spec §8）」
 
 - [ ] **Step 6: 全量回归**
 
