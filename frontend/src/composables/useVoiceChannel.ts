@@ -21,6 +21,7 @@ import type {
   VoiceReadyPayload,
   VoiceTurn,
   ToolCall,
+  ToolConfirmPayload,
 } from '@/types/voice'
 import { useTurnState } from './useTurnState'
 import { useReconnect } from './useReconnect'
@@ -164,10 +165,38 @@ export function useVoiceChannel(cfg: ConnectConfig) {
       case 'playback_cancelled':
         playback.interrupt()
         turn.onInterrupt()
+        toolCalls.clearPending()
         break
       case 'tool_call': {
-        const tc = frame.data as ToolCall
-        toolCalls.add(tc)
+        // 工具调用开始（AgentScope ToolCallStartEvent）；结果由 tool_result 落位
+        const d = frame.data as { call_id?: string; name?: string }
+        if (d.call_id) {
+          toolCalls.add({
+            id: d.call_id,
+            name: d.name || '',
+            arguments: {},
+          })
+        }
+        break
+      }
+      case 'tool_confirm_required': {
+        const p = frame.data as ToolConfirmPayload
+        toolCalls.addConfirm({
+          confirmId: p.confirm_id,
+          name: p.tool_name,
+          arguments: p.arguments ?? {},
+          timeoutMs: p.timeout_ms ?? 300000,
+        })
+        break
+      }
+      case 'tool_result': {
+        const r = frame.data as { call_id?: string; state?: string }
+        if (r.call_id) {
+          toolCalls.update(r.call_id, {
+            ok: r.state === 'success',
+            result: r.state,
+          })
+        }
         break
       }
       case 'error':
@@ -235,7 +264,18 @@ export function useVoiceChannel(cfg: ConnectConfig) {
   }
 
   function sendInterrupt() {
+    toolCalls.clearPending()
     ws?.send(JSON.stringify({ type: 'interrupt' }))
+  }
+
+  /** 回传工具确认结果（tool.confirm_required → 用户同意/拒绝） */
+  function respondToolConfirm(confirmId: string, approved: boolean) {
+    toolCalls.clearPending()
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({ type: 'tool.confirm', data: { confirm_id: confirmId, approved } }),
+      )
+    }
   }
 
   function sendAudio(bytes: Uint8Array) {
@@ -327,6 +367,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     sendText,
     sendInterrupt,
     sendAudio,
+    respondToolConfirm,
     startMic,
     stopMic,
   }
