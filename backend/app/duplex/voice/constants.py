@@ -46,7 +46,7 @@ class EventType(str, Enum):
 
 class ProviderKey(str, Enum):
     DASHSCOPE = "dashscope"
-    LOCAL = "local"
+    OPENAI = "openai"
 
 
 class ErrorCode(str, Enum):

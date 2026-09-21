@@ -32,22 +32,20 @@ class ProviderRegistry:
         """
         if "dashscope" not in cls._providers:
             try:
-                from app.duplex.voice.providers.dashscope import DashScopeProvider
-                cls.register(DashScopeProvider)
+                from app.duplex.voice.providers.agentscope import (
+                    DashScopeAgentProvider,
+                )
+                cls.register(DashScopeAgentProvider)
             except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
                 logger.warning(f"默认 Provider dashscope 注册失败: {e}")
-        if "local" not in cls._providers:
+        if "openai" not in cls._providers:
             try:
-                from app.duplex.voice.providers.local import LocalProvider
-                cls.register(LocalProvider)
+                from app.duplex.voice.providers.agentscope import (
+                    OpenAIAgentProvider,
+                )
+                cls.register(OpenAIAgentProvider)
             except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
-                logger.warning(f"本地回退 Provider local 注册失败: {e}")
-        if "s2s" not in cls._providers:
-            try:
-                from app.duplex.voice.providers.s2s import S2SProvider
-                cls.register(S2SProvider)
-            except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
-                logger.warning(f"本地 S2S Provider 注册失败: {e}")
+                logger.warning(f"备选 Provider openai 注册失败: {e}")
 
     @classmethod
     def resolve(cls, key: Optional[str] = None) -> RealtimeProvider:
@@ -112,12 +110,16 @@ class ProviderRegistry:
 
 
 def _register_defaults() -> None:
-    """默认注册存量 Provider（差距分析 §2：保留 DashScope）。
+    """默认注册 AgentScope 内核 Provider（导入即生效）。
 
-    延迟到模块尾部导入，避免与 dashscope 的 registry 反向导入形成循环。
+    延迟到模块尾部导入，避免与 agentscope 的 registry 反向导入形成循环。
     """
-    from app.duplex.voice.providers.dashscope import DashScopeProvider
-    ProviderRegistry.register(DashScopeProvider)
+    from app.duplex.voice.providers.agentscope import (
+        DashScopeAgentProvider,
+        OpenAIAgentProvider,
+    )
+    ProviderRegistry.register(DashScopeAgentProvider)
+    ProviderRegistry.register(OpenAIAgentProvider)
 
 
 _register_defaults()

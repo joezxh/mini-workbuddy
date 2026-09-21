@@ -41,9 +41,7 @@ from app.duplex.voice.voice_turn_service import (
     append_turn, mark_interrupted, bump_generation, record_latency,
 )
 
-# LocalProvider / S2SProvider 自注册到 ProviderRegistry（import 即生效）
-from app.duplex.voice.providers.local import LocalProvider  # noqa: F401
-from app.duplex.voice.providers.s2s import S2SProvider  # noqa: F401
+# AgentScope 内核 Provider 通过 providers.registry._register_defaults 注册（import 即生效）
 
 
 router = APIRouter(prefix="/duplex/voice", tags=["调解语音"])
