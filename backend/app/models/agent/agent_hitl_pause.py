@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from sqlalchemy import Column, BigInteger, String, JSON, SmallInteger, DateTime
+from sqlalchemy import Column, BigInteger, String, JSON, SmallInteger, DateTime, Index
 from sqlalchemy.sql import func
 
 from app.db.database import Base
@@ -16,7 +16,7 @@ class AgentHitlPause(Base, TenantMixin):
     __tablename__ = "agent_hitl_pause"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    execution_id = Column(String(64), nullable=False, index=True, comment="执行 ID")
+    execution_id = Column(String(64), nullable=False, comment="执行 ID")
     reply_id = Column(String(64), nullable=True, comment="AgentScope reply_id")
     tool_calls = Column(JSON, nullable=True, comment="待确认工具调用列表")
     suggested_rules = Column(JSON, nullable=True, comment="建议授权规则")
@@ -27,3 +27,9 @@ class AgentHitlPause(Base, TenantMixin):
     timeout_at = Column(DateTime, nullable=True, comment="超时提示时刻")
     answered_at = Column(DateTime, nullable=True, comment="用户应答时刻")
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    # 索引显式命名，与 DDL 47 保持一致（tenant_id 索引由 TenantMixin 的 index=True 生成）
+    __table_args__ = (
+        Index("idx_hitl_execution", "execution_id"),
+        Index("idx_hitl_status", "status"),
+    )
