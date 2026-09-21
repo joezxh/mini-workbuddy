@@ -23,17 +23,21 @@ from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 
 from agentscope.tool import ToolBase
-from agentscope.event import EventStreamHandler
 from agentscope.message import UserMsg
 
-# Stub 函数占位（待实现）
-def record_execution_start(*a, **kw): pass
-def record_execution_done(*a, **kw): pass
-def record_execution_failed(*a, **kw): pass
-def record_execution_status(*a, **kw): pass
-
+from app.ai.events.bus import EventBus
 from app.ai.services.execution_event_service import ExecutionEventService
-from app.schemas.agent.agent import ExecutionEventType
+from app.ai.skills.execution_records import (
+    record_execution_done,
+    record_execution_failed,
+    record_execution_start,
+)
+from app.schemas.agent.event_types import (
+    EventCategory,
+    EventEnvelope,
+    EventLevel,
+    ExecutionEventType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,161 +67,203 @@ def parse_allowed_tools(markdown: str) -> list[str] | None:
     return tools if tools else None
 
 
-class SkillEventHandler(EventStreamHandler):
-    """AgentScope 事件流处理器，映射为 SSE 技能事件。
+class SkillEventHandler:
+    """AgentScope 事件流处理器（spec §4.2 分级 + §5.2 运行模式增强）。
 
-    🎯 **关键改进**:
-    1. 继承 `EventStreamHandler` 基类
-    2. 重写 `handle()` 方法统一分发事件类型
-    3. 不重写每个具体事件类型，减少代码量
+    - SSE 输出：SkillEvent 入 out_q，类型保持旧值（text/thinking/tool_call/
+      tool_result/done/error），前端零改动。
+    - DB 输出：经 bus 发布信封 —— delta 不落库，块级/调用级汇总落库。
+    - 关联：透传 reply_id / block_id / tool_call_id。
+    - 计量：累计 ModelCallEnd 的 input/output tokens 与迭代轮数。
+    - 错误：安装版 agentscope 无 ErrorEvent，错误经 ReplyEndEvent.error 传递。
+
+    注：安装版 agentscope.event 无 ``EventStreamHandler`` 基类，故为普通类。
     """
-    
-    def __init__(self, skill_name: str, event_service: ExecutionEventService, yield_fn):
-        super().__init__()
+
+    def __init__(
+        self,
+        skill_name: str,
+        bus: EventBus,
+        out_q: asyncio.Queue,
+        execution_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> None:
         self.skill_name = skill_name
-        self.event_service = event_service
-        self.yield_fn = yield_fn
+        self.bus = bus
+        self.out_q = out_q
+        # EventBus 本身不携带执行标识；优先显式传入，其次从 bus 读取，兜底生成
+        self.execution_id = (
+            execution_id
+            or getattr(bus, "execution_id", None)
+            or str(uuid.uuid4())
+        )
+        self.trace_id = trace_id if trace_id is not None else getattr(bus, "trace_id", None)
         self.text_parts: list[str] = []
+        self._final_text_parts: list[str] = []  # 跨块累积全文，供 done SSE 使用
+        self.thinking_parts: list[str] = []
         self.current_tool_name: str = ""
-    
+        self.reply_id: str | None = None
+        self.usage = {"input_tokens": 0, "output_tokens": 0}
+        self.iterations = 0
+
+    # ── 发布辅助 ─────────────────────────────────────────────────────
+
+    def _emit_sse(self, type_: str, data: dict) -> None:
+        self.out_q.put_nowait(SkillEvent(type=type_, data=data))
+
+    def _publish_db(self, event_type: str, category: str, levels, content: dict,
+                    metadata: dict | None = None, **kw) -> None:
+        self.bus.publish(EventEnvelope(
+            execution_id=self.execution_id,
+            trace_id=self.trace_id,
+            event_type=event_type, category=category, levels=list(levels),
+            content=content, source="agent", source_id=self.skill_name,
+            reply_id=self.reply_id, metadata=metadata or {}, **kw,
+        ))
+
+    # ── 统一分发 ─────────────────────────────────────────────────────
+
     async def handle(self, event) -> None:
         """统一事件分发器。"""
         from agentscope.event import (
-            TextBlockDeltaEvent, ThinkingBlockStartEvent, 
+            ReplyStartEvent, ReplyEndEvent, ExceedMaxItersEvent,
+            TextBlockDeltaEvent, TextBlockEndEvent,
             ThinkingBlockDeltaEvent, ThinkingBlockEndEvent,
-            ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent,
-            ToolResultTextDeltaEvent, ToolResultDataDeltaEvent,
-            ReplyEndEvent, ErrorEvent
+            ToolCallStartEvent, ToolCallEndEvent,
+            ToolResultTextDeltaEvent, ToolResultDataDeltaEvent, ToolResultEndEvent,
+            ModelCallEndEvent,
         )
-        
-        if isinstance(event, (ThinkingBlockStartEvent, ThinkingBlockEndEvent)):
-            logger.debug("[SkillExecution] %s", event.__class__.__name__)
-            
+
+        if isinstance(event, ReplyStartEvent):
+            self.reply_id = getattr(event, "reply_id", None)
+            self._publish_db("reply_start", EventCategory.LIFECYCLE, [EventLevel.DB],
+                             {"name": getattr(event, "name", "")})
+
+        elif isinstance(event, TextBlockDeltaEvent):
+            delta = event.delta or ""
+            if delta.strip():
+                self.text_parts.append(delta)
+                self._final_text_parts.append(delta)
+                self._emit_sse("text", {"content": delta})   # 仅 SSE，不落库
+
+        elif isinstance(event, TextBlockEndEvent):
+            self._publish_db(
+                "text_done", EventCategory.TEXT, [EventLevel.DB],
+                {"text": "".join(self.text_parts)},
+                block_id=getattr(event, "block_id", None),
+            )
+            self.text_parts = []
+
         elif isinstance(event, ThinkingBlockDeltaEvent):
             delta = event.delta or ""
-            if not delta.strip():
-                return
-            self.event_service.record(
-                event_type=ExecutionEventType.THINKING,
-                content={"delta": delta},
-                source="agent",
-                source_id=self.skill_name,
+            if delta.strip():
+                self.thinking_parts.append(delta)
+                self._emit_sse("thinking", {"content": delta})  # 仅 SSE
+
+        elif isinstance(event, ThinkingBlockEndEvent):
+            # 思考块仅记块边界 + 全文汇总（体积大、审计价值低，不入 SSE）
+            self._publish_db(
+                "thinking_done", EventCategory.THINKING, [EventLevel.DB],
+                {"thinking": "".join(self.thinking_parts)},
+                block_id=getattr(event, "block_id", None),
             )
-            await self.yield_fn(SkillEvent(type="thinking", data={"content": delta}))
-            
-        elif isinstance(event, TextBlockDeltaEvent):
-            if not event.delta.strip():
-                return
-            self.text_parts.append(event.delta)
-            self.event_service.record(
-                event_type=ExecutionEventType.TEXT,
-                content={"delta": event.delta},
-                source="agent",
-                source_id=self.skill_name,
-            )
-            await self.yield_fn(SkillEvent(type="text", data={"content": event.delta}))
-            
-        elif isinstance(event, (ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent)):
-            self._handle_tool_call(event)
-            
-        elif isinstance(event, (ToolResultTextDeltaEvent, ToolResultDataDeltaEvent)):
-            self._handle_tool_result(event)
-            
-        elif isinstance(event, ReplyEndEvent):
-            final_text = "".join(self.text_parts)
-            self.event_service.record(
-                event_type=ExecutionEventType.SKILL_RESULT,
-                content={"result": final_text},
-                source="agent",
-                source_id=self.skill_name,
-            )
-            
-            # 扫描产物文件
-            from app.ai.skills.artifact_store import scan_artifacts
-            
-            yield_fn = self.yield_fn
-            
-            # TODO: execution_id 需要通过闭包或参数传递
-            # artifacts = scan_artifacts(execution_id)
-            # for art in artifacts:
-            #     yield_fn(SkillEvent(type="artifact", data={...}))
-            
-            yield_fn(SkillEvent(type="done", data={"result": final_text}))
-            
-        elif isinstance(event, ErrorEvent):
-            await self.yield_fn(SkillEvent(type="error", data={
-                "message": str(event.error),
-                "type": event.__class__.__name__
-            }))
-    
-    def _handle_tool_call(self, event) -> None:
-        """处理工具调用相关事件。"""
-        from agentscope.event import ToolCallStartEvent, ToolCallDeltaEvent, ToolCallEndEvent
-        
-        if isinstance(event, ToolCallStartEvent):
+            self.thinking_parts = []
+
+        elif isinstance(event, ToolCallStartEvent):
             self.current_tool_name = getattr(event, "tool_call_name", "") or ""
-            event.tool_args = {}  # AgentScope 已提供结构化参数
-            
-        elif isinstance(event, ToolCallDeltaEvent):
-            pass
-            
+            self._tool_call_id = getattr(event, "tool_call_id", None)
+
         elif isinstance(event, ToolCallEndEvent):
+            # 安装版 ToolCallEndEvent 无 tool_args（参数经 ToolCallDeltaEvent 流式）
             tool_input = getattr(event, "tool_args", {}) or {}
-            
-            self.event_service.record(
-                event_type=ExecutionEventType.TOOL_CALL,
-                content={"tool_name": self.current_tool_name, "input": tool_input},
-                source="agent",
-                source_id=self.skill_name,
+            self._publish_db(
+                "tool_call", EventCategory.TOOL,
+                [EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                {"tool_name": self.current_tool_name, "input": tool_input},
+                tool_call_id=getattr(event, "tool_call_id", None),
+                ui_hint="timeline",
             )
-            self.yield_fn(SkillEvent(type="tool_call", data={
-                "tool_name": self.current_tool_name,
-                "input": tool_input,
-            }))
-    
-    def _handle_tool_result(self, event) -> None:
-        """处理工具结果事件。"""
-        from agentscope.event import ToolResultTextDeltaEvent, ToolResultDataDeltaEvent
-        
-        if isinstance(event, ToolResultTextDeltaEvent):
-            result_delta = getattr(event, "delta", "") or ""
-            if not result_delta.strip():
-                return
-            self.event_service.record(
-                event_type=ExecutionEventType.TOOL_RESULT,
-                content={
+            self._emit_sse("tool_call", {
+                "tool_name": self.current_tool_name, "input": tool_input,
+            })
+
+        elif isinstance(event, (ToolResultTextDeltaEvent, ToolResultDataDeltaEvent)):
+            # 工具结果流式 delta：仅 SSE（二进制 data 记录 size 摘要）
+            if isinstance(event, ToolResultTextDeltaEvent):
+                d = getattr(event, "delta", "") or ""
+                if d.strip():
+                    self._emit_sse("tool_result", {
+                        "tool_name": self.current_tool_name, "delta": d,
+                        "state": "success",
+                    })
+            else:
+                data_b64 = getattr(event, "data", None)
+                self._emit_sse("tool_result", {
                     "tool_name": self.current_tool_name,
-                    "delta": result_delta,
-                    "state": "success",
-                },
-                source="agent",
-                source_id=self.skill_name,
+                    "media_type": getattr(event, "media_type", ""),
+                    "data_size": len(data_b64) if data_b64 else 0,
+                    "binary": True, "state": "success",
+                })
+
+        elif isinstance(event, ToolResultEndEvent):
+            state = str(getattr(event, "state", "success") or "success").lower()
+            self._publish_db(
+                "tool_result", EventCategory.TOOL,
+                [EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                {"tool_name": self.current_tool_name, "state": state},
+                tool_call_id=getattr(event, "tool_call_id", None),
+                ui_hint="timeline",
             )
-            self.yield_fn(SkillEvent(type="tool_result", data={
-                "tool_name": self.current_tool_name,
-                "delta": result_delta,
-                "state": "success",
-            }))
-            
-        elif isinstance(event, ToolResultDataDeltaEvent):
-            media_type = getattr(event, "media_type", "") or ""
-            data_b64 = getattr(event, "data", None)
-            url = getattr(event, "url", None)
-            data_size = len(data_b64) if data_b64 else 0
-            
-            self.event_service.record(
-                event_type=ExecutionEventType.TOOL_RESULT,
-                content={
-                    "tool_name": self.current_tool_name,
-                    "media_type": media_type,
-                    "data_size": data_size,
-                    "url": url,
-                    "state": "success",
-                    "binary": True,
-                },
-                source="agent",
-                source_id=self.skill_name,
+            self._emit_sse("tool_result", {
+                "tool_name": self.current_tool_name, "state": state,
+            })
+
+        elif isinstance(event, ModelCallEndEvent):
+            self.iterations += 1
+            input_tokens = int(getattr(event, "input_tokens", 0) or 0)
+            output_tokens = int(getattr(event, "output_tokens", 0) or 0)
+            self.usage["input_tokens"] += input_tokens
+            self.usage["output_tokens"] += output_tokens
+            self._publish_db(
+                "model_call", EventCategory.MODEL, [EventLevel.LOG],
+                {"model_name": getattr(event, "model_name", "")},
+                metadata={"input_tokens": input_tokens,
+                          "output_tokens": output_tokens,
+                          "iteration": self.iterations},
             )
+
+        elif isinstance(event, ExceedMaxItersEvent):
+            self._publish_db(
+                "iteration_limit", EventCategory.RUNTIME,
+                [EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                {"iterations": self.iterations}, ui_hint="timeline",
+            )
+
+        elif isinstance(event, ReplyEndEvent):
+            final_text = "".join(self._final_text_parts or self.text_parts)
+            error = getattr(event, "error", None)
+            finished = str(getattr(event, "finished_reason", None) or "completed")
+            if error is not None:
+                message = str(getattr(error, "message", "") or error)
+                self._publish_db(
+                    "error", EventCategory.ERROR,
+                    [EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                    {"message": message}, ui_hint="timeline",
+                )
+                self._emit_sse("error", {
+                    "message": message,
+                    "type": str(getattr(error, "type", "error")),
+                })
+            self._publish_db(
+                "reply_end", EventCategory.LIFECYCLE, [EventLevel.DB],
+                {"finished_reason": finished},
+                metadata={**self.usage, "iterations": self.iterations},
+            )
+            self._emit_sse("done", {"result": final_text})
+
+        else:
+            # 未知事件（含各类 Start/无关事件）：仅 debug 日志，不打扰 SSE/DB
+            logger.debug("[SkillExecution] unhandled event: %s", event.__class__.__name__)
 
 
 class SkillExecutionService:
@@ -327,9 +373,8 @@ class SkillExecutionService:
             model = self._build_model(model_id)
             
             handler = SkillEventHandler(
-                skill_name=skill_name,
-                event_service=self.event_service,
-                yield_fn=lambda evt: yield evt
+                skill_name=skill_name, bus=EventBus(),
+                out_q=asyncio.Queue(),
             )
             
             agent = self._create_agent(skill_name, system_prompt, model, toolkit)
@@ -365,28 +410,6 @@ class SkillExecutionService:
                 except Exception:
                     pass
     
-    async def _run_agent_native(
-        self,
-        skill_name: str,
-        system_prompt: str,
-        model: Any,
-        toolkit: Any,
-        user_message: str,
-        execution_id: str,
-    ) -> AsyncGenerator[SkillEvent, None]:
-        """使用原生事件处理器运行 Agent。"""
-        handler = SkillEventHandler(
-            skill_name=skill_name,
-            event_service=self.event_service,
-            yield_fn=lambda evt: yield evt
-        )
-        
-        agent = self._create_agent(skill_name, system_prompt, model, toolkit)
-        user_msg = UserMsg(name="user", content=user_message)
-        
-        async for event in agent.reply_stream(inputs=user_msg):
-            await handler.handle(event)
-
     def _create_agent(
         self,
         name: str,
