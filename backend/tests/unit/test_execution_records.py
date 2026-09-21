@@ -1,6 +1,4 @@
 """执行主记录（agent_execution 表）写入单测：start/done/failed/timeout 生命周期。"""
-from datetime import datetime
-
 from app.ai.skills.execution_records import (
     record_execution_start, record_execution_done, record_execution_failed,
 )
@@ -95,3 +93,26 @@ def test_missing_row_is_noop_no_crash():
     db = FakeDB(rows=[])
     record_execution_done(db, "ghost", output="x")   # 不存在 → 静默跳过
     assert db.committed == 0
+
+
+class RaisingCommitDB(FakeDB):
+    """commit() 抛异常的假 DB，验证异常吞噬保证（不中断 SSE 流）。"""
+
+    def commit(self):
+        raise RuntimeError("db down")
+
+
+def test_exception_swallowed_on_all_paths():
+    """start/done/failed 在 commit 抛异常时均不抛出且触发 rollback。"""
+    db = RaisingCommitDB()
+    record_execution_start(db, execution_id="e1")          # 不抛
+    assert db.rolled_back == 1
+
+    row = FakeExecutionRow(execution_id="e1", status="running")
+    db2 = RaisingCommitDB(rows=[row])
+    record_execution_done(db2, "e1", output="x")           # 不抛
+    assert db2.rolled_back == 1
+
+    db3 = RaisingCommitDB(rows=[row])
+    record_execution_failed(db3, "e1", error="boom")       # 不抛
+    assert db3.rolled_back == 1
