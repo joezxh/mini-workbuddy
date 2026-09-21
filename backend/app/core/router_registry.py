@@ -107,6 +107,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.agent.agent_execution", tags=["Agent执行查询"]),
     RouterSpec("app.routers.agent.agent_scheduled_task", tags=["Agent定时任务"]),
     RouterSpec("app.routers.agent.agent_team", prefix=API_V1_PREFIX, tags=["AI Team 多智能体团队"]),
+    # agent_run 自带相对 prefix /agents/executions，此处叠加 /api/v1
+    RouterSpec("app.routers.agent.agent_run", prefix=API_V1_PREFIX, tags=["Agent 运行控制"]),
 
     # --- 13~16. 技能 / 密钥 / 工具 ---
     RouterSpec("app.routers.ai.ai_skill", prefix=f"{API_V1_PREFIX}/ai-assistant/skills", tags=["AI技能"]),

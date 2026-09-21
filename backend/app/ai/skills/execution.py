@@ -26,6 +26,7 @@ from agentscope.tool import ToolBase
 from agentscope.message import UserMsg
 
 from app.ai.events.bus import EventBus
+from app.ai.events.registry import get_run_registry
 from app.ai.services.execution_event_service import ExecutionEventService
 from app.db.database import SessionLocal  # noqa: E402 —— 顶部导入便于测试 monkeypatch
 from app.ai.skills.execution_records import (
@@ -311,6 +312,7 @@ class SkillExecutionService:
         _finalized = False
         consumer: asyncio.Task | None = None
         handler: SkillEventHandler | None = None
+        handle = None  # RunHandle（注册进 AgentRunRegistry 后非空）
 
         if execution_id is None:
             execution_id = str(uuid.uuid4())
@@ -398,9 +400,14 @@ class SkillExecutionService:
                         await handler.handle(event)
 
                 consumer = asyncio.create_task(_consume())
+                handle = get_run_registry().register(
+                    execution_id, consumer, out_q=out_q, agent=agent,
+                    handler=handler, user_id=user_id,
+                )
                 deadline = time.monotonic() + self.timeout
                 while True:
-                    if consumer.done() and out_q.empty():
+                    if (consumer.done() and out_q.empty()
+                            and handle.status != "waiting_hitl"):
                         break
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
@@ -428,13 +435,19 @@ class SkillExecutionService:
                 exc = consumer.exception() if consumer.done() and not consumer.cancelled() else None
                 if exc is not None and not timed_out:
                     raise exc
-                if not timed_out:
+                # 消费者被取消（registry.cancel 触达）→ 不算成功完成
+                _consumer_cancelled = handle is not None and handle.task.cancelled()
+                if not timed_out and not _consumer_cancelled:
                     _exec_success = True
 
                 if timed_out:
                     # 超时 SSE 提示必须在 finally 之外 yield：
                     # GeneratorExit 传播期间禁止在 finally 内 yield
                     yield SkillEvent(type="error", data={"message": f"执行超时（>{self.timeout}s），已熔断"})
+                elif _consumer_cancelled:
+                    # 用户取消：SSE 中断提示同样在 finally 之外 yield（同上约束）
+                    _reason = handle.interrupt_reason or "user_cancel"
+                    yield SkillEvent(type="error", data={"message": f"执行被中断（{_reason}）"})
 
             except Exception as e:
                 _error_text = str(e)
@@ -465,20 +478,26 @@ class SkillExecutionService:
             elapsed_ms = int((time.perf_counter() - _exec_start) * 1000)
             if not _finalized:
                 _finalized = True
+                # 统一中断收尾：超时熔断 或 registry.cancel 触发的用户取消
+                cancel_reason = None
                 if timed_out:
+                    cancel_reason = "timeout"
+                elif handle is not None and handle.task.cancelled():
+                    cancel_reason = handle.interrupt_reason or "user_cancel"
+                if cancel_reason:
                     for etype in ("interrupt_requested", "interrupted"):
                         self.bus.publish(EventEnvelope(
                             execution_id=execution_id, trace_id=trace_id,
                             event_type=etype, category=EventCategory.INTERRUPT,
                             levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
-                            content={"reason": "timeout"},
-                            interrupt_reason="timeout", source="skill_execution",
+                            content={"reason": cancel_reason},
+                            interrupt_reason=cancel_reason, source="skill_execution",
                             source_id=skill_name, ui_hint="timeline",
                         ))
                     record_execution_failed(
                         _record_db, execution_id,
-                        error=f"执行超时（>{self.timeout}s）", latency_ms=elapsed_ms,
-                        interrupt_reason="timeout",
+                        error=f"执行被中断（{cancel_reason}）", latency_ms=elapsed_ms,
+                        interrupt_reason=cancel_reason,
                     )
                 elif not _exec_success:
                     record_execution_failed(_record_db, execution_id,
@@ -494,6 +513,12 @@ class SkillExecutionService:
 
                 # 记录指标
                 self._record_metrics(skill_name, _exec_success, elapsed_ms / 1000.0)
+
+            # 反注册：任何退出路径都执行（cancel API 查询表随即失效）
+            try:
+                get_run_registry().unregister(execution_id)
+            except Exception:
+                logger.debug("run registry unregister failed: %s", execution_id)
 
             # 关闭数据库会话（含技能不存在早退路径）
             if _record_db is not None:
