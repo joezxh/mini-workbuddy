@@ -64,8 +64,10 @@ def _safe_json(raw: str) -> dict:
 class AgentscopeRealtimeProvider(RealtimeProvider):
     """以 AgentScope RealtimeAgent 为内核的实时语音 Provider。"""
 
-    def __init__(self, key: str) -> None:
-        self.key = key
+    def __init__(self, key: Optional[str] = None) -> None:
+        # 注册表以 provider_cls() 无参实例化做 is_configured 探测，
+        # key 缺省回退到类属性（子类以类属性声明各自 key）
+        self.key = key or type(self).key or ""
         self._system_prompt = ""
         self._mcp_tool_schemas: list = []
         self._agent = None

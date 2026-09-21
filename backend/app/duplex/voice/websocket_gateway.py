@@ -8,7 +8,7 @@ M2 增强：
 - 轮次代际仲裁（turn_state.TurnState）：音频/文本帧携带 generation，过期帧丢弃
 - 能力协商（protocol_adapter.ProtocolAdapter）：voice.ready 由协商结果构造
 - 事件重放缓冲（replay_buffer）：断线重连回放遗漏的状态帧
-- 本地管线回退（providers.local.LocalProvider）：provider=local 时启用
+- AgentScope RealtimeAgent 内核（providers/agentscope.py，dashscope|openai）
 """
 import asyncio
 import json

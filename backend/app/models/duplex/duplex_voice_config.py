@@ -35,7 +35,7 @@ class AiAgentConfig(Base):
     agent_id = Column(String(64), unique=True, nullable=False, index=True)
     name = Column(String(128))
     type = Column(String(32), server_default="agentscope",
-                  comment="agentscope|dify|direct")
+                  comment="agentscope（dify/direct 已废弃，见 2026-09-20 spec）")
     model = Column(String(64), server_default="qwen-plus")
     system_prompt = Column(Text)
     tool_bindings = Column(JSON, comment="绑定的工具名列表")
