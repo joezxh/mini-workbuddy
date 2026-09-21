@@ -636,7 +636,7 @@ from app.schemas.agent.agent import ExecutionEventType as A
 from app.models.agent.agent_execution_event import ExecutionEventType as B
 from app.schemas.agent.event_types import ExecutionEventType as C
 assert A is B is C
-assert A.TEXT == 'text' and A.TEXT_CHUNK == 'text_chunk'
+assert A.TEXT_CHUNK == 'text_chunk' and A.TEAM_START == 'team_start'
 print('single source ok')
 "
 cd backend && python -m pytest tests/unit -q
