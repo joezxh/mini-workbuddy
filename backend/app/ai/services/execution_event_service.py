@@ -246,7 +246,7 @@ class ExecutionEventService:
         source: Optional[str] = None,
         source_id: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
-    ) -> int:
+    ) -> Optional[int]:
         return self.record(
             event_type=event_type,
             content=content,
