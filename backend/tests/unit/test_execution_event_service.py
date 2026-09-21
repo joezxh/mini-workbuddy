@@ -79,7 +79,11 @@ def test_batch_write_sync_maps_new_columns(monkeypatch):
     monkeypatch.setattr(svc_mod, "AgentExecutionEvent", FakeEventORM)
     monkeypatch.setattr(svc_mod, "SessionLocal", lambda: FakeDB())
 
-    svc = ExecutionEventService(execution_id="exec-2")
+    async def _make_svc():
+        # 在事件循环内构造，避免同步上下文 get_event_loop 的 DeprecationWarning
+        return ExecutionEventService(execution_id="exec-2")
+
+    svc = asyncio.run(_make_svc())
     svc._batch_write_sync([{
         "execution_id": "exec-2", "trace_id": "t", "event_type": "interrupted",
         "sequence": 3, "content": {}, "source": "agent", "source_id": None,
