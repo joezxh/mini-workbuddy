@@ -50,7 +50,10 @@
     <a-list size="small" bordered :data-source="rows">
       <template #renderItem="{ item }">
         <a-list-item>
-          <span>{{ item.agent_id }} · {{ item.name }}（{{ item.type }} / {{ item.model }}）</span>
+          <span>
+            {{ item.agent_id }} · {{ item.name }}（{{ item.type }} / {{ item.model }}）
+            <a-tag v-if="isDeprecatedType(item.type)" color="warning">已废弃，请迁移为 agentscope</a-tag>
+          </span>
           <template #actions>
             <a @click="onEdit(item)">载入</a>
           </template>
@@ -83,11 +86,12 @@ const empty = (): AgentConfig => ({
 
 const form = reactive<AgentConfig>(empty())
 
-const typeOptions = [
-  { label: 'AgentScope', value: 'agentscope' },
-  { label: 'Dify', value: 'dify' },
-  { label: '直连 LLM', value: 'direct' },
-]
+// 语音链路已切换 AgentScope RealtimeAgent 内核，dify/direct 已废弃（2026-09 spec）
+const typeOptions = [{ label: 'AgentScope', value: 'agentscope' }]
+
+function isDeprecatedType(t: string): boolean {
+  return t === 'dify' || t === 'direct'
+}
 
 async function load() {
   try {
