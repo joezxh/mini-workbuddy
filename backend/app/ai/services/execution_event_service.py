@@ -19,6 +19,9 @@ from loguru import logger
 
 from app.db.database import SessionLocal
 from app.models.agent.agent_execution_event import AgentExecutionEvent
+from app.schemas.agent.event_types import (
+    EventEnvelope, EventLevel, normalize_event_type, route_of,
+)
 
 
 # ── 批量写入配置 ──────────────────────────────────────────────────────────────
@@ -136,44 +139,98 @@ class ExecutionEventService:
         source_id: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
         async_write: bool = True,
-    ) -> int:
-        """记录事件
+    ) -> Optional[int]:
+        """记录事件（兼容入口）。
 
-        将事件放入队列，由后台 writer 批量写入数据库。
-        不阻塞调用方（SSE 流生成器）。
+        事件值先经 LEGACY_ALIAS 归一化，再按 DEFAULT_ROUTES 分级：
+        仅 STREAM 的 delta 类不再落库（spec §4.2）。
         """
+        etype = normalize_event_type(event_type)
+        route = route_of(etype)
+        envelope = EventEnvelope(
+            execution_id=self.execution_id,
+            trace_id=self.trace_id,
+            event_type=etype,
+            category=route.category,
+            levels=sorted(route.levels),
+            content=content or {},
+            source=source or "skill_execution",
+            source_id=source_id,
+            ui_hint=route.ui_hint,
+            metadata=metadata or {},
+        )
+        if async_write is False:
+            # 同步路径：仅当需要落库时写
+            if EventLevel.DB in route.levels:
+                self._write_event_sync(self._envelope_to_row(envelope))
+            return None
+        return self.record_envelope(envelope)
+
+    def record_envelope(self, envelope: EventEnvelope) -> Optional[int]:
+        """按信封级别分发：含 DB 级才入队，否则仅结构化日志。"""
+        if EventLevel.DB not in (envelope.levels or []):
+            logger.debug(
+                "event[{}] {} -> no-DB (levels={})",
+                envelope.execution_id[:8], envelope.event_type, envelope.levels,
+            )
+            return None
         seq = self.sequence
-        event = {
-            "execution_id": self.execution_id,
-            "trace_id": self.trace_id,
-            "event_type": event_type,
-            "sequence": seq,
-            "content": content or {},
-            "source": source or "skill_execution",
-            "source_id": source_id,
-            "metadata": metadata or {},
-        }
-        self._events.append(event)
-
-        if async_write:
-            # 确保 writer 已启动（自动处理跨循环调度）
-            self.start()
-            if self._owning_loop is not None and self._owning_loop.is_running():
-                # 若当前线程不是 owning loop，需线程安全地放入队列
-                try:
-                    self._owning_loop.call_soon_threadsafe(self._safe_put, event)
-                except RuntimeError:
-                    # loop 已关闭等极端情况：降级丢弃
-                    logger.warning("事件队列 loop 不可用，丢弃事件 seq={}", seq)
-            else:
-                try:
-                    self._queue.put_nowait(event)
-                except asyncio.QueueFull:
-                    logger.warning("事件队列已满（{}），丢弃事件 seq={}", _QUEUE_MAX_SIZE, seq)
-        else:
-            self._write_event_sync(event)
-
+        row = self._envelope_to_row(envelope, seq)
+        self._events.append(row)
+        self.start()
+        self._put_row(row, seq)
         return seq
+
+    def _put_row(self, row: dict[str, Any], seq: int) -> None:
+        """将行放入队列。
+
+        - 当前运行 loop 即 owning loop（同线程）：直接 put，立即对
+          ``queue.qsize()`` 可见；
+        - 在其它线程 / 其它 loop（如 asyncio.to_thread 的新循环）中：
+          经 call_soon_threadsafe 调度回 owning loop；
+        - owning loop 不可用：降级 put_nowait，失败则丢弃。
+        """
+        try:
+            current_loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        if current_loop is not None and current_loop is self._owning_loop:
+            self._safe_put(row)
+            return
+        if self._owning_loop is not None and self._owning_loop.is_running():
+            try:
+                self._owning_loop.call_soon_threadsafe(self._safe_put, row)
+            except RuntimeError:
+                # loop 已关闭等极端情况：降级丢弃
+                logger.warning("事件队列 loop 不可用，丢弃事件 seq={}", seq)
+        else:
+            try:
+                self._queue.put_nowait(row)
+            except asyncio.QueueFull:
+                logger.warning("事件队列已满（{}），丢弃事件 seq={}", _QUEUE_MAX_SIZE, seq)
+
+    def _envelope_to_row(self, envelope: EventEnvelope, seq: Optional[int] = None) -> dict[str, Any]:
+        """信封 → DB 行 dict（含 DDL 47 新列）。"""
+        levels = envelope.levels or []
+        return {
+            "execution_id": envelope.execution_id,
+            "trace_id": envelope.trace_id,
+            "event_type": envelope.event_type,
+            "sequence": seq if seq is not None else self.sequence,
+            "content": envelope.content,
+            "source": envelope.source,
+            "source_id": envelope.source_id,
+            "metadata": envelope.metadata or {},
+            "level": min(levels) if levels else None,
+            "levels": list(levels),
+            "category": envelope.category,
+            "reply_id": envelope.reply_id,
+            "block_id": envelope.block_id,
+            "tool_call_id": envelope.tool_call_id,
+            "interrupt_reason": envelope.interrupt_reason,
+            "ui_hint": envelope.ui_hint,
+            "event_version": envelope.event_version,
+        }
 
     def _safe_put(self, event: dict[str, Any]) -> None:
         """线程安全地放入队列（运行在 owning loop 上）"""
@@ -271,13 +328,21 @@ class ExecutionEventService:
             for event in events:
                 db_event = AgentExecutionEvent(
                     execution_id=event["execution_id"],
-                    trace_id=event["trace_id"],
+                    trace_id=event.get("trace_id"),
                     event_type=event["event_type"],
                     sequence=event["sequence"],
                     content=event.get("content"),
                     source=event.get("source"),
                     source_id=event.get("source_id"),
                     event_metadata=event.get("metadata"),
+                    level=event.get("level"),
+                    category=event.get("category"),
+                    reply_id=event.get("reply_id"),
+                    block_id=event.get("block_id"),
+                    tool_call_id=event.get("tool_call_id"),
+                    interrupt_reason=event.get("interrupt_reason"),
+                    ui_hint=event.get("ui_hint"),
+                    event_version=event.get("event_version") or 1,
                 )
                 db.add(db_event)
             db.commit()
