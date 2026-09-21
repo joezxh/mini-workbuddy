@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Column, BigInteger, String, Integer, JSON, DateTime, Index
+from sqlalchemy import Column, BigInteger, String, Integer, SmallInteger, JSON, DateTime, Index
 from sqlalchemy.sql import func
 
 from app.db.database import Base
@@ -80,6 +80,16 @@ class AgentExecutionEvent(Base, TenantMixin):
     # ── 元数据 ─────────────────────────────────────────────────────────────
     event_metadata = Column("metadata", JSON, nullable=True, comment="附加元数据")
 
+    # ── 分级与关联（spec 2026-09-21 §6.1，DDL 47）──────────────────────────
+    level = Column(SmallInteger, nullable=True, comment="最低分发层级 LOG=0/DB=1/STREAM=2/UI=3")
+    category = Column(String(20), nullable=True, comment="事件分类")
+    reply_id = Column(String(64), nullable=True, comment="AgentScope reply_id")
+    block_id = Column(String(64), nullable=True, comment="内容块 ID")
+    tool_call_id = Column(String(64), nullable=True, comment="工具调用关联 ID")
+    interrupt_reason = Column(String(20), nullable=True, comment="中断原因")
+    ui_hint = Column(String(20), nullable=True, comment="前端渲染路由提示")
+    event_version = Column(SmallInteger, nullable=False, server_default="1", comment="事件格式版本")
+
     # ── 时间戳 ────────────────────────────────────────────────────────────
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -87,4 +97,6 @@ class AgentExecutionEvent(Base, TenantMixin):
         Index("idx_event_execution_seq", "execution_id", "sequence"),
         Index("idx_event_type", "event_type"),
         Index("idx_event_trace", "trace_id"),
+        Index("idx_event_reply", "execution_id", "reply_id"),
+        Index("idx_event_category_level", "category", "level"),
     )
