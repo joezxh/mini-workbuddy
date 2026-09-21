@@ -25,11 +25,9 @@ VALID_DASHSCOPE_REALTIME_MODELS = frozenset({
     "qwen3.5-omni-plus-realtime",
 })
 
-# 本地 Docker 部署的 qwen-audio-s2s（OpenAI Realtime GA 协议，
-# 对齐 qwen-audio-agent 的 speech-to-speech Provider）
-S2S_PLATFORM = "s2s"
-DEFAULT_S2S_REALTIME_URL = "ws://127.0.0.1:8765/v1/realtime"
-DEFAULT_S2S_MODEL_NAME = "qwen-audio-s2s"
+# 支持的语音平台（provider key 与 ai_api_key.platform 对齐；
+# DashScope 平台值历史上为 "DashScope"，openai 平台值小写）
+SUPPORTED_VOICE_PLATFORMS = ("DashScope", "openai")
 
 
 def _voice_row_platform(model: AiChatModel, key: Optional[AiApiKey]) -> str:
@@ -46,23 +44,26 @@ def _voice_row_usable(model: AiChatModel, key: Optional[AiApiKey]) -> bool:
     """模型行是否可用于建立实时连接（列表过滤与默认解析共用）。"""
     platform = _voice_row_platform(model, key)
     api_key = key.api_key if key else None
-    if platform == S2S_PLATFORM:
-        # 本地 Docker S2S：无需云端 Key，端点有默认值即可用
-        return True
     if platform == "DashScope":
         return (
             model.model in VALID_DASHSCOPE_REALTIME_MODELS
             and bool(api_key)
         )
-    # 其它平台沿用旧规则：有 Key 即视为可用
-    return bool(api_key)
+    # openai 等其它平台：有 Key 且模型名非空即可用
+    # （模型有效性由 AgentScope 模型卡片在 connect 时校验）
+    return bool(api_key) and bool(model.model)
+
+
+def _platform_matches(want: Optional[str], row_platform: str) -> bool:
+    """provider key 与模型行平台匹配：None→仅排除 s2s；指定→忽略大小写精确匹配。"""
+    if want is None:
+        return row_platform != "s2s"
+    return row_platform.lower() == want.lower()
 
 
 def _row_dict(model: AiChatModel, key: Optional[AiApiKey]) -> Dict:
     platform = _voice_row_platform(model, key)
     base_url = _voice_row_base_url(model, key)
-    if platform == S2S_PLATFORM and not base_url:
-        base_url = DEFAULT_S2S_REALTIME_URL
     return {
         "id": model.id,
         "name": model.name,
@@ -133,10 +134,10 @@ def resolve_voice_config(
                 }
             return _row_dict(row, key) | {"configured": True}
 
-        want_s2s = (provider_key or "") == S2S_PLATFORM
         candidates = [
             r for r in rows
-            if (_voice_row_platform(r, r.api_key_obj) == S2S_PLATFORM) == want_s2s
+            if _platform_matches(provider_key,
+                                 _voice_row_platform(r, r.api_key_obj))
             and _voice_row_usable(r, r.api_key_obj)
         ]
         if not candidates:

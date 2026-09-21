@@ -137,7 +137,7 @@ async def _handle_control_frame(
     voice_session_id: str,
     websocket: Optional[WebSocket] = None,
 ) -> None:
-    """处理客户端控制帧（差距分析 §3.4.3）。
+    """处理客户端控制帧（协议 v2 + tool.confirm 增量）。
 
     input.message 受响应不活动超时保护：超时则下发 error(inactivity) 并复位聆听态。
     """
@@ -159,19 +159,34 @@ async def _handle_control_frame(
                     "code": ErrorCode.INACTIVITY.value,
                     "message": "响应超时",
                 }, ensure_ascii=False))
+    elif ftype == "tool.confirm":
+        data = frame.get("data", {})
+        confirm = getattr(realtime_provider, "resolve_confirm", None)
+        if confirm is not None:
+            await confirm(data.get("confirm_id", ""), bool(data.get("approved")))
     elif ftype == "input.mute":
         # 透传静音状态（存量 Provider 不支持则忽略）
         pass
     elif ftype == "output.mode":
         pass
     elif ftype == "interrupt":
-        if turn.turn_id:
-            turn.on_interrupt()
-            turn.generation += 1  # 代际 +1：过期助理音频将被丢弃
-            mark_interrupted(turn.turn_id)
-            bump_generation(turn.turn_id)
+        _apply_interrupt(turn, voice_session_id)
+        interrupt = getattr(realtime_provider, "interrupt", None)
+        if interrupt is not None:
+            await interrupt()
     elif ftype == "ping":
-        await realtime_provider.send_text(json.dumps({"type": "pong"}))
+        # 修复：pong 回客户端，而非发给上游 Provider
+        if websocket is not None:
+            await websocket.send_text(json.dumps({"type": EventType.PONG.value}))
+
+
+def _apply_interrupt(turn: TurnState, voice_session_id: str) -> None:
+    """打断统一入口：代际 +1 + 轮次标记（客户端 interrupt 与 VAD barge-in 共用）。"""
+    if turn.turn_id:
+        turn.on_interrupt()
+        turn.generation += 1
+        mark_interrupted(turn.turn_id)
+        bump_generation(turn.turn_id)
 
 
 @router.get("/metrics")
@@ -227,27 +242,36 @@ async def voice_websocket(
         # 从数据库解析语音模型配置（api_key + model + 端点），缺省使用默认语音模型。
         # 仅云端 Provider（dashscope/s2s）需要；local / loopback / 测试桩跳过解析
         # （避免误报 no_model）。
-        if provider in ("dashscope", "s2s"):
+        if provider in ("dashscope", "openai"):
             voice_cfg = resolve_voice_config(provider, model_id)
             if not voice_cfg.get("configured"):
                 if voice_cfg.get("reason") == "empty_key":
                     raise ValueError(
                         f"语音模型「{voice_cfg.get('model')}」(id={voice_cfg.get('model_id')}) "
                         f"已启用，但关联密钥「{voice_cfg.get('key_name')}」的 api_key 为空："
-                        f"请在「API Key 管理」中填写真实的 DashScope API Key"
+                        f"请在「API Key 管理」中填写真实的 API Key"
                     )
                 if voice_cfg.get("reason") == "invalid_model":
                     raise ValueError(
                         f"语音模型「{voice_cfg.get('model')}」(id={voice_cfg.get('model_id')}) "
                         f"不是有效的实时模型名：请在「语音模型配置」中更正"
-                        f"（DashScope 可用模型见官方实时模型目录）"
+                        f"（可用模型见官方实时模型目录）"
                     )
                 raise ValueError(
-                    "未配置语音模型：请在「语音模型配置」中新增并启用一个语音模型（type=7），"
-                    "或使用本地 Docker S2S（platform=s2s）"
+                    "未配置语音模型：请在「语音模型配置」中新增并启用一个语音模型（type=7）"
                 )
         else:
             voice_cfg = {}
+
+        # 会话级 MCP 工具注入（agent 绑定 MCP 时拉取 schema；失败不阻塞语音链路）
+        mcp_tool_schemas: list = []
+        if agent_id:
+            try:
+                from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+                mcp_tool_schemas = await McpSessionResolver().resolve_tools()
+            except Exception as e:  # noqa: BLE001 - MCP 注入失败不阻塞语音
+                logger.warning(f"MCP 工具注入失败（忽略）: {e}")
+
         await realtime_provider.connect(session_config={
             "instructions": f"你是一位专业的 AI 调解员，正在处理案件 {case_number}。",
             "tools": [],
@@ -255,6 +279,7 @@ async def voice_websocket(
             "api_key": voice_cfg.get("api_key", ""),
             "model": voice_cfg.get("model", "default"),
             "base_url": voice_cfg.get("base_url"),
+            "mcp_tools": mcp_tool_schemas,
         })
     except Exception as e:
         logger.error(f"Provider 连接失败: {e}")
@@ -298,6 +323,9 @@ async def voice_websocket(
 
     async def provider_reader():
         async for event in realtime_provider.events():
+            if event.type == "playback_cancelled":
+                # VAD barge-in：与客户端 interrupt 走同一代际仲裁入口
+                _apply_interrupt(turn, voice_session_id)
             frame = await _normalize_outbound(event)
             if not frame:
                 continue

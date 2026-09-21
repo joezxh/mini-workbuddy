@@ -50,6 +50,14 @@ class RealtimeProvider(ABC):
         """向对端发送文本（文本模式 / 打断时）。默认 no-op，子类按需实现。"""
         return None
 
+    async def interrupt(self) -> None:
+        """请求打断当前回复（子类按需实现；默认 no-op 兼容测试桩）。"""
+        return None
+
+    async def resolve_confirm(self, confirm_id: str, approved: bool) -> None:
+        """回传工具确认结果（子类按需实现）。"""
+        return None
+
     def get_capabilities(self) -> ProviderCapabilities:
         """返回 Provider 能力声明（子类可覆盖）。"""
         return ProviderCapabilities()
