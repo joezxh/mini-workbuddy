@@ -326,7 +326,7 @@ Expected: FAIL，`ModuleNotFoundError: app.schemas.agent.event_types`。
 spec: docs/superpowers/specs/2026-09-21-agent-event-architecture-design.md §4.2/§4.3
 
 设计要点：
-- 枚举用普通 str 子类（非 Enum），保持 ``ExecutionEventType.TEXT == "text"``
+- 枚举用普通 str 子类（非 Enum），保持 ``ExecutionEventType.TEXT_CHUNK == "text_chunk"``
   为 True，与旧 schemas 版行为一致，避免 ``str, Enum`` 相等性陷阱。
 - 历史值经 LEGACY_ALIAS 在写入侧归一化；DB 存量行不迁移，读取侧按别名双读。
 - levels 是分发目标集合（可多选）：delta 类仅 [STREAM] 不落库，
