@@ -306,6 +306,11 @@ class SkillEventHandler:
                 {"finished_reason": finished},
                 metadata={**self.usage, "iterations": self.iterations},
             )
+            self._publish_db(
+                "skill_result", EventCategory.SKILL,
+                [EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                {"result": final_text},
+            )
             self._emit_sse("done", {"result": final_text})
 
         else:
@@ -525,15 +530,17 @@ class SkillExecutionService:
                                 and handle.status != "waiting_hitl"):
                             break
                         timed_out = True
-                        consumer.cancel()
-                        await asyncio.gather(consumer, return_exceptions=True)
+                        _victim = handle.task if handle is not None else consumer
+                        _victim.cancel()
+                        await asyncio.gather(_victim, return_exceptions=True)
                         break
                     try:
                         evt = await asyncio.wait_for(asyncio.shield(out_q.get()),
                                                      timeout=remaining)
                         if evt is None:
                             # 哨兵：当前 consumer 已结束。HITL 暂停中不算结束
-                            # ——等待 resume 换新 consumer；哨兵绝不 yield 到 SSE
+                            # ——等待 resume 换新 consumer；哨兵绝不 yield 到 SSE。
+                            # waiting_hitl 期间 cancel 置 cancelling → 哨兵唤醒后走收尾
                             if handle.status == "waiting_hitl":
                                 continue
                             break
@@ -563,6 +570,9 @@ class SkillExecutionService:
                             ))
                         elif evt.type == "hitl_resume":
                             record_execution_status(_record_db, execution_id, "running")
+                            # 恢复后重置总超时预算（终审 IMP-01）：
+                            # 否则暂停消耗的时间会被计入恢复后的执行
+                            deadline = time.monotonic() + self.timeout
                             self.bus.publish(EventEnvelope(
                                 execution_id=execution_id, trace_id=trace_id,
                                 event_type="hitl_resume", category=EventCategory.HITL,
@@ -577,8 +587,9 @@ class SkillExecutionService:
                                 and handle.status != "waiting_hitl"):
                             break
                         timed_out = True
-                        consumer.cancel()
-                        await asyncio.gather(consumer, return_exceptions=True)
+                        _victim = handle.task if handle is not None else consumer
+                        _victim.cancel()
+                        await asyncio.gather(_victim, return_exceptions=True)
                         break
 
                 # 传播消费者异常（恢复后的新 consumer 优先）
@@ -586,16 +597,17 @@ class SkillExecutionService:
                 exc = _active.exception() if _active.done() and not _active.cancelled() else None
                 if exc is not None and not timed_out:
                     raise exc
-                # 消费者被取消（registry.cancel 触达）→ 不算成功完成
-                _consumer_cancelled = handle is not None and handle.task.cancelled()
-                if not timed_out and not _consumer_cancelled:
+                # 被取消（registry.cancel 触达 running 态或 waiting_hitl 态）→ 不算成功
+                _cancelled = handle is not None and (
+                    handle.task.cancelled() or bool(handle.interrupt_reason))
+                if not timed_out and not _cancelled:
                     _exec_success = True
 
                 if timed_out:
                     # 超时 SSE 提示必须在 finally 之外 yield：
                     # GeneratorExit 传播期间禁止在 finally 内 yield
                     yield SkillEvent(type="error", data={"message": f"执行超时（>{self.timeout}s），已熔断"})
-                elif _consumer_cancelled:
+                elif _cancelled:
                     # 用户取消：SSE 中断提示同样在 finally 之外 yield（同上约束）
                     _reason = handle.interrupt_reason or "user_cancel"
                     yield SkillEvent(type="error", data={"message": f"执行被中断（{_reason}）"})
@@ -620,8 +632,11 @@ class SkillExecutionService:
             self._injected_sys_paths = []
 
             # 断连（GeneratorExit）时尽力取消仍在运行的消费者任务
+            # （含 HITL 恢复后的新 consumer：终审 BLK-02）
             if consumer is not None and not consumer.done():
                 consumer.cancel()
+            if handle is not None and not handle.task.done():
+                handle.task.cancel()
 
             # ── 收尾：所有退出路径（正常/异常/超时/断连/技能不存在）统一执行，且仅执行一次 ──
             # record_execution_* 自身吞异常，finally 内调用安全；
@@ -630,12 +645,21 @@ class SkillExecutionService:
             if not _finalized:
                 _finalized = True
                 # 统一中断收尾：超时熔断 或 registry.cancel 触发的用户取消
+                # （含 HITL waiting_hitl 态取消与恢复后取消——终审 BLK-01/BLK-02）
                 cancel_reason = None
                 if timed_out:
                     cancel_reason = "timeout"
-                elif handle is not None and handle.task.cancelled():
+                elif handle is not None and (handle.task.cancelled()
+                                             or handle.interrupt_reason):
                     cancel_reason = handle.interrupt_reason or "user_cancel"
                 if cancel_reason:
+                    # 未决的 HITL 暂停行随中断一并关闭（终审 IMP-02）
+                    try:
+                        from app.ai.events.hitl import resolve_pause
+                        resolve_pause(_record_db, execution_id=execution_id,
+                                      action="interrupt")
+                    except Exception:
+                        pass
                     for etype in ("interrupt_requested", "interrupted"):
                         self.bus.publish(EventEnvelope(
                             execution_id=execution_id, trace_id=trace_id,
@@ -664,6 +688,10 @@ class SkillExecutionService:
 
                 # 记录指标
                 self._record_metrics(skill_name, _exec_success, elapsed_ms / 1000.0)
+
+            # 终态标记：unregister 前的最后窗口内 cancel 端点能正确 404（终审 IMP-03）
+            if handle is not None:
+                handle.status = "done"
 
             # 反注册：任何退出路径都执行（cancel API 查询表随即失效）
             try:

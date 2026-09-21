@@ -87,6 +87,8 @@ class AgentExecutionEventItem(BaseModel):
 
     @classmethod
     def from_orm_event(cls, event: Any) -> "AgentExecutionEventItem":
+        from app.schemas.agent.event_types import normalize_event_type
+
         meta = event.event_metadata or {}
         content = event.content
         if isinstance(content, (dict, list)):
@@ -94,7 +96,8 @@ class AgentExecutionEventItem(BaseModel):
         return cls(
             id=event.id,
             execution_id=event.execution_id,
-            event_type=event.event_type,
+            # 读取侧归一化（spec §4.3）：存量行的旧事件值映射为 canonical 名
+            event_type=normalize_event_type(event.event_type),
             sequence=event.sequence,
             content=content,
             source=event.source,

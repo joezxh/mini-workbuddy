@@ -25,6 +25,16 @@ async def cancel_execution(
     handle = reg.get(execution_id)
     if handle is None or handle.status == "done":
         raise HTTPException(status_code=404, detail="执行不存在或已结束")
+
+    # 权限控制：仅执行所有者可取消（与 confirm 端点一致——终审 BLK-03）
+    from app.models.agent.agent_execution import AgentExecution
+    row = db.query(AgentExecution).filter(
+        AgentExecution.execution_id == execution_id).first()
+    uid = getattr(current_user, "user_id", None)
+    if (row is not None and row.user_id is not None and uid is not None
+            and int(row.user_id) != int(uid)):
+        raise HTTPException(status_code=403, detail="无权操作该执行")
+
     ok = reg.cancel(execution_id, reason="user_cancel")
     return {"ok": ok, "execution_id": execution_id, "interrupt_reason": "user_cancel"}
 

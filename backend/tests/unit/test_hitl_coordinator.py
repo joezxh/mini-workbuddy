@@ -215,3 +215,33 @@ class _fake_event_service:
 
     async def stop(self):
         pass
+
+
+def test_execute_cancel_during_hitl_wakes_main_loop(monkeypatch):
+    """HITL waiting_hitl 态取消：哨兵唤醒主循环并走 user_cancel 收尾（终审 BLK-01）。"""
+    agent = FakeHitlAgent()
+    svc = SkillExecutionService(timeout=30)
+    _patch(monkeypatch, svc, agent)
+    failed_calls = []
+    monkeypatch.setattr(exec_mod, "record_execution_failed",
+                        lambda db, *a, **kw: failed_calls.append(kw))
+
+    async def run():
+        async def canceller():
+            for _ in range(500):
+                h = get_run_registry().get("exec-hitl-cancel")
+                if h is not None and h.status == "waiting_hitl":
+                    get_run_registry().cancel("exec-hitl-cancel", reason="user_cancel")
+                    return
+                await asyncio.sleep(0.05)
+        asyncio.create_task(canceller())
+        return [e async for e in svc.execute("demo", "hi", execution_id="exec-hitl-cancel")]
+
+    evts = asyncio.run(run())
+    types = [e.type for e in evts]
+    assert "hitl_pause" in types
+    assert any(e.type == "error" and "中断" in e.data["message"] for e in evts)
+    assert "done" not in types
+    failed = [k for k in failed_calls if k.get("interrupt_reason") == "user_cancel"]
+    assert failed, "waiting_hitl 态取消必须落 interrupt_reason=user_cancel"
+    assert get_run_registry().get("exec-hitl-cancel") is None

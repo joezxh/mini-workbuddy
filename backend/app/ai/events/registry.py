@@ -51,11 +51,27 @@ class AgentRunRegistry:
     # ── InterruptManager（P0 合并实现）─────────────────────────────────
 
     def cancel(self, execution_id: str, reason: str = "user_cancel") -> bool:
-        """强制终止运行中的执行（task.cancel → asyncio.CancelledError）。"""
+        """强制终止运行中的执行。
+
+        running 态：task.cancel() → asyncio.CancelledError。
+        waiting_hitl 态：原 consumer 已结束，task.cancel 是 no-op——
+        置 cancelling 状态并投递哨兵唤醒阻塞在 out_q.get() 上的主循环，
+        主循环据 handle.interrupt_reason 走 user_cancel 收尾（终审 BLK-01）。
+        """
         handle = self._handles.get(execution_id)
         if handle is None or handle.status == "done":
             return False
         handle.interrupt_reason = reason
+        if handle.status == "waiting_hitl":
+            handle.status = "cancelling"
+            if handle.out_q is not None:
+                try:
+                    handle.out_q.put_nowait(None)
+                except Exception:
+                    pass
+            logger.info("execution {} cancelled during HITL: {}",
+                        execution_id[:8], reason)
+            return True
         handle.task.cancel()
         logger.info("execution {} cancelled: {}", execution_id[:8], reason)
         return True
