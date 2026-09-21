@@ -19,12 +19,14 @@ export type VoiceEventType =
   | 'response_started'
   | 'playback_cancelled'
   | 'tool_call'
+  | 'tool_result'
+  | 'tool.confirm_required'
   | 'turn_update'
   | 'error'
   | 'pong'
 
-/** Provider 标识（对应后端 ProviderKey；s2s = 本地 Docker qwen-audio-s2s） */
-export type VoiceProvider = 'dashscope' | 'local' | 's2s' | 'openai' | 'loopback'
+/** Provider 标识（对应后端 ProviderKey：dashscope | openai） */
+export type VoiceProvider = 'dashscope' | 'openai'
 
 /** 协商后的能力集合（对应后端 build_ready_payload） */
 export interface VoiceCapabilities {
@@ -54,14 +56,24 @@ export interface VoiceTurn {
   finalized?: boolean
 }
 
-/** 会话级工具调用（对应后端 ToolCallHandler 结果） */
+/** 工具确认请求载荷（对应后端 tool.confirm_required 帧） */
+export interface ToolConfirmPayload {
+  confirm_id: string
+  tool_name: string
+  arguments: Record<string, unknown>
+  timeout_ms: number
+}
+
+/** 会话级工具调用（AgentScope 原生 Toolkit；status 驱动确认 UI） */
 export interface ToolCall {
   id: string
   name: string
   arguments: Record<string, unknown>
   result?: unknown
-  ok: boolean
+  ok?: boolean
   error?: string
+  /** pending：等待用户确认；executed/rejected：确认后终态 */
+  status?: 'pending' | 'executed' | 'rejected'
 }
 
 /** 通用下行帧 */
