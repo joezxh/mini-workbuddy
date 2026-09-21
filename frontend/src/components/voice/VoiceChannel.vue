@@ -29,7 +29,12 @@
         />
       </div>
 
-      <TurnTimeline :turns="transcripts" :tool-calls="toolCallList" />
+      <TurnTimeline
+        :turns="transcripts"
+        :tool-calls="toolCallList"
+        :pending-confirms="pendingConfirms"
+        @confirm="onToolConfirm"
+      />
     </a-card>
   </div>
 </template>
@@ -65,6 +70,7 @@ const {
   disconnect,
   sendInterrupt,
   sendText,
+  respondToolConfirm,
   startMic,
   stopMic,
 } = useVoiceChannel({
@@ -76,6 +82,11 @@ const {
 })
 
 const toolCallList = toolCalls.calls
+const pendingConfirms = toolCalls.pending
+
+function onToolConfirm(id: string, approved: boolean) {
+  respondToolConfirm(id, approved)
+}
 
 const textInput = ref('')
 function onSendText() {
