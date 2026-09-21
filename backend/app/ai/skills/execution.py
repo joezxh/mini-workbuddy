@@ -400,6 +400,15 @@ class SkillExecutionService:
                         await handler.handle(event)
 
                 consumer = asyncio.create_task(_consume())
+
+                def _on_consumer_done(_task: asyncio.Task) -> None:
+                    # consumer 结束（含取消）时投递哨兵，唤醒阻塞在 out_q.get() 上的主循环
+                    try:
+                        out_q.put_nowait(None)
+                    except Exception:
+                        pass
+
+                consumer.add_done_callback(_on_consumer_done)
                 handle = get_run_registry().register(
                     execution_id, consumer, out_q=out_q, agent=agent,
                     handler=handler, user_id=user_id,
@@ -421,6 +430,10 @@ class SkillExecutionService:
                     try:
                         evt = await asyncio.wait_for(asyncio.shield(out_q.get()),
                                                      timeout=remaining)
+                        if evt is None:
+                            # 哨兵：consumer 已结束（含取消），立即退出主循环；
+                            # 哨兵绝不 yield 到 SSE
+                            break
                         yield evt
                     except asyncio.TimeoutError:
                         # 完成与超时同时到达：正常完成优先

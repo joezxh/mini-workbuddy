@@ -1,5 +1,6 @@
 """AgentRunRegistry 与执行取消路径单测（Fake 全家桶，无 DB）。"""
 import asyncio
+import time
 import types
 
 import pytest
@@ -115,9 +116,17 @@ def test_execute_cancel_emits_interrupt_events(monkeypatch):
                     return
                 await asyncio.sleep(0.02)
         asyncio.create_task(canceller())
-        return [e async for e in svc.execute("demo", "hi", execution_id="exec-cancel")]
+        t0 = time.monotonic()
+        evts = [e async for e in svc.execute("demo", "hi", execution_id="exec-cancel")]
+        elapsed = time.monotonic() - t0
+        return evts, elapsed
 
-    evts = asyncio.run(run())
+    evts, elapsed = asyncio.run(run())
+    # 回归守卫（I-01）：cancel 后主循环应被哨兵即时唤醒，
+    # 而非阻塞到 svc.timeout（30s）才响应
+    assert elapsed < 10, (
+        f"cancel 后 generator 耗时 {elapsed:.2f}s，应远小于 svc.timeout=30s"
+    )
     assert any(e.type == "error" and "中断" in e.data["message"] for e in evts)
     failed = [r for r in records if r.get("interrupt_reason") == "user_cancel"]
     assert failed, "取消路径应落 interrupt_reason=user_cancel"
