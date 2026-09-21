@@ -27,6 +27,7 @@ from agentscope.message import UserMsg
 
 from app.ai.events.bus import EventBus
 from app.ai.services.execution_event_service import ExecutionEventService
+from app.db.database import SessionLocal  # noqa: E402 —— 顶部导入便于测试 monkeypatch
 from app.ai.skills.execution_records import (
     record_execution_done,
     record_execution_failed,
@@ -36,7 +37,6 @@ from app.schemas.agent.event_types import (
     EventCategory,
     EventEnvelope,
     EventLevel,
-    ExecutionEventType,
 )
 
 logger = logging.getLogger(__name__)
@@ -290,6 +290,7 @@ class SkillExecutionService:
         self.model_config = model_config
         self.timeout = timeout or self.DEFAULT_TIMEOUT
         self.event_service = event_service
+        self.bus: EventBus | None = None
 
     async def execute(
         self,
@@ -302,24 +303,12 @@ class SkillExecutionService:
         execution_id: str | None = None,
         trace_id: str | None = None,
     ) -> AsyncGenerator[SkillEvent, None]:
-        """流式执行技能（简化版）。"""
+        """流式执行技能（分级事件 + 主记录 + 超时熔断）。"""
         _exec_start = time.perf_counter()
         _exec_success = False
 
         if execution_id is None:
             execution_id = str(uuid.uuid4())
-
-        # 记录执行开始
-        _record_db = None
-        try:
-            from app.db.database import SessionLocal
-            _record_db = SessionLocal()
-            record_execution_start(_record_db, execution_id=execution_id,
-                session_id=session_id, user_id=user_id, execution_mode="skill",
-                target_id=str(skill_name), user_input=user_message,
-                metadata={"worker_skill": skill_name})
-        except Exception:
-            pass
 
         if self.event_service is None:
             self.event_service = ExecutionEventService(
@@ -328,22 +317,45 @@ class SkillExecutionService:
                 agent_code=f"skill_{skill_name}",
                 session_id=session_id, user_id=user_id,
             )
+        self.bus = EventBus(event_service=self.event_service)
+        self.bus.execution_id = execution_id
+        self.bus.trace_id = trace_id
 
-        self.event_service.record(
-            event_type=ExecutionEventType.AGENT_START,
+        # ── 主记录：start（替换原 pass 存根调用）──────────────────────────
+        _record_db = None
+        try:
+            _record_db = SessionLocal()
+            record_execution_start(
+                _record_db, execution_id=execution_id,
+                session_id=session_id, user_id=user_id, execution_mode="skill",
+                target_id=str(skill_name), user_input=user_message,
+                metadata={"worker_skill": skill_name}, trace_id=trace_id,
+            )
+        except Exception:
+            pass
+
+        self.bus.publish(EventEnvelope(
+            execution_id=execution_id, trace_id=trace_id,
+            event_type="agent_start", category=EventCategory.AGENT,
+            levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
             content={"skill_name": skill_name, "user_message": user_message},
-            source="skill_execution", source_id=skill_name,
-        )
+            source="skill_execution", source_id=skill_name, ui_hint="timeline",
+        ))
 
         # 加载 Skill
         skill = await self._load_skill(skill_name)
         if skill is None:
-            self.event_service.record(
-                event_type=ExecutionEventType.ERROR,
+            self.bus.publish(EventEnvelope(
+                execution_id=execution_id, trace_id=trace_id,
+                event_type="error", category=EventCategory.ERROR,
+                levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
                 content={"message": f"技能不存在：{skill_name}"},
                 source="skill_execution", source_id=skill_name,
-            )
+            ))
             yield SkillEvent(type="error", data={"message": f"技能不存在：{skill_name}"})
+            if _record_db is not None:
+                record_execution_failed(_record_db, execution_id,
+                                        error=f"技能不存在：{skill_name}")
             return
 
         yield SkillEvent(type="start", data={
@@ -360,55 +372,107 @@ class SkillExecutionService:
                     sys.path.insert(0, str(candidate))
                     self._injected_sys_paths.append(str(candidate))
 
-        # 构建组件
         yield SkillEvent(type="progress", data={
             "stage": "skill_agent_running",
             "message": "正在执行技能 Agent...",
         })
 
-        # 执行 Agent（使用原生事件处理器）
+        # ── 执行 Agent：总超时 + 队列桥接 SSE ────────────────────────────
+        out_q: asyncio.Queue = asyncio.Queue()
+        handler = SkillEventHandler(skill_name=skill_name, bus=self.bus, out_q=out_q)
+
+        timed_out = False
         try:
             toolkit = self._build_toolkit(extra_tools, skill.get("allowed_tools"))
             system_prompt = self._build_system_prompt(skill, session_id, user_id)
             model = self._build_model(model_id)
-            
-            handler = SkillEventHandler(
-                skill_name=skill_name, bus=EventBus(),
-                out_q=asyncio.Queue(),
-            )
-            
             agent = self._create_agent(skill_name, system_prompt, model, toolkit)
             user_msg = UserMsg(name="user", content=user_message)
-            
-            async for event in agent.reply_stream(inputs=user_msg):
-                await handler.handle(event)
-                
-            _exec_success = True
-            
+
+            async def _consume() -> None:
+                async for event in agent.reply_stream(inputs=user_msg):
+                    await handler.handle(event)
+
+            consumer = asyncio.create_task(_consume())
+            deadline = time.monotonic() + self.timeout
+            while True:
+                if consumer.done() and out_q.empty():
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    timed_out = True
+                    consumer.cancel()
+                    break
+                try:
+                    evt = await asyncio.wait_for(asyncio.shield(out_q.get()),
+                                                 timeout=remaining)
+                    yield evt
+                except asyncio.TimeoutError:
+                    timed_out = True
+                    consumer.cancel()
+                    break
+
+            # 传播消费者异常
+            exc = consumer.exception() if consumer.done() and not consumer.cancelled() else None
+            if exc is not None and not timed_out:
+                raise exc
+            if not timed_out:
+                _exec_success = True
+
         except Exception as e:
             logger.exception("技能执行异常：%s", e)
-            self.event_service.record(
-                event_type=ExecutionEventType.ERROR,
+            self.bus.publish(EventEnvelope(
+                execution_id=execution_id, trace_id=trace_id,
+                event_type="error", category=EventCategory.ERROR,
+                levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
                 content={"message": str(e)},
-                source="skill_execution",
-            )
+                source="skill_execution", source_id=skill_name, ui_hint="timeline",
+            ))
             yield SkillEvent(type="error", data={"message": str(e)})
+
         finally:
             # 清理 sys.path
             for p in getattr(self, "_injected_sys_paths", []):
                 if p in sys.path:
                     sys.path.remove(p)
-            
-            # 记录指标
-            elapsed = time.perf_counter() - _exec_start
-            self._record_metrics(skill_name, _exec_success, elapsed)
-            
-            # 关闭数据库
-            if _record_db is not None:
-                try:
-                    _record_db.close()
-                except Exception:
-                    pass
+
+        # ── 超时熔断收尾 ─────────────────────────────────────────────────
+        elapsed_ms = int((time.perf_counter() - _exec_start) * 1000)
+        if timed_out:
+            for etype in ("interrupt_requested", "interrupted"):
+                self.bus.publish(EventEnvelope(
+                    execution_id=execution_id, trace_id=trace_id,
+                    event_type=etype, category=EventCategory.INTERRUPT,
+                    levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                    content={"reason": "timeout"},
+                    interrupt_reason="timeout", source="skill_execution",
+                    source_id=skill_name, ui_hint="timeline",
+                ))
+            yield SkillEvent(type="error", data={"message": f"执行超时（>{self.timeout}s），已熔断"})
+            record_execution_failed(
+                _record_db, execution_id,
+                error=f"执行超时（>{self.timeout}s）", latency_ms=elapsed_ms,
+                interrupt_reason="timeout",
+            )
+        elif not _exec_success:
+            record_execution_failed(_record_db, execution_id, error=None,
+                                    latency_ms=elapsed_ms)
+        else:
+            record_execution_done(
+                _record_db, execution_id,
+                output=None, latency_ms=elapsed_ms,
+                input_tokens=handler.usage.get("input_tokens"),
+                output_tokens=handler.usage.get("output_tokens"),
+                iterations=handler.iterations,
+            )
+
+        # 记录指标 + 关闭数据库
+        self._record_metrics(skill_name, _exec_success, elapsed_ms / 1000.0)
+        if _record_db is not None:
+            try:
+                _record_db.close()
+            except Exception:
+                pass
     
     def _create_agent(
         self,
