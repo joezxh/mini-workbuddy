@@ -1,0 +1,204 @@
+f5be34d feat(agent): DDL 47 与 ORM 新增事件分级/关联/用量列
+ backend/app/db/init_models.py                     |  1 +
+ backend/app/models/agent/agent_execution.py       |  7 ++++
+ backend/app/models/agent/agent_execution_event.py | 14 +++++++-
+ backend/app/models/agent/agent_hitl_pause.py      | 29 ++++++++++++++++
+ docs/sql/47_agent_event_enhance.sql               | 41 +++++++++++++++++++++++
+ 5 files changed, 91 insertions(+), 1 deletion(-)
+diff --git a/backend/app/db/init_models.py b/backend/app/db/init_models.py
+index 7df835c..df04881 100644
+--- a/backend/app/db/init_models.py
++++ b/backend/app/db/init_models.py
+@@ -17,20 +17,21 @@ from app.models.sys.sys_infra_file import SysInfraFile, SysInfraFileContent
+ # --- AI 会话 / Agent (ai_ / agent_) ---
+ from app.models.ai.ai_chat import AiChatSession, AiChatMessage               # noqa: F401
+ from app.models.ai.ai_api_key import AiApiKey, AiChatModel                    # noqa: F401
+ from app.models.agent.agent_config import AgentConfig                           # noqa: F401
+ from app.models.agent.agent_team import AgentTeam, AgentTeamMember, AgentTeamEdge  # noqa: F401
+ from app.models.agent.agent_team_run import AgentTeamRun                        # noqa: F401
+ from app.models.agent.agent_async_task import AgentAsyncTask                    # noqa: F401
+ from app.models.agent.agent_scheduled_task import AgentScheduledTask            # noqa: F401
+ from app.models.agent.agent_execution import AgentExecution                     # noqa: F401
+ from app.models.agent.agent_execution_event import AgentExecutionEvent          # noqa: F401
++from app.models.agent.agent_hitl_pause import AgentHitlPause                      # noqa: F401
+ from app.models.agent.agent_trace import AgentTrace                             # noqa: F401
+ 
+ # --- 工具 / 技能 / MCP (ai_) ---
+ from app.models.ai.ai_tool_definition import AiToolDefinition                # noqa: F401
+ from app.models.ai.ai_tool_group import AiToolGroup, AiToolGroupMember         # noqa: F401
+ from app.models.ai.ai_skill_package import AiSkillPackage                      # noqa: F401
+ from app.models.ai.ai_skill_rule import AiSkillRule                              # noqa: F401
+ from app.models.ai.ai_skill_version import AiSkillVersion                       # noqa: F401
+ from app.models.ai.ai_skill_metrics import AiSkillMetrics                       # noqa: F401
+ from app.models.ai.ai_skill_evolution_config import AiSkillEvolutionConfig      # noqa: F401
+diff --git a/backend/app/models/agent/agent_execution.py b/backend/app/models/agent/agent_execution.py
+index 5f7a3a3..6fc620b 100644
+--- a/backend/app/models/agent/agent_execution.py
++++ b/backend/app/models/agent/agent_execution.py
+@@ -65,20 +65,27 @@ class AgentExecution(Base, TenantMixin):
+     completed_at = Column(DateTime, nullable=True, comment="完成时间")
+     latency_ms = Column(Integer, nullable=True, comment="耗时（毫秒）")
+ 
+     # ── 重试配置 ───────────────────────────────────────────────────────────
+     retry_count = Column(Integer, nullable=False, server_default="0", comment="重试次数")
+     max_retries = Column(Integer, nullable=False, server_default="3", comment="最大重试次数")
+ 
+     # ── 执行快照 ───────────────────────────────────────────────────────────
+     metadata_json = Column(JSON, nullable=True, comment="执行元数据快照")
+ 
++    # ── 结束原因与用量（spec 2026-09-21 §6.1，DDL 47）──────────────────────
++    finished_reason = Column(String(20), nullable=True, comment="completed|interrupted|exceed_max_iters|error")
++    interrupt_reason = Column(String(20), nullable=True, comment="timeout|user_cancel|system|error")
++    input_tokens = Column(Integer, nullable=True, comment="累计输入 token")
++    output_tokens = Column(Integer, nullable=True, comment="累计输出 token")
++    iterations = Column(Integer, nullable=True, comment="推理-行动迭代轮数")
++
+     # ── 审计字段 ───────────────────────────────────────────────────────────
+     created_at = Column(DateTime, nullable=False, server_default=func.now())
+     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+ 
+     __table_args__ = (
+         Index("idx_execution_target", "target_id"),
+         Index("idx_execution_status", "status"),
+         Index("idx_execution_trace", "trace_id"),
+     )
+ 
+diff --git a/backend/app/models/agent/agent_execution_event.py b/backend/app/models/agent/agent_execution_event.py
+index 2408aaa..e76c575 100644
+--- a/backend/app/models/agent/agent_execution_event.py
++++ b/backend/app/models/agent/agent_execution_event.py
+@@ -1,20 +1,20 @@
+ """AgentExecutionEvent - Agent 执行事件日志表
+ 
+ 记录 Agent 执行过程中的所有事件，用于审计和调试。
+ """
+ from __future__ import annotations
+ 
+ from datetime import datetime
+ from enum import Enum
+ 
+-from sqlalchemy import Column, BigInteger, String, Integer, JSON, DateTime, Index
++from sqlalchemy import Column, BigInteger, String, Integer, SmallInteger, JSON, DateTime, Index
+ from sqlalchemy.sql import func
+ 
+ from app.db.database import Base
+ from app.models.tenant_mixin import TenantMixin
+ 
+ 
+ class ExecutionEventType(str, Enum):
+     """执行事件类型"""
+     # 基础事件类型
+     TEXT = "text"
+@@ -73,18 +73,30 @@ class AgentExecutionEvent(Base, TenantMixin):
+     sequence = Column(Integer, nullable=False, comment="事件序号")
+     content = Column(JSON, nullable=True, comment="事件内容（根据类型结构化存储）")
+ 
+     # ── 事件来源 ───────────────────────────────────────────────────────────
+     source = Column(String(50), nullable=True, comment="事件来源: agent/mcp/skill")
+     source_id = Column(String(100), nullable=True, comment="来源标识")
+ 
+     # ── 元数据 ─────────────────────────────────────────────────────────────
+     event_metadata = Column("metadata", JSON, nullable=True, comment="附加元数据")
+ 
++    # ── 分级与关联（spec 2026-09-21 §6.1，DDL 47）──────────────────────────
++    level = Column(SmallInteger, nullable=True, comment="最低分发层级 LOG=0/DB=1/STREAM=2/UI=3")
++    category = Column(String(20), nullable=True, comment="事件分类")
++    reply_id = Column(String(64), nullable=True, comment="AgentScope reply_id")
++    block_id = Column(String(64), nullable=True, comment="内容块 ID")
++    tool_call_id = Column(String(64), nullable=True, comment="工具调用关联 ID")
++    interrupt_reason = Column(String(20), nullable=True, comment="中断原因")
++    ui_hint = Column(String(20), nullable=True, comment="前端渲染路由提示")
++    event_version = Column(SmallInteger, nullable=False, server_default="1", comment="事件格式版本")
++
+     # ── 时间戳 ────────────────────────────────────────────────────────────
+     created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+     __table_args__ = (
+         Index("idx_event_execution_seq", "execution_id", "sequence"),
+         Index("idx_event_type", "event_type"),
+         Index("idx_event_trace", "trace_id"),
++        Index("idx_event_reply", "execution_id", "reply_id"),
++        Index("idx_event_category_level", "category", "level"),
+     )
+diff --git a/backend/app/models/agent/agent_hitl_pause.py b/backend/app/models/agent/agent_hitl_pause.py
+new file mode 100644
+index 0000000..47a7646
+--- /dev/null
++++ b/backend/app/models/agent/agent_hitl_pause.py
+@@ -0,0 +1,29 @@
++"""AgentHitlPause - 人机交互暂停记录表（spec §5.4/§5.5；DDL 47 重建）。
++
++此前模型被移除但 agent_execution_service 仍存在悬空引用，本任务恢复。
++"""
++from __future__ import annotations
++
++from sqlalchemy import Column, BigInteger, String, JSON, SmallInteger, DateTime
++from sqlalchemy.sql import func
++
++from app.db.database import Base
++from app.models.tenant_mixin import TenantMixin
++
++
++class AgentHitlPause(Base, TenantMixin):
++    """人机交互暂停记录。"""
++    __tablename__ = "agent_hitl_pause"
++
++    id = Column(BigInteger, primary_key=True, autoincrement=True)
++    execution_id = Column(String(64), nullable=False, index=True, comment="执行 ID")
++    reply_id = Column(String(64), nullable=True, comment="AgentScope reply_id")
++    tool_calls = Column(JSON, nullable=True, comment="待确认工具调用列表")
++    suggested_rules = Column(JSON, nullable=True, comment="建议授权规则")
++    status = Column(String(20), nullable=False, server_default="waiting",
++                    comment="waiting/approved/rejected/interrupted")
++    accept_rules = Column(SmallInteger, nullable=False, server_default="0",
++                          comment="是否接受授权规则")
++    timeout_at = Column(DateTime, nullable=True, comment="超时提示时刻")
++    answered_at = Column(DateTime, nullable=True, comment="用户应答时刻")
++    created_at = Column(DateTime, nullable=False, server_default=func.now())
+diff --git a/docs/sql/47_agent_event_enhance.sql b/docs/sql/47_agent_event_enhance.sql
+new file mode 100644
+index 0000000..3b3b948
+--- /dev/null
++++ b/docs/sql/47_agent_event_enhance.sql
+@@ -0,0 +1,41 @@
++-- 47: Agent 事件体系增强（spec 2026-09-21 §6.1）
++-- ⚠️ MySQL 8 不支持 ADD COLUMN IF NOT EXISTS，本脚本只能执行一次。
++-- 执行前请确认 47 号未应用过。
++
++-- agent_execution_event：分级与三级关联
++ALTER TABLE agent_execution_event
++    ADD COLUMN level           SMALLINT     NULL COMMENT '最低分发层级 LOG=0/DB=1/STREAM=2/UI=3',
++    ADD COLUMN category        VARCHAR(20)  NULL COMMENT '事件分类（EventCategory）',
++    ADD COLUMN reply_id        VARCHAR(64)  NULL COMMENT 'AgentScope reply_id',
++    ADD COLUMN block_id        VARCHAR(64)  NULL COMMENT '内容块 ID',
++    ADD COLUMN tool_call_id    VARCHAR(64)  NULL COMMENT '工具调用关联 ID',
++    ADD COLUMN interrupt_reason VARCHAR(20) NULL COMMENT 'timeout|user_cancel|system|error',
++    ADD COLUMN ui_hint         VARCHAR(20)  NULL COMMENT '前端渲染路由提示',
++    ADD COLUMN event_version   SMALLINT     NOT NULL DEFAULT 1 COMMENT '事件格式版本';
++
++CREATE INDEX idx_event_reply ON agent_execution_event(execution_id, reply_id);
++CREATE INDEX idx_event_category_level ON agent_execution_event(category, level);
++
++-- agent_execution：结束原因与用量
++ALTER TABLE agent_execution
++    ADD COLUMN finished_reason  VARCHAR(20) NULL COMMENT 'completed|interrupted|exceed_max_iters|error',
++    ADD COLUMN interrupt_reason VARCHAR(20) NULL COMMENT 'timeout|user_cancel|system|error',
++    ADD COLUMN input_tokens     INT NULL COMMENT '累计输入 token',
++    ADD COLUMN output_tokens    INT NULL COMMENT '累计输出 token',
++    ADD COLUMN iterations       INT NULL COMMENT '推理-行动迭代轮数';
++
++-- agent_hitl_pause：HITL 暂停记录（模型此前被移除、service 存在悬空引用，本 DDL 重建；spec §5.4/§5.5）
++CREATE TABLE IF NOT EXISTS agent_hitl_pause (
++    id              BIGINT      PRIMARY KEY AUTO_INCREMENT,
++    execution_id    VARCHAR(64) NOT NULL COMMENT '执行 ID',
++    reply_id        VARCHAR(64) NULL COMMENT 'AgentScope reply_id',
++    tool_calls      JSON        NULL COMMENT '待确认工具调用列表（id/name/input）',
++    suggested_rules JSON        NULL COMMENT '建议授权规则',
++    status          VARCHAR(20) NOT NULL DEFAULT 'waiting' COMMENT 'waiting/approved/rejected/interrupted',
++    accept_rules    TINYINT(1)  NOT NULL DEFAULT 0 COMMENT '是否接受授权规则',
++    timeout_at      DATETIME    NULL COMMENT '超时提示时刻',
++    answered_at     DATETIME    NULL COMMENT '用户应答时刻',
++    created_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    INDEX idx_hitl_execution (execution_id),
++    INDEX idx_hitl_status (status)
++) COMMENT 'Agent/Skill 人机交互暂停记录';
