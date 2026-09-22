@@ -14,8 +14,7 @@ from app.models.agent.agent_execution import AgentExecution
 from app.models.ai.ai_chat import AiChatSession
 from app.models.agent.agent_trace import AgentTrace
 from app.models.agent.agent_execution_event import AgentExecutionEvent
-# TODO: 域特定模型已移除
-# from app.models.agent_hitl_pause import AgentHitlPause
+from app.models.agent.agent_hitl_pause import AgentHitlPause
 from app.schemas.agent.agent_execution import (
     AgentExecutionItem,
     AgentExecutionDetail,

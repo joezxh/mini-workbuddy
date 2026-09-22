@@ -72,6 +72,13 @@ class AgentExecution(Base, TenantMixin):
     # ── 执行快照 ───────────────────────────────────────────────────────────
     metadata_json = Column(JSON, nullable=True, comment="执行元数据快照")
 
+    # ── 结束原因与用量（spec 2026-09-21 §6.1，DDL 47）──────────────────────
+    finished_reason = Column(String(20), nullable=True, comment="completed|interrupted|exceed_max_iters|error")
+    interrupt_reason = Column(String(20), nullable=True, comment="timeout|user_cancel|system|error")
+    input_tokens = Column(Integer, nullable=True, comment="累计输入 token")
+    output_tokens = Column(Integer, nullable=True, comment="累计输出 token")
+    iterations = Column(Integer, nullable=True, comment="推理-行动迭代轮数")
+
     # ── 审计字段 ───────────────────────────────────────────────────────────
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())

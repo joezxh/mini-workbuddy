@@ -2,7 +2,7 @@
   <div class="voice-demo">
     <a-page-header
       title="调解语音 RTC 演示"
-      sub-title="M2 · 能力协商 / 轮次状态机 / 重连 / 工具调用 / 本地管线"
+      sub-title="AgentScope RealtimeAgent 内核 · 能力协商 / 轮次状态机 / 重连 / 工具确认"
     >
       <template #extra>
         <a-input v-model:value="caseNumber" placeholder="案件编号" style="width: 200px" />
@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import VoiceChannel from '@/components/voice/VoiceChannel.vue'
-import type { VoiceModel, VoiceModelDefault, VoiceProvider } from '@/types/voice'
+import type { VoiceModel, VoiceProvider } from '@/types/voice'
 import { listVoiceModels, getVoiceModelDefault } from '@/api/voice'
 
 const caseNumber = ref('1001')
@@ -47,20 +47,18 @@ const provider = ref<VoiceProvider>('dashscope')
 const showChannel = ref(false)
 
 const providerOptions = [
-  { label: 'DashScope（云端）', value: 'dashscope' },
-  { label: '本地 S2S（Docker）', value: 's2s' },
-  { label: 'Local（本地回退）', value: 'local' },
+  { label: 'DashScope 实时（Qwen-Omni / Qwen-Audio）', value: 'dashscope' },
+  { label: 'OpenAI Realtime（备选）', value: 'openai' },
 ]
 
 const voiceModels = ref<VoiceModel[]>([])
 const selectedModel = ref<number | undefined>(undefined)
 const modelLoading = ref(false)
 
-// 后端 listVoiceModels 已过滤不可用模型（DashScope 模型名无效 / 密钥为空），
-// 这里再按当前生效的 provider 平台过滤：s2s 只显示本地 Docker 模型，
-// 云端 provider 只显示云端模型。
+// 后端 listVoiceModels 已过滤不可用模型（模型名无效 / 密钥为空），
+// 这里按当前 provider 平台过滤（platform 大小写归一：DashScope/openai）。
 function modelsFor(p: VoiceProvider): VoiceModel[] {
-  return voiceModels.value.filter((m) => (p === 's2s' ? m.platform === 's2s' : m.platform !== 's2s'))
+  return voiceModels.value.filter((m) => (m.platform || '').toLowerCase() === p)
 }
 
 const modelOptions = computed(() =>
@@ -78,14 +76,18 @@ watch(provider, () => {
   }
 })
 
+function platformToProvider(platform?: string): VoiceProvider {
+  return platform && platform.toLowerCase() === 'openai' ? 'openai' : 'dashscope'
+}
+
 async function loadVoiceModels() {
   modelLoading.value = true
   try {
     const [models, def] = await Promise.all([listVoiceModels(), getVoiceModelDefault()])
     voiceModels.value = models
-    // 默认模型自适应：按其平台自动切换 provider（s2s → 本地 Docker，否则云端）
+    // 默认模型自适应：按其平台自动切换 provider
     const applyDefault = (model: VoiceModel) => {
-      provider.value = model.platform === 's2s' ? 's2s' : 'dashscope'
+      provider.value = platformToProvider(model.platform)
       selectedModel.value = model.id
     }
     const defaultModel = def?.configured

@@ -20,12 +20,13 @@ import type {
   VoiceFrame,
   VoiceReadyPayload,
   VoiceTurn,
-  ToolCall,
+  ToolConfirmPayload,
 } from '@/types/voice'
 import { useTurnState } from './useTurnState'
 import { useReconnect } from './useReconnect'
 import { useToolCalls } from './useToolCalls'
 import { useVoicePlayback } from './useVoicePlayback'
+import { createMicLifecycle, classifyMicError, type MicState } from './useMicLifecycle'
 import {
   DcBlocker,
   NoiseGate,
@@ -49,6 +50,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
   const transcripts = ref<VoiceTurn[]>([])
   const audioLevel = ref(0)
   const micOn = ref(false)
+  const micState = ref<MicState | null>(null)
 
   const turn = useTurnState()
   const reconnect = useReconnect()
@@ -135,7 +137,12 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     if (!acceptGeneration(frame.generation)) return
     frameGen = frame.generation ?? 0
 
-    switch (frame.type) {
+    // 帧名归一化：后端 EventType 混用点号（playback.cancelled/response.started/
+    // tool.confirm_required）与下划线（tool_call/audio.delta）两种命名，
+    // 统一转为下划线后分发，根治点号帧在前端从未被处理的历史问题
+    const type = frame.type.replace(/\./g, '_') as VoiceFrame['type']
+
+    switch (type) {
       case 'voice.ready':
         ready.value = frame.data as VoiceReadyPayload
         break
@@ -164,14 +171,44 @@ export function useVoiceChannel(cfg: ConnectConfig) {
       case 'playback_cancelled':
         playback.interrupt()
         turn.onInterrupt()
+        toolCalls.clearPending()
         break
       case 'tool_call': {
-        const tc = frame.data as ToolCall
-        toolCalls.add(tc)
+        // 工具调用开始（AgentScope ToolCallStartEvent）；结果由 tool_result 落位
+        const d = frame.data as { call_id?: string; name?: string }
+        if (d.call_id) {
+          toolCalls.add({
+            id: d.call_id,
+            name: d.name || '',
+            arguments: {},
+          })
+        }
+        break
+      }
+      case 'tool_confirm_required': {
+        const p = frame.data as ToolConfirmPayload
+        toolCalls.addConfirm({
+          confirmId: p.confirm_id,
+          name: p.tool_name,
+          arguments: p.arguments ?? {},
+          timeoutMs: p.timeout_ms ?? 300000,
+        })
+        break
+      }
+      case 'tool_result': {
+        const r = frame.data as { call_id?: string; state?: string }
+        if (r.call_id) {
+          toolCalls.update(r.call_id, {
+            ok: r.state === 'success',
+            result: r.state,
+          })
+        }
         break
       }
       case 'error':
-        errorMsg.value = frame.data?.message || '语音服务错误'
+        // 兼容两种错误帧形状：网关扁平（顶层 code/message）与内核嵌套（data）
+        errorMsg.value =
+          frame.data?.message || (frame as any).message || '语音服务错误'
         break
       case 'pong':
         break
@@ -235,57 +272,91 @@ export function useVoiceChannel(cfg: ConnectConfig) {
   }
 
   function sendInterrupt() {
+    toolCalls.clearPending()
     ws?.send(JSON.stringify({ type: 'interrupt' }))
+  }
+
+  /** 回传工具确认结果（tool.confirm_required → 用户同意/拒绝） */
+  function respondToolConfirm(confirmId: string, approved: boolean) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({ type: 'tool.confirm', data: { confirm_id: confirmId, approved } }),
+      )
+      // 仅转移已应答条目的状态；其余待确认不受影响
+      toolCalls.markAnswered(confirmId, approved)
+    }
   }
 
   function sendAudio(bytes: Uint8Array) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(bytes)
   }
 
-  async function startMic() {
-    try {
+  /** 将新 MediaStream 接入既有 48kHz 采集链（设备切换只重连 source，不动 AudioContext/WS） */
+  function attachStream(stream: MediaStream) {
+    mediaStream = stream
+    const ctx = ensureAudioCtx()
+    // 噪声门按实际采样率创建（仅首次或采样率变化时重建）
+    if (!uplinkGate || uplinkGate.sampleRate !== ctx.sampleRate) {
+      uplinkGate = new NoiseGate({
+        sampleRate: ctx.sampleRate,
+        thresholdDb: AUDIO_DSP_CONFIG.capture.gateThresholdDb,
+        attackMs: AUDIO_DSP_CONFIG.capture.gateAttackMs,
+        releaseMs: AUDIO_DSP_CONFIG.capture.gateReleaseMs,
+      })
+    }
+    processor?.disconnect()
+    const source = ctx.createMediaStreamSource(stream)
+    const node = ctx.createScriptProcessor(AUDIO_DSP_CONFIG.capture.bufferSize, 1, 1)
+    node.onaudioprocess = (e) => {
+      const socket = ws
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        uplinkResampler.reset()
+        return
+      }
+      const samples = e.inputBuffer.getChannelData(0)
+      uplinkDcBlocker.process(samples)
+      uplinkGate?.process(samples)
+      // 流式重采样到协商的上行采样率（默认 16k）——根治 48k 直发的错配
+      const targetRate = ready.value?.input_sample_rate || 16000
+      const resampled = uplinkResampler.process(samples, ctx.sampleRate, targetRate)
+      if (!resampled.length) return
+      sendAudio(new Uint8Array(encodeFloatToPcm16(resampled).buffer))
+    }
+    source.connect(node)
+    node.connect(ctx.destination)
+    processor = node
+    micOn.value = true
+  }
+
+  // 麦克风捕获生命周期：设备切换/track ended/退避重试独立于 WS 通道（spec §9.7）
+  const mic = createMicLifecycle({
+    acquire: async () => {
       // 显式声明浏览器端 AEC/NS/AGC：外放场景下抑制扬声器回采（根治模型"听到自己"）
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
-      mediaStream = stream
-      const ctx = ensureAudioCtx()
-      // 噪声门按实际采样率创建（仅首次或采样率变化时重建）
-      if (!uplinkGate || uplinkGate.sampleRate !== ctx.sampleRate) {
-        uplinkGate = new NoiseGate({
-          sampleRate: ctx.sampleRate,
-          thresholdDb: AUDIO_DSP_CONFIG.capture.gateThresholdDb,
-          attackMs: AUDIO_DSP_CONFIG.capture.gateAttackMs,
-          releaseMs: AUDIO_DSP_CONFIG.capture.gateReleaseMs,
-        })
+      return { media: stream, track: stream.getAudioTracks()[0] }
+    },
+    release: (c) => {
+      c.media?.getTracks().forEach((t) => t.stop())
+    },
+    onState: (s) => {
+      micState.value = s
+      if (s.state === 'unavailable' && s.error) {
+        errorMsg.value = `麦克风不可用（${classifyMicError(s.error)}）：请检查权限或设备后重试`
       }
-      const source = ctx.createMediaStreamSource(stream)
-      const node = ctx.createScriptProcessor(AUDIO_DSP_CONFIG.capture.bufferSize, 1, 1)
-      node.onaudioprocess = (e) => {
-        const socket = ws
-        if (!socket || socket.readyState !== WebSocket.OPEN) {
-          uplinkResampler.reset()
-          return
-        }
-        const samples = e.inputBuffer.getChannelData(0)
-        uplinkDcBlocker.process(samples)
-        uplinkGate?.process(samples)
-        // 流式重采样到协商的上行采样率（默认 16k）——根治 48k 直发的错配
-        const targetRate = ready.value?.input_sample_rate || 16000
-        const resampled = uplinkResampler.process(samples, ctx.sampleRate, targetRate)
-        if (!resampled.length) return
-        sendAudio(new Uint8Array(encodeFloatToPcm16(resampled).buffer))
-      }
-      source.connect(node)
-      node.connect(ctx.destination)
-      processor = node
-      micOn.value = true
-    } catch (e) {
-      errorMsg.value = `麦克风开启失败: ${(e as Error).message}`
-    }
+    },
+    onCapture: (c) => {
+      if (c.media) attachStream(c.media)
+    },
+  })
+
+  function startMic() {
+    mic.start()
   }
 
   function stopMic() {
+    mic.stop()
     mediaStream?.getTracks().forEach((t) => t.stop())
     mediaStream = null
     processor?.disconnect()
@@ -317,6 +388,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     transcripts,
     audioLevel,
     micOn,
+    micState,
     // 子状态机
     turn,
     reconnect,
@@ -327,6 +399,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     sendText,
     sendInterrupt,
     sendAudio,
+    respondToolConfirm,
     startMic,
     stopMic,
   }

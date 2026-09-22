@@ -88,3 +88,6 @@ release
 /data/hub_cache/
 /data/hub_cache/999/
 /data/hub_cache/1/
+
+# SDD session scratch (ledger/briefs/review packages)
+.superpowers/

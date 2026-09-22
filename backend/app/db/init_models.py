@@ -24,6 +24,7 @@ from app.models.agent.agent_async_task import AgentAsyncTask                    
 from app.models.agent.agent_scheduled_task import AgentScheduledTask            # noqa: F401
 from app.models.agent.agent_execution import AgentExecution                     # noqa: F401
 from app.models.agent.agent_execution_event import AgentExecutionEvent          # noqa: F401
+from app.models.agent.agent_hitl_pause import AgentHitlPause                      # noqa: F401
 from app.models.agent.agent_trace import AgentTrace                             # noqa: F401
 
 # --- 工具 / 技能 / MCP (ai_) ---

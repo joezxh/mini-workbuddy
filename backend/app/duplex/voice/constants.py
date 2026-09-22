@@ -29,6 +29,10 @@ class EventType(str, Enum):
     PLAYBACK_ENDED = "playback.ended"
     PLAYBACK_CANCELLED = "playback.cancelled"
     PLAYBACK_CLEAR = "playback.clear"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    TOOL_CONFIRM_REQUIRED = "tool.confirm_required"
+    TOOL_CONFIRM = "tool.confirm"
     TRANSCRIPT_DELTA = "transcript.delta"
     TRANSCRIPT_FINAL = "transcript.final"
     PING = "ping"
@@ -46,7 +50,7 @@ class EventType(str, Enum):
 
 class ProviderKey(str, Enum):
     DASHSCOPE = "dashscope"
-    LOCAL = "local"
+    OPENAI = "openai"
 
 
 class ErrorCode(str, Enum):

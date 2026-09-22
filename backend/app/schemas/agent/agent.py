@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.agent.event_types import ExecutionEventType  # noqa: F401 单一权威来源，re-export
+
 
 class ExecutionMode(str):
     """执行模式枚举"""
@@ -28,49 +30,6 @@ class ExecutionStatus(str):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
-
-
-class ExecutionEventType(str):
-    """执行事件类型"""
-    # 基础事件
-    TEXT = "text"
-    THINKING = "thinking"
-    TOOL_CALL = "tool_call"
-    TOOL_RESULT = "tool_result"
-    ERROR = "error"
-    METRICS = "metrics"
-
-    # HITL 事件
-    HITL_PAUSE = "hitl_pause"
-    HITL_RESUME = "hitl_resume"
-
-    # Skill 执行事件
-    SKILL_START = "skill_start"
-    SKILL_LOAD = "skill_load"
-    SKILL_LOADED = "skill_loaded"
-    SKILL_RESULT = "skill_result"
-    SKILL_COMPLETE = "skill_complete"
-
-    # Agent 执行事件
-    AGENT_START = "agent_start"
-    AGENT_COMPLETE = "agent_complete"
-    AGENT_DONE = "agent_done"
-    AGENT_RETRY = "agent_retry"
-    AGENT_ERROR = "agent_error"
-
-    # 团队（v2 动态编排）事件
-    TEAM_START = "team_start"
-    TEAM_DONE = "team_done"
-    TEAM_ERROR = "team_error"
-    # 团队 v2.1 Plan & Execute 事件（spec §7）
-    DISPATCH_PLAN = "dispatch_plan"
-    PLAN_REVISED = "plan_revised"
-    TEAM_LAYER_START = "team_layer_start"
-    TEAM_LAYER_DONE = "team_layer_done"
-
-    # 特殊事件
-    PROGRESS = "progress"
-    TIMEOUT = "timeout"
 
 
 # ── AgentConfig Schema ────────────────────────────────────────────────────────
