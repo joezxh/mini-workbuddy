@@ -14,6 +14,9 @@
 		},
 		{
 			"path": "../../work/zipper-robots"
+		},
+		{
+			"path": "../Omni-Interaction-Agent"
 		}
 	],
 	"settings": {}

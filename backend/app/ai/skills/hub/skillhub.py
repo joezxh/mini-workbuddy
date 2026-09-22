@@ -220,6 +220,90 @@ class SkillHubCloudAdapter(SkillHubAdapter):
                 ]
         return fields
 
+    @staticmethod
+    def _normalize_scripts(raw: Any) -> List[Dict[str, Any]]:
+        """把任意 manifest 脚本列表规整为内部结构（必须有 id）。"""
+        if not isinstance(raw, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for s in raw:
+            if not isinstance(s, dict):
+                continue
+            sid = s.get("id") or s.get("name")
+            if not sid:
+                continue
+            out.append(
+                {
+                    "id": str(sid),
+                    "name": str(s.get("name") or sid),
+                    "command": str(s.get("command") or ""),
+                    "description": s.get("description"),
+                    "params": s.get("params"),
+                }
+            )
+        return out
+
+    @staticmethod
+    def _parse_scripts_block(text: str) -> List[Dict[str, Any]]:
+        """从 SKILL.md frontmatter 的 `scripts:` 块解析脚本列表。
+
+        不依赖 PyYAML（生产环境未引入），仅做轻量行解析，支持:
+            scripts:
+              - id: foo
+                name: Foo
+                command: python foo.py
+                description: ...
+        import_zip 对非法脚本会逐个跳过，解析不全会被安全忽略。
+        """
+        lines = text.splitlines()
+        if not lines or not lines[0].lstrip().startswith("---"):
+            return []
+        # 定位顶层 scripts: 行
+        start = None
+        for i in range(1, len(lines)):
+            ln = lines[i]
+            if ln.lstrip().startswith("---"):
+                break
+            if re.match(r"^scripts\s*:\s*$", ln):
+                start = i
+                break
+        if start is None:
+            return []
+        block: List[str] = []
+        for j in range(start + 1, len(lines)):
+            ln = lines[j]
+            if ln.lstrip().startswith("---"):
+                break
+            if ln.strip() == "":
+                block.append(ln)
+                continue
+            if not (ln[:1] in (" ", "\t")):
+                break
+            block.append(ln)
+        scripts: List[Dict[str, Any]] = []
+        cur: Optional[Dict[str, Any]] = None
+        for ln in block:
+            if ln.strip() == "":
+                continue
+            content = ln.strip()
+            if content.startswith("- "):
+                if cur:
+                    scripts.append(cur)
+                cur = {}
+                kv = content[2:].strip()
+                if ":" in kv:
+                    k, v = kv.split(":", 1)
+                    cur[k.strip()] = v.strip().strip('"').strip("'")
+            else:
+                if cur is None:
+                    continue
+                km = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", content)
+                if km:
+                    cur[km.group(1)] = km.group(2).strip().strip('"').strip("'")
+        if cur:
+            scripts.append(cur)
+        return SkillHubCloudAdapter._normalize_scripts(scripts)
+
     def _repack_to_internal_zip(self, raw_zip: bytes, entry: SkillHubEntry) -> bytes:
         skill_id = entry.id or entry.meta.get("slug") or "skill"
         with zipfile.ZipFile(io.BytesIO(raw_zip), "r") as zin:
@@ -227,11 +311,30 @@ class SkillHubCloudAdapter(SkillHubAdapter):
             skill_md_name = next(
                 (n for n in names if n.upper().endswith("SKILL.MD")), None
             )
-            fm = (
-                self._parse_frontmatter(zin.read(skill_md_name).decode("utf-8", "ignore"))
+            skill_md_text = (
+                zin.read(skill_md_name).decode("utf-8", "ignore")
                 if skill_md_name
-                else {}
+                else ""
             )
+            fm = self._parse_frontmatter(skill_md_text) if skill_md_text else {}
+
+            # 脚本：优先 manifest.json，其次 SKILL.md frontmatter 的 scripts 块。
+            # 二者皆无则为空列表（纯 prompt 技能）。
+            scripts: List[Dict[str, Any]] = []
+            for name in names:
+                if name.upper().endswith("MANIFEST.JSON"):
+                    try:
+                        mdata = json.loads(
+                            zin.read(name).decode("utf-8", "ignore")
+                        )
+                        scripts = self._normalize_scripts(mdata.get("scripts") or [])
+                    except Exception as e:
+                        logger.warning("SkillHub manifest.json 解析失败: %s", e)
+                        scripts = []
+                    break
+            if not scripts and skill_md_text:
+                scripts = self._parse_scripts_block(skill_md_text)
+
             skill_json = {
                 "id": skill_id,
                 "name": fm.get("name") or entry.name or skill_id,
@@ -241,6 +344,7 @@ class SkillHubCloudAdapter(SkillHubAdapter):
                 "type": "prompt",
                 "icon": "tool",
                 "tags": entry.meta.get("tags") or fm.get("tags") or [],
+                "scripts": scripts,
             }
             buffer = io.BytesIO()
             with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zout:

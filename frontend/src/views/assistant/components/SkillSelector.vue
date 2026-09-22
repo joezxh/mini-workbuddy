@@ -3,8 +3,8 @@
     <div class="skill-header" @click="toggleExpand">
       <span class="skill-icon">⌨</span>
       <span class="skill-title">技能</span>
-      <span v-if="selectedScript" class="selected-badge">
-        {{ selectedScript.scriptName }}
+      <span v-if="selectedSkill" class="selected-badge">
+        {{ selectedSkill.packageName }}
         <span class="selected-remove" @click.stop="clearSelection">×</span>
       </span>
       <span class="expand-icon">{{ isExpanded ? '▼' : '▶' }}</span>
@@ -39,29 +39,16 @@
             <span class="cat-arrow">{{ collapsedCats.has(cat) ? '▶' : '▼' }}</span>
           </div>
           <div v-show="!collapsedCats.has(cat)" class="cat-packages">
+            <!-- 按技能选择：点击包名即选中（后端执行单位本就是整技能） -->
             <div
               v-for="pkg in pkgs"
               :key="pkg.package_id"
-              class="skill-package"
+              :class="['package-item', { 'package-selected': isPackageSelected(pkg.package_id) }]"
+              :title="pkg.description"
+              @click="selectPackage(pkg)"
             >
-              <div class="package-header">
-                <span class="package-icon">{{ getPackageIcon(pkg.icon || '') }}</span>
-                <span class="package-name">{{ pkg.name }}</span>
-              </div>
-
-              <div v-if="pkg.scripts?.length" class="script-list">
-                <div
-                  v-for="script in pkg.scripts"
-                  :key="script.script_id"
-                  :class="['script-item', { 'script-selected': isSelected(pkg.package_id, script.script_id) }]"
-                  :title="script.description"
-                  @click="selectScript(pkg, script)"
-                >
-                  <span class="script-name">{{ script.name }}</span>
-                  <span v-if="fileId && supportsFileParam(script)" class="file-badge">📎</span>
-                </div>
-              </div>
-              <div v-else class="package-empty">该技能包未注册脚本</div>
+              <span class="package-icon">{{ getPackageIcon(pkg.icon || '') }}</span>
+              <span class="package-name">{{ pkg.name }}</span>
             </div>
           </div>
         </div>
@@ -76,7 +63,6 @@ import { FileExcelOutlined } from '@ant-design/icons-vue'
 import {
   getSkills,
   type SkillPackage,
-  type SkillScript,
 } from '@/api/skill'
 import { getDictionaryItems } from '@/api/dictionary'
 import type { DictionaryItem } from '@/api/dictionary'
@@ -91,6 +77,7 @@ export interface SkillSelectInfo {
   packageId: string
   packageName: string
   packageIcon: string
+  /** 按技能执行后不再有脚本粒度，保持字段以兼容父组件链路 */
   scriptId: string
   scriptName: string
   scriptDescription: string
@@ -98,6 +85,7 @@ export interface SkillSelectInfo {
 }
 
 const emit = defineEmits<{
+  // 事件名保持 script-change，父组件（SessionSidebar → AssistantPanel）链路零改动
   (e: 'script-change', info: SkillSelectInfo | null): void
 }>()
 
@@ -109,14 +97,8 @@ const packages = ref<SkillPackage[]>([])
 const collapsedCats = ref<Set<string>>(new Set())
 const categoryOptions = ref<DictionaryItem[]>([])
 
-// 当前选中的技能（直接选中，无弹窗）
-const selectedScript = ref<SkillSelectInfo | null>(null)
-
-const FILE_PARAM_NAMES = ['file', 'file_id', 'filepath', 'path', 'input_file', 'source_file']
-
-function supportsFileParam(script: SkillScript): boolean {
-  return script.params?.some(p => FILE_PARAM_NAMES.includes(p.name.toLowerCase())) ?? false
-}
+// 当前选中的技能包（直接选中，无弹窗）
+const selectedSkill = ref<SkillSelectInfo | null>(null)
 
 const groupedPackages = computed(() => {
   const map: Record<string, SkillPackage[]> = {}
@@ -141,12 +123,12 @@ function toggleCat(cat: string) {
   else collapsedCats.value.add(cat)
 }
 
-function isSelected(packageId: string, scriptId: string): boolean {
-  return selectedScript.value?.packageId === packageId && selectedScript.value?.scriptId === scriptId
+function isPackageSelected(packageId: string): boolean {
+  return selectedSkill.value?.packageId === packageId
 }
 
 function clearSelection() {
-  selectedScript.value = null
+  selectedSkill.value = null
   emit('script-change', null)
 }
 
@@ -192,17 +174,19 @@ async function loadSkills() {
   }
 }
 
-// 选择技能脚本：直接 emit 给父组件，不弹确认窗口
-function selectScript(pkg: SkillPackage, script: SkillScript) {
+// 选择技能包（整技能）：直接 emit 给父组件，不弹确认窗口。
+// 后端执行单位本就是整技能（SkillExecutionService.execute(package_id)），
+// 故脚本字段统一置空串。
+function selectPackage(pkg: SkillPackage) {
   const info: SkillSelectInfo = {
     packageId: pkg.package_id,
     packageName: pkg.name,
     packageIcon: pkg.icon || 'tool',
-    scriptId: script.script_id,
-    scriptName: script.name,
-    scriptDescription: script.description || '',
+    scriptId: '',
+    scriptName: '',
+    scriptDescription: pkg.description || '',
   }
-  selectedScript.value = info
+  selectedSkill.value = info
   emit('script-change', info)
 }
 
@@ -323,39 +307,10 @@ onMounted(() => {
   padding: 4px 0;
 }
 
-.skill-package {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.package-header {
+.package-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
-  background: var(--bg-input);
-  border-bottom: 1px solid var(--border);
-}
-
-.package-icon { font-size: 13px; }
-.package-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.script-list {
-  display: flex;
-  flex-direction: column;
-  padding: 2px 0;
-}
-
-.script-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   padding: 5px 10px;
   cursor: pointer;
   font-size: 11.5px;
@@ -367,7 +322,7 @@ onMounted(() => {
     color: var(--accent);
   }
 
-  &.script-selected {
+  &.package-selected {
     background: var(--ok-soft);
     color: var(--ok);
     font-weight: 600;
@@ -375,23 +330,15 @@ onMounted(() => {
   }
 }
 
-.script-name {
+.package-icon { font-size: 13px; }
+
+.package-name {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.file-badge {
-  font-size: 11px;
-  color: var(--ok);
-}
-
-.package-empty {
-  padding: 6px 10px;
-  font-size: 11px;
-  color: var(--fg-muted);
-  font-style: italic;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .file-context-hint {

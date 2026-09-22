@@ -1,7 +1,8 @@
 """EventBus —— 基于 Observer 模式的事件分发（spec §4.1）。
 
 P0 范围：LOG（结构化日志）+ DB（委托 ExecutionEventService）两级 handler。
-STREAM/UI 级由调用方（SSE 生成器）自行消费，不经 bus。
+P1 起：STREAM 级（L2）事件经 SSEHandler 分发到订阅的 SSE 连接（按 execution_id
+环形缓冲 + 实时广播），实现断线 Last-Event-ID 重放。
 handler 异常相互隔离：一个 handler 失败不影响其他 handler。
 """
 from __future__ import annotations
@@ -37,4 +38,14 @@ class EventBus:
             except Exception as e:  # noqa: BLE001 —— handler 隔离
                 logger.opt(exception=True).warning(
                     "DBHandler 处理事件失败 {}: {}", envelope.event_type, e,
+                )
+
+        # L2：STREAM 级事件经 SSEHandler 分发到订阅的 SSE 连接（spec §4.4）
+        if EventLevel.STREAM in envelope.levels:
+            try:
+                from app.ai.events.sse_handler import get_sse_handler
+                get_sse_handler().capture(envelope)
+            except Exception as e:  # noqa: BLE001 —— handler 隔离
+                logger.opt(exception=True).warning(
+                    "SSEHandler 处理事件失败 {}: {}", envelope.event_type, e,
                 )

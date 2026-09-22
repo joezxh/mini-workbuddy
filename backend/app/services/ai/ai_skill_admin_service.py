@@ -402,6 +402,12 @@ class AiSkillAdminService:
                 skill_markdown=extracted_skill_md,
             )
 
+            scripts_count = len(skill_data.get("scripts", []))
+            registered_ids = {
+                str(s.get("id") or s.get("name"))
+                for s in skill_data.get("scripts", [])
+                if isinstance(s, dict)
+            }
             for s in skill_data.get("scripts", []):
                 try:
                     self.create_script(
@@ -416,10 +422,36 @@ class AiSkillAdminService:
                 except (ValueError, KeyError) as e:
                     logger.warning(f"跳过脚本 {s.get('id')}: {e}")
 
+            # 自动发现：源技能常仅以 scripts/*.py 文件形式提供脚本，未在
+            # manifest.json / SKILL.md frontmatter 的 scripts: 中声明。
+            # 扫描已解压的 pkg_dir/scripts 下的顶层 .py 文件，补登未显式声明的脚本
+            # （跳过以 _ 开头的辅助模块）。已显式声明的不再重复登记。
+            scripts_dir = pkg_dir / "scripts"
+            if scripts_dir.is_dir():
+                for py_file in sorted(scripts_dir.glob("*.py")):
+                    sid = py_file.stem
+                    if sid.startswith("_") or sid in registered_ids:
+                        continue
+                    registered_ids.add(sid)
+                    scripts_count += 1
+                    try:
+                        self.create_script(
+                            db,
+                            package_id=pkg.package_id,
+                            script_id=sid,
+                            name=sid,
+                            command=f"python scripts/{sid}.py",
+                            description="",
+                            params=None,
+                        )
+                    except (ValueError, KeyError) as e:
+                        scripts_count -= 1
+                        logger.warning(f"跳过自动发现的脚本 {sid}: {e}")
+
             return {
                 "package_id": pkg.package_id,
                 "name": pkg.name,
-                "scripts_count": len(skill_data.get("scripts", [])),
+                "scripts_count": scripts_count,
             }
         except ValueError:
             # 业务校验错误（缺 SKILL.json / 缺 id / 已存在等）直接抛出，保留原信息
@@ -525,6 +557,107 @@ class AiSkillAdminService:
                 zf.writestr(f"{package_id}/IMPORT_NOTE.md", note.encode("utf-8"))
 
         return buffer.getvalue()
+
+    # ── 文件树（磁盘只读扫描，不建表）────────────────────────────────
+
+    # 单文件预览上限（1MB）
+    MAX_PREVIEW_BYTES = 1024 * 1024
+    # 允许在线预览的文本扩展名白名单
+    TEXT_EXTENSIONS = {
+        ".md", ".txt", ".py", ".json", ".yaml", ".yml",
+        ".toml", ".csv", ".sh", ".bat", ".cfg", ".ini",
+    }
+
+    @staticmethod
+    def _classify_file(rel_parts: tuple, ext: str) -> str:
+        """按相对路径首段与扩展名判定文件类型。"""
+        head = rel_parts[0] if rel_parts else ""
+        if head == "scripts" and ext == ".py":
+            return "script"
+        if head == "references":
+            return "reference"
+        return "other"
+
+    def list_files(self, package_id: str) -> Dict[str, Any]:
+        """扫描技能包目录，返回全部文件的相对路径 / 大小 / 类型。
+
+        - 磁盘是唯一事实源，不建表；
+        - 排除 SKILL.md（已有专属接口）；
+        - 目录不存在返回空列表（不报错）；单个文件 OSError 跳过并记日志。
+        """
+        pkg_dir = self.SKILLS_BASE_DIR / package_id
+        files: List[Dict[str, Any]] = []
+        if not pkg_dir.is_dir():
+            return {
+                "package_id": package_id,
+                "files": files,
+                "total_count": 0,
+                "total_size": 0,
+            }
+
+        def _on_error(err: OSError) -> None:
+            logger.warning("技能文件扫描失败(%s): %s", package_id, err)
+
+        for root, _dirs, names in os.walk(pkg_dir, onerror=_on_error):
+            for fname in names:
+                if fname == "SKILL.md":
+                    continue
+                abs_path = Path(root) / fname
+                rel_parts = abs_path.relative_to(pkg_dir).parts
+                ext = abs_path.suffix.lower()
+                try:
+                    size = abs_path.stat().st_size
+                except OSError as e:
+                    logger.warning("技能文件跳过(%s): %s", abs_path, e)
+                    continue
+                files.append({
+                    "path": "/".join(rel_parts),
+                    "size": size,
+                    "ext": ext.lstrip("."),
+                    "type": self._classify_file(rel_parts, ext),
+                })
+
+        files.sort(key=lambda f: f["path"])
+        return {
+            "package_id": package_id,
+            "files": files,
+            "total_count": len(files),
+            "total_size": sum(f["size"] for f in files),
+        }
+
+    def read_file_content(self, package_id: str, rel_path: str) -> Dict[str, Any]:
+        """读取技能包内单个文本文件（越界 / 非文本 / 超限 / 二进制一律拒绝）。
+
+        Raises:
+            ValueError: 路径穿越、文件不存在、类型不允许、超过 1MB、二进制或非 UTF-8。
+        """
+        base = (self.SKILLS_BASE_DIR / package_id).resolve()
+        target = (base / rel_path).resolve()
+        # 路径穿越防护：解析后必须仍位于技能包目录内
+        if target != base and base not in target.parents:
+            raise ValueError("非法的文件路径")
+        if not target.is_file():
+            raise ValueError("文件不存在")
+        if target.suffix.lower() not in self.TEXT_EXTENSIONS:
+            raise ValueError("该文件类型不支持预览")
+        size = target.stat().st_size
+        if size > self.MAX_PREVIEW_BYTES:
+            raise ValueError("文件超过 1MB 上限，无法预览")
+        try:
+            raw = target.read_bytes()
+        except OSError as e:
+            raise ValueError(f"文件读取失败: {e}")
+        if b"\x00" in raw:
+            raise ValueError("二进制文件无法预览")
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("非 UTF-8 文本，无法预览")
+        return {
+            "path": "/".join(target.relative_to(base).parts),
+            "size": size,
+            "content": content,
+        }
 
     # ── 辅助 ────────────────────────────────────────────────────────
 

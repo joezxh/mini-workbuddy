@@ -16,7 +16,7 @@
 /brainstorm
 参照模板 以 @MiniWorkBuddyb/docs/coding/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
 -   后端 @MiniWorkBuddy/backend/app/routes/wiki  
--   前端 views目录：@MiniWorkBuddy/frontend/src/admin/llm-wiki/  api: @MiniWorkBuddy/frontend/src/api/
+-   前端 views目录：@MiniWorkBuddy/frontend/src/admin/llm-wiki/  @MiniWorkBuddy/frontend/src/kms/wiki/ api: @MiniWorkBuddy/frontend/src/api/
 输出文件路径： ​test​   /wiki-scene.md`
 文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
 wiki 服务测试模块 必须完成所有模块的测试提示词的编写
@@ -27,32 +27,44 @@ wiki 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
 /brainstorm
 参照模板 以 @MiniWorkBuddyb/docs/coding/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
--   后端 @MiniWorkBuddy/backend/app/routes/wiki  
--   前端 views目录：@MiniWorkBuddy/frontend/src/admin/llm-wiki/  api: @MiniWorkBuddy/frontend/src/api/
-输出文件路径： ​test​   /wiki-scene.md`
+-   后端 @MiniWorkBuddy/backend/app/routes/ai  
+-   前端 views目录：@MiniWorkBuddy/frontend/src/admin/ai/  api: @MiniWorkBuddy/frontend/src/api/
+输出文件路径： ​test​   /ai-scene.md`
 文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
-wiki 服务测试模块 必须完成所有模块的测试提示词的编写
+ai 服务测试模块 必须完成所有模块的测试提示词的编写
 ```
 
-## agent
+## agent/agent-team
+
+```
+参照模板 以 @MiniWorkBuddyb/docs/coding/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端 @MiniWorkBuddy/backend/app/routes/agent  
+-   前端 views目录：@MiniWorkBuddy/frontend/src/admin/agent/ @MiniWorkBuddy/frontend/src/admin/agent-team/ api: @MiniWorkBuddy/frontend/src/api/aiAgent.ts
+输出文件路径： ​test​   /agent-scene.md`
+文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
+ai 服务测试模块 必须完成所有模块的测试提示词的编写
+```
+
+## 智能助手
+
+```
+参照模板 以 @MiniWorkBuddyb/docs/coding/scene/scene-template.md 的结构与风格，生成一份完整的服务端到端浏览器自动化测试开发文档。模板的所有章节顺序、命名、子节、表格列、代码块结构、占位符语义都必须 1:1 对齐:
+-   后端 @MiniWorkBuddy/backend/app/routes/ai_assistant  
+-   前端 views目录：@MiniWorkBuddy/frontend/src/assistant  api: @MiniWorkBuddy/frontend/src/api/ai-assistant.ts
+输出文件路径： ​test​   /assistant-scene.md`
+文档更新要求：对已有文件中的各个测试场景进行维护，只能添加新场景或细化现有场景，严禁删除任何已有功能的测试场景。必须确保遍历每个页面的所有功能，页面上的每个按钮、每个交互元素的功能都必须有对应的测试场景覆盖，保证测试的完整性和全面性。
+智能助手测试模块 必须完成所有模块的测试提示词的编写
+```
+
+## 全双工
 
 ```
 ```
 
-## 连接器
-
+## 知识本体
 ```
 ```
 
-## 数据集成
-
-```
-```
-
-## 本体
-```
-```
-
-## 工作流
+## 工作流集成
 ```
 ```

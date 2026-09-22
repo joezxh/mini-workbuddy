@@ -119,25 +119,28 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.ai.ai_tool", prefix=f"{API_V1_PREFIX}/admin", tags=["AI 工具管理"]),
 
     # --- 17~20. MCP：单模块导出 4 个 router ---
-    RouterSpec("app.routers.ai.ai_mcp", attr="router", prefix=f"{API_V1_PREFIX}/admin", tags=["MCP API Key管理"]),
+    RouterSpec("app.routers.ai.ai_mcp", attr="router", prefix=f"{API_V1_PREFIX}/admin", tags=["MCP API Key 管理"]),
     RouterSpec(
         "app.routers.ai.ai_mcp",
         attr="client_router",
         prefix=f"{API_V1_PREFIX}/admin",
-        tags=["MCP Client管理"],
+        tags=["MCP Client 管理"],
     ),
     RouterSpec(
         "app.routers.ai.ai_mcp",
         attr="square_router",
         prefix=f"{API_V1_PREFIX}/admin",
-        tags=["MCP广场管理"],
+        tags=["MCP 广场管理"],
     ),
     RouterSpec(
         "app.routers.ai.ai_mcp",
         attr="mcp_tools_router",
         prefix=f"{API_V1_PREFIX}/admin",
-        tags=["MCP已注册工具"],
+        tags=["MCP 已注册工具"],
     ),
+    
+    # --- 21. AI Context Management (T1.4) ---
+    RouterSpec("app.routers.ai.ai_context", tags=["AI Context Management"]),
 
     # --- 21~24. 搜索 / 规则 / 进化 / 工作空间 ---
     RouterSpec("app.routers.ai.ai_web_search", prefix=f"{API_V1_PREFIX}/admin", tags=["AI 联网搜索"]),

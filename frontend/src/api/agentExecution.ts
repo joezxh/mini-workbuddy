@@ -174,3 +174,45 @@ export async function getUnifiedEvents(
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
+
+// ── P1 运行控制：cancel / confirm / 统一事件流订阅（spec §5.3 / §5.4 / §6.3）──
+
+export async function cancelExecution(executionId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${baseUrl}/api/v1/agents/executions/${executionId}/cancel`, {
+    method: 'POST',
+    headers: { ...(await authHeader()) },
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function confirmExecution(
+  executionId: string,
+  payload: { action: 'approve' | 'reject' | 'interrupt'; tool_calls?: any[]; accept_rules?: boolean },
+): Promise<{ ok: boolean; action: string; execution_id: string }> {
+  const res = await fetch(`${baseUrl}/api/v1/agents/executions/${executionId}/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+/** 统一事件回放（DB 落库，after_seq 增量拉取；spec §6.3 / P1.4） */
+export async function getExecutionEvents(
+  executionId: string,
+  afterSeq = 0,
+): Promise<{ execution_id: string; after_seq: number; events: any[] }> {
+  const res = await fetch(
+    `${baseUrl}/api/v1/agents/executions/${executionId}/events?after_seq=${afterSeq}`,
+    { headers: { ...(await authHeader()) } },
+  )
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+/** SSE 实时订阅地址（配合 utils/sseClient 使用；spec §4.4 / P1.2） */
+export function executionStreamUrl(executionId: string): string {
+  return `${baseUrl}/api/v1/agents/executions/${executionId}/stream`
+}

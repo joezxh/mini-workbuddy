@@ -113,38 +113,45 @@
                 <a-descriptions-item :label="t('skillHub.description')" :span="2">{{ selected.description || '—' }}</a-descriptions-item>
               </a-descriptions>
 
-              <a-divider>{{ t('skillHub.scriptList') }}</a-divider>
+              <a-divider>
+                {{ t('skillHub.fileList') }}
+                <span class="file-count-hint">{{ t('skillHub.fileCount', { count: fileRows.length }) }}</span>
+              </a-divider>
 
-              <div class="script-list">
-                <div v-if="!selected.scripts?.length" class="script-empty">
-                  {{ t('skillHub.noScripts') }}
+              <a-spin :spinning="filesLoading">
+                <div class="script-list">
+                  <div v-if="!fileRows.length" class="script-empty">
+                    {{ t('skillHub.noFiles') }}
+                  </div>
+                  <div
+                    v-for="row in fileRows"
+                    :key="row.file.path"
+                    class="script-item file-item"
+                    @click="openFilePreview(row.file)"
+                  >
+                    <div class="script-info">
+                      <div class="script-name">
+                        <span :class="{ 'text-disabled': row.script && !row.script.enabled }">{{ row.file.path }}</span>
+                        <a-tag :color="fileTypeColor(row.file.type)" size="small">{{ fileTypeLabel(row.file.type) }}</a-tag>
+                        <a-tag v-if="row.script && !row.script.enabled" color="default" size="small">{{ t('skillHub.disabled') }}</a-tag>
+                      </div>
+                      <div class="script-cmd">{{ formatSize(row.file.size) }}</div>
+                      <div v-if="row.script?.description" class="script-desc">{{ row.script.description }}</div>
+                    </div>
+                    <div v-if="row.script" class="script-actions" @click.stop>
+                      <a-switch
+                        :checked="row.script.enabled"
+                        size="small"
+                        @change="(v: boolean) => onScriptToggle(row, v)"
+                      />
+                      <a-button size="small" type="text" @click="onScriptEdit(row)">{{ t('common.edit') }}</a-button>
+                      <a-popconfirm :title="t('skillHub.deleteScriptConfirm')" @confirm="onScriptDelete(row)">
+                        <a-button size="small" type="text" danger>{{ t('common.delete') }}</a-button>
+                      </a-popconfirm>
+                    </div>
+                  </div>
                 </div>
-                <div
-                  v-for="s in selected.scripts"
-                  :key="s.script_id"
-                  class="script-item"
-                >
-                  <div class="script-info">
-                    <div class="script-name">
-                      <span :class="{ 'text-disabled': !s.enabled }">{{ s.name }}</span>
-                      <a-tag v-if="!s.enabled" color="default" size="small">{{ t('skillHub.disabled') }}</a-tag>
-                    </div>
-                    <div class="script-cmd">{{ s.command }}</div>
-                    <div v-if="s.description" class="script-desc">{{ s.description }}</div>
-                    </div>
-                    <div class="script-actions">
-                    <a-switch
-                      :checked="s.enabled"
-                      size="small"
-                      @change="(v: boolean) => toggleScriptEnabled(s, v)"
-                    />
-                    <a-button size="small" type="text" @click="openScriptForm(s)">{{ t('common.edit') }}</a-button>
-                    <a-popconfirm :title="t('skillHub.deleteScriptConfirm')" @confirm="handleDeleteScript(s)">
-                      <a-button size="small" type="text" danger>{{ t('common.delete') }}</a-button>
-                    </a-popconfirm>
-                    </div>
-                </div>
-              </div>
+              </a-spin>
 
               <div class="script-footer">
                 <a-button type="dashed" @click="openScriptForm()">
@@ -289,6 +296,19 @@
       @success="handleRuleFormSuccess"
     />
 
+    <!-- 文件预览弹窗 -->
+    <a-modal
+      v-model:open="previewVisible"
+      :title="previewPath"
+      width="820px"
+      :footer="null"
+    >
+      <a-spin :spinning="previewLoading">
+        <a-alert v-if="previewError" type="error" show-icon :message="previewError" />
+        <pre v-else class="file-preview-pre">{{ previewContent }}</pre>
+      </a-spin>
+    </a-modal>
+
     <!-- 隐藏的上传 input -->
     <input
       ref="fileInputRef"
@@ -313,10 +333,11 @@ import {
   getSkills, deleteSkillPackage, updateSkillPackage,
   deleteScript as apiDeleteScript, updateScript, importSkillPackage, exportSkillPackage,
   getSkillMarkdown, saveSkillMarkdown, ICON_OPTIONS,
+  getSkillFiles, getSkillFileContent,
 } from '@/api/skill'
 import { getDictionaryItems } from '@/api/dictionary'
 import type { DictionaryItem } from '@/api/dictionary'
-import type { SkillPackage, SkillScript } from '@/api/skill'
+import type { SkillPackage, SkillScript, SkillFileItem, SkillFileType } from '@/api/skill'
 import {
   getSkillRules, updateSkillRule, deleteSkillRule,
   type SkillRule,
@@ -358,6 +379,20 @@ const markdownError = ref('')
 const markdownEditing = ref(false)
 const markdownSaving = ref(false)
 const markdownDraft = ref('')
+
+// ── 文件树相关（磁盘扫描，只读预览）────────────────────────────────────────
+interface FileRow {
+  file: SkillFileItem
+  /** 该文件对应 ai_skill_script 记录（仅 scripts/<script_id>.py 可匹配） */
+  script: SkillScript | null
+}
+const files = ref<SkillFileItem[]>([])
+const filesLoading = ref(false)
+const previewVisible = ref(false)
+const previewPath = ref('')
+const previewContent = ref('')
+const previewError = ref('')
+const previewLoading = ref(false)
 // 来源标记：db=数据库优先 / workspace=工作区 / file=文件系统
 const markdownSource = ref('')
 const markdownSourceLabel = computed(() => {
@@ -512,6 +547,83 @@ async function loadMarkdown() {
   }
 }
 
+// ── 文件树加载 / 预览 ───────────────────────────────────────────────────────
+
+/** 文件行与 ai_skill_script 记录合并：scripts/<script_id>.py 视为可管理脚本行 */
+const fileRows = computed<FileRow[]>(() => {
+  const scripts = selected.value?.scripts || []
+  return files.value.map(file => ({
+    file,
+    script: scripts.find(s => `scripts/${s.script_id}.py` === file.path) || null,
+  }))
+})
+
+async function loadFiles() {
+  if (!selected.value) {
+    files.value = []
+    return
+  }
+  filesLoading.value = true
+  try {
+    const res = await getSkillFiles(selected.value.package_id)
+    files.value = res.files || []
+  } catch (e: any) {
+    files.value = []
+    message.error(t('skillHub.loadFilesFailed') + (e?.data?.detail || e?.message || t('skillHub.unknownError')))
+  } finally {
+    filesLoading.value = false
+  }
+}
+
+async function openFilePreview(file: SkillFileItem) {
+  if (!selected.value) return
+  previewPath.value = file.path
+  previewContent.value = ''
+  previewError.value = ''
+  previewVisible.value = true
+  previewLoading.value = true
+  try {
+    const res = await getSkillFileContent(selected.value.package_id, file.path)
+    previewContent.value = res.content
+  } catch (e: any) {
+    previewError.value = e?.data?.detail || e?.message || t('skillHub.unknownError')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function fileTypeLabel(type: SkillFileType): string {
+  if (type === 'script') return t('skillHub.fileTypeScript')
+  if (type === 'reference') return t('skillHub.fileTypeReference')
+  return t('skillHub.fileTypeOther')
+}
+
+function fileTypeColor(type: SkillFileType): string {
+  if (type === 'script') return 'blue'
+  if (type === 'reference') return 'green'
+  return 'default'
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+// 脚本行操作（数据仍来自 ai_skill_script）
+function onScriptToggle(row: FileRow, enabled: boolean) {
+  if (row.script) toggleScriptEnabled(row.script, enabled)
+}
+
+function onScriptEdit(row: FileRow) {
+  if (row.script) openScriptForm(row.script)
+}
+
+function onScriptDelete(row: FileRow) {
+  if (row.script) handleDeleteScript(row.script)
+}
+
 // ── 过滤与分组 ──────────────────────────────────────────────────────────────
 
 const filteredPackages = computed(() => {
@@ -544,15 +656,17 @@ function selectPackage(pkg: SkillPackage) {
   activeTab.value = 'detail'
 }
 
-// 切换包时自动加载规则
+// 切换包时自动加载规则 / SKILL.md / 文件树
 watch(() => selected.value?.package_id, () => {
   if (selected.value) {
     loadRules()
     loadMarkdown()
+    loadFiles()
   } else {
     rules.value = []
     markdownContent.value = ''
     markdownError.value = ''
+    files.value = []
   }
 })
 
@@ -563,6 +677,7 @@ async function reloadSelected() {
     const updated = (res?.packages || []).find((p: SkillPackage) => p.package_id === selected.value!.package_id)
     selected.value = updated || null
   } catch { /* ignore */ }
+  await loadFiles()
 }
 
 async function toggleEnabled(pkg: SkillPackage) {
@@ -608,6 +723,7 @@ async function handleDeleteScript(s: SkillScript) {
     selected.value.scripts = (selected.value.scripts || []).filter(
       x => x.script_id !== s.script_id
     )
+    await loadFiles()
     message.success(t('skillHub.deleted'))
   } catch (e: any) {
     message.error(e?.data?.detail || t('skillHub.deleteFailed'))
@@ -725,7 +841,15 @@ async function handleExport(pkg: SkillPackage) {
 }
 
 function categoryLabel(cat?: string) {
-  return categoryOptions.value.find(o => o.item_code === cat)?.item_name || cat || t('skillMgmt.other')
+  if (!cat) return t('skillMgmt.other')
+  // 官方仓库分类：优先走 i18n（officialCategories / cloudCategories），回退到字典 item_name
+  const officialKey = `skillHub.officialCategories.${cat}`
+  const official = t(officialKey)
+  if (official !== officialKey) return official
+  const cloudKey = `skillHub.cloudCategories.${cat}`
+  const cloud = t(cloudKey)
+  if (cloud !== cloudKey) return cloud
+  return categoryOptions.value.find(o => o.item_code === cat)?.item_name || cat
 }
 
 function iconLabel(icon?: string) {
@@ -1045,6 +1169,39 @@ function iconLabel(icon?: string) {
 
 .script-footer {
   margin-top: 12px;
+}
+
+/* 文件列表 */
+.file-count-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.file-item {
+  cursor: pointer;
+}
+
+.file-item:hover {
+  border-color: var(--accent);
+}
+
+/* 文件预览 */
+.file-preview-pre {
+  margin: 0;
+  padding: 12px;
+  max-height: 60vh;
+  overflow: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
 }
 
 /* SKILL.md Tab */

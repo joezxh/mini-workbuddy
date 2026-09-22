@@ -141,6 +141,41 @@ export function saveSkillMarkdown(packageId: string, content: string): Promise<{
   return request.put(`${BASE_URL}/ai-assistant/skills/${packageId}/skill-md`, { content })
 }
 
+// ── 技能文件树 API（磁盘扫描，只读）──────────────────────────────────────────
+
+export type SkillFileType = 'script' | 'reference' | 'other'
+
+export interface SkillFileItem {
+  /** 相对技能包目录的 POSIX 路径，如 scripts/run.py */
+  path: string
+  size: number
+  /** 不带点的扩展名，如 py / md */
+  ext: string
+  type: SkillFileType
+}
+
+export interface SkillFileListResp {
+  package_id: string
+  files: SkillFileItem[]
+  total_count: number
+  total_size: number
+}
+
+/** 列出技能包内全部文件（SKILL.md 除外，磁盘为唯一事实源） */
+export function getSkillFiles(packageId: string): Promise<SkillFileListResp> {
+  return request.get(`${BASE_URL}/ai-assistant/skills/${packageId}/files`)
+}
+
+/** 预览技能包内文本文件（越界/二进制/超 1MB 时后端返回 400 + detail） */
+export function getSkillFileContent(
+  packageId: string,
+  path: string
+): Promise<{ path: string; size: number; content: string }> {
+  return request.get(`${BASE_URL}/ai-assistant/skills/${packageId}/files/content`, {
+    params: { path },
+  })
+}
+
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 
 export const ICON_OPTIONS = [

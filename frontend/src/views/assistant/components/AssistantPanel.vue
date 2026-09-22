@@ -27,6 +27,17 @@
 
     <!-- ── 右栏 ── -->
     <div class="chat-main">
+      <!-- AI Context Stats Card (Session-aware) -->
+      <div v-if="currentSession" class="context-stats-container">
+        <StatsCard
+          :title="$t('context.stats.cardTitle')"
+          :icon="DatabaseOutlined"
+          :stats="contextStats || { sharedContextCount: 0, modes: {}, mem0Enabled: false, totalEntries: 0 }"
+          :loading="statsLoading"
+          @refresh="refreshContextStats"
+        />
+      </div>
+
       <div class="chat-main-header">
         <span class="chat-main-title">{{ currentSession ? currentSession.session_title || typeLabel(sessionType) : '智能助手' }}</span>
         <a-button
@@ -108,6 +119,9 @@
         @react-skip="handleReactSkip"
       />
 
+      <!-- P1.3：统一事件流订阅（HITL 确认面板按需渲染） -->
+      <AgentEventStream :execution-id="currentExecutionId || ''" />
+
       <ChatInput
         ref="chatInputRef"
         v-model:input-text="inputText"
@@ -161,7 +175,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, watch } from 'vue'
-import { UnorderedListOutlined } from '@ant-design/icons-vue'
+import { UnorderedListOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 import { message as antMsg } from 'ant-design-vue'
 import { parseMsg, type ParsedMsg, type ChatMessage, type SkillInfo, type SqlBotData, type ThinkingStep, type ResearchSubQuestion, type ResearchReport, type AsyncTaskInfo, type UnifiedStep, type UnifiedArtifact, MODEL_SELECTABLE_TYPES } from './types'
 import {
@@ -177,12 +191,15 @@ import { getWorkspacesSimple, type WorkspaceSimple } from '@/api/workspace'
 import { getUnifiedEvents } from '@/api/agentExecution'
 import SessionSidebar from './SessionSidebar.vue'
 import ChatContainer from './ChatContainer.vue'
+import AgentEventStream from './AgentEventStream.vue'
 import ChatInput from './ChatInput.vue'
 import UnifiedTimeline from './UnifiedTimeline.vue'
 import { type UploadedFile } from './FileUploader.vue'
+import StatsCard from '@/components/common/StatsCard.vue'
 import { getToken } from '@/utils/auth'
 import { getDictionaryItems, type DictionaryItem } from '@/api/dictionary'
 import { submitDeepResearch } from '@/api/agentWorkspace'
+import { getContextStats } from '@/api/aiContext'
 import { useExecutionState } from './renderers/execution/useExecutionState'
 
 // ── 状态 ─────────────────────────────────────────────────────────────────────
@@ -192,6 +209,10 @@ const sessionSearch   = ref('')
 const currentSession  = ref<AiChatSession | null>(null)
 const sessionType     = ref('general')
 const sessionTypeOptions = ref<DictionaryItem[]>([])
+
+// AI Context 统计状态
+const contextStats = ref<any>(null)
+const statsLoading = ref(false)
 
 // ── 数据源选择 ─────────────────────────────────────────────────────────────
 const selectedDatasourceId = ref<number | null>(null)
@@ -227,6 +248,32 @@ const inputText    = ref('')
 const streaming    = ref(false)
 const streamingText = ref('')
 const difyConvId   = ref<string | undefined>(undefined)
+
+// 获取上下文统计
+async function refreshContextStats() {
+  statsLoading.value = true
+  try {
+    const sessionId = currentSession.value?.session_id?.toString()
+    const res = await getContextStats({ session_id: sessionId })
+    contextStats.value = res.data
+  } catch (e) {
+    console.error('Failed to fetch context stats:', e)
+    antMsg.error(t('common.fetchFailed'))
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// Watch session changes and auto-refresh stats
+watch(currentSession, () => {
+  if (currentSession.value?.session_id) {
+    refreshContextStats()
+  } else {
+    contextStats.value = null
+  }
+}, { immediate: true })
+
+// ── ReAct HITL 控制函数 ────────────────────────────────────────────────────
 
 // 流式阶段的统一执行事件（归一化 step / artifact），实时驱动执行详情的时间线 Tab
 const streamingUnifiedStepsRef = ref<UnifiedStep[] | null>(null)
@@ -274,6 +321,27 @@ async function handleReactSkip() {
 
 // 技能执行 composable（替代旧 streamingSkillEvents）
 const executionState = useExecutionState({ streaming: false } as any)
+
+// i18n translation helper
+function t(key: string): string {
+  // Simple fallback implementation - in production would use vue-i18n properly
+  const translations: Record<string, string> = {
+    'context.stats.sharedLabel': 'Shared',
+    'context.stats.tokenUsage': 'Tokens',
+    'context.stats.avgPriority': 'Priority',
+    'context.stats.mem0Enabled': 'Mem0 Enabled',
+    'context.stats.mem0Disabled': 'Mem0 Disabled',
+    'context.stats.totalEntries': 'Total',
+    'common.entryCount': 'entries',
+    'common.refresh': 'Refresh',
+    'common.refreshing': 'Refreshing...',
+    'common.fetchFailed': 'Failed to load data',
+    'context.modes.dify': 'Dify',
+    'context.modes.sqlbot': 'SQLBot',
+    'context.modes.agentscope': 'AgentScope'
+  }
+  return translations[key] || key
+}
 const { enqueueEvent, agentGroups, agentOrder, teamState, tasks, progressHistory, phase: executionPhase, flatEvents, resetFlatEvents } = executionState
 // 保留 executionId 变量用于保存到消息
 const currentExecutionId = ref<string | undefined>(undefined)
@@ -932,9 +1000,10 @@ async function sendMessage(text?: string) {
         sqlbot_chat_id: sqlbotChatIdMap[currentSession.value!.session_id] || null,
         sqlbot_datasource_id: selectedDatasourceId.value || null,
         file_ids: fileIds, file_db_ids: fileDbIds,
+        // 技能执行单位为整技能（package_id）：脚本字段不再参与执行，统一置空
         skill: currentSkill.value ? {
           package_id: currentSkill.value.packageId, package_name: currentSkill.value.packageName,
-          script_id: currentSkill.value.scriptId, script_name: currentSkill.value.scriptName,
+          script_id: '', script_name: '',
           params: currentSkill.value.params || {},
         } : null,
         // 智能体模式：提交选中的 Agent id 与 code
@@ -1669,7 +1738,21 @@ onMounted(() => { loadSessions(); loadSessionTypes(); loadDatasourceOptions(); l
   display: flex; flex: 1; min-width: 0; width: 100%; height: 100%; min-height: 0;
   background: var(--bg-input); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
 }
-.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.chat-main { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  min-width: 0; 
+  min-height: 0; 
+  overflow: hidden; 
+}
+
+// AI Context Stats Card Container
+.context-stats-container {
+  flex: 0 0 auto;
+  margin: 12px 16px;
+  padding: 4px;
+}
 
 .chat-main-header {
   flex: 0 0 auto;

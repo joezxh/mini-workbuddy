@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "MinWorkBuddy AI 工作台",
+    "output": "minworkbuddy-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {"id": "users", "type": "external", "label": "用户/客户端", "sublabel": "Browser / Mobile", "pos": [20, 350], "size": [100, 60]},
+    {"id": "nginx", "type": "cloud", "label": "Nginx", "sublabel": "网关", "pos": [200, 350], "size": [130, 60]},
+    {"id": "fastapi", "type": "backend", "label": "FastAPI", "sublabel": ":8000", "pos": [450, 350], "size": [130, 60]},
+    {"id": "agent_scope", "type": "backend", "label": "AgentScope", "sublabel": "核心引擎", "pos": [680, 350], "size": [130, 60]},
+    {"id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "数据库", "pos": [910, 350], "size": [110, 60]},
+    {"id": "redis", "type": "database", "label": "Redis", "sublabel": "缓存", "pos": [680, 250], "size": [90, 50]},
+    {"id": "chat_agent", "type": "backend", "label": "AI 对话", "sublabel": "", "pos": [840, 280], "size": [110, 60]},
+    {"id": "reasoning_agent", "type": "backend", "label": "深度思考", "sublabel": "", "pos": [840, 350], "size": [110, 60]},
+    {"id": "research_agent", "type": "backend", "label": "深度研究", "sublabel": "", "pos": [840, 420], "size": [110, 60]},
+    {"id": "knowledge_kb", "type": "backend", "label": "知识库 RAG", "sublabel": "", "pos": [450, 250], "size": [130, 60]},
+    {"id": "voice_duplex", "type": "backend", "label": "全双工语音", "sublabel": "", "pos": [450, 450], "size": [130, 60]},
+    {"id": "ml_cloud", "type": "cloud", "label": "AI 云服务", "sublabel": "外部", "pos": [1050, 350], "size": [120, 70]}
+  ],
+  "connections": [
+    {"from": "users", "to": "nginx", "label": ""},
+    {"from": "nginx", "to": "fastapi", "label": ""},
+    {"from": "fastapi", "to": "agent_scope", "label": ""},
+    {"from": "fastapi", "to": "knowledge_kb", "label": ""},
+    {"from": "fastapi", "to": "voice_duplex", "label": ""},
+    {"from": "fastapi", "to": "redis", "label": ""},
+    {"from": "agent_scope", "to": "chat_agent", "label": ""},
+    {"from": "agent_scope", "to": "reasoning_agent", "label": ""},
+    {"from": "agent_scope", "to": "research_agent", "label": ""},
+    {"from": "agent_scope", "to": "postgres", "label": ""},
+    {"from": "agent_scope", "to": "ml_cloud", "label": ""},
+    {"from": "knowledge_kb", "to": "postgres", "label": ""},
+    {"from": "voice_duplex", "to": "ml_cloud", "label": ""}
+  ],
+  "cards": [
+    {"dot": "cyan", "title": "接入层", "items": ["Nginx 提供 HTTPS/WebSocket 网关"]},
+    {"dot": "emerald", "title": "核心引擎", "items": ["AgentScope 统一执行引擎", "支持 AI 对话、深度思考、深度研究"]},
+    {"dot": "rose", "title": "知识系统", "items": ["知识库 RAG 向量检索", "PostgreSQL 持久化"]},
+    {"dot": "amber", "title": "多媒体", "items": ["全双工语音实时通信"]}
+  ]
+}

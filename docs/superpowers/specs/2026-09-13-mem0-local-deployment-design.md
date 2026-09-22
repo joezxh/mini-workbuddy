@@ -1,282 +1,353 @@
-# Mem0 内存服务本地部署设计
+# Mem0 内存服务本地部署设计（Phase 1+2 更新版）
 
 ## 概述
 
-在本地 Windows 开发机（Docker Desktop）上部署 Mem0 平台版（含 API + Dashboard），复用本地已有的 PostgreSQL (pgvector) 和 Neo4j 基础设施，为 Dify 工作流提供 AI 记忆能力。
+在私有化服务器（`192.168.110.169`）上部署 Mem0 RAG API 服务，为 MinWorkBuddy 提供 AI 长期记忆能力。本设计支持以下三种模式：
 
-## 架构
+1. **本地私有化部署**（默认推荐）: `MEM0_RAG_URL=http://192.168.110.169:8002`
+2. **云端 API**: `MEM0_USE_CLOUD_API=true` (需配置 API Key)
+3. **本地测试模式**: 纯内存实现（fallback）
 
-```
-本地 Windows 开发机 (Docker Desktop)
-┌──────────────────────────────────────────────────────────┐
-│  mwb-infra-network (已有 bridge 网络)                      │
-│                                                          │
-│  ┌──────────────────┐  ┌───────────────────────┐         │
-│  │ mem0-api         │  │ mem0-dashboard        │         │
-│  │ (FastAPI:8888)   │  │ (Next.js:3001)        │         │
-│  └──┬───────────┬───┘  └───────────────────────┘         │
-│     │           │                                         │
-│     ▼           ▼                                         │
-│  postgres     mwb-neo4j                                   │
-│  (pgvector)   (graph, APOC)                               │
-│  :5432        :7687                                       │
-└──────────────────────────────────────────────────────────┘
-```
+### 核心参数
+- **Restful API 地址**: `http://192.168.110.169:8002`
+- **MCP 服务地址**: `192.168.110.169:8080`  
+- **API Key**: `m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw`
 
-- **mem0-api**：FastAPI 服务，处理记忆 CRUD、向量搜索、图记忆
-- **mem0-dashboard**：Next.js 管理控制台，浏览记忆、管理 API Key、配置 LLM
-- 两个容器通过 Docker 内部网络通信，对外暴露独立端口
+---
 
-## 文件结构
+## 架构设计
 
 ```
-d:\projects\MinWorkBuddy\docker\mem0\
-├── api\
-│   └── Dockerfile              # 基于 mem0/mem0-api-server + 图记忆依赖
-├── docker-compose.yaml         # 核心编排文件
-├── .env                        # 环境变量（不提交到 git）
-└── build.ps1                   # 一键构建启动脚本
+┌─────────────────────────────────────────────────────────────────┐
+│                    MinWorkBuddy Application                       │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │        ai/services/mem0_service.py                    │      │
+│  │  ┌────────────────────────────────────────────────┐   │      │
+│  │  │  Mem0Service                                    │   │      │
+│  │  │  ├─ _init_mem0_client()                         │   │      │
+│  │  │  ├─ record() / retrieve() / delete()           │   │      │
+│  │  │  ├─ get_stats() / compress_memories()          │   │      │
+│  │  │  └─ health_check()                              │   │      │
+│  │  └────────────────────────────────────────────────┘   │      │
+│  └─────────────────────┬──────────────────────────────────┘      │
+│                        │                                          │
+└────────────────────────┼──────────────────────────────────────────┘
+                         │
+    ═════════════════════╧═══════════════════════════════════════
+                         │
+         优先级选择逻辑:
+         1. MEM0_ENABLED=false → LocalMem0Impl (内存存储)
+         2. is_local_deployment → LocalMem0APIImpl (私有化)
+         3. use_cloud_api=true → MemoryClient (云端)
+         4. 否则 → LocalMem0Impl (降级 fallback)
+                         │
+    ═════════════════════╧═══════════════════════════════════════
+                         │
+┌─────────────────────────────────────────────────────────────────┐
+│              Deployment Mode Selection                            │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Local Private Deployment (Recommended)                  │   │
+│  │  ┌─────────────────────────────────────────────────┐   │   │
+│  │  │  HTTP REST API Server                           │   │   │
+│  │  │  http://192.168.110.169:8002                    │   │   │
+│  │  │                                                 │   │   │
+│  │  │  Endpoints:                                     │   │   │
+│  │  │  • POST /memories       - Add memory entry      │   │   │
+│  │  │  • POST /search         - Semantic search       │   │   │
+│  │  │  • DELETE /memories     - Delete by ID          │   │   │
+│  │  │  • GET  /memories/stats - Statistics            │   │   │
+│  │  │  • GET  /health         - Health check          │   │   │
+│  │  │  • POST /memories/compress - Compress memories  │   │   │
+│  │  └─────────────────────────────────────────────────┘   │   │
+│  │         ↑ Bearer Token Auth                             │   │
+│  │         m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  MCP Service                                              │   │
+│  │  http://192.168.110.169:8080                             │   │
+│  │  (Optional - for real-time events)                       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Cloud API (Fallback Option)                             │   │
+│  │  mem0.ai                                                │   │
+│  │  Requires: MEM0_USE_CLOUD_API=true, MEM0_API_KEY        │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-Dashboard 源码通过 git clone mem0 仓库获取，构建时引用 `mem0/server/dashboard/` 目录。
+---
 
 ## 组件详细设计
 
-### 1. API Dockerfile (`api/Dockerfile`)
-
-```dockerfile
-FROM mem0/mem0-api-server:latest
-RUN pip install --no-cache-dir \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
-    --trusted-host mirrors.aliyun.com \
-    "psycopg[binary,pool]" \
-    "mem0ai[graph]" \
-    rank-bm25 langchain-neo4j neo4j
-```
-
-- 基于官方 `mem0/mem0-api-server:latest`
-- 安装 PostgreSQL 驱动（psycopg）用于 pgvector 向量存储
-- 安装图记忆依赖（mem0ai[graph]、langchain-neo4j、neo4j）
-- 使用阿里云 pip 镜像加速
-
-### 2. Dashboard 构建
-
-直接使用 mem0 仓库中 `server/dashboard/Dockerfile`（多阶段 Next.js 构建）。该 Dockerfile 的 `entrypoint.sh` 支持运行时替换 `NEXT_PUBLIC_API_URL` 和 `NEXT_PUBLIC_INSTANCE_NAME`，无需重新构建即可修改 API 地址。
-
-### 3. docker-compose.yaml
-
-```yaml
-name: mem0-local
-
-services:
-  mem0-api:
-    build:
-      context: ./api
-    container_name: mem0-api
-    ports:
-      - "8888:8000"
-    env_file:
-      - .env
-    environment:
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=mem0
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_COLLECTION_NAME=memories
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - APP_DB_NAME=mem0_app
-      - JWT_SECRET=${JWT_SECRET}
-      - AUTH_DISABLED=${AUTH_DISABLED:-true}
-      - DASHBOARD_URL=http://localhost:3001
-      - MEM0_TELEMETRY=false
-    networks:
-      - mwb-infra-network
-    restart: unless-stopped
-
-  mem0-dashboard:
-    build:
-      context: ./mem0-source/server/dashboard
-    container_name: mem0-dashboard
-    ports:
-      - "3001:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8888
-      - API_INTERNAL_URL=http://mem0-api:8000
-      - NEXT_PUBLIC_INSTANCE_NAME=Mem0
-    depends_on:
-      - mem0-api
-    networks:
-      - mwb-infra-network
-    restart: unless-stopped
-
-networks:
-  mwb-infra-network:
-    external: true
-```
-
-### 4. 环境变量 (.env)
-
-```env
-# PostgreSQL (本地 mwb-postgres-pgvector 容器)
-POSTGRES_PASSWORD=admin123
-
-# Neo4j (本地 mwb-neo4j 容器)
-NEO4J_URI=bolt://mwb-neo4j:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=neo4j123
-
-# Auth (本地开发关闭认证)
-AUTH_DISABLED=true
-JWT_SECRET=local-dev-jwt-secret-key-2026
-
-# LLM (后续配置，暂留空)
-OPENAI_API_KEY=
-```
-
-### 5. 构建脚本 (build.ps1)
-
-```powershell
-# 1. Clone mem0 源码（首次运行）
-if (-not (Test-Path "./mem0-source")) {
-    git clone https://github.com/mem0ai/mem0.git --depth 1 mem0-source
-}
-
-# 2. 创建 PostgreSQL 数据库（首次运行，手动执行）
-# docker exec -it mwb-postgres-pgvector psql -U postgres `
-#   -c "CREATE DATABASE mem0;" `
-#   -c "\c mem0" `
-#   -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# 3. 构建并启动
-docker compose up -d --build
-
-# 4. 等待服务就绪
-Write-Host "等待 API 就绪..."
-Start-Sleep -Seconds 10
-
-# 5. 验证
-Write-Host "API Docs: http://localhost:8888/docs"
-Write-Host "Dashboard: http://localhost:3001"
-```
-
-## 依赖项检查清单
-
-| 依赖 | 位置 | 状态 | 操作 |
-|------|------|------|------|
-| PostgreSQL + pgvector | mwb-postgres-pgvector:5432 | 已有 | 创建 `mem0` 数据库 |
-| Neo4j + APOC | mwb-neo4j:7687 | 已有 | APOC 已启用（已配置） |
-| Docker Desktop | 本地 | 已有 | 确保运行中 |
-| Git | 本地 | 需确认 | clone mem0 源码 |
-| LLM/Embedder | 待定 | 待配置 | 后续通过 Dashboard 或 .env 配置 |
-
-## 数据库准备
-
-### PostgreSQL
-
-在本地 PostgreSQL (mwb-postgres-pgvector) 上创建 `mem0` 数据库：
-
-```bash
-docker exec -it mwb-postgres-pgvector psql -U postgres \
-  -c "CREATE DATABASE mem0;" \
-  -c "\c mem0" \
-  -c "CREATE EXTENSION IF NOT EXISTS vector;"
-```
-
-### Neo4j
-
-确认本地 Neo4j 启用了 APOC 插件。在 Neo4j 容器中检查：
-```
-NEO4J_PLUGINS=["apoc"]
-```
-
-## 验证步骤
-
-### 1. 启动服务
-
-```powershell
-cd d:\projects\MinWorkBuddy\docker\mem0
-.\build.ps1
-```
-
-### 2. API 健康检查
-
-```powershell
-# Swagger UI 应可访问
-curl http://localhost:8888/docs
-```
-
-### 3. Dashboard 访问
-
-浏览器打开 `http://localhost:3001`，应看到 Mem0 控制台界面。
-
-### 4. 记忆 CRUD 测试
-
-```powershell
-# 添加记忆
-curl -X POST http://localhost:8888/memories `
-  -H "Content-Type: application/json" `
-  -d '{"messages": [{"role": "user", "content": "我喜欢用 Python 写代码"}], "user_id": "test_user"}'
-
-# 搜索记忆
-curl -X POST http://localhost:8888/search `
-  -H "Content-Type: application/json" `
-  -d '{"query": "编程语言偏好", "user_id": "test_user"}'
-
-# 列出所有记忆
-curl http://localhost:8888/memories?user_id=test_user
-```
-
-### 5. Dify 工作流集成
-
-在 Dify 工作流中使用 HTTP 节点调用 Mem0 API：
+### 1. 配置文件 (`app/config/_mem0.py`)
 
 ```python
-import requests
-
-MEM0_BASE_URL = "http://host.docker.internal:8888"
-
-# 添加记忆
-response = requests.post(f"{MEM0_BASE_URL}/memories", json={
-    "messages": [{"role": "user", "content": "用户偏好中文界面"}],
-    "user_id": "dify_user_001"
-})
-
-# 搜索记忆
-response = requests.post(f"{MEM0_BASE_URL}/search", json={
-    "query": "界面语言偏好",
-    "user_id": "dify_user_001"
-})
+class Mem0Settings(BaseModel):
+    """Mem0 配置字段 - 支持本地私有化部署"""
+    
+    # Connection Configuration
+    MEM0_RAG_URL: str = Field(default="")
+    MEM0_API_KEY: str = Field(default="")
+    MEM0_MCP_HOST: str = Field(default="localhost")
+    MEM0_MCP_PORT: int = Field(default=8080)
+    
+    # Feature Switches
+    MEM0_ENABLED: bool = Field(default=False)
+    MEM0_USE_CLOUD_API: bool = Field(default=False)
+    
+    # Storage & Retrieval
+    MEM0_MAX_ENTRIES: int = Field(default=10000)
+    MEM0_RETENTION_DAYS: int = Field(default=90)
+    MEM0_EMBEDDING_MODEL: str = Field(default="all-MiniLM-L6-v2")
+    MEM0_VECTOR_DIMENSION: int = Field(default=384)
+    
+    # Performance & Caching
+    MEM0_CACHE_TTL: int = Field(default=3600)
+    MEM0_SEARCH_LIMIT: int = Field(default=10)
+    MEM0_RETRIEVE_TOP_K: int = Field(default=5)
+    
+    # Compression & Optimization
+    MEM0_ENABLE_COMPRESSION: bool = Field(default=False)
+    MEM0_COMPLETION_TOKEN_LIMIT: int = Field(default=10000)
 ```
 
-## 国内镜像加速
+### 2. 服务实现 (`ai/services/mem0_service.py`)
 
-| 组件 | 镜像源 | 配置方式 |
-|------|--------|---------|
-| pip (API 依赖) | 阿里云 | Dockerfile 中 `-i https://mirrors.aliyun.com/pypi/simple/` |
-| npm (Dashboard 构建) | 淘宝 | Dockerfile 中 `npm config set registry https://registry.npmmirror.com` |
-| Docker 基础镜像 | Docker Desktop 加速器 | Settings → Docker Engine → registry-mirrors |
+#### 客户端初始化逻辑
 
-推荐的 Docker 镜像加速器：
-- 阿里云容器镜像服务（需注册）
-- DaoCloud: `https://docker.m.daocloud.io`
-- 中科大: `https://docker.mirrors.ustc.edu.cn`
+```python
+def _init_mem0_client(self) -> Any:
+    if not self.config.enabled:
+        return LocalMem0Impl(...)
+    
+    if self.config.is_local_deployment:  # has RAG URL && !use_cloud_api
+        return self._init_local_deployment_client()
+    
+    if self.config.use_cloud_api and self.config.api_key:
+        return self._init_cloud_client()
+    
+    return LocalMem0Impl(...)  # fallback
+```
 
-## LLM/Embedder 后续配置
+#### LocalMem0APIImpl（本地私有化部署客户端）
 
-LLM 和 Embedder 暂不配置，Mem0 API 和 Dashboard 可正常启动。后续通过以下方式之一配置：
+```python
+class LocalMem0APIImpl:
+    def __init__(self, base_url: str, api_key: Optional[str] = None):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+    
+    def add(self, user_id: str, message: str, metadata: Dict) -> Union[Dict, bool]:
+        # POST /memories
+        payload = {"user_id": user_id, "message": message, "metadata": metadata}
+        
+    def search(self, query: str, user_id: str, limit: int) -> List[Dict]:
+        # POST /search
+        payload = {"query": query, "user_id": user_id, "limit": limit}
+        
+    def delete(self, memory_id: str, user_id: str) -> bool:
+        # DELETE /memories
+        payload = {"memory_id": memory_id, "user_id": user_id}
+    
+    def health_check(self) -> bool:
+        # GET /health
+        response = client.get(f"{base_url}/health")
+        return response.json().get("status", False)
+    
+    def compress_memories(self, user_id: str, token_limit: int) -> bool:
+        # POST /memories/compress (optional)
+        try:
+            payload = {"user_id": user_id, "token_limit": token_limit}
+            response = client.post(..., json=payload)
+            return True
+        except HTTPError as e:
+            if e.response.status_code == 404:
+                return False  # Endpoint not supported
+```
 
-1. **Dashboard 配置页面**：访问 http://localhost:3001 → Configuration → 选择 LLM/Embedder 提供商
-2. **环境变量**：在 `.env` 中添加 `OPENAI_API_KEY` 或其他提供商密钥
-3. **Ollama 本地模型**：配置 `MEM0_DEFAULT_LLM_MODEL` 和 `MEM0_DEFAULT_EMBEDDER_MODEL` 指向本地 Ollama
+---
 
-## 注意事项
+## Phase 1: 上下文管理基础架构
 
-- `AUTH_DISABLED=true` 仅用于本地开发，生产环境必须启用认证
-- 切换 Embedder 模型（如从 OpenAI 换到 Ollama）需要清空向量数据重建，因为向量维度不同
-- `.env` 文件包含敏感信息，不应提交到 git
-- Mem0 API 默认 CORS 为 `allow_origins=["*"]`，本地开发无需额外配置
+### 文件清单
+
+| 文件 | 修改内容 |
+|------|---------|
+| `backend/app/config/_mem0.py` | **新建**: Mem0Settings 配置模块 |
+| `backend/app/config/__init__.py` | 导入并注册 `Mem0Settings` mixin |
+| `backend/app/ai/services/mem0_service.py` | 重写 `LocalMem0APIImpl` 和初始化逻辑 |
+| `.env.example` | **新建**: 包含所有 Mem0 环境变量示例 |
+
+### 环境变量规范
+
+```bash
+# .env 文件配置
+MEM0_RAG_URL=http://192.168.110.169:8002
+MEM0_API_KEY=m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw
+MEM0_ENABLED=true
+MEM0_USE_CLOUD_API=false
+MEM0_MAX_ENTRIES=10000
+MEM0_RETENTION_DAYS=90
+MEM0_EMBEDDING_MODEL=all-MiniLM-L6-v2
+```
+
+---
+
+## Phase 2: 生命周期管理与干预能力
+
+### 健康检查机制
+
+```python
+# 初始化时执行一次
+if isinstance(self._client, LocalMem0APIImpl):
+    if not self._client.health_check():
+        logger.warning("Mem0 health check failed, will retry on next operation")
+
+# 每次操作前自动重试（仅首次未检查时）
+if not self._health_checked and isinstance(self._client, LocalMem0APIImpl):
+    if not self._client.health_check():
+        logger.error("Mem0 API health check failed during operation")
+        return False
+```
+
+### 压缩接口兼容性验证
+
+```python
+def compress_memories(self) -> bool:
+    if not getattr(self.config, 'enable_compression', False):
+        return False
+    
+    if isinstance(self._client, LocalMem0APIImpl):
+        return self._client.compress_memories(
+            user_id=self.user_id,
+            token_limit=getattr(self.config, 'completion_token_limit', 10000)
+        )
+```
+
+### 审计日志集成点
+
+```python
+# 在 record、retrieve、delete 方法中已添加详细日志
+logger.debug(f"Mem0Service recorded memory: user={self.user_id}, result={result}")
+logger.error(f"Mem0Service record failed: {type(e).__name__}: {e}")
+```
+
+---
+
+## 安全规范
+
+### 敏感信息处理
+
+✅ **遵循**
+- API Key 通过环境变量传递：`MEM0_API_KEY=m0sk_...`
+- 不在代码中硬编码凭证
+- 使用 JWT Bearer Token 认证（如果 Mem0 API 支持）
+- `.env` 文件不应提交到 git
+
+❌ **避免**
+- 硬编码在源代码中的密钥
+- 使用弱加密算法
+- 将生产凭证放入开发环境
+
+---
+
+## 部署步骤
+
+### 1. 验证 Mem0 API 可用性
+
+```bash
+# 健康检查端点
+curl http://192.168.110.169:8002/health
+
+# 添加记忆测试
+curl -X POST http://192.168.110.169:8002/memories \
+  -H "Authorization: Bearer m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test_user", "message": "测试记忆条目"}'
+
+# 搜索记忆测试
+curl -X POST http://192.168.110.169:8002/search \
+  -H "Authorization: Bearer m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "测试", "user_id": "test_user"}'
+
+# 压缩接口测试（如果存在）
+curl -X POST http://192.168.110.169:8002/memories/compress \
+  -H "Authorization: Bearer m0sk_ta2xhQeKvdmorEFuBsMdyKKW_YG2XeJqd2SGHFPJ2dw" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "test_user", "token_limit": 10000}'
+```
+
+### 2. 启动 MinWorkBuddy 应用
+
+```bash
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑 .env 文件，设置正确的配置
+nano .env  # 或 vim .env
+
+# 启动应用
+cd backend
+uv run uvicorn app.ai.platform.app_factory:create_app() --factory --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 监控与运维
+
+### 健康检查脚本
+
+```python
+from app.ai.services.mem0_service import Mem0Service, Mem0Config
+from app.config import settings
+
+config = Mem0Config.from_settings()
+service = Mem0Service(config, user_id="health_check")
+
+is_healthy = service._client.health_check()
+print(f"Mem0 Status: {'✓ Healthy' if is_healthy else '✗ Unhealthy'}")
+```
+
+### 日志级别建议
+
+| 环境 | LOG_LEVEL | Mem0 日志级别 |
+|------|-----------|--------------|
+| Development | DEBUG | DEBUG |
+| Staging | INFO | INFO |
+| Production | WARNING | WARNING |
+
+---
+
+## 故障排查
+
+### 常见问题
+
+1. **连接失败**: 检查网络连通性和防火墙规则
+2. **认证失败**: 验证 MEM0_API_KEY 是否正确
+3. **端口错误**: 确认 MEM0_MCP_PORT 和 MEM0_RAG_URL 端口匹配
+
+### 调试命令
+
+```bash
+# 检查容器端口监听
+netstat -an | grep 8002
+
+# 测试 TCP 连接
+telnet 192.168.110.169 8002
+
+# 查看 Mem0 容器日志
+docker logs mem0-api
+```
+
+---
+
+## 参考资料
+
+- [Mem0 官方文档](https://docs.mem0.ai)
+- [AgentScope MemoryBase 接口](https://github.com/modelscope/agentscope)
+- [MinWorkBuddy Architecture Design](../../architecture-design.md)

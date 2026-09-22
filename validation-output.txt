@@ -1,0 +1,1007 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "validate",
+  "stage": "render",
+  "type": "architecture",
+  "input": "d:\\projects\\MinWorkBuddy\\docs\\architecture\\archify-spec.json",
+  "error": "Architecture layout validation failed:\n- Components \"tenant\" and \"redis\" are less than 8px apart — move one or shrink its size.\n  \"tenant\" [548, 250, 90, 50]; \"redis\" [548, 200, 90, 50]\n  Suggested fix: move \"redis\" pos to [646, 200] (right of \"tenant\") or [548, 308] (below)\n- Connection \"agent_scope->agent_team\" is too short (20px; minimum 24px) — place its components farther apart.\n- [clean-flow/endpoint-side-direction] architecture connections[2] \"fastapi\" -> \"auth\" first segment 0 [450, 378] -> [450, 326.5] does not honor inferred fromSide \"left\" — it must run horizontal leftward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/endpoint-side-direction] architecture connections[2] \"fastapi\" -> \"auth\" final segment 2 [540, 326.5] -> [540, 275] does not honor inferred toSide \"right\" — it must run horizontal leftward from the right; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/endpoint-side-direction] architecture connections[3] \"fastapi\" -> \"tenant\" first segment 0 [580, 385] -> [580, 330] does not honor inferred fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/endpoint-side-direction] architecture connections[3] \"fastapi\" -> \"tenant\" final segment 2 [548, 330] -> [548, 275] does not honor inferred toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/endpoint-side-direction] architecture connections[4] \"fastapi\" -> \"redis\" first segment 0 [580, 371] -> [564, 371] does not honor inferred fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/endpoint-side-direction] architecture connections[4] \"fastapi\" -> \"redis\" final segment 2 [564, 225] -> [548, 225] does not honor inferred toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.\n- [clean-flow/edge-through-node] architecture connections[4] \"fastapi\" -> \"redis\" crosses component \"tenant\" (unrelated to this relationship) on segment 1 [564, 371] -> [564, 225] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[7] \"fastapi\" -> \"voice_duplex\" crosses component \"knowledge_kb\" (unrelated to this relationship) on segment 0 [522, 420] -> [522, 500] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[10] \"agent_scope\" -> \"reasoning_agent\" crosses component \"research_agent\" (unrelated to this relationship) on segment 2 [834, 434] -> [895, 434] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[11] \"agent_scope\" -> \"research_agent\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 2 [834, 396] -> [895, 396] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[13] \"agent_scope\" -> \"ml_cloud\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 0 [810, 390] -> [930, 390] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[17] \"knowledge_kb\" -> \"workflow_mgr\" crosses component \"neo4j\" (unrelated to this relationship) on segment 0 [450, 517] -> [355, 517] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [clean-flow/edge-through-node] architecture connections[18] \"voice_duplex\" -> \"ml_cloud\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 2 [815, 392] -> [1050, 392] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.\n- [composition/proper-crossing] showcase architecture connections[10] \"agent_scope\" -> \"reasoning_agent\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [834, 392] (segments 1 and 2) — adjust route/via or fromSide/toSide so the connections use separate corridors.\n- [composition/proper-crossing] showcase architecture connections[11] \"agent_scope\" -> \"research_agent\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 402] (segments 0 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.\n- [composition/proper-crossing] showcase architecture connections[14] \"agent_scope\" -> \"postgres\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 414] (segments 0 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.\n- [composition/proper-crossing] showcase architecture connections[16] \"knowledge_kb\" -> \"postgres\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 570] (segments 2 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.\n- [composition/micro-segment] showcase architecture connections[7] \"fastapi\" -> \"voice_duplex\" has a 7px interior segment 1 [522, 500] -> [515, 500] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.\n- [composition/micro-segment] showcase architecture connections[11] \"agent_scope\" -> \"research_agent\" has a 6px interior segment 1 [834, 402] -> [834, 396] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.\n- [composition/short-interior-segment] showcase architecture connections[13] \"agent_scope\" -> \"ml_cloud\" has a 12px interior segment 1 [930, 390] -> [930, 378] that is below the 16px interior-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.\n- [composition/micro-segment] showcase architecture connections[17] \"knowledge_kb\" -> \"workflow_mgr\" has a 7px interior segment 1 [355, 517] -> [355, 510] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.\n- Label \"缓存访问\" overlaps component \"tenant\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [540, 278, 48, 14]\n  component \"tenant\" rect: [548, 250, 90, 50]\n  Suggested fix: labelAt [564, 314] or labelDy +26 (below); or labelAt [564, 246] or labelDy -42 (above)\n- Label \"查询\" overlaps component \"fastapi\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [493, 400, 30, 14]\n  component \"fastapi\" rect: [450, 350, 130, 70]\n  Suggested fix: labelAt [508, 434] or labelDy +24 (below); or labelAt [508, 346] or labelDy -64 (above)\n- Label \"语音会话\" overlaps component \"knowledge_kb\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [494, 480, 48, 14]\n  component \"knowledge_kb\" rect: [450, 480, 130, 60]\n  Suggested fix: labelAt [519, 554] or labelDy +64 (below); or labelAt [519, 476] or labelDy -14 (above)\n- Label \"AI 调用\" overlaps component \"reasoning_agent\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [908, 364, 44, 14]\n  component \"reasoning_agent\" rect: [840, 350, 110, 60]\n  Suggested fix: labelAt [930, 424] or labelDy +50 (below); or labelAt [930, 346] or labelDy -28 (above)\n- Label \"图谱查询\" overlaps component \"knowledge_kb\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [406, 483, 48, 14]\n  component \"knowledge_kb\" rect: [450, 480, 130, 60]\n  Suggested fix: labelAt [430, 554] or labelDy +61 (below); or labelAt [430, 476] or labelDy -17 (above)\n- Label \"图谱查询\" overlaps component \"neo4j\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [406, 483, 48, 14]\n  component \"neo4j\" rect: [300, 480, 110, 60]\n  Suggested fix: labelAt [430, 554] or labelDy +61 (below); or labelAt [430, 476] or labelDy -17 (above)\n- Label \"编排\" overlaps component \"neo4j\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [340, 494, 30, 14]\n  component \"neo4j\" rect: [300, 480, 110, 60]\n  Suggested fix: labelAt [355, 554] or labelDy +50 (below); or labelAt [355, 476] or labelDy -28 (above)\n- Label \"语音处理\" overlaps component \"agent_team\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [791, 478, 48, 14]\n  component \"agent_team\" rect: [680, 450, 130, 60]\n  Suggested fix: labelAt [815, 524] or labelDy +36 (below); or labelAt [815, 446] or labelDy -42 (above)\n- Label \"工具调用\" overlaps component \"voice_duplex\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [491, 620, 48, 14]\n  component \"voice_duplex\" rect: [450, 580, 130, 60]\n  Suggested fix: labelAt [515, 654] or labelDy +24 (below); or labelAt [515, 576] or labelDy -54 (above)\n- [composition/label-route-clearance] showcase architecture label \"租户解析\" on connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" is 0px from connections[2] \"fastapi\" -> \"auth\" label \"认证\" segment 2 [540, 326.5] -> [540, 275] (label rect [540, 310, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.\n- [composition/label-route-clearance] showcase architecture label \"租户解析\" on connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" is 0px from connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" segment 1 [564, 371] -> [564, 225] (label rect [540, 310, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.\n- [composition/label-route-clearance] showcase architecture label \"缓存访问\" on connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" is 0px from connections[2] \"fastapi\" -> \"auth\" label \"认证\" segment 2 [540, 326.5] -> [540, 275] (label rect [540, 278, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.\n- [composition/label-route-clearance] showcase architecture label \"缓存访问\" on connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" is 0px from connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" segment 2 [548, 330] -> [548, 275] (label rect [540, 278, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.\n- [composition/label-route-clearance] showcase architecture label \"语音会话\" on connections[7] \"fastapi\" -> \"voice_duplex\" label \"语音会话\" is 0px from connections[6] \"fastapi\" -> \"knowledge_kb\" label \"查询\" segment 0 [508, 420] -> [508, 480] (label rect [494, 480, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+  "diagnostics": [
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[2] \"fastapi\" -> \"auth\" first segment 0 [450, 378] -> [450, 326.5] does not honor inferred fromSide \"left\" — it must run horizontal leftward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 2,
+        "from": "fastapi",
+        "to": "auth"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "inferred",
+        "side": "left",
+        "segmentIndex": 0,
+        "from": [
+          450,
+          378
+        ],
+        "to": [
+          450,
+          326.5
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "leftward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[2] \"fastapi\" -> \"auth\" final segment 2 [540, 326.5] -> [540, 275] does not honor inferred toSide \"right\" — it must run horizontal leftward from the right; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 2,
+        "from": "fastapi",
+        "to": "auth"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "inferred",
+        "side": "right",
+        "segmentIndex": 2,
+        "from": [
+          540,
+          326.5
+        ],
+        "to": [
+          540,
+          275
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "leftward from the right"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[3] \"fastapi\" -> \"tenant\" first segment 0 [580, 385] -> [580, 330] does not honor inferred fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 3,
+        "from": "fastapi",
+        "to": "tenant"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "inferred",
+        "side": "right",
+        "segmentIndex": 0,
+        "from": [
+          580,
+          385
+        ],
+        "to": [
+          580,
+          330
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[3] \"fastapi\" -> \"tenant\" final segment 2 [548, 330] -> [548, 275] does not honor inferred toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 3,
+        "from": "fastapi",
+        "to": "tenant"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "inferred",
+        "side": "left",
+        "segmentIndex": 2,
+        "from": [
+          548,
+          330
+        ],
+        "to": [
+          548,
+          275
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward from the left"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[4] \"fastapi\" -> \"redis\" first segment 0 [580, 371] -> [564, 371] does not honor inferred fromSide \"right\" — it must run horizontal rightward; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 4,
+        "from": "fastapi",
+        "to": "redis"
+      },
+      "evidence": {
+        "endpoint": "source",
+        "authoredField": "fromSide",
+        "sideOrigin": "inferred",
+        "side": "right",
+        "segmentIndex": 0,
+        "from": [
+          580,
+          371
+        ],
+        "to": [
+          564,
+          371
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/endpoint-side-direction",
+      "severity": "error",
+      "message": "[clean-flow/endpoint-side-direction] architecture connections[4] \"fastapi\" -> \"redis\" final segment 2 [564, 225] -> [548, 225] does not honor inferred toSide \"left\" — it must run horizontal rightward from the left; keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 4,
+        "from": "fastapi",
+        "to": "redis"
+      },
+      "evidence": {
+        "endpoint": "target",
+        "authoredField": "toSide",
+        "sideOrigin": "inferred",
+        "side": "left",
+        "segmentIndex": 2,
+        "from": [
+          564,
+          225
+        ],
+        "to": [
+          548,
+          225
+        ],
+        "expectedAxis": "horizontal",
+        "expectedDirection": "rightward from the left"
+      },
+      "supportedFixes": [
+        "keep automatic routing so the renderer can use a side-aware bridge, or set truthful fromSide/toSide with perpendicular via segments"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[4] \"fastapi\" -> \"redis\" crosses component \"tenant\" (unrelated to this relationship) on segment 1 [564, 371] -> [564, 225] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 4,
+        "from": "fastapi",
+        "to": "redis"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "tenant",
+        "segmentIndex": 1,
+        "from": [
+          564,
+          371
+        ],
+        "to": [
+          564,
+          225
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[7] \"fastapi\" -> \"voice_duplex\" crosses component \"knowledge_kb\" (unrelated to this relationship) on segment 0 [522, 420] -> [522, 500] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 7,
+        "from": "fastapi",
+        "to": "voice_duplex"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "knowledge_kb",
+        "segmentIndex": 0,
+        "from": [
+          522,
+          420
+        ],
+        "to": [
+          522,
+          500
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[10] \"agent_scope\" -> \"reasoning_agent\" crosses component \"research_agent\" (unrelated to this relationship) on segment 2 [834, 434] -> [895, 434] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 10,
+        "from": "agent_scope",
+        "to": "reasoning_agent"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "research_agent",
+        "segmentIndex": 2,
+        "from": [
+          834,
+          434
+        ],
+        "to": [
+          895,
+          434
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[11] \"agent_scope\" -> \"research_agent\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 2 [834, 396] -> [895, 396] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 11,
+        "from": "agent_scope",
+        "to": "research_agent"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "reasoning_agent",
+        "segmentIndex": 2,
+        "from": [
+          834,
+          396
+        ],
+        "to": [
+          895,
+          396
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[13] \"agent_scope\" -> \"ml_cloud\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 0 [810, 390] -> [930, 390] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 13,
+        "from": "agent_scope",
+        "to": "ml_cloud"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "reasoning_agent",
+        "segmentIndex": 0,
+        "from": [
+          810,
+          390
+        ],
+        "to": [
+          930,
+          390
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[17] \"knowledge_kb\" -> \"workflow_mgr\" crosses component \"neo4j\" (unrelated to this relationship) on segment 0 [450, 517] -> [355, 517] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 17,
+        "from": "knowledge_kb",
+        "to": "workflow_mgr"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "neo4j",
+        "segmentIndex": 0,
+        "from": [
+          450,
+          517
+        ],
+        "to": [
+          355,
+          517
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "clean-flow/edge-through-node",
+      "severity": "error",
+      "message": "[clean-flow/edge-through-node] architecture connections[18] \"voice_duplex\" -> \"ml_cloud\" crosses component \"reasoning_agent\" (unrelated to this relationship) on segment 2 [815, 392] -> [1050, 392] (2px clearance) — adjust fromSide/toSide, set route/via, or move the component.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 18,
+        "from": "voice_duplex",
+        "to": "ml_cloud"
+      },
+      "evidence": {
+        "obstacleKind": "component",
+        "obstacleId": "reasoning_agent",
+        "segmentIndex": 2,
+        "from": [
+          815,
+          392
+        ],
+        "to": [
+          1050,
+          392
+        ],
+        "clearancePx": 2
+      },
+      "supportedFixes": [
+        "adjust fromSide/toSide, set route/via, or move the component"
+      ]
+    },
+    {
+      "code": "composition/proper-crossing",
+      "severity": "error",
+      "message": "[composition/proper-crossing] showcase architecture connections[10] \"agent_scope\" -> \"reasoning_agent\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [834, 392] (segments 1 and 2) — adjust route/via or fromSide/toSide so the connections use separate corridors.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 10,
+        "from": "agent_scope",
+        "to": "reasoning_agent"
+      },
+      "evidence": {
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 18,
+          "from": "voice_duplex",
+          "to": "ml_cloud"
+        },
+        "point": [
+          834,
+          392
+        ],
+        "segmentIndex": 1,
+        "otherSegmentIndex": 2
+      },
+      "supportedFixes": [
+        "adjust route/via or fromSide/toSide so the connections use separate corridors"
+      ]
+    },
+    {
+      "code": "composition/proper-crossing",
+      "severity": "error",
+      "message": "[composition/proper-crossing] showcase architecture connections[11] \"agent_scope\" -> \"research_agent\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 402] (segments 0 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 11,
+        "from": "agent_scope",
+        "to": "research_agent"
+      },
+      "evidence": {
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 18,
+          "from": "voice_duplex",
+          "to": "ml_cloud"
+        },
+        "point": [
+          815,
+          402
+        ],
+        "segmentIndex": 0,
+        "otherSegmentIndex": 1
+      },
+      "supportedFixes": [
+        "adjust route/via or fromSide/toSide so the connections use separate corridors"
+      ]
+    },
+    {
+      "code": "composition/proper-crossing",
+      "severity": "error",
+      "message": "[composition/proper-crossing] showcase architecture connections[14] \"agent_scope\" -> \"postgres\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 414] (segments 0 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 14,
+        "from": "agent_scope",
+        "to": "postgres"
+      },
+      "evidence": {
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 18,
+          "from": "voice_duplex",
+          "to": "ml_cloud"
+        },
+        "point": [
+          815,
+          414
+        ],
+        "segmentIndex": 0,
+        "otherSegmentIndex": 1
+      },
+      "supportedFixes": [
+        "adjust route/via or fromSide/toSide so the connections use separate corridors"
+      ]
+    },
+    {
+      "code": "composition/proper-crossing",
+      "severity": "error",
+      "message": "[composition/proper-crossing] showcase architecture connections[16] \"knowledge_kb\" -> \"postgres\" crosses connections[18] \"voice_duplex\" -> \"ml_cloud\" at [815, 570] (segments 2 and 1) — adjust route/via or fromSide/toSide so the connections use separate corridors.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 16,
+        "from": "knowledge_kb",
+        "to": "postgres"
+      },
+      "evidence": {
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 18,
+          "from": "voice_duplex",
+          "to": "ml_cloud"
+        },
+        "point": [
+          815,
+          570
+        ],
+        "segmentIndex": 2,
+        "otherSegmentIndex": 1
+      },
+      "supportedFixes": [
+        "adjust route/via or fromSide/toSide so the connections use separate corridors"
+      ]
+    },
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase architecture connections[7] \"fastapi\" -> \"voice_duplex\" has a 7px interior segment 1 [522, 500] -> [515, 500] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 7,
+        "from": "fastapi",
+        "to": "voice_duplex"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 7,
+        "minimumPx": 8,
+        "from": [
+          522,
+          500
+        ],
+        "to": [
+          515,
+          500
+        ]
+      },
+      "supportedFixes": [
+        "move route/via points into a wider corridor or move the component so every turn has room to read"
+      ]
+    },
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase architecture connections[11] \"agent_scope\" -> \"research_agent\" has a 6px interior segment 1 [834, 402] -> [834, 396] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 11,
+        "from": "agent_scope",
+        "to": "research_agent"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 6,
+        "minimumPx": 8,
+        "from": [
+          834,
+          402
+        ],
+        "to": [
+          834,
+          396
+        ]
+      },
+      "supportedFixes": [
+        "move route/via points into a wider corridor or move the component so every turn has room to read"
+      ]
+    },
+    {
+      "code": "composition/short-interior-segment",
+      "severity": "error",
+      "message": "[composition/short-interior-segment] showcase architecture connections[13] \"agent_scope\" -> \"ml_cloud\" has a 12px interior segment 1 [930, 390] -> [930, 378] that is below the 16px interior-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 13,
+        "from": "agent_scope",
+        "to": "ml_cloud"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 12,
+        "minimumPx": 16,
+        "from": [
+          930,
+          390
+        ],
+        "to": [
+          930,
+          378
+        ]
+      },
+      "supportedFixes": [
+        "move route/via points into a wider corridor or move the component so every turn has room to read"
+      ]
+    },
+    {
+      "code": "composition/micro-segment",
+      "severity": "error",
+      "message": "[composition/micro-segment] showcase architecture connections[17] \"knowledge_kb\" -> \"workflow_mgr\" has a 7px interior segment 1 [355, 517] -> [355, 510] that is below the 8px micro-segment floor — move route/via points into a wider corridor or move the component so every turn has room to read.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 17,
+        "from": "knowledge_kb",
+        "to": "workflow_mgr"
+      },
+      "evidence": {
+        "segmentIndex": 1,
+        "position": "interior",
+        "lengthPx": 7,
+        "minimumPx": 8,
+        "from": [
+          355,
+          517
+        ],
+        "to": [
+          355,
+          510
+        ]
+      },
+      "supportedFixes": [
+        "move route/via points into a wider corridor or move the component so every turn has room to read"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"租户解析\" on connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" is 0px from connections[2] \"fastapi\" -> \"auth\" label \"认证\" segment 2 [540, 326.5] -> [540, 275] (label rect [540, 310, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 3,
+        "from": "fastapi",
+        "to": "tenant"
+      },
+      "evidence": {
+        "label": "租户解析",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 2,
+          "from": "fastapi",
+          "to": "auth"
+        },
+        "segmentIndex": 2,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "from": "fastapi",
+            "to": "tenant",
+            "label": "租户解析"
+          },
+          "relationIndex": 3,
+          "label": "租户解析",
+          "x": 539.8,
+          "y": 310,
+          "width": 48.4,
+          "height": 14,
+          "lx": 564,
+          "ly": 320
+        },
+        "from": [
+          540,
+          326.5
+        ],
+        "to": [
+          540,
+          275
+        ]
+      },
+      "supportedFixes": [
+        "adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"租户解析\" on connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" is 0px from connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" segment 1 [564, 371] -> [564, 225] (label rect [540, 310, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 3,
+        "from": "fastapi",
+        "to": "tenant"
+      },
+      "evidence": {
+        "label": "租户解析",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 4,
+          "from": "fastapi",
+          "to": "redis"
+        },
+        "segmentIndex": 1,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "from": "fastapi",
+            "to": "tenant",
+            "label": "租户解析"
+          },
+          "relationIndex": 3,
+          "label": "租户解析",
+          "x": 539.8,
+          "y": 310,
+          "width": 48.4,
+          "height": 14,
+          "lx": 564,
+          "ly": 320
+        },
+        "from": [
+          564,
+          371
+        ],
+        "to": [
+          564,
+          225
+        ]
+      },
+      "supportedFixes": [
+        "adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"缓存访问\" on connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" is 0px from connections[2] \"fastapi\" -> \"auth\" label \"认证\" segment 2 [540, 326.5] -> [540, 275] (label rect [540, 278, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 4,
+        "from": "fastapi",
+        "to": "redis"
+      },
+      "evidence": {
+        "label": "缓存访问",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 2,
+          "from": "fastapi",
+          "to": "auth"
+        },
+        "segmentIndex": 2,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "from": "fastapi",
+            "to": "redis",
+            "label": "缓存访问"
+          },
+          "relationIndex": 4,
+          "label": "缓存访问",
+          "x": 539.8,
+          "y": 278,
+          "width": 48.4,
+          "height": 14,
+          "lx": 564,
+          "ly": 288
+        },
+        "from": [
+          540,
+          326.5
+        ],
+        "to": [
+          540,
+          275
+        ]
+      },
+      "supportedFixes": [
+        "adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"缓存访问\" on connections[4] \"fastapi\" -> \"redis\" label \"缓存访问\" is 0px from connections[3] \"fastapi\" -> \"tenant\" label \"租户解析\" segment 2 [548, 330] -> [548, 275] (label rect [540, 278, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 4,
+        "from": "fastapi",
+        "to": "redis"
+      },
+      "evidence": {
+        "label": "缓存访问",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 3,
+          "from": "fastapi",
+          "to": "tenant"
+        },
+        "segmentIndex": 2,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "from": "fastapi",
+            "to": "redis",
+            "label": "缓存访问"
+          },
+          "relationIndex": 4,
+          "label": "缓存访问",
+          "x": 539.8,
+          "y": 278,
+          "width": 48.4,
+          "height": 14,
+          "lx": 564,
+          "ly": 288
+        },
+        "from": [
+          548,
+          330
+        ],
+        "to": [
+          548,
+          275
+        ]
+      },
+      "supportedFixes": [
+        "adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "composition/label-route-clearance",
+      "severity": "error",
+      "message": "[composition/label-route-clearance] showcase architecture label \"语音会话\" on connections[7] \"fastapi\" -> \"voice_duplex\" label \"语音会话\" is 0px from connections[6] \"fastapi\" -> \"knowledge_kb\" label \"查询\" segment 0 [508, 420] -> [508, 480] (label rect [494, 480, 48, 14]; minimum 4px) — adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel.",
+      "subject": {
+        "diagramType": "architecture",
+        "collection": "connections",
+        "index": 7,
+        "from": "fastapi",
+        "to": "voice_duplex"
+      },
+      "evidence": {
+        "label": "语音会话",
+        "otherRelationship": {
+          "diagramType": "architecture",
+          "collection": "connections",
+          "index": 6,
+          "from": "fastapi",
+          "to": "knowledge_kb"
+        },
+        "segmentIndex": 0,
+        "clearancePx": 0,
+        "minimumPx": 4,
+        "labelRect": {
+          "relation": {
+            "from": "fastapi",
+            "to": "voice_duplex",
+            "label": "语音会话"
+          },
+          "relationIndex": 7,
+          "label": "语音会话",
+          "x": 494.3,
+          "y": 480,
+          "width": 48.4,
+          "height": 14,
+          "lx": 518.5,
+          "ly": 490
+        },
+        "from": [
+          508,
+          420
+        ],
+        "to": [
+          508,
+          480
+        ]
+      },
+      "supportedFixes": [
+        "adjust labelAt, labelDx, labelDy, or labelSegment; otherwise adjust the other relationship route/via/channel"
+      ]
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Components \"tenant\" and \"redis\" are less than 8px apart — move one or shrink its size.\n  \"tenant\" [548, 250, 90, 50]; \"redis\" [548, 200, 90, 50]\n  Suggested fix: move \"redis\" pos to [646, 200] (right of \"tenant\") or [548, 308] (below)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Connection \"agent_scope->agent_team\" is too short (20px; minimum 24px) — place its components farther apart.",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"缓存访问\" overlaps component \"tenant\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [540, 278, 48, 14]\n  component \"tenant\" rect: [548, 250, 90, 50]\n  Suggested fix: labelAt [564, 314] or labelDy +26 (below); or labelAt [564, 246] or labelDy -42 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"查询\" overlaps component \"fastapi\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [493, 400, 30, 14]\n  component \"fastapi\" rect: [450, 350, 130, 70]\n  Suggested fix: labelAt [508, 434] or labelDy +24 (below); or labelAt [508, 346] or labelDy -64 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"语音会话\" overlaps component \"knowledge_kb\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [494, 480, 48, 14]\n  component \"knowledge_kb\" rect: [450, 480, 130, 60]\n  Suggested fix: labelAt [519, 554] or labelDy +64 (below); or labelAt [519, 476] or labelDy -14 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"AI 调用\" overlaps component \"reasoning_agent\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [908, 364, 44, 14]\n  component \"reasoning_agent\" rect: [840, 350, 110, 60]\n  Suggested fix: labelAt [930, 424] or labelDy +50 (below); or labelAt [930, 346] or labelDy -28 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"图谱查询\" overlaps component \"knowledge_kb\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [406, 483, 48, 14]\n  component \"knowledge_kb\" rect: [450, 480, 130, 60]\n  Suggested fix: labelAt [430, 554] or labelDy +61 (below); or labelAt [430, 476] or labelDy -17 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"图谱查询\" overlaps component \"neo4j\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [406, 483, 48, 14]\n  component \"neo4j\" rect: [300, 480, 110, 60]\n  Suggested fix: labelAt [430, 554] or labelDy +61 (below); or labelAt [430, 476] or labelDy -17 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"编排\" overlaps component \"neo4j\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [340, 494, 30, 14]\n  component \"neo4j\" rect: [300, 480, 110, 60]\n  Suggested fix: labelAt [355, 554] or labelDy +50 (below); or labelAt [355, 476] or labelDy -28 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"语音处理\" overlaps component \"agent_team\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [791, 478, 48, 14]\n  component \"agent_team\" rect: [680, 450, 130, 60]\n  Suggested fix: labelAt [815, 524] or labelDy +36 (below); or labelAt [815, 446] or labelDy -42 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"工具调用\" overlaps component \"voice_duplex\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [491, 620, 48, 14]\n  component \"voice_duplex\" rect: [450, 580, 130, 60]\n  Suggested fix: labelAt [515, 654] or labelDy +24 (below); or labelAt [515, 576] or labelDy -54 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    }
+  ]
+}

@@ -49,7 +49,7 @@
           :class="{ active: hubActiveCat === c.key }"
           @click="selectHubCat(c.key)"
         >
-          {{ (isCloudMarket ? cloudCategoryLabel(c) : c.name) }} ({{ c.count }})
+          {{ hubCategoryLabel(c) }} ({{ c.count }})
         </div>
       </div>
 
@@ -155,7 +155,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getLocale, type LocaleKey } from '@/i18n'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import {
@@ -193,7 +192,6 @@ const repoForm = ref<{ name: string; url: string; branch: string; is_official: b
 })
 
 const activeRepo = computed(() => hubRepos.value.find(r => r.id === hubActiveRepoId.value) || null)
-const isCloudMarket = computed(() => activeRepo.value?.source_type === 'skillhub')
 
 // ── 数据加载 ─────────────────────────────────────────────────────────────────
 
@@ -351,32 +349,20 @@ async function deleteRepo(r: HubRepo) {
 
 // ── 工具 ─────────────────────────────────────────────────────────────────────
 
-// SkillHub 云市场分类多语言映射
-const CLOUD_CATEGORY_I18N: Record<string, Partial<Record<LocaleKey, string>>> = {
-  'office-efficiency': { 'zh-CN': '办公提效', 'zh-TW': '辦公提效', 'en-US': 'Office Efficiency', 'ja-JP': 'オフィス効率化' },
-  'writing': { 'zh-CN': '写作辅助', 'zh-TW': '寫作輔助', 'en-US': 'Writing', 'ja-JP': 'ライティング' },
-  'programming': { 'zh-CN': '编程开发', 'zh-TW': '程式開發', 'en-US': 'Programming', 'ja-JP': 'プログラミング' },
-  'design': { 'zh-CN': '设计创意', 'zh-TW': '設計創意', 'en-US': 'Design', 'ja-JP': 'デザイン' },
-  'research': { 'zh-CN': '科研学术', 'zh-TW': '科研學術', 'en-US': 'Research', 'ja-JP': '研究' },
-  'marketing': { 'zh-CN': '营销增长', 'zh-TW': '營銷增長', 'en-US': 'Marketing', 'ja-JP': 'マーケティング' },
-  'data-analysis': { 'zh-CN': '数据分析', 'zh-TW': '資料分析', 'en-US': 'Data Analysis', 'ja-JP': 'データ分析' },
-  'education': { 'zh-CN': '教育培训', 'zh-TW': '教育培訓', 'en-US': 'Education', 'ja-JP': '教育' },
-  'life': { 'zh-CN': '生活助手', 'zh-TW': '生活助手', 'en-US': 'Life Assistant', 'ja-JP': '生活支援' },
-  'business': { 'zh-CN': '商业办公', 'zh-TW': '商業辦公', 'en-US': 'Business', 'ja-JP': 'ビジネス' },
-  'image': { 'zh-CN': '图像生成', 'zh-TW': '圖像生成', 'en-US': 'Image', 'ja-JP': '画像生成' },
-  'video': { 'zh-CN': '视频处理', 'zh-TW': '視頻處理', 'en-US': 'Video', 'ja-JP': '動画' },
-  'audio': { 'zh-CN': '音频处理', 'zh-TW': '音頻處理', 'en-US': 'Audio', 'ja-JP': '音声' },
-  'translation': { 'zh-CN': '翻译', 'zh-TW': '翻譯', 'en-US': 'Translation', 'ja-JP': '翻訳' },
-  'finance': { 'zh-CN': '金融财经', 'zh-TW': '金融財經', 'en-US': 'Finance', 'ja-JP': '金融' },
-  'law': { 'zh-CN': '法律', 'zh-TW': '法律', 'en-US': 'Law', 'ja-JP': '法律' },
-  'health': { 'zh-CN': '医疗健康', 'zh-TW': '醫療健康', 'en-US': 'Health', 'ja-JP': 'ヘルスケア' },
-  'game': { 'zh-CN': '游戏', 'zh-TW': '遊戲', 'en-US': 'Game', 'ja-JP': 'ゲーム' },
-  'other': { 'zh-CN': '其他', 'zh-TW': '其他', 'en-US': 'Other', 'ja-JP': 'その他' },
+// SkillHub 云市场分类多语言映射（集中维护在 i18n 语言文件中，见 skillHub.cloudCategories）
+function cloudCategoryLabel(c: HubCategory): string {
+  const key = `skillHub.cloudCategories.${c.key}`
+  const val = t(key)
+  return val !== key ? val : (c.name || c.key)
 }
 
-function cloudCategoryLabel(c: HubCategory): string {
-  const loc = getLocale()
-  return CLOUD_CATEGORY_I18N[c.key]?.[loc] || c.name || c.key
+// 仓库分类标签：官方仓库（git）/ 云市场统一走 i18n，
+// 优先 officialCategories，其次 cloudCategories，最后回退原始 name。
+function hubCategoryLabel(c: HubCategory): string {
+  const officialKey = `skillHub.officialCategories.${c.key}`
+  const official = t(officialKey)
+  if (official !== officialKey) return official
+  return cloudCategoryLabel(c)
 }
 
 defineExpose({ openRepoModal })

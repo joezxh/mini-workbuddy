@@ -14,6 +14,7 @@
   _otel         OpenTelemetry 可观测性
   _audit        审计日志
   _async_task   异步任务调度参数
+  _mem0         Mem0 长期记忆服务（本地私有化部署）
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,6 +29,7 @@ from ._embedding import EmbeddingSettings
 from ._otel import OTelSettings
 from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
+from ._mem0 import Mem0Settings
 
 
 class Settings(
@@ -40,6 +42,7 @@ class Settings(
     OTelSettings,
     AuditSettings,
     AsyncTaskSettings,
+    Mem0Settings,
     BaseSettings,
 ):
     """应用配置 — 组合所有领域 mixin。

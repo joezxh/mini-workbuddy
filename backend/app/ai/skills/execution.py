@@ -135,6 +135,48 @@ class SkillEventHandler:
 
     def _emit_sse(self, type_: str, data: dict) -> None:
         self.out_q.put_nowait(SkillEvent(type=type_, data=data))
+        # 镜像到统一 SSE 通道（spec §5.2 / P1.1）：bus 的 STREAM 级信封
+        # 经 SSEHandler 分发到订阅的 /stream 连接，与 /chat/stream 旧链路格式解耦。
+        self._mirror_stream(type_, data)
+
+    def _mirror_stream(self, type_: str, data: dict) -> None:
+        """把旧 SSE 事件名映射到统一信封并发布（仅补充旧链路未落 bus 的类型）。
+
+        tool_call/tool_result/engine_decision/done/error/hitl_* 已由 handle 内
+        _publish_db 以 [DB,STREAM,UI] 发布，无需重复；此处只补 text/thinking
+        delta、progress、start 三类。
+        """
+        if type_ in ("text", "thinking"):
+            etype = "text_chunk" if type_ == "text" else "thinking_chunk"
+            delta = data.get("content", "")
+            if not delta:
+                return
+            self._emit_envelope(etype, {"delta": delta})
+        elif type_ == "progress":
+            self._emit_envelope("progress", data)
+        elif type_ == "start":
+            self._emit_envelope("skill_start", data)
+
+    def _emit_envelope(self, etype: str, content: dict,
+                       extra_levels=None) -> None:
+        """构造并发布统一信封（按 route_of 取 category/levels/ui_hint）。"""
+        route = route_of(etype)
+        levels = set(route.levels)
+        if extra_levels:
+            levels.update(extra_levels)
+        levels.discard(EventLevel.LOG)
+        self.bus.publish(EventEnvelope(
+            execution_id=self.execution_id,
+            trace_id=self.trace_id,
+            event_type=etype,
+            category=route.category,
+            levels=sorted(levels),
+            content=content,
+            source="agent",
+            source_id=self.skill_name,
+            ui_hint=route.ui_hint,
+            metadata={},
+        ))
 
     def _publish_db(self, event_type: str, category: str, levels, content: dict,
                     metadata: dict | None = None, **kw) -> None:
@@ -392,8 +434,8 @@ class SkillExecutionService:
                 target_id=str(skill_name), user_input=user_message,
                 metadata={"worker_skill": skill_name}, trace_id=trace_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("record_execution_start failed: %s", e)
 
         self.bus.publish(EventEnvelope(
             execution_id=execution_id, trace_id=trace_id,
@@ -547,11 +589,13 @@ class SkillExecutionService:
                         if evt.type == "hitl_pause":
                             # HITL 暂停（spec §5.4）：DB 记录 + 状态标记 + 信封
                             # + HITL 超时接管总超时
-                            from app.ai.events.hitl import record_pause, PAUSE_TIMEOUT_MINUTES
+                            from app.ai.events.hitl import record_pause, PAUSE_TIMEOUT_MINUTES, monitor_pause_timeout
+
                             try:
-                                record_pause(_record_db, execution_id=execution_id,
-                                             reply_id=handler.reply_id,
-                                             tool_calls=evt.data.get("tool_calls"))
+                                pause_time = datetime.now()
+                                pause_id = record_pause(_record_db, execution_id=execution_id,
+                                                         reply_id=handler.reply_id,
+                                                         tool_calls=evt.data.get("tool_calls"))
                             except Exception:
                                 pass
                             handle.status = "waiting_hitl"
@@ -559,6 +603,12 @@ class SkillExecutionService:
                             record_execution_status(_record_db, execution_id,
                                                     "waiting_hitl")
                             deadline = time.monotonic() + PAUSE_TIMEOUT_MINUTES * 60
+                            
+                            # 启动后台超时监控器
+                            asyncio.create_task(monitor_pause_timeout(
+                                _record_db, execution_id, handler.reply_id, pause_time,
+                                PAUSE_TIMEOUT_MINUTES))
+                            
                             self.bus.publish(EventEnvelope(
                                 execution_id=execution_id, trace_id=trace_id,
                                 event_type="hitl_pause", category=EventCategory.HITL,

@@ -12,7 +12,7 @@
           @click="activateTab(tab.key)"
         >
           <component v-if="tab.icon && iconMap[tab.icon]" :is="iconMap[tab.icon]" class="tab-icon" />
-          <span class="tab-title">{{ tab.name }}</span>
+          <span class="tab-title">{{ tabLabel(tab) }}</span>
           <span
             v-if="tab.closable !== false"
             class="tab-close"
@@ -88,6 +88,8 @@ const { t } = useI18n()
 interface TabItem {
   key: string
   name: string
+  /** vue-i18n 键，与左侧菜单共用同一套国际化；存在时优先翻译并随语言切换实时更新 */
+  titleKey?: string
   icon: string
   component: Component
   props?: Record<string, any>
@@ -110,14 +112,7 @@ function getTabProps(key: string): Record<string, any> {
 }
 
 /** 查找菜单项信息（名称、图标）- 支持三级嵌套 */
-/** 多语言菜单标签解析：优先 i18nKey 翻译，回退到 name 字段 */
-function resolveMenuLabel(menu: MenuItem): string {
-  if (menu.i18nKey) {
-    const translated = t(menu.i18nKey)
-    if (translated !== menu.i18nKey) return translated
-  }
-  return menu.name
-}
+/** 多语言菜单标签解析：与左侧菜单（SidebarItem）共用同一套逻辑——优先 i18nKey / titleKey 翻译，回退到 name */
 function findMenuItem(key: string): MenuItem | undefined {
   for (const group of menuTree.value) {
     if (group.children) {
@@ -135,20 +130,37 @@ function findMenuItem(key: string): MenuItem | undefined {
   return undefined
 }
 
+/** Tab 标题解析：与左侧菜单保持一致，优先 titleKey（i18nKey）翻译，回退到 name。
+ *  由于内部调用了 vue-i18n 的 t()，在模板中调用会随语言切换实时重新计算。 */
+function tabLabel(tab: TabItem): string {
+  if (tab.titleKey) {
+    const translated = t(tab.titleKey)
+    if (translated !== tab.titleKey) return translated
+  }
+  return tab.name
+}
+
 /** 打开或激活一个 Tab */
-function openOrActivateTab(key: string, options?: { name?: string; icon?: string; props?: Record<string, any> }) {
+function openOrActivateTab(
+  key: string,
+  options?: { name?: string; titleKey?: string; icon?: string; props?: Record<string, any> },
+) {
   const existing = openTabs.value.find(t => t.key === key)
   if (existing) {
     if (options?.props) existing.props = { ...(existing.props || {}), ...options.props }
+    if (options?.titleKey) existing.titleKey = options.titleKey
+    if (options?.name) existing.name = options.name
+    if (options?.icon) existing.icon = options.icon
     activeTab.value = key
     return
   }
   const menuItem = findMenuItem(key)
-  const name = options?.name || (menuItem ? resolveMenuLabel(menuItem) : '') || key
+  const titleKey = options?.titleKey ?? menuItem?.i18nKey ?? menuItem?.titleKey
+  const name = options?.name || (menuItem ? menuItem.name : '') || key
   const icon = options?.icon || menuItem?.icon || ''
   const comp = componentMap[key]
   if (!comp) return
-  openTabs.value.push({ key, name, icon, component: markRaw(comp), props: options?.props })
+  openTabs.value.push({ key, name, titleKey, icon, component: markRaw(comp), props: options?.props })
   activeTab.value = key
 }
 
@@ -162,7 +174,8 @@ function openConsoleTab() {
   if (openTabs.value.some(tab => tab.key === 'dashboard')) return
   openTabs.value.push({
     key: 'dashboard',
-    name: t('userMenu.dashboard'),
+    titleKey: 'userMenu.dashboard',
+    name: 'Dashboard',
     icon: 'DashboardOutlined',
     component: markRaw(DashboardPanel),
     closable: false,
@@ -331,7 +344,8 @@ function handleOpenAgentTeamEditor(e: Event) {
   const detail = (e as CustomEvent).detail as { teamId: number }
   if (!detail?.teamId) return
   openOrActivateTab('agent-team-editor', {
-    name: '团队编排',
+    titleKey: 'agentTeam.editorTitle',
+    name: 'Team Orchestration',
     icon: 'ApartmentOutlined',
     props: { teamId: detail.teamId }
   })
@@ -346,7 +360,7 @@ function handleCloseAgentTeamEditor() {
 
 // 打开「我的异步任务」管理界面（来自 AI 助理页按钮）
 function handleOpenAsyncTaskManage() {
-  openOrActivateTab('async-task-manage', { name: '我的异步任务' })
+  openOrActivateTab('async-task-manage', { titleKey: 'sys.menu.async-task-manage', name: 'Async Tasks' })
 }
 
 onUnmounted(() => {

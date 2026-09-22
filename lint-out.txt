@@ -1,0 +1,1072 @@
+npm warn Unknown user config "disturl". This will stop working in the next major version of npm.
+npm warn Unknown user config "phantomjs_cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "chromedriver_cdnurl". This will stop working in the next major version of npm.
+npm warn Unknown user config "sass_binary_site". This will stop working in the next major version of npm.
+npm warn Unknown user config "electron_mirror". This will stop working in the next major version of npm.
+npm warn Unknown user config "puppeteer_download_host". This will stop working in the next major version of npm.
+
+> miniworkbuddy-frontend@1.0.0 lint
+> eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore
+
+
+D:\projects\MinWorkBuddy\frontend\dist-electron\main\config.js
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\dist-electron\main\index.js
+  6:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\dist-electron\main\server.js
+  7:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\dist-electron\preload\index.js
+  3:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\electron\electron-env.d.ts
+  3:9  error  Parsing error: Unexpected token namespace
+
+D:\projects\MinWorkBuddy\frontend\electron\main\config.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\electron\main\index.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\electron\main\server.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\electron\preload\index.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\electron\shared\ipc.ts
+  9:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\docx\docx.worker.js
+  5:386  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\core.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-bbm-font-extension\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-bbm-font-extension\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-bboldx-font-extension\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-bboldx-font-extension\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-dsfont-font-extension\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-dsfont-font-extension\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-mhchem-font-extension\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-mhchem-font-extension\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-tex-font\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\fonts\mathjax-tex-font\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\asciimath.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\action.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\amscd.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\bbm.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\bboldx.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\bbox.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\begingroup.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\boldsymbol.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\braket.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\bussproofs.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\cancel.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\cases.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\centernot.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\color.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\colortbl.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\dsfont.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\empheq.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\enclose.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\extpfeil.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\gensymb.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\html.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\mathtools.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\mhchem.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\physics.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\textcomp.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\unicode.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\units.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\upgreek.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\input\tex\extensions\verb.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\output\chtml.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\output\svg.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\startup.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\math4\es5\ui\safe.js
+  1:3  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\drawio\viewer-static.min.js
+  6:1229  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\libarchive\worker-bundle.js
+  6:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\pdf\pdf.worker.mjs
+  30:1  error  Parsing error: Unexpected token (
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\pdf\wasm\openjpeg_nowasm_fallback.js
+  2:7  error  Parsing error: Unexpected token function
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\ppt\frame-cache.mjs
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\ppt\index.mjs
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\ppt\worker.mjs
+  9:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\pptx\pptx.worker.js
+  1:198  error  Parsing error: Unexpected token >
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\vendor\xlsx\sheet.worker.js
+  2:188  error  Parsing error: Assigning to rvalue
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\wasm\cad\dwg-worker.js
+  1:37  error  Parsing error: Assigning to rvalue
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\wasm\cad\libredwg-web.js
+  1:22  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\wasm\model\occt-import-js.js
+  2:22  error  Parsing error: Unexpected token )
+
+D:\projects\MinWorkBuddy\frontend\public\file-viewer\wasm\model\occt-worker.js
+  3:1  error  Parsing error: The keyword 'let' is reserved
+
+D:\projects\MinWorkBuddy\frontend\scripts\build.cjs
+  8:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\scripts\electron.cjs
+  17:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\App.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\api\admin.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\agent.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\agentConfig.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\agentExecution.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\agentTeam.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\agentWorkspace.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai-apikey.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai-assistant.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai-mcp.ts
+  8:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai-tool.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai-web-search.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ai.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\aiAgent.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\aiSession.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\auth.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\batch_progress.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\chatHistory.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\common.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\dataops.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\dictionary.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\externalKb.ts
+  8:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\knowledgeBase.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\notification.ts
+  2:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\ontology.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\react.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\region.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\skill.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\skillEvolution.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\skillHub.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\skillRule.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\tenant.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\voice.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\wiki.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\workflow.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\api\workspace.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\components\charts\BarChart.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\charts\LineChart.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\charts\MultiLineChart.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\charts\PieChart.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\charts\StackedBarChart.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\BackTable\cell\customTableColumn.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\BackTable\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\BackTable\pageMixin.js
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\ChunkPreview.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\DataCard.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\DataTable\cell\customTableColumn.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\DataTable\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\DataTable\pageMixin.js
+  1:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\DiffView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\JsonViewer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\LoadingSpinner.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\SchemaTree.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\ScrollCards.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\StateWrapper.vue
+  9:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\StatusTag.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\common\TechCard.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\modals\DetailModal.vue
+  4:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\sse\TextOutputEvent.vue
+  5:13  error  Parsing error: Unexpected token text
+
+D:\projects\MinWorkBuddy\frontend\src\components\sse\ThinkingEvent.vue
+  5:13  error  Parsing error: Unexpected token AI
+
+D:\projects\MinWorkBuddy\frontend\src\components\sse\ToolCallEvent.vue
+  5:13  error  Parsing error: Unexpected token external
+
+D:\projects\MinWorkBuddy\frontend\src\components\sse\ToolResultEvent.vue
+  5:13  error  Parsing error: Unexpected token tool
+
+D:\projects\MinWorkBuddy\frontend\src\components\sse\VerticalTimeline.vue
+  5:10  error  Parsing error: Unexpected token vertical
+
+D:\projects\MinWorkBuddy\frontend\src\components\voice\TurnTimeline.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\voice\VoiceChannel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\voice\VoiceToolbar.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\components\voice\VoiceWaveform.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\composables\__tests__\useMicLifecycle.spec.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\__tests__\useToolCalls.spec.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useAdminDict.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useChartColors.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useDictionary.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useMicLifecycle.ts
+  13:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\usePermission.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useReconnect.ts
+  6:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useSSE.ts
+  6:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useToolCalls.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useTurnState.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useVoiceChannel.ts
+  16:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\composables\useVoicePlayback.ts
+  12:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\directives\autoScale.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\directives\permission.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\i18n\index.ts
+  2:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\i18n\locales\en-US.ts
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\i18n\locales\ja-JP.ts
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\i18n\locales\zh-CN.ts
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\i18n\locales\zh-TW.ts
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\AppLayout.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\components\AppHeader.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\components\AppLogo.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\components\AppSidebar.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\components\ElectronServerButton.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\layouts\components\SidebarItem.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\main.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\router\index.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\agentEvents.ts
+  6:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\ai.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\app.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\menu.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\permission.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\report.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\sse.ts
+  6:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\stores\user.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\agentEvents.ts
+  3:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\ai.d.ts
+  6:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\api.d.ts
+  6:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\chart.d.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\electron.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\markdown-it.d.ts
+  1:9  error  Parsing error: Unexpected token module
+
+D:\projects\MinWorkBuddy\frontend\src\types\menu.ts
+  6:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\shared.d.ts
+  6:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\sse.ts
+  7:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\user.d.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\types\voice.ts
+  9:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\__tests__\audioDsp.spec.ts
+  9:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\apiBase.ts
+  12:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\audioDsp.ts
+  12:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\auth.ts
+  1:1  error  Parsing error: The keyword 'const' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\electron.ts
+  8:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\icons.ts
+  7:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\request.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\sse.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\utils\sseClient.ts
+  8:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\Dashboard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\Profile.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent-team\TeamConversation.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent-team\TeamEditor.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent-team\TeamList.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent-team\TeamReplay.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent\AgentExecutionManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent\AgentManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent\components\AgentDetailDrawer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\agent\components\AgentFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai-config\agents\AgentConfigPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\ApiKeyManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\components\ApiKeyFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\components\ChatModelFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\components\ChatModelList.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\components\ModelTestModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\apikey\components\ThinkBlock.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\components\ToolPolicyEditor.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\McpServiceManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpApiKeyFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpClientFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpClientList.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpInstallModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpSquareDetailModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\mcp\components\McpSquareTemplateFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\SkillManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillConversationsPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillEvolutionPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillHubBrowser.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillPackageForm.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillRuleFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\skill\components\SkillScriptForm.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\tool\ToolManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\tool\components\ToolFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\tool\components\ToolTestModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\websearch\WebSearchManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\websearch\components\SearchTestModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\ai\websearch\components\WebSearchFormModal.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\componentMap.ts
+  4:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\duplex\config\VoiceModelConfig.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\duplex\config\VoiceSessionConfig.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\DataSourcePanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\ExternalKbPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\KnowledgeBasePanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\OntologyPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\data-source\BindingWorkbench.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\data-source\MetadataExplorer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\data-source\SourceManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\data-source\SqlWorkbench.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\data-source\StandardManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\external\InstanceManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\external\SyncJobs.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\kb\DatasetManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\kb\DocumentManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\kb\IngestionJobs.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\kb\SearchTester.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\ontology\ClassHierarchy.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\ontology\ModelingWorkbench.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\ontology\OntologyList.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\knowledge\ontology\ReviewVersion.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\KnowledgeManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\tabs\ArticleTab.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\tabs\CategoryTab.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\tabs\KnowledgeBaseTab.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\tabs\RagTestTab.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\llm-wiki\tabs\VersionTab.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\DictionaryPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\ProfilePanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\RegionPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\SystemManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\TenantPackagePanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\TenantPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\AttachmentSummary.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\AuditLogManager.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\PermissionManager.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\RoleManager.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\TenantFilterSelect.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\system\components\UserManager.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\WorkflowManagement.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\components\WorkflowDashboard.vue
+  2:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\components\WorkflowExecutionTable.vue
+  2:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\components\WorkflowFlowForm.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\components\WorkflowFlowTable.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\admin\workflow\components\WorkflowTestBench.vue
+  2:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\AiSessionPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\AsyncTaskManage.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\ScheduledTaskManage.vue
+  2:27  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\AgentEventStream.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\AgentSelector.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\AgentTraceDrawer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\AssistantPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\AttachmentCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\ChatContainer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\ChatInput.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\DataAnalysisCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\FileUploader.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\HitlConfirmPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\MessageRenderer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\ReactConfirmPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\ReactSkillPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\ReactTimeline.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\SessionSidebar.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\SkillSelector.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\TeamSelector.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\UnifiedTimeline.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\eventRouter.ts
+  9:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\markdown.ts
+  6:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\ArtifactCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\DeepResearchTaskCard.vue
+  2:28  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\GeneralRenderer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\ResearchPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\ResearchReportRenderer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\ScheduledTaskCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\SqlBotRenderer.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\ThinkingCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\AgentExecutionPanel.vue
+  2:27  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\AgentFlowGraph.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\AgentSection.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\DeepResearchExecutionPanel.vue
+  2:34  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\DefaultToolRenderer.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ErrorRow.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\EventStreamView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ExecutionPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ProgressTracker.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\SkillExecutionPanel.vue
+  2:27  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TaskPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TeamEventBlock.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TeamExecutionPanel.vue
+  2:26  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TeamTopology.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TextOutputRow.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ThinkingExecutionPanel.vue
+  2:30  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ThinkingRow.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\TimelineFlowPlayer.vue
+  2:26  error  Parsing error: Unexpected character '—'
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ToolCallGroupRow.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\ToolCallRow.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\_shared.ts
+  6:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\toolRegistry.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\types.ts
+  5:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\execution\useExecutionState.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\index.ts
+  2:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\renderers\types\timeline.ts
+  7:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\components\types.ts
+  2:1  error  Parsing error: The keyword 'import' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\assistant\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\duplex\VoiceDemo.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\ArticleEdit.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\ArticleView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\CitationCard.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\LLMAnswerPanel.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\SearchBar.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\SearchResultList.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\VersionDiffView.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\VersionRollbackButton.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\components\VersionTimeline.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\views\kms\wiki\types\wiki.ts
+  3:1  error  Parsing error: The keyword 'export' is reserved
+
+D:\projects\MinWorkBuddy\frontend\src\views\login\index.vue
+  1:1  error  Parsing error: Unexpected token <
+
+D:\projects\MinWorkBuddy\frontend\src\vite-env.d.ts
+  4:9  error  Parsing error: Unexpected token module
+
+D:\projects\MinWorkBuddy\frontend\vite.config.ts
+  1:1  error  Parsing error: The keyword 'import' is reserved
+
+✖ 353 problems (353 errors, 0 warnings)
+

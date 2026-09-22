@@ -366,7 +366,7 @@ class ContextManager:
             
             # Layer 3: Mem0 long-term memory retrieval (if enabled)
             mem0_summary = ""
-            if enable_mem0_retrieval and self._user_id:
+            if enable_mem0_retrieval and self.user_id:
                 try:
                     mem0_data = self._retrieve_mem0_memories(limit=mem0_limit)
                     

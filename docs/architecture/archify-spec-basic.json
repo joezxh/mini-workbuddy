@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "MinWorkBuddy AI 工作台",
+    "output": "minworkbuddy-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {"id": "users", "type": "external", "label": "用户", "sublabel": "Browser/Mobile", "pos": [40, 300], "size": [120, 60]},
+    {"id": "nginx", "type": "cloud", "label": "Nginx", "sublabel": "网关", "pos": [250, 300], "size": [130, 60]},
+    {"id": "fastapi", "type": "backend", "label": "FastAPI", "sublabel": ":8000", "pos": [460, 300], "size": [130, 60]},
+    {"id": "agent_scope", "type": "backend", "label": "AgentScope", "sublabel": "引擎", "pos": [670, 300], "size": [130, 60]},
+    {"id": "postgres", "type": "database", "label": "PostgreSQL", "sublabel": "", "pos": [880, 300], "size": [130, 60]}
+  ],
+  "connections": [
+    {"from": "users", "to": "nginx"},
+    {"from": "nginx", "to": "fastapi"},
+    {"from": "fastapi", "to": "agent_scope"},
+    {"from": "agent_scope", "to": "postgres"}
+  ]
+}

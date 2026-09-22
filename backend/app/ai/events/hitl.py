@@ -122,3 +122,69 @@ def resume_hitl(handle: Any, action: str,
         handle.out_q.put_nowait(
             SkillEvent(type="hitl_resume", data={"action": action}))
     return True
+
+
+async def monitor_pause_timeout(db: Any, execution_id: str, 
+                                reply_id: Optional[str], pause_time: datetime,
+                                timeout_minutes: int = PAUSE_TIMEOUT_MINUTES):
+    """后台监控 HITL 暂停超时：达到阈值后发送告警 + 可选熔断。
+
+    流程：
+    1. 休眠 timeout_minutes*60 秒
+    2. 检查记录是否仍为 waiting 态 → 若已 resolve，直接返回
+    3. 发送超长等待告警（DB+STREAM）
+    4. 标记为超时中断（status=interrupted），record_paused 自动触发 SSE
+    
+    注意：此函数由执行侧在 yield hitl_pause 后立即 spawn 守护协程启动
+    """
+    import time as time_mod
+
+    await asyncio.sleep(timeout_minutes * 60)
+
+    try:
+        # Import here to avoid circular dependency
+        from app.models.agent.agent_hitl_pause import AgentHitlPause
+        
+        row = (db.query(AgentHitlPause)
+               .filter(AgentHitlPause.execution_id == execution_id,
+                       AgentHitlPause.status == "waiting")
+               .order_by(AgentHitlPause.id.desc())
+               .first())
+        if row is None:
+            # 已被 resolve（用户提前 approve/reject），不触发告警
+            return
+
+        # 超长等待告警
+        wait_seconds = (datetime.now() - pause_time).total_seconds()
+        logger.warning("HITL 暂停已等待 %.0f 分钟（超过 %d 分钟阈值）",
+                       wait_seconds / 60, timeout_minutes)
+
+        # DB 落库 + SSE 推送
+        db.add(AgentHitlPause(
+            execution_id=execution_id,
+            reply_id=reply_id,
+            status="timeout_alert",
+            timeout_at=datetime.now(),
+        ))
+        db.commit()
+
+        # 发送告警事件（仅 STREAM+UI，不落库避免重复）
+        from app.ai.events.bus import EventBus
+        from app.schemas.agent.event_types import EventEnvelope, EventCategory, EventLevel
+        bus = EventBus()
+        bus.publish(EventEnvelope(
+            execution_id=execution_id,
+            event_type="hitl_timeout_alert",
+            category=EventCategory.HITL,
+            levels=[EventLevel.STREAM, EventLevel.UI],
+            content={
+                "message": f"HITL 暂停超时警告（已等待 {wait_seconds // 60} 分钟）",
+                "timeout_minutes": timeout_minutes,
+                "pause_time": pause_time.isoformat(),
+            },
+            source="hitl_monitor",
+            ui_hint="alert",
+        ))
+
+    except Exception as e:
+        logger.error("HITL 超时监控失败：%s: %s", execution_id, e)

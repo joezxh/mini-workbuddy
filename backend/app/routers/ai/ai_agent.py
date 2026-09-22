@@ -16,7 +16,9 @@ from app.deps import get_current_user_or_api_key, get_current_user
 from app.models.sys.sys_user import SysUser
 from app.services.ai.ai_chat_service import AiChatService
 from app.ai.agent_factory import AgentFactory
-from app.ai.sse_bridge import SSEBridge, create_done_event, create_error_event
+from app.ai.sse_bridge import (
+    SSEBridge, create_done_event, create_error_event, create_sse_response,
+)
 
 router = APIRouter(prefix="/ai-agent", tags=["AI Agent"])
 
@@ -167,9 +169,22 @@ async def chat_stream(
             from agentscope.message import UserMsg
             user_msg = UserMsg(content=message_text)
 
-            # 通过 SSEBridge 流式输出
+            # P1 统一事件通道（spec §5.2）：生成 execution_id 并经 bus 发布统一信封，
+            # 供 /stream 订阅与断线重放。此处不写 DB（仅 SSEHandler 环形缓冲）。
+            import uuid
+            execution_id = str(uuid.uuid4())
+            from app.ai.events.bus import EventBus
+            bus = EventBus()
+            # 通知前端 execution_id，供其打开 /stream 与 HITL 面板
+            yield create_sse_response("_gateway_meta", {"execution_id": execution_id})
+
+            # 通过 SSEBridge 流式输出（同时发布统一信封到 bus）
             bridge = SSEBridge()
-            async for sse_event in bridge.stream_agent_reply(agent, user_msg):
+            async for sse_event in bridge.stream_agent_reply(
+                agent, user_msg, bus=bus,
+                execution_id=execution_id, trace_id=None,
+                source_id=agent_config.get("name"),
+            ):
                 yield sse_event
 
             # 保存助手回复（简化：实际应从事件流中收集完整内容）

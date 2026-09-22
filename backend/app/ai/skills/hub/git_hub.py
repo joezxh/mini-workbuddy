@@ -21,7 +21,7 @@ import subprocess
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from app.ai.skills.hub.base import SkillHubAdapter, SkillHubEntry
 from app.config import settings
@@ -55,6 +55,76 @@ _HUB_CATEGORY_MAP = {
     "risk_event": "risk-assessment",
     "general": "other",
 }
+
+
+def _parse_frontmatter_scripts(text: str) -> List[Dict[str, Any]]:
+    """从 SKILL.md frontmatter 的 `scripts:` 块解析脚本列表。
+
+    与云市场适配器同逻辑（不依赖 PyYAML）；manifest.json 缺脚本时回退使用。
+    """
+    import re as _re
+
+    lines = text.splitlines()
+    if not lines or not lines[0].lstrip().startswith("---"):
+        return []
+    start = None
+    for i in range(1, len(lines)):
+        ln = lines[i]
+        if ln.lstrip().startswith("---"):
+            break
+        if _re.match(r"^scripts\s*:\s*$", ln):
+            start = i
+            break
+    if start is None:
+        return []
+    block: List[str] = []
+    for j in range(start + 1, len(lines)):
+        ln = lines[j]
+        if ln.lstrip().startswith("---"):
+            break
+        if ln.strip() == "":
+            block.append(ln)
+            continue
+        if not (ln[:1] in (" ", "\t")):
+            break
+        block.append(ln)
+    scripts: List[Dict[str, Any]] = []
+    cur: Optional[Dict[str, Any]] = None
+    for ln in block:
+        if ln.strip() == "":
+            continue
+        content = ln.strip()
+        if content.startswith("- "):
+            if cur:
+                scripts.append(cur)
+            cur = {}
+            kv = content[2:].strip()
+            if ":" in kv:
+                k, v = kv.split(":", 1)
+                cur[k.strip()] = v.strip().strip('"').strip("'")
+        else:
+            if cur is None:
+                continue
+            km = _re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", content)
+            if km:
+                cur[km.group(1)] = km.group(2).strip().strip('"').strip("'")
+    if cur:
+        scripts.append(cur)
+    out: List[Dict[str, Any]] = []
+    for s in scripts:
+        sid = s.get("id") or s.get("name")
+        if not sid:
+            continue
+        out.append(
+            {
+                "id": str(sid),
+                "name": str(s.get("name") or sid),
+                "command": str(s.get("command") or ""),
+                "description": s.get("description"),
+                "params": s.get("params"),
+            }
+        )
+    return out
 
 
 class GitHubAdapter(SkillHubAdapter):
@@ -568,6 +638,7 @@ class GitHubAdapter(SkillHubAdapter):
     # ── 工具 ──────────────────────────────────────────────────
     def _build_skill_json(self, skill_dir: Path, entry: SkillHubEntry) -> dict:
         md = skill_dir / "SKILL.md"
+        md_text = md.read_text(encoding="utf-8") if md.exists() else ""
         fm = self._parse_frontmatter(md) if md.exists() else {}
         category = entry.meta.get("category", "general")
         mapped = _HUB_CATEGORY_MAP.get(category, "other")
@@ -592,6 +663,9 @@ class GitHubAdapter(SkillHubAdapter):
                         "params": sc.get("params"),
                     }
                 )
+        # manifest.json 未定义脚本时，回退解析 SKILL.md frontmatter 的 scripts 块
+        if not scripts and md_text:
+            scripts = _parse_frontmatter_scripts(md_text)
 
         return {
             "id": entry.id,

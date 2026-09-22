@@ -102,8 +102,9 @@
 
       <span v-if="skill" class="skill-context">
         <span class="skill-icon">{{ skillIcon }}</span>
-        <span class="skill-name">{{ skill.scriptName }}</span>
-        <a-tooltip :title="skill.scriptDescription" placement="top">
+        <!-- 按技能执行：scriptName 已置空，回退展示技能包名 -->
+        <span class="skill-name">{{ skill.scriptName || skill.packageName }}</span>
+        <a-tooltip :title="skill.scriptDescription || skill.packageName" placement="top">
           <QuestionCircleOutlined class="skill-tip-icon" />
         </a-tooltip>
       </span>

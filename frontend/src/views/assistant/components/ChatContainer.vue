@@ -84,149 +84,14 @@
                 :chart-config="msg.sqlbotData.chartConfig"
                 :error="msg.sqlbotData.error"
               />
-              <!-- 智能体模式：AgentExecutionPanel（Tab 标签页，独立展示） -->
-              <template v-else-if="msg.renderKind === 'agent'">
-                <AgentExecutionPanel
-                  :execution-id="msg.executionId"
-                  :streaming="false"
-                  :events="msg.executionEvents"
-                  :thinking-steps="msg.thinkingSteps"
-                  :unified-steps="msg.unifiedSteps"
-                  :unified-artifacts="msg.unifiedArtifacts"
-                />
-                <ArtifactCard
-                  v-if="msg.artifacts?.length"
-                  :artifacts="msg.artifacts"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :expanded="thinkingExpanded[msg.message_id]"
-                  :session-type="currentSessionType"
-                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
-                />
-              </template>
-              <!-- 智能体团队模式：TeamExecutionPanel（Tab 标签页，独立展示） -->
-              <template v-else-if="msg.renderKind === 'team'">
-                <TeamExecutionPanel
-                  :execution-id="msg.executionId"
-                  :streaming="false"
-                  :events="msg.executionEvents"
-                  :unified-steps="msg.unifiedSteps"
-                  :unified-artifacts="msg.unifiedArtifacts"
-                />
-                <ArtifactCard
-                  v-if="msg.artifacts?.length"
-                  :artifacts="msg.artifacts"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :expanded="thinkingExpanded[msg.message_id]"
-                  :session-type="currentSessionType"
-                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
-                />
-              </template>
-              <!-- 深度研究模式：DeepResearchExecutionPanel（Tab 标签页，独立展示） -->
-              <template v-else-if="msg.renderKind === 'research'">
-                <DeepResearchExecutionPanel
-                  :execution-id="msg.executionId"
-                  :streaming="false"
-                  :events="msg.executionEvents"
-                  :thinking-steps="msg.thinkingSteps"
-                  :sources="msg.researchSources"
-                  :unified-steps="msg.unifiedSteps"
-                  :unified-artifacts="msg.unifiedArtifacts"
-                />
-                <ArtifactCard
-                  v-if="msg.artifacts?.length"
-                  :artifacts="msg.artifacts"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :expanded="thinkingExpanded[msg.message_id]"
-                  :session-type="currentSessionType"
-                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
-                />
-              </template>
-              <!-- ReAct 计划执行模式：ReactTimeline（步骤时间线）+ ReactConfirmPanel（HITL 确认） -->
-              <template v-else-if="msg.renderKind === 'react'">
-                <ReactTimeline
-                  :events="msg.reactEvents || []"
-                  :goal="msg.content"
-                  :plan-status="msg.reactRunId ? 'done' : 'planning'"
-                  :show-actions="false"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :expanded="thinkingExpanded[msg.message_id]"
-                  :session-type="currentSessionType"
-                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
-                />
-              </template>
-              <!-- 技能执行消息 / 携带统一执行时间线的消息：使用 SkillExecutionPanel（Tab 标签页，与 Mediator Panel 对齐）。
-                   即时会话完成后与回放保持一致布局：执行详情 Tab 在上、结果正文在下。 -->
-              <template
-                v-else-if="(msg.skillEvent && (msg.executionId || msg.sseUrl)) || usesTopTimelineBranch(msg)"
-              >
-                <SkillExecutionPanel
-                  :execution-id="msg.executionId"
-                  :streaming="false"
-                  :unified-steps="msg.unifiedSteps"
-                  :unified-artifacts="msg.unifiedArtifacts"
-                />
-                <ArtifactCard
-                  v-if="msg.artifacts?.length"
-                  :artifacts="msg.artifacts"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :expanded="thinkingExpanded[msg.message_id]"
-                  :session-type="currentSessionType"
-                  @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
-                />
-              </template>
-              <!-- THINKING 思考模式：ThinkingExecutionPanel（Tab 在上）+ 结论正文在下，与技能模式布局一致。
-                   必须先于 skill 分支判断：思考消息同时携带 skillEvent+executionId（复用 completed 保存路径） -->
-              <template v-else-if="msg.renderKind === 'thinking' || (currentSessionType === 'thinking' && msg.thinkingMode)">
-                <ThinkingExecutionPanel
-                  :execution-id="msg.executionId"
-                  :thinking-steps="msg.thinkingSteps || []"
-                  :unified-steps="msg.unifiedSteps"
-                  :unified-artifacts="msg.unifiedArtifacts"
-                />
-                <GeneralRenderer
-                  :parsed="msg.parsed || { rawContent: msg.content, thinking: '' }"
-                  :session-type="currentSessionType"
-                />
-              </template>
-              <!-- DEEP_RESEARCH 深度研究模式（兼容旧消息）：过程面板 + 报告渲染 -->
-              <template v-else-if="msg.renderKind === 'research-legacy' || (currentSessionType === 'deep_research' && msg.researchReport)">
-                <ResearchPanel
-                  :plan="msg.researchPlan || []"
-                  :stage="msg.researchStage"
-                  :progress="msg.researchProgress || 0"
-                  :active="false"
-                />
-                <ResearchReportRenderer
-                  v-if="msg.researchReport"
-                  :report="msg.researchReport"
-                />
-              </template>
-              <!-- 深度研究后台异步模式：任务卡片（轮询状态 + 实时进度） -->
-              <DeepResearchTaskCard
-                v-else-if="msg.renderKind === 'research-async'"
-                :task="msg.asyncTask!"
-              />
-              <!-- SCHEDULED 云端调度模式：任务卡片 -->
-              <ScheduledTaskCard
-                v-else-if="msg.renderKind === 'scheduled' || (currentSessionType === 'scheduled' && msg.asyncTask)"
-                :task="msg.asyncTask!"
-              />
-              <GeneralRenderer
+              <!-- 主渲染：分支判定经 EventRouter.resolveRenderKind，渲染表见 eventRouter.RENDER_SPECS，
+                   视图统一由 MessageRenderer 分发（spec：主渲染切到 EventRouter） -->
+              <MessageRenderer
                 v-else
-                :parsed="msg.parsed || { thinking: '', rawContent: msg.content }"
-                :expanded="thinkingExpanded[msg.message_id]"
+                :msg="msg"
                 :session-type="currentSessionType"
-                @toggle-thinking="$emit('toggle-thinking', msg.message_id)"
+                :thinking-expanded="thinkingExpanded[msg.message_id]"
+                @toggle-thinking="$emit('toggle-thinking', $event)"
               />
 
               <div class="msg-footer msg-footer-row">
@@ -468,6 +333,7 @@ import {
   ClearOutlined, BulbOutlined, LoadingOutlined,
 } from '@ant-design/icons-vue'
 import { GeneralRenderer, SqlBotRenderer, ExecutionPanel } from './renderers'
+import MessageRenderer from './MessageRenderer.vue'
 import SkillExecutionPanel from './renderers/execution/SkillExecutionPanel.vue'
 import ThinkingExecutionPanel from './renderers/execution/ThinkingExecutionPanel.vue'
 import AgentExecutionPanel from './renderers/execution/AgentExecutionPanel.vue'
@@ -475,10 +341,7 @@ import DeepResearchExecutionPanel from './renderers/execution/DeepResearchExecut
 import TeamExecutionPanel from './renderers/execution/TeamExecutionPanel.vue'
 import ThinkingCard from './renderers/ThinkingCard.vue'
 import ResearchPanel from './renderers/ResearchPanel.vue'
-import ResearchReportRenderer from './renderers/ResearchReportRenderer.vue'
 import ScheduledTaskCard from './renderers/ScheduledTaskCard.vue'
-import DeepResearchTaskCard from './renderers/DeepResearchTaskCard.vue'
-import ArtifactCard from './renderers/ArtifactCard.vue'
 import AttachmentCard from './AttachmentCard.vue'
 import DataAnalysisCard from './DataAnalysisCard.vue'
 import ReactTimeline from './ReactTimeline.vue'
@@ -487,6 +350,7 @@ import type { ReactEvent } from './ReactTimeline.vue'
 import type { ChatMessage } from './types'
 import type { AiChatSession } from '@/api/aiSession'
 import type { SqlBotData } from './types'
+import { hasUnifiedTimeline, usesTopTimelineBranch } from './eventRouter'
 
 defineProps<{
   currentSession: AiChatSession | null
@@ -608,21 +472,9 @@ defineEmits<{
 const msgListRef = ref<HTMLElement>()
 
 // ── 统一执行时间线渲染分支 ─────────────────────────────────────────────────
-/** 消息是否携带统一执行时间线数据（归一化步骤 / 产物） */
-function hasUnifiedTimeline(msg: ChatMessage): boolean {
-  return !!(msg.unifiedSteps?.length || msg.unifiedArtifacts?.length)
-}
-
-/**
- * 是否走「执行详情 Tab 在上、结果正文在下」的渲染分支：
- * 携带统一时间线、
- * 非 thinking / research / scheduled 专属卡片模式。
- * 目的：即时会话完成后与历史回放的布局保持一致（Tab 在上、结果在下），
- * 不再依赖 execution_id 是否随 completed 事件到达前端。
- */
-function usesTopTimelineBranch(msg: ChatMessage): boolean {
-  return hasUnifiedTimeline(msg) && !msg.renderKind
-}
+// hasUnifiedTimeline / usesTopTimelineBranch 已统一收敛到 ./eventRouter，
+// 历史消息主渲染分支判定与组件分发统一由 ./eventRouter（决策+渲染表）+ ./MessageRenderer（视图）承担，
+// ChatContainer 内不再保留内联 v-if 分支链。
 
 function scrollToBottom(smooth = true) {
   nextTick(() => {

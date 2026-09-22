@@ -2,10 +2,26 @@
 from __future__ import annotations
 
 from typing import AsyncGenerator, Optional
+from loguru import logger
 from sqlalchemy.orm import Session
 
 
 from app.ai.msg_utils import text_of
+
+
+def resolve_skill_name(skill_config: Optional[dict]) -> str:
+    """解析技能标识：兼容 name（潜在旧调用方）与 package_id（当前前端载荷）。
+
+    前端 skill 载荷为 ``{package_id, package_name, script_id, script_name}``；
+    后端技能执行单位本就是整技能（package_id）。两者都缺失时回退 ``general``
+    并记录 warning（保持原有兜底语义）。
+    """
+    cfg = skill_config or {}
+    name = cfg.get("name") or cfg.get("package_id")
+    if not name:
+        logger.warning("SkillAgent 未收到 skill 标识（name/package_id），回退 general")
+        return "general"
+    return str(name)
 
 
 class ResearchAgent:
@@ -53,7 +69,7 @@ class SkillAgent:
         from app.ai.skills.execution import SkillExecutionService
 
         topic = text_of(user_msg)
-        skill_name = (self._skill_config or {}).get("name", "general")
+        skill_name = resolve_skill_name(self._skill_config)
         service = SkillExecutionService()
         async for skill_event in service.execute(
             skill_name=skill_name,

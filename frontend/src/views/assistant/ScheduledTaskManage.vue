@@ -121,13 +121,14 @@
         </a-row>
         <a-row v-if="form.targetMode === 'skill'" :gutter="12">
           <a-col :span="12">
-            <a-form-item label="技能脚本" required>
+            <a-form-item label="技能脚本（可选）">
               <a-select
                 v-model:value="form.skillScriptId"
                 :options="skillScriptOptions"
                 show-search
+                allow-clear
                 option-filter-prop="label"
-                :placeholder="form.skillPackageId ? '选择技能脚本' : '请先选择技能包'"
+                :placeholder="form.skillPackageId ? '可不选脚本，按整技能执行' : '请先选择技能包'"
                 :disabled="!form.skillPackageId"
               />
             </a-form-item>
@@ -367,7 +368,6 @@ async function onSave() {
   }
   if (form.targetMode === 'agent' && !form.agentId) { message.warning('请选择智能体'); return }
   if (form.targetMode === 'skill' && !form.skillPackageId) { message.warning('请选择技能包'); return }
-  if (form.targetMode === 'skill' && !form.skillScriptId) { message.warning('请选择技能脚本'); return }
   if (form.scheduleType === 'cron' && !form.cronExpression.trim()) { message.warning('请填写 Cron 表达式'); return }
   if (form.scheduleType === 'interval' && (!form.intervalSeconds || form.intervalSeconds < 60)) {
     message.warning('间隔不能小于 60 秒')
@@ -375,13 +375,14 @@ async function onSave() {
   }
   if (form.scheduleType === 'once' && !runAtValue.value) { message.warning('请选择执行时间'); return }
 
+  // 后端校验与执行均只使用 package_id；脚本为可选（按整技能执行）
   const skillInfo: ScheduledSkillInfo | null =
-    form.targetMode === 'skill' && selectedSkillPackage.value && selectedSkillScript.value
+    form.targetMode === 'skill' && selectedSkillPackage.value
       ? {
           package_id: selectedSkillPackage.value.package_id,
           package_name: selectedSkillPackage.value.name,
-          script_id: selectedSkillScript.value.script_id,
-          script_name: selectedSkillScript.value.name,
+          script_id: selectedSkillScript.value?.script_id || '',
+          script_name: selectedSkillScript.value?.name || '',
         }
       : null
 

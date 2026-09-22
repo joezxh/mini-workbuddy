@@ -268,6 +268,44 @@ def delete_script(
 # 旧版同步 /execute 与 /result/{task_id} 任务轮询端点（V1）已删除。
 
 
+# ── 技能文件树端点（磁盘只读扫描，不建表）──────────────────────────────────
+
+
+@router.get("/{package_id}/files")
+def list_skill_files(
+    package_id: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """列出技能包内全部文件（递归扫描磁盘，SKILL.md 除外）。
+
+    返回 `{package_id, files: [{path, size, ext, type}], total_count, total_size}`；
+    `type` 取值 script（scripts/*.py）/ reference（references/ 下）/ other。
+    目录缺失时返回空列表，不报错。
+    """
+    svc = AiSkillAdminService()
+    if not svc.get_package(db, package_id):
+        raise HTTPException(status_code=404, detail="技能包不存在")
+    return svc.list_files(package_id)
+
+
+@router.get("/{package_id}/files/content")
+def get_skill_file_content(
+    package_id: str,
+    path: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """预览技能包内文本文件。越界 / 非白名单类型 / 二进制 / 超 1MB → 400。"""
+    svc = AiSkillAdminService()
+    if not svc.get_package(db, package_id):
+        raise HTTPException(status_code=404, detail="技能包不存在")
+    try:
+        return svc.read_file_content(package_id, path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ── SKILL.md 文档端点 ──────────────────────────────────────────────────────
 
 

@@ -243,8 +243,10 @@ def route_of(event_type: str) -> EventRoute:
 class EventEnvelope(BaseModel):
     """统一事件信封：EventBus 分发与持久化的标准载荷。
 
-    sequence 由 ExecutionEventService 在落库时分配，调用方不填。
+    sequence 由 ExecutionEventService 在落库时分配；实时 SSE 通道
+    （SSEHandler）也会按 execution_id 自增分配，用于 Last-Event-ID 断线重放。
     """
+    sequence: Optional[int] = None
     execution_id: str
     trace_id: Optional[str] = None
     event_type: str
