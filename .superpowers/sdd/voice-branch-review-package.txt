@@ -1,0 +1,3838 @@
+121e248 docs(voice): 部署配置与前端联调测试指南
+9785077 refactor(voice-ui): 清理 s2s/local/loopback 死选项，收敛 provider 与 agent type
+3c562cf feat(voice-ui): 麦克风韧性生命周期（设备切换/track 宽限/退避重试）+ lint 基础设施修复
+3912c5b feat(voice-ui): 工具确认卡片（同意/拒绝 → tool.confirm 上行）
+cb66de3 feat(voice-ui): WS 通道接入 tool.confirm_required 下行与确认上行
+ada03c8 feat(voice-ui): 工具确认状态流与协议类型增量（vitest 基础设施）
+3b58125 docs(voice): 协议 v2 全量文档（含 tool.confirm 增量帧）
+3c9bbf1 refactor(voice): 清理手写 dashscope/s2s/local Provider 与 agent_adapter，收敛依赖与配置
+1f7f415 feat(voice): RealtimeAgent Toolkit 构建（MCP 工具注入）
+14f9a1e feat(voice): 网关增量——interrupt 透传/tool.confirm 上行/ping 修复/VAD barge-in 代际/openai 平台
+f4ce9de feat(voice): Provider 注册表切换为 AgentScope 内核（dashscope/openai）
+4eb2c87 feat(voice): AgentscopeRealtimeProvider 内核与事件映射
+a7dd0d7 feat(voice): BrowserTransport 桥接协议v2网关与 AgentScope TransportBase
+ backend/app/config/_voice.py                       |  12 +-
+ backend/app/duplex/voice/agent_adapter.py          | 215 -----------
+ backend/app/duplex/voice/audio_codec.py            |  31 --
+ backend/app/duplex/voice/constants.py              |   6 +-
+ backend/app/duplex/voice/pipeline/__init__.py      |  14 -
+ backend/app/duplex/voice/pipeline/stt.py           |  86 -----
+ backend/app/duplex/voice/pipeline/tts.py           |  67 ----
+ backend/app/duplex/voice/pipeline/vad.py           | 111 ------
+ backend/app/duplex/voice/providers/agentscope.py   | 260 ++++++++++++++
+ .../duplex/voice/providers/agentscope_transport.py | 128 +++++++
+ backend/app/duplex/voice/providers/base.py         |   8 +
+ backend/app/duplex/voice/providers/dashscope.py    | 200 -----------
+ backend/app/duplex/voice/providers/local.py        | 173 ---------
+ backend/app/duplex/voice/providers/registry.py     |  34 +-
+ backend/app/duplex/voice/providers/s2s.py          | 206 -----------
+ backend/app/duplex/voice/tool_call_handler.py      |  64 ----
+ backend/app/duplex/voice/toolkit_builder.py        |  70 ++++
+ backend/app/duplex/voice/voice_config.py           |  29 +-
+ backend/app/duplex/voice/websocket_gateway.py      |  58 ++-
+ backend/app/models/duplex/duplex_voice_config.py   |   2 +-
+ backend/requirements.txt                           |  23 +-
+ backend/tests/duplex/test_dashscope_provider.py    | 106 ------
+ backend/tests/duplex/test_s2s_provider.py          | 104 ------
+ backend/tests/duplex/voice/__init__.py             |   0
+ .../tests/duplex/voice/test_agentscope_provider.py | 123 +++++++
+ .../duplex/voice/test_agentscope_transport.py      |  68 ++++
+ .../tests/duplex/voice/test_gateway_increment.py   |  70 ++++
+ backend/tests/duplex/voice/test_registry.py        |  17 +
+ backend/tests/duplex/voice/test_toolkit_builder.py |  48 +++
+ backend/tests/unit/test_voice_agent_adapter.py     |  29 --
+ backend/tests/unit/test_voice_audio_codec.py       |  21 --
+ backend/tests/unit/test_voice_dify_adapter.py      |  91 -----
+ backend/tests/unit/test_voice_local_provider.py    | 134 -------
+ backend/tests/unit/test_voice_pipeline.py          | 146 --------
+ backend/tests/unit/test_voice_providers.py         |  14 -
+ backend/tests/unit/test_voice_registry_select.py   |  52 ++-
+ backend/tests/unit/test_voice_tool_call_handler.py |  60 ----
+ docs/api/voice-ws-protocol.md                      | 167 +++++++++
+ docs/deploy/voice-agentscope-deploy.md             |  59 ++++
+ docs/guides/voice-frontend-integration-test.md     |  51 +++
+ frontend/.gitignore                                |   7 +
+ frontend/package-lock.json                         | 393 +++++++++++++++++++++
+ frontend/package.json                              |   5 +-
+ frontend/src/components/voice/TurnTimeline.vue     |  64 +++-
+ frontend/src/components/voice/VoiceChannel.vue     |  15 +-
+ frontend/src/components/voice/VoiceToolbar.vue     |  30 +-
+ .../composables/__tests__/useMicLifecycle.spec.ts  | 121 +++++++
+ .../src/composables/__tests__/useToolCalls.spec.ts |  43 +++
+ frontend/src/composables/useMicLifecycle.ts        | 192 ++++++++++
+ frontend/src/composables/useToolCalls.ts           |  38 +-
+ frontend/src/composables/useVoiceChannel.ts        | 143 ++++++--
+ frontend/src/types/voice.ts                        |  20 +-
+ .../admin/ai-config/agents/AgentConfigPanel.vue    |  16 +-
+ frontend/src/views/duplex/VoiceDemo.vue            |  24 +-
+ 54 files changed, 2233 insertions(+), 2035 deletions(-)
+diff --git a/backend/app/config/_voice.py b/backend/app/config/_voice.py
+index e94cc5a..6fb1bc7 100644
+--- a/backend/app/config/_voice.py
++++ b/backend/app/config/_voice.py
+@@ -1,19 +1,17 @@
+ """语音 RTC 配置"""
+ from pydantic import BaseModel
+ 
+ 
+ class VoiceSettings(BaseModel):
+-    """语音 RTC 配置字段"""
++    """语音 RTC 配置字段
++
++    VOICE_DEFAULT_PROVIDER 值域：dashscope | openai
++    （AgentScope RealtimeAgent 内核；openai 需 agentscope > 2.0.8，见 spec §2.3）
++    """
+     VOICE_DEFAULT_PROVIDER: str = "dashscope"
+     VOICE_INPUT_SAMPLE_RATE: int = 16000
+     VOICE_OUTPUT_SAMPLE_RATE: int = 24000
+     VOICE_RESPONSE_START_TIMEOUT_MS: int = 3000
+     VOICE_RESPONSE_INACTIVITY_TIMEOUT_MS: int = 15000
+     VOICE_RECONNECT_MAX: int = 5
+-    VOICE_LOCAL_PIPELINE_URL: str = "ws://127.0.0.1:8765"
+     VOICE_VAD_THRESHOLD: float = 0.55
+-    VOICE_LOCAL_ENABLED: bool = False
+-    VOICE_LOCAL_VAD_MODEL: str = ""      # silero_vad.onnx 路径
+-    VOICE_LOCAL_STT_MODEL: str = ""      # Paraformer 模型名/路径
+-    VOICE_LOCAL_TTS_MODEL: str = ""      # CosyVoice2 模型路径
+-    VOICE_LOCAL_TTS_SPEED: float = 0.95
+diff --git a/backend/app/duplex/voice/agent_adapter.py b/backend/app/duplex/voice/agent_adapter.py
+deleted file mode 100644
+index c41cb59..0000000
+--- a/backend/app/duplex/voice/agent_adapter.py
++++ /dev/null
+@@ -1,215 +0,0 @@
+-"""Agent 适配器：把本平台 Agent 接入实时语音样例回放/工具调用。
+-
+-- AgentScopeAdapter：接入 app.ai.*（以存量为准，不新建抽象）。
+-- DirectLLMAdapter：无 app.ai 依赖的直连 LLM 回放（样例/测试/降级）。
+-- AgentRegistry：运行时按 agent_id 注册/解析适配器。
+-"""
+-from typing import Any, Dict, List, Optional, Protocol
+-
+-
+-class AgentAdapter(Protocol):
+-    agent_id: str
+-    engine_code: str
+-
+-    async def run_voice_turn(
+-        self,
+-        audio_b64: Optional[str],
+-        text: Optional[str],
+-        history: List[Dict[str, Any]],
+-        tools: List[str],
+-    ) -> Dict[str, Any]:
+-        ...
+-
+-    async def call_tool(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+-        ...
+-
+-
+-class AgentRegistry:
+-    """按 agent_id 注册/解析 AgentAdapter。"""
+-
+-    _registry: Dict[str, AgentAdapter] = {}
+-    _default_id: Optional[str] = None
+-
+-    @classmethod
+-    def register(cls, adapter: AgentAdapter) -> None:
+-        cls._registry[adapter.agent_id] = adapter
+-
+-    @classmethod
+-    def get(cls, agent_id: str) -> AgentAdapter:
+-        if agent_id not in cls._registry:
+-            raise KeyError(f"agent not found: {agent_id}")
+-        return cls._registry[agent_id]
+-
+-    @classmethod
+-    def exists(cls, agent_id: str) -> bool:
+-        return agent_id in cls._registry
+-
+-    @classmethod
+-    def set_default(cls, agent_id: str) -> None:
+-        """指定默认 Agent（未指定时 default() 取首个注册者）。"""
+-        cls._default_id = agent_id
+-
+-    @classmethod
+-    def default(cls) -> Optional[AgentAdapter]:
+-        """返回默认 AgentAdapter；无注册时返回 None。"""
+-        if cls._default_id:
+-            return cls._registry.get(cls._default_id)
+-        if cls._registry:
+-            return next(iter(cls._registry.values()))
+-        return None
+-
+-
+-class AgentScopeAdapter:
+-    """接入 app.ai.*（以存量为准，不新建抽象）。"""
+-
+-    def __init__(
+-        self,
+-        agent_id: str,
+-        engine_code: Optional[str] = None,
+-        system_prompt: Optional[str] = None,
+-        max_react_iters: int = 5,
+-    ):
+-        self.agent_id = agent_id
+-        self.engine_code = engine_code or "default"
+-        self.system_prompt = system_prompt
+-        self.max_react_iters = max_react_iters
+-
+-    async def run_voice_turn(
+-        self,
+-        audio_b64: Optional[str] = None,
+-        text: Optional[str] = None,
+-        history: Optional[List[Dict[str, Any]]] = None,
+-        tools: Optional[List[str]] = None,
+-    ) -> Dict[str, Any]:
+-        """经统一网关 UnifiedAgentGateway 执行（存量真实入口）。"""
+-        from app.ai.gateway.gateway import UnifiedAgentGateway
+-        from app.ai.gateway.models import AgentMode, AgentRequest
+-        from app.db.database import SessionLocal
+-
+-        with SessionLocal() as db:
+-            gateway = UnifiedAgentGateway(db)
+-            req = AgentRequest(
+-                mode=AgentMode.AGENT,
+-                user_input=text or "",
+-                agent_ids=[self.agent_id],
+-                context={
+-                    "history": history or [],
+-                    "tools": tools or [],
+-                    "system_prompt": self.system_prompt,
+-                },
+-            )
+-            resp = await gateway.dispatch(req)
+-
+-        return {
+-            "text": resp.output or "",
+-            "audio_b64": None,
+-            "tool_calls": [],
+-            "error": resp.error,
+-        }
+-
+-    async def call_tool(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+-        """委托存量 ToolManager 统一调用入口。"""
+-        from app.ai.tool_manager.manager import ToolManager
+-
+-        return await ToolManager().call_tool(name, **(args or {}))
+-
+-
+-class DirectLLMAdapter:
+-    """无 app.ai 依赖的直连 LLM 回放（用于样例/测试/降级）。"""
+-
+-    def __init__(self, agent_id: str, engine_code: str = "echo"):
+-        self.agent_id = agent_id
+-        self.engine_code = engine_code
+-
+-    async def run_voice_turn(
+-        self,
+-        audio_b64: Optional[str] = None,
+-        text: Optional[str] = None,
+-        history: Optional[List[Dict[str, Any]]] = None,
+-        tools: Optional[List[str]] = None,
+-    ) -> Dict[str, Any]:
+-        return {
+-            "text": f"[echo] {text or ''}".strip(),
+-            "audio_b64": None,
+-            "tool_calls": [],
+-        }
+-
+-    async def call_tool(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+-        return {"name": name, "result": "ok", "args": args}
+-
+-
+-class DifyAdapter:
+-    """接入 app.ai.dify.model_wrapper.DifyModelWrapper（Dify Chatflow，以存量为准）。
+-
+-    与 AgentScopeAdapter 同构，遵守 AgentAdapter 协议（run_voice_turn / call_tool）。
+-    Dify Chatflow 本身不暴露原生工具调用，故 call_tool 委托存量 ToolManager。
+-    """
+-
+-    def __init__(
+-        self,
+-        agent_id: str = "dify",
+-        flow_code: str = "",
+-        engine_code: str = "dify",
+-        stream: bool = False,
+-    ):
+-        self.agent_id = agent_id
+-        self.engine_code = engine_code
+-        self.flow_code = flow_code
+-        self.stream = stream
+-        self._client = None
+-
+-    def _ensure_client(self):
+-        if self._client is None:
+-            from app.ai.dify.model_wrapper import DifyModelWrapper
+-
+-            self._client = DifyModelWrapper(flow_code=self.flow_code, stream=self.stream)
+-        return self._client
+-
+-    def _build_messages(self, text: Optional[str], history: Optional[List[Dict[str, Any]]]):
+-        from agentscope.message import Msg
+-
+-        # agentscope 2.0：Msg 为 pydantic 模型（关键字传参），
+-        # 且 content 必须是 list[ContentBlock]，纯字符串会被校验拒绝。
+-        from agentscope.message import TextBlock
+-
+-        def _msg(role: str, content: str):
+-            return Msg(name=role, content=[TextBlock(type="text", text=content)], role=role)
+-
+-        messages = []
+-        for item in history or []:
+-            role = item.get("role", "user")
+-            messages.append(_msg(role, item.get("content", "")))
+-        messages.append(_msg("user", text or ""))
+-        return messages
+-
+-    async def run_voice_turn(
+-        self,
+-        audio_b64: Optional[str] = None,
+-        text: Optional[str] = None,
+-        history: Optional[List[Dict[str, Any]]] = None,
+-        tools: Optional[List[str]] = None,
+-    ) -> Dict[str, Any]:
+-        import inspect
+-
+-        client = self._ensure_client()
+-        resp = await client(self._build_messages(text, history))
+-
+-        # 流式模式返回 async generator，需聚合；阻塞模式直接取 content。
+-        # 用 isasyncgen 显式判定（避免 MagicMock 的 __aiter__ 造成误判）。
+-        content = ""
+-        if inspect.isasyncgen(resp):
+-            async for chunk in resp:
+-                content += getattr(chunk, "content", "") or ""
+-        else:
+-            content = getattr(resp, "content", "") or ""
+-
+-        return {"text": content, "audio_b64": None, "tool_calls": []}
+-
+-    async def call_tool(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+-        from app.ai.tool_manager.manager import ToolManager
+-
+-        return await ToolManager().call_tool(name, **(args or {}))
+-
+-
+-# 默认注册 Dify 适配器（import 即生效，避免调用方手工注册）
+-AgentRegistry.register(DifyAdapter())
+diff --git a/backend/app/duplex/voice/audio_codec.py b/backend/app/duplex/voice/audio_codec.py
+deleted file mode 100644
+index e41ede9..0000000
+--- a/backend/app/duplex/voice/audio_codec.py
++++ /dev/null
+@@ -1,31 +0,0 @@
+-"""音频编解码：float32↔PCM16、Base64、线性重采样。"""
+-import base64
+-import numpy as np
+-
+-
+-def float32_to_pcm16(samples: np.ndarray) -> np.ndarray:
+-    """float32[-1,1] → int16 PCM（钳位到 [-1,1]，满量程映射到 [-32768,32767]）。"""
+-    s = np.clip(samples, -1.0, 1.0)
+-    return (s * 32768).clip(-32768, 32767).astype(np.int16)
+-
+-
+-def pcm16_to_base64(pcm_bytes: bytes) -> str:
+-    return base64.b64encode(pcm_bytes).decode("ascii")
+-
+-
+-def base64_to_pcm16(b64: str) -> bytes:
+-    return base64.b64decode(b64)
+-
+-
+-def linear_resample(pcm: np.ndarray, in_rate: int, out_rate: int) -> np.ndarray:
+-    """简单最近邻重采样（差距分析 §3.4.3 48k→16k 线性插值占位实现）。"""
+-    if in_rate == out_rate:
+-        return pcm
+-    n_out = int(round(len(pcm) * out_rate / in_rate))
+-    idx = np.linspace(0, len(pcm) - 1, n_out)
+-    return pcm[idx.astype(np.int32)].astype(pcm.dtype)
+-
+-
+-def resample_pcm16(pcm_bytes: bytes, in_rate: int, out_rate: int) -> bytes:
+-    arr = np.frombuffer(pcm_bytes, dtype=np.int16)
+-    return linear_resample(arr, in_rate, out_rate).tobytes()
+diff --git a/backend/app/duplex/voice/constants.py b/backend/app/duplex/voice/constants.py
+index 765143c..99830fe 100644
+--- a/backend/app/duplex/voice/constants.py
++++ b/backend/app/duplex/voice/constants.py
+@@ -22,36 +22,40 @@ class EventType(str, Enum):
+     INPUT_MUTE = "input.mute"
+     INPUT_UNMUTE = "input.unmute"
+     OUTPUT_MODE = "output.mode"
+     INTERRUPT = "interrupt"
+     RESPONSE_STARTED = "response.started"
+     RESPONSE_INTERRUPTED = "response.interrupted"
+     PLAYBACK_STARTED = "playback.started"
+     PLAYBACK_ENDED = "playback.ended"
+     PLAYBACK_CANCELLED = "playback.cancelled"
+     PLAYBACK_CLEAR = "playback.clear"
++    TOOL_CALL = "tool_call"
++    TOOL_RESULT = "tool_result"
++    TOOL_CONFIRM_REQUIRED = "tool.confirm_required"
++    TOOL_CONFIRM = "tool.confirm"
+     TRANSCRIPT_DELTA = "transcript.delta"
+     TRANSCRIPT_FINAL = "transcript.final"
+     PING = "ping"
+     PONG = "pong"
+     ERROR = "error"
+     # 扩展（D6 冻结）
+     EXPERT_JOIN = "expert.join"
+     EXPERT_LEAVE = "expert.leave"
+     AGENT_ACTIVITY = "agent.activity"
+     INSIGHT_DELTA = "insight.delta"
+     RESPONSE_REQUEST = "response.request"
+     PARTICIPANT_JOINED = "participant.joined"
+     PARTICIPANT_LEFT = "participant.left"
+ 
+ 
+ class ProviderKey(str, Enum):
+     DASHSCOPE = "dashscope"
+-    LOCAL = "local"
++    OPENAI = "openai"
+ 
+ 
+ class ErrorCode(str, Enum):
+     INACTIVITY = "inactivity"
+     INPUT_BUSY = "input_busy"
+     FATAL = "fatal"
+     PROVIDER_UNAVAILABLE = "provider_unavailable"
+     OTHER = "other"
+diff --git a/backend/app/duplex/voice/pipeline/__init__.py b/backend/app/duplex/voice/pipeline/__init__.py
+deleted file mode 100644
+index e7d21a2..0000000
+--- a/backend/app/duplex/voice/pipeline/__init__.py
++++ /dev/null
+@@ -1,14 +0,0 @@
+-"""本地私有化语音管线（M4）。
+-
+-四 stage 编排：
+-    Silero VAD（语音端点检测）
+-      → Paraformer 2pass（流式 ASR）
+-      → AgentAdapter（生成回复）
+-      → CosyVoice2（流式 TTS）
+-
+-设计原则：
+-- 各 stage **惰性加载**重型依赖（onnxruntime / funasr / cosyvoice），
+-  未安装时模块仍可 import，仅 `available()` 返回 False。
+-- `available()` 用于 `LocalProvider.is_configured()` 探测，
+-  未就绪时上层自动降级到云端 Provider。
+-"""
+diff --git a/backend/app/duplex/voice/pipeline/stt.py b/backend/app/duplex/voice/pipeline/stt.py
+deleted file mode 100644
+index 9b7583d..0000000
+--- a/backend/app/duplex/voice/pipeline/stt.py
++++ /dev/null
+@@ -1,86 +0,0 @@
+-"""STT stage：Paraformer 2pass（流式 ASR，funasr）。
+-
+-- 依赖就绪：走 funasr 流式识别
+-- 未就绪：退化为「占位转写」，保证四 stage 编排可跑通与可测
+-
+-对外接口：
+-    run(in_queue)  -> 逐个产出已结束语音段的识别结果（含 partial 序列）
+-    partials(seg)  -> 该段的中间结果序列（partial 粒度可控）
+-    final(seg)     -> 该段最终结果
+-"""
+-from typing import Any, AsyncGenerator, Dict, List, Optional
+-
+-from loguru import logger
+-
+-from app.config import settings
+-
+-
+-class ParaformerStream:
+-    """Paraformer 2pass 流式识别封装。"""
+-
+-    def __init__(
+-        self,
+-        model: str = "",
+-        partial_interval_chars: int = 8,
+-        sample_rate: int = 16000,
+-    ):
+-        self.model = model or settings.VOICE_LOCAL_STT_MODEL
+-        self.partial_interval_chars = max(1, partial_interval_chars)
+-        self.sample_rate = sample_rate
+-        self._model_obj = None
+-
+-    def available(self) -> bool:
+-        try:
+-            import funasr  # noqa: F401
+-        except ImportError:
+-            return False
+-        return bool(self.model)
+-
+-    def _load(self):
+-        if self._model_obj is None:
+-            from funasr import AutoModel
+-
+-            self._model_obj = AutoModel(model=self.model)
+-        return self._model_obj
+-
+-    def _recognize(self, pcm_chunks: List[bytes]) -> str:
+-        """对一段完整语音做识别。未就绪时返回占位。"""
+-        audio = b"".join(pcm_chunks)
+-        if self.available():
+-            try:
+-                m = self._load()
+-                res = m.generate(input=audio, sample_rate=self.sample_rate)
+-                if res:
+-                    return str(res[0].get("text", "") or "")
+-                return ""
+-            except Exception as e:  # noqa: BLE001 - 识别失败降级为占位
+-                logger.warning(f"Paraformer 识别失败: {e}")
+-        # 退化：无识别能力时给出可辨识的占位转写
+-        return f"[本地转写占位 {len(audio)}B]"
+-
+-    async def run(
+-        self, in_queue: "asyncio.Queue[bytes]",
+-    ) -> AsyncGenerator[Dict[str, Any], None]:
+-        """消费音频块队列，产出 {'final': str, 'chunks': [...]} 段结果。"""
+-        import asyncio
+-
+-        buffer: List[bytes] = []
+-        while True:
+-            chunk = await in_queue.get()
+-            if chunk is None:  # 结束哨兵
+-                if buffer:
+-                    yield {"final": self._recognize(buffer), "chunks": buffer}
+-                    buffer = []
+-                return
+-            buffer.append(chunk)
+-
+-    def partials(self, seg: Dict[str, Any]) -> List[str]:
+-        """把最终结果切成若干中间结果，模拟流式 partial 粒度。"""
+-        text = seg.get("final", "") or ""
+-        step = self.partial_interval_chars
+-        if not text:
+-            return []
+-        return [text[i : i + step] for i in range(0, len(text), step)]
+-
+-    def final(self, seg: Dict[str, Any]) -> str:
+-        return seg.get("final", "") or ""
+diff --git a/backend/app/duplex/voice/pipeline/tts.py b/backend/app/duplex/voice/pipeline/tts.py
+deleted file mode 100644
+index fb17233..0000000
+--- a/backend/app/duplex/voice/pipeline/tts.py
++++ /dev/null
+@@ -1,67 +0,0 @@
+-"""TTS stage：CosyVoice2（流式语音合成）。
+-
+-- 依赖就绪：走 CosyVoice2 流式合成，按句/按块产出 wav
+-- 未就绪：产出静音 wav 占位（保证编排可跑通与首包可测）
+-"""
+-from typing import Iterator, List
+-
+-from loguru import logger
+-
+-from app.config import settings
+-
+-
+-class CosyVoice2:
+-    """CosyVoice2 流式 TTS 封装。"""
+-
+-    def __init__(self, model: str = "", speed: float = 0.0, sample_rate: int = 24000):
+-        self.model = model or settings.VOICE_LOCAL_TTS_MODEL
+-        self.speed = speed or settings.VOICE_LOCAL_TTS_SPEED
+-        self.sample_rate = sample_rate
+-        self._tts = None
+-
+-    def available(self) -> bool:
+-        try:
+-            import cosyvoice  # noqa: F401
+-        except ImportError:
+-            return False
+-        return bool(self.model)
+-
+-    def _load(self):
+-        if self._tts is None:
+-            from cosyvoice.cli.cosyvoice import CosyVoice2 as _Impl
+-
+-            self._tts = _Impl(self.model)
+-        return self._tts
+-
+-    def _split(self, text: str) -> List[str]:
+-        """按标点切句，便于流式逐句合成（降低首包延迟）。"""
+-        import re
+-
+-        parts = re.split(r"(?<=[。！？；.!?;])", text or "")
+-        return [p for p in parts if p.strip()]
+-
+-    def stream(self, text: str) -> Iterator[bytes]:
+-        """流式产出 wav 音频块（bytes）。"""
+-        for sentence in self._split(text):
+-            yield self._synth(sentence)
+-
+-    def _synth(self, sentence: str) -> bytes:
+-        if self.available():
+-            try:
+-                tts = self._load()
+-                chunks = []
+-                for out in tts.inference_zero_shot(sentence, "", "", speed=self.speed):
+-                    chunks.append(out["tts_speech"].numpy().tobytes())
+-                return b"".join(chunks)
+-            except Exception as e:  # noqa: BLE001 - 合成失败降级为静音
+-                logger.warning(f"CosyVoice2 合成失败: {e}")
+-        return self._silence(sentence)
+-
+-    def _silence(self, sentence: str) -> bytes:
+-        """按句长产出等时长静音 wav（16bit PCM），用于无模型时跑通编排。"""
+-        import struct
+-
+-        # 经验值：每字约 0.25s
+-        seconds = max(0.2, len(sentence or "") * 0.25)
+-        n = int(seconds * self.sample_rate)
+-        return b"".join(struct.pack("<h", 0) for _ in range(n))
+diff --git a/backend/app/duplex/voice/pipeline/vad.py b/backend/app/duplex/voice/pipeline/vad.py
+deleted file mode 100644
+index c6dc4ee..0000000
+--- a/backend/app/duplex/voice/pipeline/vad.py
++++ /dev/null
+@@ -1,111 +0,0 @@
+-"""VAD stage：Silero VAD（onnxruntime 推理）。
+-
+-- 依赖与模型就绪：走 onnxruntime 推理真实概率
+-- 未就绪：退化为基于能量的简易 VAD（保证管线可跑通，精度不及 Silero）
+-
+-状态机带「最小静音时长」迟滞，避免短暂停顿被误判为说话结束。
+-"""
+-from typing import Optional
+-
+-from loguru import logger
+-
+-from app.config import settings
+-
+-
+-class SileroVAD:
+-    """Silero VAD 封装。"""
+-
+-    def __init__(
+-        self,
+-        threshold: Optional[float] = None,
+-        sample_rate: int = 16000,
+-        min_silence_ms: int = 300,
+-        model_path: str = "",
+-    ):
+-        self.threshold = threshold if threshold is not None else settings.VOICE_VAD_THRESHOLD
+-        self.sample_rate = sample_rate
+-        self.min_silence_ms = min_silence_ms
+-        self.model_path = model_path or settings.VOICE_LOCAL_VAD_MODEL
+-        self._session = None
+-        self._speaking = False
+-        self._silence_ms = 0.0
+-
+-    # ── 可用性 ──────────────────────────────────────────
+-    def available(self) -> bool:
+-        """onnxruntime 与模型文件均就绪才算可用。"""
+-        import os
+-
+-        try:
+-            import onnxruntime  # noqa: F401
+-        except ImportError:
+-            return False
+-        return bool(self.model_path) and os.path.exists(self.model_path)
+-
+-    # ── 推理 ────────────────────────────────────────────
+-    def _load(self):
+-        if self._session is None:
+-            import onnxruntime
+-
+-            self._session = onnxruntime.InferenceSession(self.model_path)
+-        return self._session
+-
+-    def _infer(self, pcm: bytes) -> float:
+-        """返回 0..1 语音概率。测试可覆盖此方法注入概率。"""
+-        if self.available():
+-            try:
+-                sess = self._load()
+-                import numpy as np
+-
+-                x = np.frombuffer(pcm, dtype=np.int16).astype("float32") / 32768.0
+-                x = x.reshape(1, -1)
+-                out = sess.run(None, {"input": x})
+-                return float(out[0].reshape(-1)[0])
+-            except Exception as e:  # noqa: BLE001 - 推理失败退化为能量法
+-                logger.warning(f"SileroVAD 推理失败，退化为能量 VAD: {e}")
+-        return self._energy(pcm)
+-
+-    @staticmethod
+-    def _energy(pcm: bytes) -> float:
+-        """能量法兜底：归一化 RMS。"""
+-        if not pcm:
+-            return 0.0
+-        import array
+-
+-        arr = array.array("h")
+-        try:
+-            arr.frombytes(pcm[: len(pcm) // 2 * 2])
+-        except (ValueError, TypeError):
+-            return 0.0
+-        if not arr:
+-            return 0.0
+-        rms = (sum((v / 32768.0) ** 2 for v in arr) / len(arr)) ** 0.5
+-        return min(1.0, rms * 6.0)  # 经验放大系数
+-
+-    # ── 状态机 ──────────────────────────────────────────
+-    def feed(self, pcm: bytes) -> Optional[str]:
+-        """喂入一个音频块，返回 None / 'speech_started' / 'speech_stopped'。"""
+-        prob = self._infer(pcm)
+-        dur_ms = (len(pcm) / 2) / self.sample_rate * 1000
+-
+-        if prob >= self.threshold:
+-            self._silence_ms = 0.0
+-            if not self._speaking:
+-                self._speaking = True
+-                return "speech_started"
+-            return None
+-
+-        if self._speaking:
+-            self._silence_ms += dur_ms
+-            if self._silence_ms >= self.min_silence_ms:
+-                self._speaking = False
+-                self._silence_ms = 0.0
+-                return "speech_stopped"
+-        return None
+-
+-    @property
+-    def speaking(self) -> bool:
+-        return self._speaking
+-
+-    def reset(self) -> None:
+-        self._speaking = False
+-        self._silence_ms = 0.0
+diff --git a/backend/app/duplex/voice/providers/agentscope.py b/backend/app/duplex/voice/providers/agentscope.py
+new file mode 100644
+index 0000000..c0ad4b2
+--- /dev/null
++++ b/backend/app/duplex/voice/providers/agentscope.py
+@@ -0,0 +1,260 @@
++"""AgentScope 2.0.8 RealtimeAgent 内核 Provider（spec §2）。
++
++两个注册子类：
++- DashScopeAgentProvider(key="dashscope")：Qwen-Omni / Qwen-Audio-3.0 实时模型
++- OpenAIAgentProvider(key="openai")：gpt-realtime-*（注册位，2.0.8 暂不可用）
++
++事件映射（spec §3.1）：
++ReplyStart(user)→speech_started；ReplyStart(assistant)→response_started；
++TextBlockDelta→transcript|tts_transcript；DataBlockDelta→audio_delta；
++ReplyEnd(user)→speech_stopped；ReplyEnd(assistant)→playback.ended；
++ToolCallStart→tool_call；ToolResultEnd→tool_result；
++RequireUserConfirm→tool.confirm_required。
++"""
++import asyncio
++import json
++from typing import Any, AsyncGenerator, Dict, Optional
++
++from loguru import logger
++
++from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
++from app.duplex.voice.providers.agentscope_transport import BrowserTransport
++
++
++def build_realtime_model(provider_key: str, model_name: str, api_key: str,
++                         base_url: Optional[str] = None,
++                         voice: str = "default"):
++    """模型工厂（spec §2.3）：按模型名前缀选择 AgentScope 模型类。
++
++    注意：agentscope 2.0.8 发布版不含 OpenAIRealtimeModel（官方文档与
++    GitHub main 超前于发布版）。gpt-realtime 分支做惰性导入，框架升级后
++    零代码自动启用；当前版本下抛出明确的 NotImplementedError。
++    """
++    from agentscope.credential import DashScopeCredential
++
++    if model_name.startswith("qwen-audio-3.0-realtime"):
++        from agentscope.realtime import DashScopeAudioRealtimeModel
++        return DashScopeAudioRealtimeModel(
++            model=model_name, credential=DashScopeCredential(api_key=api_key))
++    if model_name.startswith(("qwen3.5-omni", "qwen3-omni", "qwen-omni")):
++        from agentscope.realtime import DashScopeRealtimeModel
++        return DashScopeRealtimeModel(
++            model=model_name, credential=DashScopeCredential(api_key=api_key),
++            parameters=DashScopeRealtimeModel.Parameters(voice=voice))
++    if model_name.startswith("gpt-realtime"):
++        from agentscope.credential import OpenAICredential
++        try:
++            from agentscope.realtime import OpenAIRealtimeModel
++        except ImportError as e:
++            raise NotImplementedError(
++                f"当前 agentscope 版本不含 OpenAIRealtimeModel（gpt-realtime "
++                f"模型需升级 agentscope > 2.0.8 后使用）: {e}") from e
++        return OpenAIRealtimeModel(
++            model=model_name, credential=OpenAICredential(api_key=api_key))
++    raise ValueError(f"未知实时模型: {model_name}（provider={provider_key}）")
++
++
++def _safe_json(raw: str) -> dict:
++    try:
++        return json.loads(raw) if raw else {}
++    except json.JSONDecodeError:
++        return {"_raw": raw}
++
++
++class AgentscopeRealtimeProvider(RealtimeProvider):
++    """以 AgentScope RealtimeAgent 为内核的实时语音 Provider。"""
++
++    def __init__(self, key: Optional[str] = None) -> None:
++        # 注册表以 provider_cls() 无参实例化做 is_configured 探测，
++        # key 缺省回退到类属性（子类以类属性声明各自 key）
++        self.key = key or type(self).key or ""
++        self._system_prompt = ""
++        self._mcp_tool_schemas: list = []
++        self._agent = None
++        self._transport: Optional[BrowserTransport] = None
++        self._queue: Optional[asyncio.Queue] = None
++        self._pump_task: Optional[asyncio.Task] = None
++        self._user_replies: set = set()
++        # confirm_id → (reply_id, ToolCallBlock)
++        self._pending_confirms: Dict[str, tuple] = {}
++        self._closed = False
++
++    # ---- 组装（测试可覆写）----
++
++    def _agent_factory(self, model, toolkit):
++        from agentscope.agent import RealtimeAgent
++        return RealtimeAgent(name="mediator", system_prompt=self._system_prompt,
++                             model=model, toolkit=toolkit)
++
++    def _toolkit_factory(self):
++        from app.duplex.voice.toolkit_builder import build_toolkit
++        return build_toolkit(self._mcp_tool_schemas)
++
++    # ---- RealtimeProvider 接口 ----
++
++    async def connect(self, session_config: Dict[str, Any]) -> None:
++        self._system_prompt = session_config.get("instructions", "")
++        self._mcp_tool_schemas = session_config.get("mcp_tools", [])
++        model = build_realtime_model(
++            provider_key=self.key,
++            model_name=session_config.get("model", ""),
++            api_key=session_config.get("api_key", ""),
++            base_url=session_config.get("base_url"),
++            voice=session_config.get("voice", "default"),
++        )
++        self._queue = asyncio.Queue()
++        self._transport = BrowserTransport(
++            input_sample_rate=model.input_sample_rate,
++            output_sample_rate=model.output_sample_rate,
++            uplink=asyncio.Queue(), downlink_events=self._queue,
++        )
++        self._agent = self._agent_factory(model, self._toolkit_factory())
++        await self._agent.connect()
++        await self._transport.start()
++        await self._start_pump()
++
++    async def _start_pump(self) -> None:
++        if self._pump_task is not None or self._agent is None:
++            return
++        self._pump_task = asyncio.create_task(
++            self._pump(self._agent, self._transport, self._queue))
++
++    async def _pump(self, agent, transport, queue) -> None:
++        from agentscope.event import (
++            DataBlockDeltaEvent, ReplyEndEvent, ReplyStartEvent,
++            RequireUserConfirmEvent, TextBlockDeltaEvent, ToolCallStartEvent,
++            ToolResultEndEvent,
++        )
++        try:
++            async for ev in agent.reply_stream(transport):
++                match ev:
++                    case ReplyStartEvent(role="user"):
++                        self._user_replies.add(ev.reply_id)
++                        await queue.put(ProviderEvent("speech_started", {}))
++                    case ReplyStartEvent():
++                        await queue.put(ProviderEvent("response_started", {}))
++                    case TextBlockDeltaEvent():
++                        is_user = ev.reply_id in self._user_replies
++                        await queue.put(ProviderEvent(
++                            "transcript" if is_user else "tts_transcript",
++                            {"text": ev.delta}))
++                    case DataBlockDeltaEvent() if ev.data:
++                        import base64 as b64
++                        await queue.put(ProviderEvent(
++                            "audio_delta", {"audio": b64.b64decode(ev.data)}))
++                    case ToolCallStartEvent():
++                        await queue.put(ProviderEvent(
++                            "tool_call", {"call_id": ev.tool_call_id,
++                                          "name": ev.tool_call_name}))
++                    case ToolResultEndEvent():
++                        await queue.put(ProviderEvent(
++                            "tool_result", {"call_id": ev.tool_call_id,
++                                            "state": str(ev.state)}))
++                    case RequireUserConfirmEvent():
++                        for tc in ev.tool_calls:
++                            self._pending_confirms[tc.id] = (ev.reply_id, tc)
++                            await queue.put(ProviderEvent(
++                                "tool.confirm_required",
++                                {"confirm_id": tc.id, "tool_name": tc.name,
++                                 "arguments": _safe_json(tc.input),
++                                 "timeout_ms": 300000}))
++                    case ReplyEndEvent() if ev.reply_id in self._user_replies:
++                        await queue.put(ProviderEvent("speech_stopped", {}))
++                    case ReplyEndEvent():
++                        await queue.put(ProviderEvent(
++                            "playback.ended",
++                            {"reply_id": ev.reply_id,
++                             "finished_reason": str(ev.finished_reason)}))
++        except asyncio.CancelledError:
++            raise
++        except Exception as e:  # noqa: BLE001 - 泵异常落事件流
++            if not self._closed:
++                logger.error(f"AgentScope 事件泵异常: {e}")
++                await queue.put(ProviderEvent(
++                    "error", {"code": "fatal", "message": str(e)}))
++
++    async def send_audio(self, pcm_data: bytes) -> None:
++        if self._transport is None:  # 未连接（含测试直注场景）：无下游可送
++            return
++        if self._transport.input_sample_rate != 16000:
++            self._transport.submit_resampled(pcm_data, source_rate=16000)
++        else:
++            self._transport.submit_audio(pcm_data)
++
++    async def send_text(self, text: str) -> None:
++        if self._agent is not None and not self._agent.model.supports_text_input:
++            await self._queue.put(ProviderEvent(
++                "error", {"code": "text_unsupported",
++                          "message": f"{type(self._agent.model).__name__} 不支持文本输入"}))
++            return
++        if self._transport is None:
++            await self._queue.put(ProviderEvent(
++                "error", {"code": "not_connected",
++                          "message": "语音会话未连接，无法发送文本"}))
++            return
++        self._transport.submit_text(text)
++
++    async def interrupt(self) -> None:
++        if self._agent is not None:
++            await self._agent.interrupt()
++
++    async def resolve_confirm(self, confirm_id: str, approved: bool) -> None:
++        entry = self._pending_confirms.pop(confirm_id, None)
++        if entry is None:
++            return
++        reply_id, tool_call = entry
++        from agentscope.event import ConfirmResult, UserConfirmResultEvent
++        payload = UserConfirmResultEvent(
++            reply_id=reply_id,
++            confirm_results=[ConfirmResult(confirmed=approved,
++                                           tool_call=tool_call)],
++        ).model_dump(exclude_none=True)
++        self._transport.submit_confirm(payload)
++
++    async def configure_session(self, **kwargs) -> None:
++        return None  # 会话在 connect 一次性配置
++
++    async def events(self) -> AsyncGenerator[ProviderEvent, None]:
++        while True:
++            item = await self._queue.get()
++            if item is None:
++                return
++            yield item
++
++    async def close(self) -> None:
++        self._closed = True
++        if self._pump_task is not None:
++            self._pump_task.cancel()
++            self._pump_task = None
++        if self._transport is not None:
++            self._transport.close_uplink()
++            await self._transport.close()
++        if self._agent is not None:
++            try:
++                await self._agent.close()
++            except Exception as e:  # noqa: BLE001
++                logger.warning(f"agent close 异常（忽略）: {e}")
++        if self._queue is not None:
++            await self._queue.put(None)
++
++    def get_capabilities(self):
++        from app.duplex.voice.capabilities import ProviderCapabilities
++        return ProviderCapabilities(
++            input_sample_rate=16000, output_sample_rate=24000,
++            server_vad=True, native_transcription=True,
++            barge_in_mode="server")
++
++    def is_configured(self) -> bool:
++        from app.duplex.voice.voice_config import resolve_voice_config
++        try:
++            return bool(resolve_voice_config(self.key).get("configured"))
++        except Exception:  # noqa: BLE001
++            return False
++
++
++class DashScopeAgentProvider(AgentscopeRealtimeProvider):
++    key = "dashscope"
++
++
++class OpenAIAgentProvider(AgentscopeRealtimeProvider):
++    key = "openai"
+diff --git a/backend/app/duplex/voice/providers/agentscope_transport.py b/backend/app/duplex/voice/providers/agentscope_transport.py
+new file mode 100644
+index 0000000..9968339
+--- /dev/null
++++ b/backend/app/duplex/voice/providers/agentscope_transport.py
+@@ -0,0 +1,128 @@
++"""浏览器侧 TransportBase 桥接（协议 v2 网关 ⇄ AgentScope RealtimeAgent，spec §2.2）。
++
++- 上行：网关 PCM/控制帧 → AudioFrame/ControlFrame（限深 100 块，满丢最旧）
++- 下行：agent 音频 → 事件队列（audio_delta）+ 发送水位记账（服务端模拟 PlayoutPosition）
++- clear_audio：返回水位并清零（barge-in truncate 事实来源），并产出 playback_cancelled
++- 采样率契约：transport.input_sample_rate 必须等于模型上行率；
++  浏览器 16k 与模型 24k 不一致时经 submit_resampled 线性插值重采样。
++"""
++import asyncio
++import time
++from typing import AsyncIterator
++
++from agentscope.realtime import (
++    AudioFrame, ControlFrame, ControlFrameType, PlayoutPosition, TransportBase,
++)
++
++from app.duplex.voice.providers.base import ProviderEvent
++
++_UPLINK_MAX = 100
++
++
++class BrowserTransport(TransportBase):
++    """桥接浏览器 WebSocket 与 RealtimeAgent 的 TransportBase 实现。"""
++
++    def __init__(self, input_sample_rate: int, output_sample_rate: int,
++                 uplink: asyncio.Queue, downlink_events: asyncio.Queue) -> None:
++        self.input_sample_rate = input_sample_rate
++        self.output_sample_rate = output_sample_rate
++        self._uplink = uplink
++        self._events = downlink_events
++        self._running = False
++        self._item_id = ""
++        self._played_samples = 0
++        self._first_played_at: float | None = None
++
++    async def start(self) -> None:
++        self._running = True
++
++    async def close(self) -> None:
++        self._running = False
++
++    async def incoming(self) -> AsyncIterator[AudioFrame | ControlFrame]:
++        while True:
++            frame = await self._uplink.get()
++            if frame is None:  # 关闭哨兵
++                return
++            yield frame
++
++    # ---- 上行入口（由 Provider 调用）----
++
++    def submit_audio(self, pcm: bytes) -> None:
++        self._put_uplink(AudioFrame(pcm=pcm))
++
++    def submit_resampled(self, pcm: bytes, source_rate: int) -> None:
++        if source_rate != self.input_sample_rate:
++            pcm = _resample_pcm16(pcm, source_rate, self.input_sample_rate)
++        self._put_uplink(AudioFrame(pcm=pcm))
++
++    def submit_text(self, text: str) -> None:
++        self._put_uplink(ControlFrame(type=ControlFrameType.TEXT, data={"text": text}))
++
++    def submit_confirm(self, data: dict) -> None:
++        self._put_uplink(ControlFrame(type=ControlFrameType.USER_CONFIRM, data=data))
++
++    def submit_interrupt(self) -> None:
++        self._put_uplink(ControlFrame(type=ControlFrameType.INTERRUPT, data={}))
++
++    def _put_uplink(self, frame) -> None:
++        if not self._running:
++            return
++        if self._uplink.qsize() >= _UPLINK_MAX:
++            try:
++                self._uplink.get_nowait()
++            except asyncio.QueueEmpty:
++                pass
++        self._uplink.put_nowait(frame)
++
++    def close_uplink(self) -> None:
++        self._uplink.put_nowait(None)
++
++    # ---- 下行（agent 调用）----
++
++    async def send_audio(self, pcm: bytes, item_id: str) -> None:
++        if item_id != self._item_id:
++            self._item_id = item_id
++            self._played_samples = 0
++            self._first_played_at = time.monotonic()
++        self._played_samples += len(pcm) // 2
++        await self._events.put(
++            ProviderEvent(type="audio_delta", data={"audio": pcm}))
++
++    async def clear_audio(self) -> PlayoutPosition:
++        pos = self.playout()
++        self._played_samples = 0
++        self._first_played_at = None
++        await self._events.put(ProviderEvent(
++            type="playback_cancelled",
++            data={"item_id": pos.item_id, "played_ms": pos.played_ms,
++                  "reason": "barge_in"}))
++        return pos
++
++    def playout(self) -> PlayoutPosition:
++        return PlayoutPosition(
++            item_id=self._item_id,
++            played_ms=self._played_samples * 1000 // self.output_sample_rate,
++            first_played_at=self._first_played_at,
++        )
++
++
++def _resample_pcm16(pcm: bytes, from_rate: int, to_rate: int) -> bytes:
++    """PCM16 单声道线性插值重采样（16k→24k 上行适配）。"""
++    if from_rate == to_rate or not pcm:
++        return pcm
++    import array
++    samples = array.array("h")
++    samples.frombytes(pcm)
++    if len(samples) < 2:
++        return pcm
++    ratio = from_rate / to_rate
++    out_len = int(len(samples) / ratio)
++    out = array.array("h", bytes(2 * out_len))
++    for i in range(out_len):
++        src = i * ratio
++        i0 = int(src)
++        i1 = min(i0 + 1, len(samples) - 1)
++        frac = src - i0
++        out[i] = int(samples[i0] * (1 - frac) + samples[i1] * frac)
++    return out.tobytes()
+diff --git a/backend/app/duplex/voice/providers/base.py b/backend/app/duplex/voice/providers/base.py
+index 1a24732..9b2cf25 100644
+--- a/backend/app/duplex/voice/providers/base.py
++++ b/backend/app/duplex/voice/providers/base.py
+@@ -43,13 +43,21 @@ class RealtimeProvider(ABC):
+         yield ProviderEvent(type="")
+ 
+     @abstractmethod
+     async def close(self) -> None:
+         """关闭连接。"""
+ 
+     async def send_text(self, text: str) -> None:
+         """向对端发送文本（文本模式 / 打断时）。默认 no-op，子类按需实现。"""
+         return None
+ 
++    async def interrupt(self) -> None:
++        """请求打断当前回复（子类按需实现；默认 no-op 兼容测试桩）。"""
++        return None
++
++    async def resolve_confirm(self, confirm_id: str, approved: bool) -> None:
++        """回传工具确认结果（子类按需实现）。"""
++        return None
++
+     def get_capabilities(self) -> ProviderCapabilities:
+         """返回 Provider 能力声明（子类可覆盖）。"""
+         return ProviderCapabilities()
+diff --git a/backend/app/duplex/voice/providers/dashscope.py b/backend/app/duplex/voice/providers/dashscope.py
+deleted file mode 100644
+index d2a5b30..0000000
+--- a/backend/app/duplex/voice/providers/dashscope.py
++++ /dev/null
+@@ -1,200 +0,0 @@
+-"""DashScope Realtime Provider。
+-
+-通过 WebSocket 连接 DashScope Realtime API，
+-处理双向音频流 + ASR 转写 + 工具调用。
+-"""
+-import base64
+-import json
+-import os
+-from typing import Any, AsyncGenerator, Dict, Optional
+-
+-import websockets
+-from loguru import logger
+-
+-from app.duplex.voice.capabilities import ProviderCapabilities
+-from app.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
+-
+-
+-class DashScopeProvider(RealtimeProvider):
+-    """DashScope Realtime Provider 实现。"""
+-
+-    key = "dashscope"
+-    input_sample_rate = 16000
+-    output_sample_rate = 24000
+-
+-    def __init__(self):
+-        self._ws: Optional[websockets.WebSocketClientProtocol] = None
+-        # 对齐 qwen-audio-agent：api-ws 实时端点 + qwen-audio-3.0-realtime-plus
+-        self._base_url = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+-        self._model = "qwen-audio-3.0-realtime-plus"
+-        self._api_key: Optional[str] = None
+-
+-    def get_capabilities(self) -> ProviderCapabilities:
+-        return ProviderCapabilities(
+-            supports_partial_audio=True,
+-            supports_interrupt=True,
+-            supports_duplex=True,
+-            input_sample_rate=self.input_sample_rate,
+-            output_sample_rate=self.output_sample_rate,
+-        )
+-
+-    async def connect(self, session_config: Dict[str, Any]) -> None:
+-        """建立与 DashScope Realtime API 的 WebSocket 连接。
+-
+-        api_key / model / base_url 优先取自 session_config（由网关从数据库解析注入），
+-        缺省时回退到环境变量 / 内置默认值，保证向后兼容。
+-        """
+-        self._api_key = (session_config.get("api_key") or os.getenv("DASHSCOPE_API_KEY") or "").strip()
+-        if not self._api_key:
+-            raise ValueError("DashScopeProvider 需要 api_key（请配置语音模型密钥）")
+-        self._model = session_config.get("model") or self._model
+-        # 端点可被「API Key 管理」中的 url 覆盖（支持百炼业务空间专属域名）
+-        base_url = session_config.get("base_url") or self._base_url
+-
+-        # 对齐 qwen-audio-agent 已验证可用的写法：
+-        #   - URL 仅带 model 查询参数（不带 api-key）
+-        #   - 鉴权在 WebSocket 握手阶段通过 Authorization: Bearer <api_key> 头完成
+-        #     （DashScope Realtime API 当前只认此头；旧的 ?api-key= 查询参数已失效，会触发 401）
+-        # 鉴权头必须用 additional_headers（直接写入握手请求头，Python 3.11 即可）：
+-        #   不能用 extra_headers —— 它会转发到 loop.create_connection(extra_headers=)，
+-        #   该参数需 Python 3.12+，在 3.11 / Windows 上抛 TypeError，导致头发不出 → 401。
+-        separator = "&" if "?" in base_url else "?"
+-        url = f"{base_url}{separator}model={self._model}"
+-        headers = [("Authorization", f"Bearer {self._api_key}")]
+-        self._ws = await websockets.connect(url, additional_headers=headers)
+-        await self.configure_session(**session_config)
+-        logger.info("DashScopeProvider: 已连接")
+-
+-    async def send_text(self, text: str) -> None:
+-        """向 DashScope 发送文本（文本模式 / 打断时）。
+-
+-        对齐 qwen-audio-agent：通过 conversation.item.create 注入用户文本消息，
+-        并触发 response.create 让模型回应。
+-        """
+-        if not self._ws:
+-            raise RuntimeError("未连接，请先调用 connect()")
+-        item_event = {
+-            "type": "conversation.item.create",
+-            "item": {
+-                "type": "message",
+-                "role": "user",
+-                "content": [{"type": "input_text", "text": text}],
+-            },
+-        }
+-        await self._ws.send(json.dumps(item_event))
+-        await self._ws.send(json.dumps({"type": "response.create"}))
+-
+-    async def send_audio(self, pcm_data: bytes) -> None:
+-        """发送 PCM 音频数据。
+-
+-        DashScope api-ws 的 audio 字段接受 base64 编码的 PCM
+-        （对齐 qwen-audio-agent 的 pcmBase64）；浏览器直接发原始 PCM 字节到此。
+-        """
+-        if not self._ws:
+-            raise RuntimeError("未连接，请先调用 connect()")
+-        audio_b64 = base64.b64encode(pcm_data).decode("ascii") if isinstance(pcm_data, bytes) else pcm_data
+-        event = {
+-            "type": "input_audio_buffer.append",
+-            "audio": audio_b64,
+-        }
+-        await self._ws.send(json.dumps(event))
+-
+-    async def configure_session(self, **kwargs) -> None:
+-        """配置 DashScope 会话参数。
+-
+-        语音质量修复（方案 A）：补配 turn_detection——此前未配置，走服务端默认 VAD
+-        （阈值不可控），外放回声易误触发。默认 smart_turn（qwen-audio 家族支持，
+-        对齐 qwen-audio-agent 模型目录 audio 家族默认值）；session_config 可覆盖，
+-        传 "off" 时不下发（兼容不支持 smart_turn 的自定义模型）。
+-        """
+-        if not self._ws:
+-            return
+-        config = {
+-            "type": "session.update",
+-            "session": {
+-                "instructions": kwargs.get("instructions", ""),
+-                "voice": kwargs.get("voice", "default"),
+-                # api-ws 实时端点使用 "pcm"（非 "pcm16"），对齐 qwen-audio-agent
+-                "input_audio_format": "pcm",
+-                "output_audio_format": "pcm",
+-            },
+-        }
+-        turn_detection = kwargs.get("turn_detection", {"type": "smart_turn"})
+-        if turn_detection and turn_detection != "off":
+-            config["session"]["turn_detection"] = turn_detection
+-        # 输入转写：仅显式提供时下发（避免无效字段导致整个 session.update 被拒）
+-        transcription = kwargs.get("input_audio_transcription")
+-        if transcription:
+-            config["session"]["input_audio_transcription"] = transcription
+-        tools = kwargs.get("tools")
+-        if tools:
+-            config["session"]["tools"] = tools
+-        await self._ws.send(json.dumps(config))
+-
+-    async def events(self) -> AsyncGenerator[ProviderEvent, None]:
+-        """产出 DashScope 事件流。"""
+-        if not self._ws:
+-            return
+-        async for raw_msg in self._ws:
+-            try:
+-                data = json.loads(raw_msg)
+-                event = self._parse_event(data)
+-                if event:
+-                    yield event
+-            except json.JSONDecodeError:
+-                logger.warning(f"DashScopeProvider: 无法解析消息: {raw_msg[:100]}")
+-
+-    def _parse_event(self, data: Dict[str, Any]) -> Optional[ProviderEvent]:
+-        """解析 DashScope 事件。"""
+-        event_type = data.get("type", "")
+-
+-        if event_type == "conversation.item.input_audio_transcription.completed":
+-            return ProviderEvent("transcript", {"text": data.get("transcript", "")})
+-        elif event_type == "response.audio.delta":
+-            # DashScope api-ws 的 delta 为 base64 编码的 PCM，解码为原始字节，
+-            # 由网关以二进制帧下发，前端直接播放（无需再次 base64）。
+-            delta = data.get("delta", "")
+-            audio = b""
+-            if isinstance(delta, str) and delta:
+-                try:
+-                    audio = base64.b64decode(delta)
+-                except Exception:
+-                    audio = b""
+-            return ProviderEvent("audio_delta", {"audio": audio})
+-        elif event_type == "response.audio_transcript.delta":
+-            return ProviderEvent("tts_transcript", {"text": data.get("delta", "")})
+-        elif event_type == "response.function_call_arguments.done":
+-            args = data.get("arguments", "{}")
+-            try:
+-                parsed_args = json.loads(args) if isinstance(args, str) else args
+-            except json.JSONDecodeError:
+-                parsed_args = {}
+-            return ProviderEvent("tool_call", {
+-                "name": data.get("name", ""),
+-                "arguments": parsed_args,
+-            })
+-        elif event_type == "response.done":
+-            return ProviderEvent("response_done", {})
+-        elif event_type == "input_audio_buffer.speech_started":
+-            return ProviderEvent("speech_started", {})
+-        elif event_type == "input_audio_buffer.speech_stopped":
+-            return ProviderEvent("speech_stopped", {})
+-        elif event_type == "error":
+-            # 服务端错误事件（如 session.update 含非法字段被拒）：落日志供排查，
+-            # 不向网关产出事件（_normalize_outbound 无对应映射，透传会被丢弃）
+-            logger.warning(f"DashScopeProvider: 服务端错误事件: {data}")
+-            return None
+-
+-        return None
+-
+-    async def close(self) -> None:
+-        """关闭 WebSocket 连接。"""
+-        if self._ws:
+-            await self._ws.close()
+-            self._ws = None
+-            logger.info("DashScopeProvider: 已断开")
+-
+-
+-# 自注册到 ProviderRegistry
+-from app.duplex.voice.providers.registry import ProviderRegistry
+-ProviderRegistry.register(DashScopeProvider)
+diff --git a/backend/app/duplex/voice/providers/local.py b/backend/app/duplex/voice/providers/local.py
+deleted file mode 100644
+index 3189d4f..0000000
+--- a/backend/app/duplex/voice/providers/local.py
++++ /dev/null
+@@ -1,173 +0,0 @@
+-"""Local Provider（本地私有化管线，M4 真实对接）。
+-
+-四 stage 编排：
+-    Silero VAD  →  Paraformer 2pass  →  AgentAdapter  →  CosyVoice2
+-
+-- 各 stage 惰性加载重型依赖（onnxruntime / funasr / cosyvoice），
+-  缺依赖时按 stage 优雅降级（能量 VAD / 占位转写 / 静音 wav），
+-  使编排本身可跑通、可测试。
+-- 总开关 `VOICE_LOCAL_ENABLED`：关闭时 `is_configured()=False`，
+-  `connect()` 直接抛出，交由上层（registry/网关）降级到云端 Provider。
+-- supervisor：单个 stage 崩溃自动重启，不影响整体会话。
+-"""
+-import asyncio
+-from typing import Any, AsyncGenerator, Dict, List, Optional
+-
+-from loguru import logger
+-
+-from app.config import settings
+-from app.duplex.voice.agent_adapter import AgentRegistry
+-from app.duplex.voice.capabilities import ProviderCapabilities
+-from app.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
+-
+-
+-class LocalProvider(RealtimeProvider):
+-    """本地管线 Provider（Silero + Paraformer + Agent + CosyVoice2）。"""
+-
+-    key = "local"
+-    input_sample_rate = 16000
+-    output_sample_rate = 24000
+-
+-    def __init__(self):
+-        self._in: asyncio.Queue = asyncio.Queue()        # 上行音频块
+-        self._out: asyncio.Queue = asyncio.Queue()       # 下行 ProviderEvent
+-        self._speech_q: asyncio.Queue = asyncio.Queue()  # VAD 判定为语音的块 → STT
+-        self._text_q: asyncio.Queue = asyncio.Queue()    # 待 Agent 处理的文本
+-        self._tts_q: asyncio.Queue = asyncio.Queue()     # 待合成文本 → TTS
+-        self._tasks: List[asyncio.Task] = []
+-        self._cfg: Dict[str, Any] = {}
+-        self._adapter = None
+-
+-    # ── 能力 / 配置探测 ──────────────────────────────────
+-    def get_capabilities(self) -> ProviderCapabilities:
+-        # 本地管线为客户端 VAD 主导：端点由本端判定，打断走 client 模式
+-        return ProviderCapabilities(
+-            supports_partial_audio=True,
+-            supports_interrupt=True,
+-            supports_duplex=True,
+-            input_sample_rate=self.input_sample_rate,
+-            output_sample_rate=self.output_sample_rate,
+-            server_vad=False,
+-            semantic_vad=False,
+-            native_transcription=False,
+-            manual_vad_only=True,
+-            barge_in_mode="client",
+-        )
+-
+-    def is_configured(self) -> bool:
+-        """本地管线总开关（关闭时上层应降级到云端 Provider）。"""
+-        return bool(settings.VOICE_LOCAL_ENABLED)
+-
+-    # ── 生命周期 ─────────────────────────────────────────
+-    async def connect(self, session_config: Dict[str, Any]) -> None:
+-        if not self.is_configured():
+-            raise RuntimeError("本地管线未启用：请设置 VOICE_LOCAL_ENABLED=1")
+-        self._cfg = session_config or {}
+-        self._adapter = AgentRegistry.default()
+-        self._tasks = [
+-            self._spawn(self._vad_loop),
+-            self._spawn(self._stt_loop),
+-            self._spawn(self._agent_loop),
+-            self._spawn(self._tts_loop),
+-        ]
+-        logger.info("LocalProvider: 四 stage 编排已启动")
+-
+-    def _spawn(self, factory) -> asyncio.Task:
+-        """supervisor：单 stage 异常后自动重启。"""
+-
+-        async def runner() -> None:
+-            while True:
+-                try:
+-                    await factory()
+-                except asyncio.CancelledError:
+-                    raise
+-                except Exception as e:  # noqa: BLE001 - stage 崩溃需重启而非扩散
+-                    logger.error(f"LocalProvider stage 异常，重启中: {e}")
+-                    await asyncio.sleep(0.1)
+-
+-        return asyncio.create_task(runner())
+-
+-    # ── Stage 1: VAD ─────────────────────────────────────
+-    async def _vad_loop(self) -> None:
+-        from app.duplex.voice.pipeline.vad import SileroVAD
+-
+-        vad = SileroVAD(threshold=self._cfg.get("vad_threshold"))
+-        while True:
+-            chunk = await self._in.get()
+-            event = vad.feed(chunk)
+-            if event == "speech_started":
+-                await self._out.put(ProviderEvent("speech_started", {}))
+-            elif event == "speech_stopped":
+-                await self._speech_q.put(None)  # 段结束哨兵
+-                await self._out.put(ProviderEvent("speech_stopped", {}))
+-            elif vad.speaking:
+-                await self._speech_q.put(chunk)
+-
+-    # ── Stage 2: STT ─────────────────────────────────────
+-    async def _stt_loop(self) -> None:
+-        from app.duplex.voice.pipeline.stt import ParaformerStream
+-
+-        stt = ParaformerStream()
+-        while True:
+-            # run() 消费至哨兵后产出一段结果，随后结束；外层循环处理下一段
+-            async for seg in stt.run(self._speech_q):
+-                for partial in stt.partials(seg):
+-                    await self._out.put(
+-                        ProviderEvent("transcript_delta", {"text": partial, "role": "user"})
+-                    )
+-                await self._out.put(
+-                    ProviderEvent("transcript_final", {"text": stt.final(seg), "role": "user"})
+-                )
+-                await self._text_q.put(stt.final(seg))
+-
+-    # ── Stage 3: Agent ───────────────────────────────────
+-    async def _agent_loop(self) -> None:
+-        while True:
+-            text = await self._text_q.get()
+-            if not text:
+-                continue
+-            await self._out.put(ProviderEvent("response_started", {}))
+-            if self._adapter is not None:
+-                try:
+-                    result = await self._adapter.run_voice_turn(text=text)
+-                    reply = (result or {}).get("text", "")
+-                except Exception as e:  # noqa: BLE001 - Agent 失败时本地兜底
+-                    logger.warning(f"LocalProvider Agent 调用失败: {e}")
+-                    reply = f"[本地兜底] {text}"
+-            else:
+-                reply = f"[本地兜底] {text}"
+-            await self._tts_q.put(reply)
+-
+-    # ── Stage 4: TTS ─────────────────────────────────────
+-    async def _tts_loop(self) -> None:
+-        from app.duplex.voice.pipeline.tts import CosyVoice2
+-
+-        tts = CosyVoice2()
+-        while True:
+-            text = await self._tts_q.get()
+-            for wav in tts.stream(text):
+-                await self._out.put(ProviderEvent("audio_delta", {"audio": wav}))
+-
+-    # ── I/O ──────────────────────────────────────────────
+-    async def send_audio(self, pcm_data: bytes) -> None:
+-        await self._in.put(pcm_data)
+-
+-    async def send_text(self, text: str) -> None:
+-        await self._text_q.put(text)
+-
+-    async def configure_session(self, **kwargs) -> None:
+-        self._cfg.update(kwargs)
+-
+-    async def events(self) -> AsyncGenerator[ProviderEvent, None]:
+-        while True:
+-            yield await self._out.get()
+-
+-    async def close(self) -> None:
+-        for t in self._tasks:
+-            t.cancel()
+-        self._tasks = []
+-
+-
+-# 自注册到 ProviderRegistry
+-from app.duplex.voice.providers.registry import ProviderRegistry
+-ProviderRegistry.register(LocalProvider)
+diff --git a/backend/app/duplex/voice/providers/registry.py b/backend/app/duplex/voice/providers/registry.py
+index e2827d6..282a57b 100644
+--- a/backend/app/duplex/voice/providers/registry.py
++++ b/backend/app/duplex/voice/providers/registry.py
+@@ -25,36 +25,34 @@ class ProviderRegistry:
+ 
+     @classmethod
+     def _ensure_defaults(cls) -> None:
+         """惰性确保默认 Provider 已注册（幂等）。
+ 
+         用于规避某些环境下 ProviderRegistry 模块被重复加载、
+         导致默认注册未生效的问题（见测试跨目录运行时默认 Provider 丢失）。
+         """
+         if "dashscope" not in cls._providers:
+             try:
+-                from app.duplex.voice.providers.dashscope import DashScopeProvider
+-                cls.register(DashScopeProvider)
++                from app.duplex.voice.providers.agentscope import (
++                    DashScopeAgentProvider,
++                )
++                cls.register(DashScopeAgentProvider)
+             except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
+                 logger.warning(f"默认 Provider dashscope 注册失败: {e}")
+-        if "local" not in cls._providers:
+-            try:
+-                from app.duplex.voice.providers.local import LocalProvider
+-                cls.register(LocalProvider)
+-            except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
+-                logger.warning(f"本地回退 Provider local 注册失败: {e}")
+-        if "s2s" not in cls._providers:
++        if "openai" not in cls._providers:
+             try:
+-                from app.duplex.voice.providers.s2s import S2SProvider
+-                cls.register(S2SProvider)
++                from app.duplex.voice.providers.agentscope import (
++                    OpenAIAgentProvider,
++                )
++                cls.register(OpenAIAgentProvider)
+             except Exception as e:  # noqa: BLE001 - 注册失败不应中断调用方
+-                logger.warning(f"本地 S2S Provider 注册失败: {e}")
++                logger.warning(f"备选 Provider openai 注册失败: {e}")
+ 
+     @classmethod
+     def resolve(cls, key: Optional[str] = None) -> RealtimeProvider:
+         """解析 Provider 实例。"""
+         key = key or cls._default_key
+         provider_cls = cls._providers.get(key)
+         if not provider_cls:
+             raise ValueError(f"未知 Provider: {key}，已注册: {list(cls._providers.keys())}")
+         return provider_cls()
+ 
+@@ -105,26 +103,30 @@ class ProviderRegistry:
+                 )
+             return cls._default_key
+         for key in cls._providers:
+             if cls.is_configured(key):
+                 logger.warning(f"默认 Provider 不可用，降级到 {key}")
+                 return key
+         return cls._default_key
+ 
+ 
+ def _register_defaults() -> None:
+-    """默认注册存量 Provider（差距分析 §2：保留 DashScope）。
++    """默认注册 AgentScope 内核 Provider（导入即生效）。
+ 
+-    延迟到模块尾部导入，避免与 dashscope 的 registry 反向导入形成循环。
++    延迟到模块尾部导入，避免与 agentscope 的 registry 反向导入形成循环。
+     """
+-    from app.duplex.voice.providers.dashscope import DashScopeProvider
+-    ProviderRegistry.register(DashScopeProvider)
++    from app.duplex.voice.providers.agentscope import (
++        DashScopeAgentProvider,
++        OpenAIAgentProvider,
++    )
++    ProviderRegistry.register(DashScopeAgentProvider)
++    ProviderRegistry.register(OpenAIAgentProvider)
+ 
+ 
+ _register_defaults()
+ 
+ 
+ def get_provider(key: str) -> Type[RealtimeProvider]:
+     """按 key 返回 Provider 类（不实例化）。"""
+     ProviderRegistry._ensure_defaults()
+     if key not in ProviderRegistry._providers:
+         raise KeyError(f"unknown provider: {key}")
+diff --git a/backend/app/duplex/voice/providers/s2s.py b/backend/app/duplex/voice/providers/s2s.py
+deleted file mode 100644
+index 67e49c8..0000000
+--- a/backend/app/duplex/voice/providers/s2s.py
++++ /dev/null
+@@ -1,206 +0,0 @@
+-"""本地 Docker S2S Provider（qwen-audio-s2s，OpenAI Realtime GA 协议）。
+-
+-对齐 qwen-audio-agent 的 speech-to-speech Provider（server/src/voice/providers/s2s.mjs
+-+ ga-protocol.mjs）：用户自管的本地 speech-to-speech 端点，上游服务掌握全部
+-模型 / STT / TTS / 音色选择，本 Provider 只描述其 GA 方言的线缆契约。
+-
+-GA（2025+）方言与 OpenAI beta 方言的差异（ confined to this provider）：
+-- response 载荷用 output_modalities 而非 modalities；
+-- 文本增量事件为 response.output_text.*（归一化为 response.text.* 语义）；
+-- session.update 的 session 载荷需要 type: 'realtime' 判别字段。
+-
+-端点：默认 ws://127.0.0.1:8765/v1/realtime（可用 ai_api_key.url 覆盖），
+-可选 Bearer Token（ai_api_key.api_key 非空时下发）。
+-"""
+-import base64
+-import json
+-from typing import Any, AsyncGenerator, Dict, Optional
+-
+-import websockets
+-from loguru import logger
+-
+-from app.duplex.voice.capabilities import ProviderCapabilities
+-from app.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
+-
+-INPUT_SAMPLE_RATE = 16000
+-OUTPUT_SAMPLE_RATE = 24000
+-DEFAULT_S2S_REALTIME_URL = "ws://127.0.0.1:8765/v1/realtime"
+-
+-
+-class S2SProvider(RealtimeProvider):
+-    """本地 Docker qwen-audio-s2s（GA Realtime 协议）。"""
+-
+-    key = "s2s"
+-    input_sample_rate = INPUT_SAMPLE_RATE
+-    output_sample_rate = OUTPUT_SAMPLE_RATE
+-
+-    def __init__(self):
+-        self._ws: Optional[Any] = None
+-        self._url = DEFAULT_S2S_REALTIME_URL
+-        self._token: Optional[str] = None
+-        self._model = "default"
+-
+-    def get_capabilities(self) -> ProviderCapabilities:
+-        # 服务端 VAD 主导（GA audio.input.turn_detection=server_vad）；
+-        # 单响应槽：server-VAD 轮次与 response.create 竞争时会被拒绝而非排队。
+-        return ProviderCapabilities(
+-            supports_partial_audio=True,
+-            supports_interrupt=True,
+-            supports_duplex=True,
+-            input_sample_rate=self.input_sample_rate,
+-            output_sample_rate=self.output_sample_rate,
+-            server_vad=True,
+-            native_transcription=True,
+-        )
+-
+-    async def connect(self, session_config: Dict[str, Any]) -> None:
+-        self._url = (
+-            session_config.get("base_url")
+-            or DEFAULT_S2S_REALTIME_URL
+-        ).strip()
+-        self._token = (session_config.get("api_key") or "").strip() or None
+-        self._model = session_config.get("model") or "default"
+-
+-        headers = []
+-        if self._token:
+-            headers.append(("Authorization", f"Bearer {self._token}"))
+-        try:
+-            self._ws = await websockets.connect(self._url, additional_headers=headers)
+-        except Exception as exc:  # noqa: BLE001 - 统一转成可读错误
+-            raise RuntimeError(
+-                f"连接本地 S2S 服务失败（{self._url}）：{exc}。"
+-                f"请确认本地 Docker 的 {self._model} 服务已启动"
+-            ) from exc
+-        await self.configure_session(**session_config)
+-        logger.info(f"S2SProvider: 已连接 {self._url} (model={self._model})")
+-
+-    async def send_text(self, text: str) -> None:
+-        """注入用户文本消息并触发回复（GA：response 用 output_modalities）。"""
+-        if not self._ws:
+-            raise RuntimeError("未连接，请先调用 connect()")
+-        await self._ws.send(json.dumps({
+-            "type": "conversation.item.create",
+-            "item": {
+-                "type": "message",
+-                "role": "user",
+-                "content": [{"type": "input_text", "text": text}],
+-            },
+-        }))
+-        await self._ws.send(json.dumps({
+-            "type": "response.create",
+-            "response": {"output_modalities": ["audio"]},
+-        }))
+-
+-    async def send_audio(self, pcm_data: bytes) -> None:
+-        if not self._ws:
+-            raise RuntimeError("未连接，请先调用 connect()")
+-        audio_b64 = (
+-            base64.b64encode(pcm_data).decode("ascii")
+-            if isinstance(pcm_data, bytes)
+-            else pcm_data
+-        )
+-        await self._ws.send(json.dumps({
+-            "type": "input_audio_buffer.append",
+-            "audio": audio_b64,
+-        }))
+-
+-    async def configure_session(self, **kwargs) -> None:
+-        """GA 方言的 session.update（session 载荷带 type='realtime' 判别字段）。"""
+-        if not self._ws:
+-            return
+-        session: Dict[str, Any] = {
+-            "type": "realtime",
+-            "instructions": kwargs.get("instructions", ""),
+-        }
+-        tools = kwargs.get("tools")
+-        if tools:
+-            # GA 工具为扁平对象（非 beta 的 {type, function} 形状）
+-            session["tools"] = [
+-                {
+-                    "type": "function",
+-                    "name": t.get("function", {}).get("name", ""),
+-                    "description": t.get("function", {}).get("description", ""),
+-                    "parameters": t.get("function", {}).get("parameters", {}),
+-                }
+-                if "function" in t
+-                else t
+-                for t in tools
+-            ]
+-        session["output_modalities"] = ["audio"]
+-        session["audio"] = {
+-            "input": {
+-                # 省略输入格式时按服务端原生 16kHz PCM 管线处理（显式声明
+-                # 16kHz 反而会使整个 session.update 无效，见 GA schema 注释）
+-                "turn_detection": {"type": "server_vad", "interrupt_response": True},
+-            },
+-            "output": {
+-                "format": {"type": "audio/pcm", "rate": OUTPUT_SAMPLE_RATE},
+-            },
+-        }
+-        await self._ws.send(json.dumps({"type": "session.update", "session": session}))
+-
+-    async def events(self) -> AsyncGenerator[ProviderEvent, None]:
+-        if not self._ws:
+-            return
+-        async for raw_msg in self._ws:
+-            try:
+-                data = json.loads(raw_msg)
+-            except json.JSONDecodeError:
+-                logger.warning(f"S2SProvider: 无法解析消息: {str(raw_msg)[:100]}")
+-                continue
+-            event = self._parse_event(data)
+-            if event:
+-                yield event
+-
+-    def _parse_event(self, data: Dict[str, Any]) -> Optional[ProviderEvent]:
+-        """GA 方言事件 → 网关 ProviderEvent。"""
+-        event_type = data.get("type", "")
+-
+-        if event_type == "response.audio.delta":
+-            delta = data.get("delta", "")
+-            audio = b""
+-            if isinstance(delta, str) and delta:
+-                try:
+-                    audio = base64.b64decode(delta)
+-                except Exception:  # noqa: BLE001 - 坏帧丢弃不中断会话
+-                    audio = b""
+-            return ProviderEvent("audio_delta", {"audio": audio})
+-        if event_type == "response.audio_transcript.delta":
+-            return ProviderEvent("tts_transcript", {"text": data.get("delta", "")})
+-        # GA 方言：文本增量走 response.output_text.*（等价口播文字）
+-        if event_type == "response.output_text.delta":
+-            return ProviderEvent("tts_transcript", {"text": data.get("delta", "")})
+-        if event_type == "conversation.item.input_audio_transcription.completed":
+-            return ProviderEvent("transcript", {"text": data.get("transcript", "")})
+-        if event_type == "response.function_call_arguments.done":
+-            args = data.get("arguments", "{}")
+-            try:
+-                parsed = json.loads(args) if isinstance(args, str) else args
+-            except json.JSONDecodeError:
+-                parsed = {}
+-            return ProviderEvent("tool_call", {
+-                "name": data.get("name", ""),
+-                "arguments": parsed,
+-            })
+-        if event_type == "response.done":
+-            return ProviderEvent("response_done", {})
+-        if event_type == "input_audio_buffer.speech_started":
+-            return ProviderEvent("speech_started", {})
+-        if event_type == "input_audio_buffer.speech_stopped":
+-            return ProviderEvent("speech_stopped", {})
+-        if event_type == "error":
+-            logger.warning(f"S2SProvider: 服务端错误事件: {data}")
+-            return None
+-
+-        return None
+-
+-    async def close(self) -> None:
+-        if self._ws:
+-            await self._ws.close()
+-            self._ws = None
+-            logger.info("S2SProvider: 已断开")
+-
+-
+-# 自注册到 ProviderRegistry
+-from app.duplex.voice.providers.registry import ProviderRegistry  # noqa: E402
+-ProviderRegistry.register(S2SProvider)
+diff --git a/backend/app/duplex/voice/tool_call_handler.py b/backend/app/duplex/voice/tool_call_handler.py
+deleted file mode 100644
+index e85517e..0000000
+--- a/backend/app/duplex/voice/tool_call_handler.py
++++ /dev/null
+@@ -1,64 +0,0 @@
+-"""工具调用处理器（差距分析 §3.3 会话级工具调用）。
+-
+-将 Provider 透传的 function_call 事件，路由给当前 Agent 的工具实现，
+-并以统一结构返回结果；失败的工具调用可整体 replay（如断线重连后）。
+-"""
+-import asyncio
+-from typing import Any, Dict, List, Optional
+-
+-from app.duplex.voice.agent_adapter import AgentAdapter
+-
+-
+-class ToolCallHandler:
+-    """执行并回放会话级工具调用。"""
+-
+-    def __init__(self, agent: Optional[AgentAdapter] = None):
+-        self._agent = agent
+-
+-    async def handle(
+-        self,
+-        tool_name: str,
+-        args: Dict[str, Any],
+-        agent: Optional[AgentAdapter] = None,
+-    ) -> Dict[str, Any]:
+-        target = agent or self._agent
+-        if target is None:
+-            return {
+-                "name": tool_name,
+-                "arguments": args,
+-                "result": None,
+-                "ok": False,
+-                "error": "no agent bound",
+-            }
+-        try:
+-            result = await target.call_tool(tool_name, args)
+-            return {
+-                "name": tool_name,
+-                "arguments": args,
+-                "result": result,
+-                "ok": True,
+-            }
+-        except Exception as e:  # noqa: BLE001 - 工具调用失败需被结构化捕获
+-            return {
+-                "name": tool_name,
+-                "arguments": args,
+-                "result": None,
+-                "ok": False,
+-                "error": str(e),
+-            }
+-
+-    def replay(
+-        self,
+-        failed: List[Dict[str, Any]],
+-        agent: Optional[AgentAdapter] = None,
+-    ) -> List[Dict[str, Any]]:
+-        """重放一批失败的工具调用（参数中需含 name / arguments）。
+-
+-        同步接口：逐项在独立事件循环中执行 handle，便于无后端环境下批量重试。
+-        """
+-        results: List[Dict[str, Any]] = []
+-        for item in failed or []:
+-            name = item.get("name", "")
+-            args = item.get("arguments", {})
+-            results.append(asyncio.run(self.handle(name, args, agent)))
+-        return results
+diff --git a/backend/app/duplex/voice/toolkit_builder.py b/backend/app/duplex/voice/toolkit_builder.py
+new file mode 100644
+index 0000000..06207bb
+--- /dev/null
++++ b/backend/app/duplex/voice/toolkit_builder.py
+@@ -0,0 +1,70 @@
++"""RealtimeAgent Toolkit 构建（spec §2.4）。
++
++MCPAdapter 工具 schema（{name, description, inputSchema}）→ AgentScope
++ToolBase 包装，执行回调 call_fn（默认 MCPAdapter.call_tool）；权限确认由
++RealtimeAgent 内建 PermissionEngine + RequireUserConfirmEvent 完成。
++
++已核实事实（agentscope 2.0.8）：ToolResultState 从 agentscope.message 导入
++（agentscope.tool 不导出），完成态成员为 SUCCESS。
++"""
++import json
++from typing import Any, Callable, Dict, List, Optional
++
++from loguru import logger
++
++
++def _dumps(obj: Any) -> str:
++    try:
++        return json.dumps(obj, ensure_ascii=False, default=str)
++    except (TypeError, ValueError):
++        return str(obj)
++
++
++class McpToolWrapper:
++    """MCP 工具的 AgentScope ToolBase 包装。"""
++
++    name: str
++    description: str
++    input_schema: dict
++    is_concurrency_safe: bool = False
++    is_read_only: bool = False
++    is_mcp: bool = True
++    mcp_name: str = "mwb-voice-mcp"
++
++    def __init__(self, schema: Dict[str, Any],
++                 call_fn: Optional[Callable] = None) -> None:
++        self.name = schema["name"]
++        self.description = schema.get("description", "")
++        self.input_schema = schema.get("inputSchema") or {"type": "object"}
++        self._call_fn = call_fn
++
++    def _resolve_call_fn(self) -> Callable:
++        if self._call_fn is not None:
++            return self._call_fn
++        from app.ai.mcp.tool_adapter import get_mcp_adapter
++        adapter = get_mcp_adapter()
++
++        async def call(name: str, args: dict):
++            return await adapter.call_tool(name, args)
++        return call
++
++    async def call(self, **kwargs):
++        from agentscope.message import TextBlock, ToolResultState
++        from agentscope.tool import ToolChunk
++        try:
++            result = await self._resolve_call_fn()(self.name, kwargs)
++            text = result if isinstance(result, str) else _dumps(result)
++            return ToolChunk(content=[TextBlock(type="text", text=text)],
++                             state=ToolResultState.SUCCESS)
++        except Exception as e:  # noqa: BLE001 - 工具失败不中断语音流
++            logger.warning(f"语音工具 {self.name} 执行失败: {e}")
++            return ToolChunk(
++                content=[TextBlock(type="text", text=f"工具执行失败: {e}")],
++                state=ToolResultState.ERROR)
++
++
++def build_toolkit(tool_schemas: List[Dict[str, Any]],
++                  call_fn: Optional[Callable] = None):
++    """构建 RealtimeAgent 所需 Toolkit；空 schema 返回空 Toolkit。"""
++    from agentscope.tool import Toolkit
++    return Toolkit(tools=[McpToolWrapper(s, call_fn) for s in tool_schemas])
+diff --git a/backend/app/duplex/voice/voice_config.py b/backend/app/duplex/voice/voice_config.py
+index 9885a92..8d6c27b 100644
+--- a/backend/app/duplex/voice/voice_config.py
++++ b/backend/app/duplex/voice/voice_config.py
+@@ -18,58 +18,59 @@ VOICE_MODEL_TYPE = 7
+ 
+ # DashScope 当前可用的实时语音模型（对齐 qwen-audio-agent
+ # shared/realtime-model-catalog.mjs 的模型目录；无效模型名会导致 401/400）
+ VALID_DASHSCOPE_REALTIME_MODELS = frozenset({
+     "qwen-audio-3.0-realtime-plus",
+     "qwen-audio-3.0-realtime-flash",
+     "qwen3.5-omni-flash-realtime",
+     "qwen3.5-omni-plus-realtime",
+ })
+ 
+-# 本地 Docker 部署的 qwen-audio-s2s（OpenAI Realtime GA 协议，
+-# 对齐 qwen-audio-agent 的 speech-to-speech Provider）
+-S2S_PLATFORM = "s2s"
+-DEFAULT_S2S_REALTIME_URL = "ws://127.0.0.1:8765/v1/realtime"
+-DEFAULT_S2S_MODEL_NAME = "qwen-audio-s2s"
++# 支持的语音平台（provider key 与 ai_api_key.platform 对齐；
++# DashScope 平台值历史上为 "DashScope"，openai 平台值小写）
++SUPPORTED_VOICE_PLATFORMS = ("DashScope", "openai")
+ 
+ 
+ def _voice_row_platform(model: AiChatModel, key: Optional[AiApiKey]) -> str:
+     return key.platform if key else (model.platform or "DashScope")
+ 
+ 
+ def _voice_row_base_url(model: AiChatModel, key: Optional[AiApiKey]) -> Optional[str]:
+     if key and key.url:
+         return key.url
+     return None
+ 
+ 
+ def _voice_row_usable(model: AiChatModel, key: Optional[AiApiKey]) -> bool:
+     """模型行是否可用于建立实时连接（列表过滤与默认解析共用）。"""
+     platform = _voice_row_platform(model, key)
+     api_key = key.api_key if key else None
+-    if platform == S2S_PLATFORM:
+-        # 本地 Docker S2S：无需云端 Key，端点有默认值即可用
+-        return True
+     if platform == "DashScope":
+         return (
+             model.model in VALID_DASHSCOPE_REALTIME_MODELS
+             and bool(api_key)
+         )
+-    # 其它平台沿用旧规则：有 Key 即视为可用
+-    return bool(api_key)
++    # openai 等其它平台：有 Key 且模型名非空即可用
++    # （模型有效性由 AgentScope 模型卡片在 connect 时校验）
++    return bool(api_key) and bool(model.model)
++
++
++def _platform_matches(want: Optional[str], row_platform: str) -> bool:
++    """provider key 与模型行平台匹配：None→仅排除 s2s；指定→忽略大小写精确匹配。"""
++    if want is None:
++        return row_platform != "s2s"
++    return row_platform.lower() == want.lower()
+ 
+ 
+ def _row_dict(model: AiChatModel, key: Optional[AiApiKey]) -> Dict:
+     platform = _voice_row_platform(model, key)
+     base_url = _voice_row_base_url(model, key)
+-    if platform == S2S_PLATFORM and not base_url:
+-        base_url = DEFAULT_S2S_REALTIME_URL
+     return {
+         "id": model.id,
+         "name": model.name,
+         "model": model.model,
+         "platform": platform,
+         "key_id": model.key_id,
+         "key_name": key.name if key else None,
+         "is_default": bool(model.is_default),
+         "status": model.status,
+         "sort": model.sort,
+@@ -126,24 +127,24 @@ def resolve_voice_config(
+                     }
+                 return {
+                     "configured": False,
+                     "reason": "empty_key",
+                     "model_id": row.id,
+                     "model": row.model,
+                     "key_name": key.name if key else None,
+                 }
+             return _row_dict(row, key) | {"configured": True}
+ 
+-        want_s2s = (provider_key or "") == S2S_PLATFORM
+         candidates = [
+             r for r in rows
+-            if (_voice_row_platform(r, r.api_key_obj) == S2S_PLATFORM) == want_s2s
++            if _platform_matches(provider_key,
++                                 _voice_row_platform(r, r.api_key_obj))
+             and _voice_row_usable(r, r.api_key_obj)
+         ]
+         if not candidates:
+             return {"configured": False, "reason": "no_model"}
+         return _row_dict(candidates[0], candidates[0].api_key_obj) | {"configured": True}
+     finally:
+         db.close()
+ 
+ 
+ def list_voice_models() -> List[Dict]:
+diff --git a/backend/app/duplex/voice/websocket_gateway.py b/backend/app/duplex/voice/websocket_gateway.py
+index 2c0bbd6..3f2617f 100644
+--- a/backend/app/duplex/voice/websocket_gateway.py
++++ b/backend/app/duplex/voice/websocket_gateway.py
+@@ -1,21 +1,21 @@
+ """调解语音 WebSocket 网关 v2（差距分析 §3 实现）。
+ 
+ 协议 v2：
+ - 客户端上行：PCM 帧 / JSON 控制帧（input.message / input.mute / output.mode / interrupt / ping）
+ - 服务端下行：voice.ready / audio / transcript / turn / error / pong
+ 
+ M2 增强：
+ - 轮次代际仲裁（turn_state.TurnState）：音频/文本帧携带 generation，过期帧丢弃
+ - 能力协商（protocol_adapter.ProtocolAdapter）：voice.ready 由协商结果构造
+ - 事件重放缓冲（replay_buffer）：断线重连回放遗漏的状态帧
+-- 本地管线回退（providers.local.LocalProvider）：provider=local 时启用
++- AgentScope RealtimeAgent 内核（providers/agentscope.py，dashscope|openai）
+ """
+ import asyncio
+ import json
+ import uuid
+ from dataclasses import dataclass
+ from datetime import datetime, timezone
+ from typing import Any, Dict, Optional
+ 
+ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+ from loguru import logger
+@@ -34,23 +34,21 @@ from app.duplex.voice.replay_buffer import (
+     SESSION_REPLAY_BUFFERS,
+ )
+ from app.duplex.voice.voice_session_service import (
+     create_voice_session, update_voice_session_status,
+ )
+ from app.duplex.voice.voice_config import resolve_voice_config
+ from app.duplex.voice.voice_turn_service import (
+     append_turn, mark_interrupted, bump_generation, record_latency,
+ )
+ 
+-# LocalProvider / S2SProvider 自注册到 ProviderRegistry（import 即生效）
+-from app.duplex.voice.providers.local import LocalProvider  # noqa: F401
+-from app.duplex.voice.providers.s2s import S2SProvider  # noqa: F401
++# AgentScope 内核 Provider 通过 providers.registry._register_defaults 注册（import 即生效）
+ 
+ 
+ router = APIRouter(prefix="/duplex/voice", tags=["调解语音"])
+ 
+ 
+ @dataclass
+ class VoiceSession:
+     """语音会话状态（保留以兼容存量 e2e 测试）。"""
+     session_id: str = ""
+     case_number: str = ""
+@@ -132,21 +130,21 @@ async def _normalize_outbound(event: ProviderEvent) -> Optional[Dict[str, Any]]:
+     return {"type": etype, "data": event.data}
+ 
+ 
+ async def _handle_control_frame(
+     frame: Dict[str, Any],
+     realtime_provider: RealtimeProvider,
+     turn: TurnState,
+     voice_session_id: str,
+     websocket: Optional[WebSocket] = None,
+ ) -> None:
+-    """处理客户端控制帧（差距分析 §3.4.3）。
++    """处理客户端控制帧（协议 v2 + tool.confirm 增量）。
+ 
+     input.message 受响应不活动超时保护：超时则下发 error(inactivity) 并复位聆听态。
+     """
+     ftype = frame.get("type")
+     if ftype == "input.message":
+         text = frame.get("text", "")
+         turn.turn_id = str(uuid.uuid4())
+         turn.on_speech_started()  # 代际 +1，进入 LISTENING
+         append_turn(voice_session_id, turn.turn_id, "user", "text", transcript=text)
+         timeout_s = settings.VOICE_RESPONSE_INACTIVITY_TIMEOUT_MS / 1000
+@@ -154,33 +152,48 @@ async def _handle_control_frame(
+             await asyncio.wait_for(realtime_provider.send_text(text), timeout=timeout_s)
+         except (asyncio.TimeoutError, TimeoutError):
+             logger.warning("语音响应超时（inactivity），复位为聆听态")
+             turn.reset_listening()
+             if websocket is not None:
+                 await websocket.send_text(json.dumps({
+                     "type": EventType.ERROR.value,
+                     "code": ErrorCode.INACTIVITY.value,
+                     "message": "响应超时",
+                 }, ensure_ascii=False))
++    elif ftype == "tool.confirm":
++        data = frame.get("data", {})
++        confirm = getattr(realtime_provider, "resolve_confirm", None)
++        if confirm is not None:
++            await confirm(data.get("confirm_id", ""), bool(data.get("approved")))
+     elif ftype == "input.mute":
+         # 透传静音状态（存量 Provider 不支持则忽略）
+         pass
+     elif ftype == "output.mode":
+         pass
+     elif ftype == "interrupt":
+-        if turn.turn_id:
+-            turn.on_interrupt()
+-            turn.generation += 1  # 代际 +1：过期助理音频将被丢弃
+-            mark_interrupted(turn.turn_id)
+-            bump_generation(turn.turn_id)
++        _apply_interrupt(turn, voice_session_id)
++        interrupt = getattr(realtime_provider, "interrupt", None)
++        if interrupt is not None:
++            await interrupt()
+     elif ftype == "ping":
+-        await realtime_provider.send_text(json.dumps({"type": "pong"}))
++        # 修复：pong 回客户端，而非发给上游 Provider
++        if websocket is not None:
++            await websocket.send_text(json.dumps({"type": EventType.PONG.value}))
++
++
++def _apply_interrupt(turn: TurnState, voice_session_id: str) -> None:
++    """打断统一入口：代际 +1 + 轮次标记（客户端 interrupt 与 VAD barge-in 共用）。"""
++    if turn.turn_id:
++        turn.on_interrupt()
++        turn.generation += 1
++        mark_interrupted(turn.turn_id)
++        bump_generation(turn.turn_id)
+ 
+ 
+ @router.get("/metrics")
+ async def voice_metrics():
+     """Prometheus 指标导出（语音层，差距分析 §12）。"""
+     from fastapi import Response
+ 
+     from app.duplex.voice.metrics import render_metrics
+ 
+     return Response(content=render_metrics(), media_type="text/plain; version=0.0.4")
+@@ -222,48 +235,58 @@ async def voice_websocket(
+         agent_id=agent_id,
+     )
+ 
+     turn = TurnState()
+     realtime_provider = provider_cls()
+ 
+     try:
+         # 从数据库解析语音模型配置（api_key + model + 端点），缺省使用默认语音模型。
+         # 仅云端 Provider（dashscope/s2s）需要；local / loopback / 测试桩跳过解析
+         # （避免误报 no_model）。
+-        if provider in ("dashscope", "s2s"):
++        if provider in ("dashscope", "openai"):
+             voice_cfg = resolve_voice_config(provider, model_id)
+             if not voice_cfg.get("configured"):
+                 if voice_cfg.get("reason") == "empty_key":
+                     raise ValueError(
+                         f"语音模型「{voice_cfg.get('model')}」(id={voice_cfg.get('model_id')}) "
+                         f"已启用，但关联密钥「{voice_cfg.get('key_name')}」的 api_key 为空："
+-                        f"请在「API Key 管理」中填写真实的 DashScope API Key"
++                        f"请在「API Key 管理」中填写真实的 API Key"
+                     )
+                 if voice_cfg.get("reason") == "invalid_model":
+                     raise ValueError(
+                         f"语音模型「{voice_cfg.get('model')}」(id={voice_cfg.get('model_id')}) "
+                         f"不是有效的实时模型名：请在「语音模型配置」中更正"
+-                        f"（DashScope 可用模型见官方实时模型目录）"
++                        f"（可用模型见官方实时模型目录）"
+                     )
+                 raise ValueError(
+-                    "未配置语音模型：请在「语音模型配置」中新增并启用一个语音模型（type=7），"
+-                    "或使用本地 Docker S2S（platform=s2s）"
++                    "未配置语音模型：请在「语音模型配置」中新增并启用一个语音模型（type=7）"
+                 )
+         else:
+             voice_cfg = {}
++
++        # 会话级 MCP 工具注入（agent 绑定 MCP 时拉取 schema；失败不阻塞语音链路）
++        mcp_tool_schemas: list = []
++        if agent_id:
++            try:
++                from app.duplex.voice.mcp_session_resolver import McpSessionResolver
++                mcp_tool_schemas = await McpSessionResolver().resolve_tools()
++            except Exception as e:  # noqa: BLE001 - MCP 注入失败不阻塞语音
++                logger.warning(f"MCP 工具注入失败（忽略）: {e}")
++
+         await realtime_provider.connect(session_config={
+             "instructions": f"你是一位专业的 AI 调解员，正在处理案件 {case_number}。",
+             "tools": [],
+             "voice": "default",
+             "api_key": voice_cfg.get("api_key", ""),
+             "model": voice_cfg.get("model", "default"),
+             "base_url": voice_cfg.get("base_url"),
++            "mcp_tools": mcp_tool_schemas,
+         })
+     except Exception as e:
+         logger.error(f"Provider 连接失败: {e}")
+         voice_provider_errors.labels(provider=provider).inc()
+         await websocket.send_text(json.dumps({
+             "type": EventType.ERROR.value,
+             "code": ErrorCode.PROVIDER_UNAVAILABLE.value,
+             "message": str(e),
+         }, ensure_ascii=False))
+         await websocket.close(code=4503)
+@@ -293,20 +316,23 @@ async def voice_websocket(
+                     elif data:
+                         frame = json.loads(data)
+                         await _handle_control_frame(
+                             frame, realtime_provider, turn, voice_session_id, websocket
+                         )
+             except WebSocketDisconnect:
+                 break
+ 
+     async def provider_reader():
+         async for event in realtime_provider.events():
++            if event.type == "playback_cancelled":
++                # VAD barge-in：与客户端 interrupt 走同一代际仲裁入口
++                _apply_interrupt(turn, voice_session_id)
+             frame = await _normalize_outbound(event)
+             if not frame:
+                 continue
+             # 代际标记：携带当前 generation，供客户端丢弃过期帧
+             if frame["type"] in (
+                 EventType.AUDIO_DELTA.value,
+                 EventType.TRANSCRIPT_DELTA.value,
+             ):
+                 frame["generation"] = turn.generation
+             if isinstance(frame.get("data"), bytes):
+diff --git a/backend/app/models/duplex/duplex_voice_config.py b/backend/app/models/duplex/duplex_voice_config.py
+index 4ba5111..f068c90 100644
+--- a/backend/app/models/duplex/duplex_voice_config.py
++++ b/backend/app/models/duplex/duplex_voice_config.py
+@@ -28,21 +28,21 @@ class DuplexVoiceConfig(Base):
+     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+ 
+ 
+ class AiAgentConfig(Base):
+     __tablename__ = "ai_agent_config"
+ 
+     id = Column(BigInteger, primary_key=True, autoincrement=True)
+     agent_id = Column(String(64), unique=True, nullable=False, index=True)
+     name = Column(String(128))
+     type = Column(String(32), server_default="agentscope",
+-                  comment="agentscope|dify|direct")
++                  comment="agentscope（dify/direct 已废弃，见 2026-09-20 spec）")
+     model = Column(String(64), server_default="qwen-plus")
+     system_prompt = Column(Text)
+     tool_bindings = Column(JSON, comment="绑定的工具名列表")
+     mcp_bindings = Column(JSON, comment="绑定的 MCP 服务列表")
+     max_react_iters = Column(Integer, server_default="5")
+     enable_plan = Column(Boolean, server_default="true")
+     created_at = Column(TIMESTAMP, server_default=func.now())
+     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+ 
+ 
+diff --git a/docs/api/voice-ws-protocol.md b/docs/api/voice-ws-protocol.md
+new file mode 100644
+index 0000000..4bb64b3
+--- /dev/null
++++ b/docs/api/voice-ws-protocol.md
+@@ -0,0 +1,167 @@
++# 调解语音 WebSocket 协议 v2（AgentScope RealtimeAgent 内核）
++
++> 更新：2026-09-22。内核已替换为 AgentScope 2.0.8 `RealtimeAgent`
++> （`backend/app/duplex/voice/providers/agentscope.py`），协议 v2 主链路不变。
++> 本文档为前后端对接的权威参考。
++
++## 1. 端点与握手
++
++```
++ws(s)://<host>/api/v1/duplex/voice/ws
++    ?case_number=<案件号>            # 可选，缺省回退 session_id
++    &session_id=<会话ID>             # 可选，缺省自动生成 uuid
++    &participant_id=<当事人ID>       # 可选，缺省 party_a
++    &provider=dashscope|openai       # 可选，缺省 dashscope
++    &model_id=<语音模型ID>           # 可选，缺省数据库默认语音模型
++    &agent_id=<语音Agent配置ID>      # 可选，绑定时注入 MCP 工具
++    &client_caps=<URL编码JSON>       # 可选，客户端能力声明
++```
++
++`client_caps` 示例（当前仅消费 `vad_mode`）：
++
++```json
++{"vad_mode": "server", "transcription": true}
++```
++
++握手成功后服务端首先下发 `voice.ready`；未配置语音模型 / API Key 为空 /
++模型名无效时下发 `error` 帧并以 **4503** 关闭连接。
++
++## 2. 上行（客户端 → 服务端）
++
++### 2.1 二进制音频帧
++
++裸 **PCM16** 字节流：16kHz、单声道、小端 int16。无任何包头。
++前端经流式重采样保证 16k（`frontend/src/utils/audioDsp.ts` 的 `createStreamingResampler`）。
++
++> openai 平台模型上行率 24kHz，与服务端 `input_sample_rate` 不一致时由
++> 服务端 BrowserTransport 线性插值重采样（前端无感）。
++
++### 2.2 JSON 控制帧
++
++```jsonc
++// 文本输入（受 15s inactivity 超时保护；Qwen-Omni 不支持文本输入，
++// 将收到 code=text_unsupported 的 error 帧）
++{"type": "input.message", "text": "你好"}
++
++// 用户打断：代际 +1，此后过期 generation 帧（audio.delta/transcript.delta）
++// 应被客户端丢弃；同时触发服务端 barge-in 截断
++{"type": "interrupt"}
++
++// 工具确认结果（见 §3.2）
++{"type": "tool.confirm", "data": {"confirm_id": "call_1", "approved": true}}
++
++// 心跳（服务端直接回 pong，不转发上游）
++{"type": "ping"}
++
++// 存量 no-op（保留兼容，服务端忽略）
++{"type": "input.mute"}
++{"type": "output.mode"}
++```
++
++## 3. 下行（服务端 → 客户端）
++
++### 3.1 状态与数据帧
++
++```jsonc
++// 握手完成（首个帧）。客户端据此设置采集重采样目标率与播放采样率
++{"type": "voice.ready", "data": {
++    "session_id": 123,
++    "provider": "dashscope",
++    "input_sample_rate": 16000,
++    "output_sample_rate": 24000,
++    "server_vad": true,
++    "native_transcription": true,
++    "supports_interrupt": true,
++    "vad_mode": "server"
++}}
++
++// 转写增量（role: user|assistant；generation 用于代际仲裁）
++{"type": "transcript.delta", "data": {"text": "你好", "role": "user"}, "generation": 3}
++{"type": "transcript.final",  "data": {"text": "...", "role": "user"}}
++
++// 音频增量：二进制 PCM16 @ output_sample_rate（24kHz），无 JSON 包裹
++// （二进制帧即音频本体）
++
++// 轮次与状态
++{"type": "turn.started", "data": {}}
++{"type": "response.started", "data": {}}
++{"type": "voice.state", "data": {"state": "listening|processing|speaking|idle"}}
++{"type": "playback.cancelled", "data": {"item_id": "...", "played_ms": 500, "reason": "barge_in"}}
++
++// 工具调用开始（call_id 供 tool_result 关联）
++{"type": "tool_call", "data": {"call_id": "call_1", "name": "database_query"}}
++
++// 工具执行结果（state 为 AgentScope ToolResultState：success|error|interrupted|denied|running）
++{"type": "tool_result", "data": {"call_id": "call_1", "state": "success"}}
++
++// 回复结束（playback.ended 为内核透传帧）
++{"type": "playback.ended", "data": {"reply_id": "...", "finished_reason": "completed"}}
++
++// 心跳应答
++{"type": "pong"}
++
++// 错误（code 见 §4）
++{"type": "error", "code": "provider_unavailable", "message": "..."}
++```
++
++### 3.2 工具确认（tool.confirm_required，新增）
++
++Agent 绑定的 MCP 工具需要用户授权时，服务端下发确认请求（**语音流不中断**）：
++
++```jsonc
++{"type": "tool.confirm_required", "data": {
++    "confirm_id": "call_1",          // 回传 tool.confirm 时使用
++    "tool_name": "database_query",
++    "arguments": {"query": "select 1"},
++    "timeout_ms": 300000             // 5 分钟，超时服务端按拒绝处理
++}}
++```
++
++客户端回传（§2.2）：
++
++```json
++{"type": "tool.confirm", "data": {"confirm_id": "call_1", "approved": true}}
++```
++
++流程要点：
++- 确认执行后结果经 `tool_result` 帧补全（按 `call_id` 关联）；
++- 用户打断 / `playback.cancelled` 时服务端清空待确认请求，客户端应同步撤卡；
++- 旧前端无确认 UI 时主链路不受影响（超时自动拒绝）。
++
++## 4. 代际仲裁与错误码
++
++**generation**：轮次代际计数。客户端 `interrupt` 或服务端 VAD barge-in
++（`playback.cancelled`）都会 +1；`audio.delta` / `transcript.delta` 帧携带
++发出时的 generation，客户端对 `generation < 本地当前值` 的帧直接丢弃
++（`useTurnState.isStale()`）。
++
++**error code 一览**：
++
++| code | 场景 | 客户端处置 |
++|---|---|---|
++| `provider_unavailable` | 未配置语音模型 / API Key 为空 / 连接失败 | 提示后重连（服务端随发 4503 关闭） |
++| `inactivity` | 文本输入后 15s 无响应 | 复位聆听态，提示重试 |
++| `text_unsupported` | 模型不支持文本输入（Qwen-Omni） | 禁用文字输入入口 |
++| `not_connected` | 会话未就绪时收到控制帧 | 忽略 / 提示重连 |
++| `fatal` | 内核事件泵异常 | 断开重连 |
++| `other` | 其它 | 记录日志 |
++
++**WS 关闭码**：`4503` = Provider 不可用（握手阶段失败）。
++
++## 5. Provider 差异
++
++| | dashscope（默认） | openai（备选） |
++|---|---|---|
++| 模型 | `qwen3.5-omni-*-realtime`、`qwen-audio-3.0-realtime-*` | `gpt-realtime-*` |
++| 文本输入 | **不支持**（`text_unsupported`） | 支持 |
++| 上行采样率 | 16kHz（与前端一致，无重采样） | 24kHz（服务端重采样） |
++| 截断（truncation） | NONE（以 PlayoutPosition 修正上下文） | 同左 |
++| 可用性 | 需 DashScope API Key | **需 agentscope > 2.0.8**（当前版本连接时返回明确 `NotImplementedError` 文案） |
++
++## 6. 断线重连
++
++- 客户端断线重连（同一 `session_id`）后，服务端先回放 `ReplayBuffer` 缓冲的
++  状态帧（不含二进制音频），再下发 `voice.ready`；
++- 模型侧空闲超时（DashScope 约 3 分钟）由 AgentScope 自动重连恢复，
++  历史转写随 `agent.state` 重放，对客户端透明。
++
+diff --git a/docs/deploy/voice-agentscope-deploy.md b/docs/deploy/voice-agentscope-deploy.md
+new file mode 100644
+index 0000000..0b60b5b
+--- /dev/null
++++ b/docs/deploy/voice-agentscope-deploy.md
+@@ -0,0 +1,59 @@
++# 全双工语音（AgentScope RealtimeAgent 内核）部署配置说明
++
++> 适用：`feature/agentscope-voice-s2s` 及之后版本。协议详见 `docs/api/voice-ws-protocol.md`。
++
++## 1. 依赖
++
++| 项 | 说明 |
++|---|---|
++| Python | 3.11+（与后端一致） |
++| agentscope | `==2.0.8`（realtime 内核；已固定于 `backend/requirements.txt`） |
++| mcp | `>=1.15.0,<2.0.0`（agentscope streamable_http_client 要求） |
++| 已移除 | `torch / torchvision / torchaudio / sentence-transformers / onnxruntime`（原 local 语音管线与本地 embedding 专用） |
++| 外部服务 | **无**（原 s2s Docker 已废除；DashScope 走公网 WebSocket） |
++
++安装：
++
++```bash
++cd backend
++pip install -r requirements.txt
++# 验证 realtime 内核可导入
++python -c "from agentscope.realtime import DashScopeRealtimeModel, DashScopeAudioRealtimeModel; print('ok')"
++```
++
++## 2. 环境变量（backend/app/config/_voice.py）
++
++| 变量 | 默认 | 说明 |
++|---|---|---|
++| `VOICE_DEFAULT_PROVIDER` | `dashscope` | 值域 `dashscope \| openai` |
++| `VOICE_INPUT_SAMPLE_RATE` | `16000` | 上行采样率（dashscope） |
++| `VOICE_OUTPUT_SAMPLE_RATE` | `24000` | 下行采样率 |
++| `VOICE_RESPONSE_START_TIMEOUT_MS` | `3000` | 首响应超时 |
++| `VOICE_RESPONSE_INACTIVITY_TIMEOUT_MS` | `15000` | 文本输入不活动超时 |
++| `VOICE_RECONNECT_MAX` | `5` | 客户端重连上限 |
++
++已删除：`VOICE_LOCAL_PIPELINE_URL / VOICE_LOCAL_ENABLED / VOICE_LOCAL_VAD_MODEL /
++VOICE_LOCAL_STT_MODEL / VOICE_LOCAL_TTS_MODEL / VOICE_LOCAL_TTS_SPEED`。
++
++## 3. 数据库配置
++
++语音模型复用 `ai_api_key` + `ai_chat_model`（type=7）两表，管理页「语音模型配置」：
++
++1. **API Key 管理**：新增 Key，`platform` 填 `DashScope`（或 `openai`），填入真实 api_key；
++2. **语音模型配置**：新增模型行绑定该 Key，`model` 必须是有效实时模型名：
++   - DashScope：`qwen3.5-omni-plus-realtime`、`qwen3.5-omni-flash-realtime`、
++     `qwen-audio-3.0-realtime-plus`、`qwen-audio-3.0-realtime-flash`
++   - openai：`gpt-realtime-*`（**需 agentscope > 2.0.8**，当前版本连接时返回明确错误）
++3. 设默认模型（或前端 `model_id` 指定）。
++
++工具确认：Agent 配置（`ai_agent_config`，type 固定 `agentscope`）的 `mcp_bindings`
++绑定 MCP 服务后，会话建立时自动注入工具 schema；需要用户授权的工具会在
++语音流中下发 `tool.confirm_required` 帧。
++
++## 4. 启动验证
++
++```bash
++# 指标端点可访问
++curl http://127.0.0.1:8000/api/v1/duplex/voice/metrics
++# VoiceDemo 页面（/duplex/voice-demo）连接 → 收到 voice.ready 即部署成功
++```
+diff --git a/docs/guides/voice-frontend-integration-test.md b/docs/guides/voice-frontend-integration-test.md
+new file mode 100644
+index 0000000..ee7904d
+--- /dev/null
++++ b/docs/guides/voice-frontend-integration-test.md
+@@ -0,0 +1,51 @@
++# 全双工语音前端联调测试指南
++
++> 页面入口：`/duplex/voice-demo`（需先在「语音模型配置」配置可用模型）。
++> 协议参考：`docs/api/voice-ws-protocol.md`。
++
++## 冒烟清单
++
++### 1. 连接
++- 选 DashScope + 语音模型 → 输入案件编号 → 「进入语音通道」→ 「连接」
++- ✅ 收到 `voice.ready`，工具栏显示「已连接」，采样率显示 `16000/24000`
++
++### 2. 语音对话
++- 开启麦克风说一句话
++- ✅ 时间线出现「当事人」转写（transcript.delta user）→ 助手语音播放 + 「调解员」转写
++
++### 3. 打断（barge-in）
++- 助手回复中开口插话
++- ✅ 播放立即停止，出现 `playback.cancelled`；时间线后续过期帧被丢弃
++- 点「打断」按钮
++- ✅ 同上（显式 interrupt）
++
++### 4. 工具确认
++- 前置：Agent 配置绑定 MCP 工具；对话触发该工具且策略要求授权
++- ✅ 时间线出现黄色「待确认」卡片（工具名 + 参数预览）
++- 点「同意」→ ✅ `tool_result` 补全，卡片消失，状态为「已返回」
++- 点「拒绝」→ ✅ 工具不执行
++- 等待 5 分钟不操作 → ✅ 服务端按拒绝处理
++- 打断时有待确认卡片 → ✅ 卡片被清空
++
++### 5. 文字输入
++- 对 Omni 模型（qwen3.5-omni-*）输入文字 → ✅ 收到 `text_unsupported` error 并提示
++- 对 Qwen-Audio-3.0 模型输入文字 → ✅ 正常进入对话流
++
++### 6. 麦克风韧性
++- 通话中拔出 USB 麦克风 → ✅ 工具栏出现「麦克风恢复中…」，2s 内自动恢复
++- 系统静音麦克风轨道 → ✅ 1.5s 宽限内恢复有声则不重启；超宽限后自动重建
++- 拒绝浏览器麦克风权限 → ✅ 「麦克风不可用：权限被拒」且不无限重试
++
++### 7. 断线重连
++- 断网 10s 后恢复 → ✅ 前端指数退避重连，收到回放状态帧后恢复对话
++
++### 8. 降级
++- 未配置 Key 时选 `provider=openai` → ✅ `provider_unavailable` error + 4503 关闭
++- agentscope==2.0.8 下选 openai 平台模型 → ✅ 明确的 `NotImplementedError` 提示文案
++
++## 单测回归
++
++```bash
++cd frontend && npx vitest run src/composables/__tests__
++cd backend && .venv\Scripts\python.exe -m pytest tests/duplex/voice/ tests/unit/test_voice_registry_select.py -v
++```
+diff --git a/frontend/src/components/voice/TurnTimeline.vue b/frontend/src/components/voice/TurnTimeline.vue
+index 676fcf5..c186244 100644
+--- a/frontend/src/components/voice/TurnTimeline.vue
++++ b/frontend/src/components/voice/TurnTimeline.vue
+@@ -1,37 +1,60 @@
+ <template>
+   <div class="turn-timeline">
+-    <a-empty v-if="turns.length === 0 && toolCalls.length === 0" description="暂无对话" />
++    <a-empty v-if="turns.length === 0 && toolCalls.length === 0 && pendingConfirms.length === 0" description="暂无对话" />
+     <div v-for="t in turns" :key="t.id" class="turn-item" :class="t.role">
+       <span class="role">{{ roleLabel(t.role) }}</span>
+       <span class="text">{{ t.text || '（静音/无文本）' }}</span>
+     </div>
++    <div v-for="c in pendingConfirms" :key="c.id" class="confirm-card">
++      <div class="confirm-title">
++        <a-tag color="orange">待确认</a-tag>
++        <span class="name">{{ c.name }}</span>
++      </div>
++      <pre class="confirm-args">{{ JSON.stringify(c.arguments, null, 2) }}</pre>
++      <div class="confirm-actions">
++        <a-button size="small" type="primary" @click="$emit('confirm', c.id, true)">同意</a-button>
++        <a-button size="small" danger @click="$emit('confirm', c.id, false)">拒绝</a-button>
++      </div>
++    </div>
+     <div v-for="c in toolCalls" :key="c.id" class="tool-item">
+-      <a-tag :color="c.ok ? 'green' : 'red'">工具</a-tag>
++      <a-tag :color="tagColor(c)">工具</a-tag>
+       <span class="name">{{ c.name }}</span>
+-      <span v-if="!c.ok" class="err">调用失败：{{ c.error }}</span>
+-      <span v-else class="ok">已返回</span>
++      <span v-if="c.ok === false" class="err">调用失败：{{ c.error }}</span>
++      <span v-else-if="c.ok" class="ok">已返回</span>
++      <span v-else class="running">执行中…</span>
+     </div>
+   </div>
+ </template>
+ 
+ <script setup lang="ts">
+ import type { VoiceTurn, ToolCall } from '@/types/voice'
+ 
+-defineProps<{ turns: VoiceTurn[]; toolCalls: ToolCall[] }>()
++withDefaults(
++  defineProps<{ turns: VoiceTurn[]; toolCalls: ToolCall[]; pendingConfirms?: ToolCall[] }>(),
++  { pendingConfirms: () => [] },
++)
++
++defineEmits<{ (e: 'confirm', id: string, approved: boolean): void }>()
+ 
+ function roleLabel(r: string): string {
+   return (
+     { user: '当事人', assistant: '调解员', system: '系统', party_a: '甲方', party_b: '乙方' }[r] ||
+     r
+   )
+ }
++
++function tagColor(c: ToolCall): string {
++  if (c.ok === true) return 'green'
++  if (c.ok === false) return 'red'
++  return 'blue'
++}
+ </script>
+ 
+ <style scoped>
+ .turn-timeline {
+   margin-top: 12px;
+   max-height: 320px;
+   overflow-y: auto;
+   display: flex;
+   flex-direction: column;
+   gap: 8px;
+@@ -60,11 +83,42 @@ function roleLabel(r: string): string {
+   gap: 8px;
+   align-items: center;
+   font-size: 13px;
+ }
+ .tool-item .err {
+   color: #cf1322;
+ }
+ .tool-item .ok {
+   color: #389e0d;
+ }
++.tool-item .running {
++  color: #1677ff;
++}
++.confirm-card {
++  border: 1px solid #ffd591;
++  background: #fffbe6;
++  border-radius: 8px;
++  padding: 8px 12px;
++  font-size: 13px;
++}
++.confirm-title {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++.confirm-title .name {
++  font-weight: 600;
++}
++.confirm-args {
++  margin: 6px 0;
++  font-size: 12px;
++  background: #fff;
++  border-radius: 6px;
++  padding: 6px 8px;
++  max-height: 120px;
++  overflow: auto;
++}
++.confirm-actions {
++  display: flex;
++  gap: 8px;
++}
+ </style>
+diff --git a/frontend/src/components/voice/VoiceChannel.vue b/frontend/src/components/voice/VoiceChannel.vue
+index cab5c0d..f1b4303 100644
+--- a/frontend/src/components/voice/VoiceChannel.vue
++++ b/frontend/src/components/voice/VoiceChannel.vue
+@@ -1,16 +1,17 @@
+ <template>
+   <div class="voice-channel">
+     <a-card title="调解语音通道（实时 RTC）" class="channel-card">
+       <VoiceToolbar
+         :status="status"
+         :mic-on="micOn"
++        :mic-state="micState"
+         @connect="connect"
+         @disconnect="disconnect"
+         @toggle-mic="onToggleMic"
+         @interrupt="sendInterrupt"
+       />
+ 
+       <div class="wave-row">
+         <VoiceWaveform :level="audioLevel" />
+         <span v-if="ready" class="caps">
+           采样率 {{ ready.input_sample_rate }}/{{ ready.output_sample_rate }} · VAD: {{ ready.vad_mode }}
+@@ -22,21 +23,26 @@
+       <div class="input-row">
+         <a-input-search
+           v-model:value="textInput"
+           placeholder="输入文字与调解员对话，回车发送"
+           enter-button="发送"
+           :disabled="status !== 'open'"
+           @search="onSendText"
+         />
+       </div>
+ 
+-      <TurnTimeline :turns="transcripts" :tool-calls="toolCallList" />
++      <TurnTimeline
++        :turns="transcripts"
++        :tool-calls="toolCallList"
++        :pending-confirms="pendingConfirms"
++        @confirm="onToolConfirm"
++      />
+     </a-card>
+   </div>
+ </template>
+ 
+ <script setup lang="ts">
+ import { ref } from 'vue'
+ import { useVoiceChannel } from '@/composables/useVoiceChannel'
+ import type { VoiceProvider } from '@/types/voice'
+ import VoiceToolbar from './VoiceToolbar.vue'
+ import VoiceWaveform from './VoiceWaveform.vue'
+@@ -53,36 +59,43 @@ const props = withDefaults(
+   { participantId: 'party_a', provider: 'dashscope' },
+ )
+ 
+ const {
+   status,
+   ready,
+   errorMsg,
+   transcripts,
+   audioLevel,
+   micOn,
++  micState,
+   toolCalls,
+   connect,
+   disconnect,
+   sendInterrupt,
+   sendText,
++  respondToolConfirm,
+   startMic,
+   stopMic,
+ } = useVoiceChannel({
+   caseNumber: props.caseNumber,
+   participantId: props.participantId,
+   provider: props.provider,
+   agentId: props.agentId,
+   modelId: props.modelId,
+ })
+ 
+ const toolCallList = toolCalls.calls
++const pendingConfirms = toolCalls.pending
++
++function onToolConfirm(id: string, approved: boolean) {
++  respondToolConfirm(id, approved)
++}
+ 
+ const textInput = ref('')
+ function onSendText() {
+   const t = textInput.value.trim()
+   if (!t) return
+   sendText(t)
+   textInput.value = ''
+ }
+ 
+ function onToggleMic() {
+diff --git a/frontend/src/components/voice/VoiceToolbar.vue b/frontend/src/components/voice/VoiceToolbar.vue
+index 6386f0f..47dfcf9 100644
+--- a/frontend/src/components/voice/VoiceToolbar.vue
++++ b/frontend/src/components/voice/VoiceToolbar.vue
+@@ -1,40 +1,64 @@
+ <template>
+   <a-space wrap>
+     <a-button v-if="status !== 'open'" type="primary" @click="$emit('connect')">连接</a-button>
+     <a-button v-else danger @click="$emit('disconnect')">断开</a-button>
+     <a-button :type="micOn ? 'default' : 'dashed'" @click="$emit('toggleMic')">
+       {{ micOn ? '关闭麦克风' : '开启麦克风' }}
+     </a-button>
+     <a-button :disabled="status !== 'open'" @click="$emit('interrupt')">打断</a-button>
+     <a-tag :color="statusColor">{{ statusText }}</a-tag>
++    <a-tag v-if="micTag" :color="micTag!.color">{{ micTag!.text }}</a-tag>
+   </a-space>
+ </template>
+ 
+ <script setup lang="ts">
+ import { computed } from 'vue'
+ import type { ChannelStatus } from '@/composables/useVoiceChannel'
++import type { MicState } from '@/composables/useMicLifecycle'
++import { classifyMicError } from '@/composables/useMicLifecycle'
+ 
+-const props = defineProps<{ status: ChannelStatus; micOn: boolean }>()
++const props = defineProps<{
++  status: ChannelStatus
++  micOn: boolean
++  micState?: MicState | null
++}>()
+ defineEmits<{ connect: []; disconnect: []; toggleMic: []; interrupt: [] }>()
+ 
+ const statusText = computed(
+   () =>
+     ({
+       idle: '空闲',
+       connecting: '连接中',
+       open: '已连接',
+       closed: '已断开',
+       error: '错误',
+-    }[props.status]),
++    })[props.status],
+ )
+ const statusColor = computed(
+   () =>
+     ({
+       idle: 'default',
+       connecting: 'processing',
+       open: 'success',
+       closed: 'default',
+       error: 'error',
+-    }[props.status]),
++    })[props.status],
+ )
++
++/** 麦克风韧性状态徽标（recovering/unavailable；ready 不显示） */
++const micTag = computed<{ color: string; text: string } | null>(() => {
++  const s = props.micState
++  if (!s || s.state === 'ready' || s.state === 'starting') return null
++  if (s.state === 'recovering') return { color: 'processing', text: '麦克风恢复中…' }
++  const kind = s.error ? classifyMicError(s.error) : 'unknown'
++  const reasonText =
++    ({
++      permission_denied: '权限被拒',
++      device_missing: '设备缺失',
++      device_unavailable: '设备占用',
++      unsupported: '不支持',
++      unknown: '未知原因',
++    })[kind] || '未知原因'
++  return { color: 'error', text: `麦克风不可用：${reasonText}` }
++})
+ </script>
+diff --git a/frontend/src/composables/__tests__/useMicLifecycle.spec.ts b/frontend/src/composables/__tests__/useMicLifecycle.spec.ts
+new file mode 100644
+index 0000000..6a8256e
+--- /dev/null
++++ b/frontend/src/composables/__tests__/useMicLifecycle.spec.ts
+@@ -0,0 +1,121 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
++import { createMicLifecycle } from '../useMicLifecycle'
++
++describe('useMicLifecycle', () => {
++  beforeEach(() => vi.useFakeTimers())
++  afterEach(() => vi.useRealTimers())
++
++  function makeEnv() {
++    const states: any[] = []
++    const track = makeTrack()
++    let stream: any = { track }
++    const acquire = vi.fn(async () => stream)
++    const release = vi.fn()
++    function makeTrack() {
++      const listeners: Record<string, Function[]> = {}
++      return {
++        muted: false,
++        addEventListener: (n: string, f: Function) => {
++          ;(listeners[n] ??= []).push(f)
++        },
++        removeEventListener: () => {},
++        __emit: (n: string) => (listeners[n] || []).forEach((f) => f()),
++      }
++    }
++    const mediaDevices = {
++      listeners: {} as Record<string, Function[]>,
++      addEventListener(n: string, f: Function) {
++        ;(this.listeners[n] ??= []).push(f)
++      },
++      removeEventListener() {},
++      __emitDeviceChange() {
++        ;(this.listeners['devicechange'] || []).forEach((f) => f())
++      },
++    }
++    const lc = createMicLifecycle({
++      acquire,
++      release,
++      onState: (s: any) => states.push(s),
++      schedule: (cb: () => void, ms: number) => setTimeout(cb, ms),
++      cancel: (t: any) => clearTimeout(t),
++      mediaDevices,
++    })
++    return { lc, states, acquire, release, track, mediaDevices }
++  }
++
++  it('track ended 立即重启', async () => {
++    const { lc, acquire, track } = makeEnv()
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    expect(acquire).toHaveBeenCalledTimes(1)
++    track.__emit('ended')
++    await vi.advanceTimersByTimeAsync(0)
++    expect(acquire).toHaveBeenCalledTimes(2)
++    lc.stop()
++  })
++
++  it('mute 宽限内 unmute 不重启', async () => {
++    const { lc, acquire, track } = makeEnv()
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    track.__emit('mute')
++    await vi.advanceTimersByTimeAsync(1000)
++    track.muted = false
++    track.__emit('unmute')
++    await vi.advanceTimersByTimeAsync(1000)
++    expect(acquire).toHaveBeenCalledTimes(1)
++    lc.stop()
++  })
++
++  it('mute 超宽限触发重启', async () => {
++    const { lc, acquire, track } = makeEnv()
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    track.muted = true
++    track.__emit('mute')
++    await vi.advanceTimersByTimeAsync(1600)
++    expect(acquire).toHaveBeenCalledTimes(2)
++    lc.stop()
++  })
++
++  it('不可恢复错误直接 unavailable', async () => {
++    const { lc, states, acquire } = makeEnv()
++    acquire.mockRejectedValueOnce(
++      Object.assign(new Error('denied'), { name: 'NotAllowedError' }),
++    )
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    expect(states.at(-1).state).toBe('unavailable')
++    expect(states.at(-1).recoverable).toBe(false)
++    lc.stop()
++  })
++
++  it('可恢复错误按 500ms 退避重试', async () => {
++    const { lc, acquire } = makeEnv()
++    acquire.mockRejectedValueOnce(
++      Object.assign(new Error('busy'), { name: 'NotReadableError' }),
++    )
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    await vi.advanceTimersByTimeAsync(500)
++    expect(acquire).toHaveBeenCalledTimes(2)
++    lc.stop()
++  })
++
++  it('devicechange 重置重试计数并重启', async () => {
++    const { lc, acquire, mediaDevices } = makeEnv()
++    // 一次可恢复失败，消耗一次重试预算
++    acquire.mockRejectedValueOnce(
++      Object.assign(new Error('busy'), { name: 'NotReadableError' }),
++    )
++    lc.start()
++    await vi.advanceTimersByTimeAsync(0)
++    await vi.advanceTimersByTimeAsync(500)
++    expect(acquire).toHaveBeenCalledTimes(2)
++    // devicechange（300ms 去抖）→ 计数重置后仍执行重启
++    mediaDevices.__emitDeviceChange()
++    await vi.advanceTimersByTimeAsync(300)
++    expect(acquire).toHaveBeenCalledTimes(3)
++    lc.stop()
++  })
++})
+diff --git a/frontend/src/composables/__tests__/useToolCalls.spec.ts b/frontend/src/composables/__tests__/useToolCalls.spec.ts
+new file mode 100644
+index 0000000..5db899a
+--- /dev/null
++++ b/frontend/src/composables/__tests__/useToolCalls.spec.ts
+@@ -0,0 +1,43 @@
++import { describe, it, expect } from 'vitest'
++import { useToolCalls } from '../useToolCalls'
++
++describe('useToolCalls confirm flow', () => {
++  it('addConfirm 入 pending，update 补全结果', () => {
++    const tc = useToolCalls()
++    tc.addConfirm({
++      confirmId: 'c1',
++      name: 'db_query',
++      arguments: { q: 'x' },
++      timeoutMs: 300000,
++    })
++    expect(tc.pending.value).toHaveLength(1)
++    expect(tc.pending.value[0].status).toBe('pending')
++    tc.update('c1', { ok: true, result: 'done' })
++    expect(tc.pending.value).toHaveLength(0)
++    expect(tc.calls.value.find((c) => c.id === 'c1')?.status).toBe('executed')
++  })
++
++  it('clearPending 打断时清空待确认', () => {
++    const tc = useToolCalls()
++    tc.addConfirm({
++      confirmId: 'c2',
++      name: 't',
++      arguments: {},
++      timeoutMs: 1000,
++    })
++    tc.clearPending()
++    expect(tc.pending.value).toHaveLength(0)
++  })
++
++  it('update 失败结果落位 rejected', () => {
++    const tc = useToolCalls()
++    tc.addConfirm({
++      confirmId: 'c3',
++      name: 't',
++      arguments: {},
++      timeoutMs: 1000,
++    })
++    tc.update('c3', { ok: false, error: 'denied' })
++    expect(tc.calls.value.find((c) => c.id === 'c3')?.status).toBe('rejected')
++  })
++})
+diff --git a/frontend/src/composables/useMicLifecycle.ts b/frontend/src/composables/useMicLifecycle.ts
+new file mode 100644
+index 0000000..c87eaea
+--- /dev/null
++++ b/frontend/src/composables/useMicLifecycle.ts
+@@ -0,0 +1,192 @@
++/**
++ * 麦克风捕获生命周期：只负责媒体流获取与 track 监听，独立于 WS 通道与
++ * 播放链——设备切换只重建流，不重连、不打断播放（spec §9.7）。
++ *
++ * 移植自 qwen-audio-agent `createMicrophoneCaptureLifecycle`：
++ * - devicechange → 300ms 去抖重启，并重置重试计数（主动行为不累计退避）
++ * - track ended → 立即重启（USB 拔出/被抢占）
++ * - track mute → 1.5s 宽限后仍 muted 才重启；unmute 取消（过滤瞬时静音）
++ * - 可恢复错误 → 500ms/1s/2s/4s 四次退避；耗尽转 unavailable
++ * - 不可恢复错误（NotAllowedError 等）→ 直接 unavailable，不重试
++ * - generation 代际仲裁：迟到的 acquire 结果直接 release 丢弃
++ */
++export interface MicState {
++  state: 'starting' | 'ready' | 'recovering' | 'unavailable'
++  reason: string
++  error?: unknown
++  recoverable?: boolean
++}
++
++const FATAL_ERRORS = ['NotAllowedError', 'NotSupportedError', 'SecurityError', 'TypeError']
++
++/** 错误分类（供 UI 文案） */
++export function classifyMicError(error: unknown): string {
++  const name = String((error as any)?.name || '')
++  const message = String((error as any)?.message || '')
++  if (
++    ['NotAllowedError', 'SecurityError'].includes(name) ||
++    /permission\s+denied|not\s+allowed/i.test(message)
++  )
++    return 'permission_denied'
++  if (name === 'NotFoundError') return 'device_missing'
++  if (name === 'NotReadableError') return 'device_unavailable'
++  if (name === 'NotSupportedError') return 'unsupported'
++  return 'unknown'
++}
++
++interface MicCapture {
++  track?: MediaStreamTrack
++  media?: MediaStream
++  close?: () => void
++  handleEnded?: () => void
++  handleMute?: () => void
++  handleUnmute?: () => void
++}
++
++interface MicLifecycleOpts {
++  acquire: (ctx: { reason: string; generation: number }) => Promise<MicCapture>
++  release: (capture: MicCapture) => void
++  onState: (s: MicState) => void
++  /** 代际验证通过的新流就绪（消费方据此重连采集链，如 WebAudio source） */
++  onCapture?: (capture: MicCapture) => void
++  retryDelays?: number[]
++  debounceMs?: number
++  muteGraceMs?: number
++  schedule?: (cb: () => void, ms: number) => any
++  cancel?: (timer: any) => void
++  mediaDevices?: {
++    addEventListener?: (n: string, f: EventListenerOrEventListenerObject) => void
++    removeEventListener?: (n: string, f: EventListenerOrEventListenerObject) => void
++  }
++}
++
++export function createMicLifecycle(opts: MicLifecycleOpts) {
++  const retryDelays = opts.retryDelays ?? [500, 1000, 2000, 4000]
++  const debounceMs = opts.debounceMs ?? 300
++  const muteGraceMs = opts.muteGraceMs ?? 1500
++  const schedule = opts.schedule ?? ((cb: () => void, ms: number) => setTimeout(cb, ms))
++  const cancel = opts.cancel ?? ((t: any) => clearTimeout(t))
++
++  let running = false
++  let generation = 0
++  let current: MicCapture | null = null
++  let restartTimer: any = null
++  let retryTimer: any = null
++  let muteTimer: any = null
++  let retryAttempt = 0
++
++  const trackOf = (c: MicCapture | null) =>
++    c?.track || (c?.media as MediaStream | undefined)?.getAudioTracks?.()[0] || null
++
++  const clearTimer = (kind: 'restart' | 'retry' | 'mute') => {
++    const t = kind === 'restart' ? restartTimer : kind === 'retry' ? retryTimer : muteTimer
++    if (t !== null) cancel(t)
++    if (kind === 'restart') restartTimer = null
++    else if (kind === 'retry') retryTimer = null
++    else muteTimer = null
++  }
++
++  const detach = () => {
++    const c = current
++    if (!c) return
++    current = null
++    clearTimer('mute')
++    const track = trackOf(c)
++    track?.removeEventListener?.('ended', c.handleEnded as EventListener)
++    track?.removeEventListener?.('mute', c.handleMute as EventListener)
++    track?.removeEventListener?.('unmute', c.handleUnmute as EventListener)
++    opts.release(c)
++  }
++
++  const installListeners = (c: MicCapture) => {
++    const track = trackOf(c)
++    if (!track?.addEventListener) return
++    c.handleEnded = () => requestRestart('track-ended', 0)
++    c.handleMute = () => {
++      clearTimer('mute')
++      muteTimer = schedule(() => {
++        muteTimer = null
++        if (track.muted !== false) requestRestart('track-muted', 0)
++      }, muteGraceMs)
++    }
++    c.handleUnmute = () => clearTimer('mute')
++    track.addEventListener('ended', c.handleEnded as EventListener)
++    track.addEventListener('mute', c.handleMute as EventListener)
++    track.addEventListener('unmute', c.handleUnmute as EventListener)
++  }
++
++  const replaceCapture = async (reason: string) => {
++    if (!running) return
++    clearTimer('restart')
++    clearTimer('retry')
++    const gen = ++generation
++    detach()
++    opts.onState({ state: reason === 'initial' ? 'starting' : 'recovering', reason })
++    try {
++      const capture = await opts.acquire({ reason, generation: gen })
++      if (!running || gen !== generation) {
++        opts.release(capture)
++        return
++      }
++      current = capture
++      retryAttempt = 0
++      installListeners(capture)
++      opts.onCapture?.(capture)
++      opts.onState({ state: 'ready', reason })
++    } catch (error) {
++      if (!running || gen !== generation) return
++      const recoverable = !FATAL_ERRORS.includes(String((error as any)?.name || ''))
++      const delay = recoverable ? retryDelays[retryAttempt] : undefined
++      retryAttempt += 1
++      const retrying = recoverable && Number.isFinite(delay as number)
++      opts.onState({
++        state: retrying ? 'recovering' : 'unavailable',
++        reason,
++        error,
++        recoverable,
++      })
++      if (retrying) {
++        retryTimer = schedule(() => {
++          retryTimer = null
++          void replaceCapture('retry')
++        }, delay as number)
++      }
++    }
++  }
++
++  function requestRestart(reason = 'devicechange', delay = debounceMs) {
++    if (!running) return
++    if (reason === 'devicechange') retryAttempt = 0
++    clearTimer('restart')
++    clearTimer('retry')
++    restartTimer = schedule(() => {
++      restartTimer = null
++      void replaceCapture(reason)
++    }, delay)
++  }
++
++  const handleDeviceChange = () => requestRestart('devicechange')
++
++  return {
++    start() {
++      if (running) return
++      running = true
++      opts.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
++      void replaceCapture('initial')
++    },
++    stop() {
++      if (!running) return
++      running = false
++      generation += 1
++      opts.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange)
++      clearTimer('restart')
++      clearTimer('retry')
++      clearTimer('mute')
++      detach()
++    },
++    restart(reason = 'manual') {
++      retryAttempt = 0
++      requestRestart(reason, 0)
++    },
++  }
++}
+diff --git a/frontend/src/composables/useToolCalls.ts b/frontend/src/composables/useToolCalls.ts
+index 62c1e48..945a7ea 100644
+--- a/frontend/src/composables/useToolCalls.ts
++++ b/frontend/src/composables/useToolCalls.ts
+@@ -1,29 +1,57 @@
+ /**
+- * 工具调用 Composable（对应后端 tool_call_handler.ToolCallHandler）
++ * 工具调用 Composable（AgentScope 原生 Toolkit 语义）
+  *
+- * 维护会话级工具调用的列表与状态，供 UI 展示「AI 调用了哪些工具」。
++ * 维护会话级工具调用列表与状态：tool_call 结果展示 + 待确认（pending）
++ * 卡片驱动。addConfirm 由 tool.confirm_required 帧触发，结果经 update 落位。
+  */
+ import { ref, computed } from 'vue'
+ import type { ToolCall } from '@/types/voice'
+ 
+ export function useToolCalls() {
+   const calls = ref<ToolCall[]>([])
+ 
+   function add(call: ToolCall) {
+     calls.value.push(call)
+   }
+ 
++  /** tool.confirm_required 帧到达：登记待确认调用 */
++  function addConfirm(p: {
++    confirmId: string
++    name: string
++    arguments: Record<string, unknown>
++    timeoutMs: number
++  }) {
++    calls.value.push({
++      id: p.confirmId,
++      name: p.name,
++      arguments: p.arguments,
++      status: 'pending',
++    })
++  }
++
+   function update(id: string, patch: Partial<ToolCall>) {
+     const idx = calls.value.findIndex((c) => c.id === id)
+-    if (idx >= 0) calls.value[idx] = { ...calls.value[idx], ...patch }
++    if (idx >= 0) {
++      calls.value[idx] = { ...calls.value[idx], ...patch }
++      if (patch.ok !== undefined) {
++        calls.value[idx].status = patch.ok ? 'executed' : 'rejected'
++      }
++    }
++  }
++
++  /** 打断 / playback_cancelled 时清空待确认（服务端同步放弃） */
++  function clearPending() {
++    calls.value = calls.value.filter((c) => c.status !== 'pending')
+   }
+ 
+   function clear() {
+     calls.value = []
+   }
+ 
+-  const pending = computed(() => calls.value.filter((c) => c.result === undefined))
++  const pending = computed(() =>
++    calls.value.filter((c) => c.status === 'pending'),
++  )
+   const failed = computed(() => calls.value.filter((c) => c.ok === false))
+ 
+-  return { calls, add, update, clear, pending, failed }
++  return { calls, add, addConfirm, update, clearPending, clear, pending, failed }
+ }
+diff --git a/frontend/src/composables/useVoiceChannel.ts b/frontend/src/composables/useVoiceChannel.ts
+index 4e89dd5..e24c331 100644
+--- a/frontend/src/composables/useVoiceChannel.ts
++++ b/frontend/src/composables/useVoiceChannel.ts
+@@ -13,26 +13,27 @@
+  * - 上行流式重采样 ctx.sampleRate → input_sample_rate（根治 48k/16k 错配）
+  * - 上行软噪声门 + 去直流；下行播放链/调度交给 useVoicePlayback
+  */
+ import { ref, onUnmounted } from 'vue'
+ import { buildVoiceWsUrl } from '@/api/voice'
+ import type {
+   ConnectConfig,
+   VoiceFrame,
+   VoiceReadyPayload,
+   VoiceTurn,
+-  ToolCall,
++  ToolConfirmPayload,
+ } from '@/types/voice'
+ import { useTurnState } from './useTurnState'
+ import { useReconnect } from './useReconnect'
+ import { useToolCalls } from './useToolCalls'
+ import { useVoicePlayback } from './useVoicePlayback'
++import { createMicLifecycle, classifyMicError, type MicState } from './useMicLifecycle'
+ import {
+   DcBlocker,
+   NoiseGate,
+   createStreamingResampler,
+   encodeFloatToPcm16,
+   AUDIO_DSP_CONFIG,
+ } from '@/utils/audioDsp'
+ 
+ export type ChannelStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'error'
+ 
+@@ -42,20 +43,21 @@ function randomId(): string {
+     : Math.random().toString(36).slice(2)
+ }
+ 
+ export function useVoiceChannel(cfg: ConnectConfig) {
+   const status = ref<ChannelStatus>('idle')
+   const ready = ref<VoiceReadyPayload | null>(null)
+   const errorMsg = ref<string | null>(null)
+   const transcripts = ref<VoiceTurn[]>([])
+   const audioLevel = ref(0)
+   const micOn = ref(false)
++  const micState = ref<MicState | null>(null)
+ 
+   const turn = useTurnState()
+   const reconnect = useReconnect()
+   const toolCalls = useToolCalls()
+ 
+   let ws: WebSocket | null = null
+   let audioCtx: AudioContext | null = null
+   let mediaStream: MediaStream | null = null
+   let processor: ScriptProcessorNode | null = null
+   let reconnectTimer: number | null = null
+@@ -157,24 +159,52 @@ export function useVoiceChannel(cfg: ConnectConfig) {
+         if (typeof frame.data === 'string') playback.push(frame.data)
+         else if (frame.data) playback.push((frame.data as { audio?: string }).audio)
+         break
+       case 'audio':
+         turn.markSpeaking()
+         playback.push(frame.data?.audio)
+         break
+       case 'playback_cancelled':
+         playback.interrupt()
+         turn.onInterrupt()
++        toolCalls.clearPending()
+         break
+       case 'tool_call': {
+-        const tc = frame.data as ToolCall
+-        toolCalls.add(tc)
++        // 工具调用开始（AgentScope ToolCallStartEvent）；结果由 tool_result 落位
++        const d = frame.data as { call_id?: string; name?: string }
++        if (d.call_id) {
++          toolCalls.add({
++            id: d.call_id,
++            name: d.name || '',
++            arguments: {},
++          })
++        }
++        break
++      }
++      case 'tool.confirm_required': {
++        const p = frame.data as ToolConfirmPayload
++        toolCalls.addConfirm({
++          confirmId: p.confirm_id,
++          name: p.tool_name,
++          arguments: p.arguments ?? {},
++          timeoutMs: p.timeout_ms ?? 300000,
++        })
++        break
++      }
++      case 'tool_result': {
++        const r = frame.data as { call_id?: string; state?: string }
++        if (r.call_id) {
++          toolCalls.update(r.call_id, {
++            ok: r.state === 'success',
++            result: r.state,
++          })
++        }
+         break
+       }
+       case 'error':
+         errorMsg.value = frame.data?.message || '语音服务错误'
+         break
+       case 'pong':
+         break
+     }
+   }
+ 
+@@ -228,71 +258,104 @@ export function useVoiceChannel(cfg: ConnectConfig) {
+   }
+ 
+   function sendText(text: string) {
+     if (!ws || ws.readyState !== WebSocket.OPEN) return
+     ws.send(JSON.stringify({ type: 'input.message', text }))
+     // 本地回显：用户键入的文字立即显示在对话流中
+     appendTranscript('user', text, true)
+   }
+ 
+   function sendInterrupt() {
++    toolCalls.clearPending()
+     ws?.send(JSON.stringify({ type: 'interrupt' }))
+   }
+ 
++  /** 回传工具确认结果（tool.confirm_required → 用户同意/拒绝） */
++  function respondToolConfirm(confirmId: string, approved: boolean) {
++    toolCalls.clearPending()
++    if (ws && ws.readyState === WebSocket.OPEN) {
++      ws.send(
++        JSON.stringify({ type: 'tool.confirm', data: { confirm_id: confirmId, approved } }),
++      )
++    }
++  }
++
+   function sendAudio(bytes: Uint8Array) {
+     if (ws && ws.readyState === WebSocket.OPEN) ws.send(bytes)
+   }
+ 
+-  async function startMic() {
+-    try {
++  /** 将新 MediaStream 接入既有 48kHz 采集链（设备切换只重连 source，不动 AudioContext/WS） */
++  function attachStream(stream: MediaStream) {
++    mediaStream = stream
++    const ctx = ensureAudioCtx()
++    // 噪声门按实际采样率创建（仅首次或采样率变化时重建）
++    if (!uplinkGate || uplinkGate.sampleRate !== ctx.sampleRate) {
++      uplinkGate = new NoiseGate({
++        sampleRate: ctx.sampleRate,
++        thresholdDb: AUDIO_DSP_CONFIG.capture.gateThresholdDb,
++        attackMs: AUDIO_DSP_CONFIG.capture.gateAttackMs,
++        releaseMs: AUDIO_DSP_CONFIG.capture.gateReleaseMs,
++      })
++    }
++    processor?.disconnect()
++    const source = ctx.createMediaStreamSource(stream)
++    const node = ctx.createScriptProcessor(AUDIO_DSP_CONFIG.capture.bufferSize, 1, 1)
++    node.onaudioprocess = (e) => {
++      const socket = ws
++      if (!socket || socket.readyState !== WebSocket.OPEN) {
++        uplinkResampler.reset()
++        return
++      }
++      const samples = e.inputBuffer.getChannelData(0)
++      uplinkDcBlocker.process(samples)
++      uplinkGate?.process(samples)
++      // 流式重采样到协商的上行采样率（默认 16k）——根治 48k 直发的错配
++      const targetRate = ready.value?.input_sample_rate || 16000
++      const resampled = uplinkResampler.process(samples, ctx.sampleRate, targetRate)
++      if (!resampled.length) return
++      sendAudio(new Uint8Array(encodeFloatToPcm16(resampled).buffer))
++    }
++    source.connect(node)
++    node.connect(ctx.destination)
++    processor = node
++    micOn.value = true
++  }
++
++  // 麦克风捕获生命周期：设备切换/track ended/退避重试独立于 WS 通道（spec §9.7）
++  const mic = createMicLifecycle({
++    acquire: async () => {
+       // 显式声明浏览器端 AEC/NS/AGC：外放场景下抑制扬声器回采（根治模型"听到自己"）
+       const stream = await navigator.mediaDevices.getUserMedia({
+         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+       })
+-      mediaStream = stream
+-      const ctx = ensureAudioCtx()
+-      // 噪声门按实际采样率创建（仅首次或采样率变化时重建）
+-      if (!uplinkGate || uplinkGate.sampleRate !== ctx.sampleRate) {
+-        uplinkGate = new NoiseGate({
+-          sampleRate: ctx.sampleRate,
+-          thresholdDb: AUDIO_DSP_CONFIG.capture.gateThresholdDb,
+-          attackMs: AUDIO_DSP_CONFIG.capture.gateAttackMs,
+-          releaseMs: AUDIO_DSP_CONFIG.capture.gateReleaseMs,
+-        })
+-      }
+-      const source = ctx.createMediaStreamSource(stream)
+-      const node = ctx.createScriptProcessor(AUDIO_DSP_CONFIG.capture.bufferSize, 1, 1)
+-      node.onaudioprocess = (e) => {
+-        const socket = ws
+-        if (!socket || socket.readyState !== WebSocket.OPEN) {
+-          uplinkResampler.reset()
+-          return
+-        }
+-        const samples = e.inputBuffer.getChannelData(0)
+-        uplinkDcBlocker.process(samples)
+-        uplinkGate?.process(samples)
+-        // 流式重采样到协商的上行采样率（默认 16k）——根治 48k 直发的错配
+-        const targetRate = ready.value?.input_sample_rate || 16000
+-        const resampled = uplinkResampler.process(samples, ctx.sampleRate, targetRate)
+-        if (!resampled.length) return
+-        sendAudio(new Uint8Array(encodeFloatToPcm16(resampled).buffer))
++      return { media: stream, track: stream.getAudioTracks()[0] }
++    },
++    release: (c) => {
++      c.media?.getTracks().forEach((t) => t.stop())
++    },
++    onState: (s) => {
++      micState.value = s
++      if (s.state === 'unavailable' && s.error) {
++        errorMsg.value = `麦克风不可用（${classifyMicError(s.error)}）：请检查权限或设备后重试`
+       }
+-      source.connect(node)
+-      node.connect(ctx.destination)
+-      processor = node
+-      micOn.value = true
+-    } catch (e) {
+-      errorMsg.value = `麦克风开启失败: ${(e as Error).message}`
+-    }
++    },
++    onCapture: (c) => {
++      if (c.media) attachStream(c.media)
++    },
++  })
++
++  function startMic() {
++    mic.start()
+   }
+ 
+   function stopMic() {
++    mic.stop()
+     mediaStream?.getTracks().forEach((t) => t.stop())
+     mediaStream = null
+     processor?.disconnect()
+     processor = null
+     micOn.value = false
+   }
+ 
+   function disconnect() {
+     closedByUser = true
+     if (reconnectTimer !== null) {
+@@ -310,24 +373,26 @@ export function useVoiceChannel(cfg: ConnectConfig) {
+   onUnmounted(disconnect)
+ 
+   return {
+     // 状态
+     status,
+     ready,
+     errorMsg,
+     transcripts,
+     audioLevel,
+     micOn,
++    micState,
+     // 子状态机
+     turn,
+     reconnect,
+     toolCalls,
+     // 操作
+     connect,
+     disconnect,
+     sendText,
+     sendInterrupt,
+     sendAudio,
++    respondToolConfirm,
+     startMic,
+     stopMic,
+   }
+ }
+diff --git a/frontend/src/types/voice.ts b/frontend/src/types/voice.ts
+index fe35b50..622a914 100644
+--- a/frontend/src/types/voice.ts
++++ b/frontend/src/types/voice.ts
+@@ -12,26 +12,28 @@ export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking'
+ export type VoiceEventType =
+   | 'voice.ready'
+   | 'audio'
+   | 'audio.delta'
+   | 'transcript'
+   | 'transcript.delta'
+   | 'transcript.final'
+   | 'response_started'
+   | 'playback_cancelled'
+   | 'tool_call'
++  | 'tool_result'
++  | 'tool.confirm_required'
+   | 'turn_update'
+   | 'error'
+   | 'pong'
+ 
+-/** Provider 标识（对应后端 ProviderKey；s2s = 本地 Docker qwen-audio-s2s） */
+-export type VoiceProvider = 'dashscope' | 'local' | 's2s' | 'openai' | 'loopback'
++/** Provider 标识（对应后端 ProviderKey：dashscope | openai） */
++export type VoiceProvider = 'dashscope' | 'openai'
+ 
+ /** 协商后的能力集合（对应后端 build_ready_payload） */
+ export interface VoiceCapabilities {
+   input_sample_rate: number
+   output_sample_rate: number
+   server_vad: boolean
+   native_transcription: boolean
+   supports_interrupt: boolean
+   vad_mode: string
+ }
+@@ -47,28 +49,38 @@ export interface VoiceTurn {
+   id: string
+   role: 'user' | 'assistant' | 'system'
+   text: string
+   started_at: string
+   final_transcript: string
+   generation: number
+   /** 是否为已定稿轮次（用于流式累积时判断是否还可追加） */
+   finalized?: boolean
+ }
+ 
+-/** 会话级工具调用（对应后端 ToolCallHandler 结果） */
++/** 工具确认请求载荷（对应后端 tool.confirm_required 帧） */
++export interface ToolConfirmPayload {
++  confirm_id: string
++  tool_name: string
++  arguments: Record<string, unknown>
++  timeout_ms: number
++}
++
++/** 会话级工具调用（AgentScope 原生 Toolkit；status 驱动确认 UI） */
+ export interface ToolCall {
+   id: string
+   name: string
+   arguments: Record<string, unknown>
+   result?: unknown
+-  ok: boolean
++  ok?: boolean
+   error?: string
++  /** pending：等待用户确认；executed/rejected：确认后终态 */
++  status?: 'pending' | 'executed' | 'rejected'
+ }
+ 
+ /** 通用下行帧 */
+ export interface VoiceFrame {
+   type: VoiceEventType
+   data: any
+   /** 代际标记：用于丢弃过期（被打断前）的音频/文本帧 */
+   generation?: number
+ }
+ 
+diff --git a/frontend/src/views/admin/ai-config/agents/AgentConfigPanel.vue b/frontend/src/views/admin/ai-config/agents/AgentConfigPanel.vue
+index 87a8a48..a7e07c0 100644
+--- a/frontend/src/views/admin/ai-config/agents/AgentConfigPanel.vue
++++ b/frontend/src/views/admin/ai-config/agents/AgentConfigPanel.vue
+@@ -43,21 +43,24 @@
+       <a-space>
+         <a-button type="primary" :loading="saving" @click="onSave">保存</a-button>
+         <a-button @click="onReset">重置</a-button>
+       </a-space>
+     </a-form>
+ 
+     <a-divider />
+     <a-list size="small" bordered :data-source="rows">
+       <template #renderItem="{ item }">
+         <a-list-item>
+-          <span>{{ item.agent_id }} · {{ item.name }}（{{ item.type }} / {{ item.model }}）</span>
++          <span>
++            {{ item.agent_id }} · {{ item.name }}（{{ item.type }} / {{ item.model }}）
++            <a-tag v-if="isDeprecatedType(item.type)" color="warning">已废弃，请迁移为 agentscope</a-tag>
++          </span>
+           <template #actions>
+             <a @click="onEdit(item)">载入</a>
+           </template>
+         </a-list-item>
+       </template>
+     </a-list>
+   </a-card>
+ </template>
+ 
+ <script setup lang="ts">
+@@ -76,25 +79,26 @@ const empty = (): AgentConfig => ({
+   model: 'qwen-plus',
+   system_prompt: '',
+   tool_bindings: [],
+   mcp_bindings: [],
+   max_react_iters: 5,
+   enable_plan: true,
+ })
+ 
+ const form = reactive<AgentConfig>(empty())
+ 
+-const typeOptions = [
+-  { label: 'AgentScope', value: 'agentscope' },
+-  { label: 'Dify', value: 'dify' },
+-  { label: '直连 LLM', value: 'direct' },
+-]
++// 语音链路已切换 AgentScope RealtimeAgent 内核，dify/direct 已废弃（2026-09 spec）
++const typeOptions = [{ label: 'AgentScope', value: 'agentscope' }]
++
++function isDeprecatedType(t: string): boolean {
++  return t === 'dify' || t === 'direct'
++}
+ 
+ async function load() {
+   try {
+     const res = await listAgentConfigs()
+     rows.value = res as unknown as AgentConfig[]
+   } catch (e) {
+     message.error(`加载失败: ${(e as Error).message}`)
+   }
+ }
+ 
+diff --git a/frontend/src/views/duplex/VoiceDemo.vue b/frontend/src/views/duplex/VoiceDemo.vue
+index e7f2047..2795546 100644
+--- a/frontend/src/views/duplex/VoiceDemo.vue
++++ b/frontend/src/views/duplex/VoiceDemo.vue
+@@ -1,15 +1,15 @@
+ <template>
+   <div class="voice-demo">
+     <a-page-header
+       title="调解语音 RTC 演示"
+-      sub-title="M2 · 能力协商 / 轮次状态机 / 重连 / 工具调用 / 本地管线"
++      sub-title="AgentScope RealtimeAgent 内核 · 能力协商 / 轮次状态机 / 重连 / 工具确认"
+     >
+       <template #extra>
+         <a-input v-model:value="caseNumber" placeholder="案件编号" style="width: 200px" />
+         <a-select
+           v-model:value="provider"
+           style="width: 180px"
+           :options="providerOptions"
+         />
+         <a-select
+           v-model:value="selectedModel"
+@@ -32,67 +32,69 @@
+       :provider="provider"
+       :model-id="selectedModel"
+     />
+     <a-empty v-else description="输入案件编号并进入语音通道" />
+   </div>
+ </template>
+ 
+ <script setup lang="ts">
+ import { ref, onMounted, computed, watch } from 'vue'
+ import VoiceChannel from '@/components/voice/VoiceChannel.vue'
+-import type { VoiceModel, VoiceModelDefault, VoiceProvider } from '@/types/voice'
++import type { VoiceModel, VoiceProvider } from '@/types/voice'
+ import { listVoiceModels, getVoiceModelDefault } from '@/api/voice'
+ 
+ const caseNumber = ref('1001')
+ const provider = ref<VoiceProvider>('dashscope')
+ const showChannel = ref(false)
+ 
+ const providerOptions = [
+-  { label: 'DashScope（云端）', value: 'dashscope' },
+-  { label: '本地 S2S（Docker）', value: 's2s' },
+-  { label: 'Local（本地回退）', value: 'local' },
++  { label: 'DashScope 实时（Qwen-Omni / Qwen-Audio）', value: 'dashscope' },
++  { label: 'OpenAI Realtime（备选）', value: 'openai' },
+ ]
+ 
+ const voiceModels = ref<VoiceModel[]>([])
+ const selectedModel = ref<number | undefined>(undefined)
+ const modelLoading = ref(false)
+ 
+-// 后端 listVoiceModels 已过滤不可用模型（DashScope 模型名无效 / 密钥为空），
+-// 这里再按当前生效的 provider 平台过滤：s2s 只显示本地 Docker 模型，
+-// 云端 provider 只显示云端模型。
++// 后端 listVoiceModels 已过滤不可用模型（模型名无效 / 密钥为空），
++// 这里按当前 provider 平台过滤（platform 大小写归一：DashScope/openai）。
+ function modelsFor(p: VoiceProvider): VoiceModel[] {
+-  return voiceModels.value.filter((m) => (p === 's2s' ? m.platform === 's2s' : m.platform !== 's2s'))
++  return voiceModels.value.filter((m) => (m.platform || '').toLowerCase() === p)
+ }
+ 
+ const modelOptions = computed(() =>
+   modelsFor(provider.value).map((m) => ({
+     label: m.is_default ? `${m.name}（默认）` : m.name,
+     value: m.id,
+   })),
+ )
+ 
+ // 切换 provider 时，若当前选中模型不属于该平台则自动改选该平台第一个可用模型
+ watch(provider, () => {
+   const pool = modelsFor(provider.value)
+   if (!pool.some((m) => m.id === selectedModel.value)) {
+     selectedModel.value = pool[0]?.id
+   }
+ })
+ 
++function platformToProvider(platform?: string): VoiceProvider {
++  return platform && platform.toLowerCase() === 'openai' ? 'openai' : 'dashscope'
++}
++
+ async function loadVoiceModels() {
+   modelLoading.value = true
+   try {
+     const [models, def] = await Promise.all([listVoiceModels(), getVoiceModelDefault()])
+     voiceModels.value = models
+-    // 默认模型自适应：按其平台自动切换 provider（s2s → 本地 Docker，否则云端）
++    // 默认模型自适应：按其平台自动切换 provider
+     const applyDefault = (model: VoiceModel) => {
+-      provider.value = model.platform === 's2s' ? 's2s' : 'dashscope'
++      provider.value = platformToProvider(model.platform)
+       selectedModel.value = model.id
+     }
+     const defaultModel = def?.configured
+       ? models.find((m) => m.id === def.model_id)
+       : undefined
+     if (defaultModel) applyDefault(defaultModel)
+     else if (models.length) applyDefault(models[0])
+     else selectedModel.value = undefined
+   } finally {
+     modelLoading.value = false
