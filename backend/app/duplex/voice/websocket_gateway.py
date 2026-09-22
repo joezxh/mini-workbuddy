@@ -263,12 +263,33 @@ async def voice_websocket(
         else:
             voice_cfg = {}
 
-        # 会话级 MCP 工具注入（agent 绑定 MCP 时拉取 schema；失败不阻塞语音链路）
+        # 会话级 MCP 工具注入：读取 Agent 绑定的工具/服务清单（失败不阻塞语音链路）
         mcp_tool_schemas: list = []
         if agent_id:
             try:
+                from app.db.database import SessionLocal
+                from app.models.duplex.duplex_voice_config import AiAgentConfig
+                db = SessionLocal()
+                try:
+                    row = (
+                        db.query(AiAgentConfig)
+                        .filter(AiAgentConfig.agent_id == agent_id)
+                        .first()
+                    )
+                    tool_bindings = list(row.tool_bindings or []) if row else []
+                    mcp_bindings = list(row.mcp_bindings or []) if row else []
+                finally:
+                    db.close()
                 from app.duplex.voice.mcp_session_resolver import McpSessionResolver
-                mcp_tool_schemas = await McpSessionResolver().resolve_tools()
+                mcp_tool_schemas = await McpSessionResolver(
+                    mcp_service_ids=mcp_bindings,
+                    tool_bindings=tool_bindings,
+                ).resolve_tools()
+                if mcp_tool_schemas:
+                    logger.info(
+                        f"语音会话注入 {len(mcp_tool_schemas)} 个工具"
+                        f"（agent={agent_id}）"
+                    )
             except Exception as e:  # noqa: BLE001 - MCP 注入失败不阻塞语音
                 logger.warning(f"MCP 工具注入失败（忽略）: {e}")
 
@@ -341,10 +362,23 @@ async def voice_websocket(
                 _buffer_outbound(session_id, frame)
                 await websocket.send_text(json.dumps(frame, ensure_ascii=False))
 
+    # 任一 reader 退出（客户端断开 / provider 事件流终止）即整体收尾：
+    # gather 会在 provider_reader 阻塞于空队列时永远等待，导致 close 永不执行
+    # （每个会话泄漏一个上游模型连接），故用 asyncio.wait FIRST_COMPLETED。
+    client_task = asyncio.create_task(client_reader())
+    provider_task = asyncio.create_task(provider_reader())
     try:
-        await asyncio.gather(client_reader(), provider_reader())
-    except WebSocketDisconnect:
-        logger.info("客户端断开")
+        done, pending = await asyncio.wait(
+            {client_task, provider_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.wait(pending)
+        for t in done:
+            exc = t.exception()
+            if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                logger.warning(f"语音 reader 异常退出: {exc}")
     finally:
         update_voice_session_status(voice_session_id, "disconnected")
         voice_ws_connections.dec()

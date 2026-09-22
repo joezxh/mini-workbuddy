@@ -137,7 +137,12 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     if (!acceptGeneration(frame.generation)) return
     frameGen = frame.generation ?? 0
 
-    switch (frame.type) {
+    // 帧名归一化：后端 EventType 混用点号（playback.cancelled/response.started/
+    // tool.confirm_required）与下划线（tool_call/audio.delta）两种命名，
+    // 统一转为下划线后分发，根治点号帧在前端从未被处理的历史问题
+    const type = frame.type.replace(/\./g, '_') as VoiceFrame['type']
+
+    switch (type) {
       case 'voice.ready':
         ready.value = frame.data as VoiceReadyPayload
         break
@@ -180,7 +185,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
         }
         break
       }
-      case 'tool.confirm_required': {
+      case 'tool_confirm_required': {
         const p = frame.data as ToolConfirmPayload
         toolCalls.addConfirm({
           confirmId: p.confirm_id,
@@ -201,7 +206,9 @@ export function useVoiceChannel(cfg: ConnectConfig) {
         break
       }
       case 'error':
-        errorMsg.value = frame.data?.message || '语音服务错误'
+        // 兼容两种错误帧形状：网关扁平（顶层 code/message）与内核嵌套（data）
+        errorMsg.value =
+          frame.data?.message || (frame as any).message || '语音服务错误'
         break
       case 'pong':
         break
@@ -271,11 +278,12 @@ export function useVoiceChannel(cfg: ConnectConfig) {
 
   /** 回传工具确认结果（tool.confirm_required → 用户同意/拒绝） */
   function respondToolConfirm(confirmId: string, approved: boolean) {
-    toolCalls.clearPending()
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({ type: 'tool.confirm', data: { confirm_id: confirmId, approved } }),
       )
+      // 仅转移已应答条目的状态；其余待确认不受影响
+      toolCalls.markAnswered(confirmId, approved)
     }
   }
 

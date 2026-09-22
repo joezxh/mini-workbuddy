@@ -76,7 +76,15 @@ class BrowserTransport(TransportBase):
         self._uplink.put_nowait(frame)
 
     def close_uplink(self) -> None:
-        self._uplink.put_nowait(None)
+        try:
+            self._uplink.put_nowait(None)
+        except asyncio.QueueFull:
+            # 队列满时丢弃最旧一帧再放哨兵，保证 incoming() 能终止
+            try:
+                self._uplink.get_nowait()
+                self._uplink.put_nowait(None)
+            except (asyncio.QueueEmpty, asyncio.QueueFull):
+                pass
 
     # ---- 下行（agent 调用）----
 

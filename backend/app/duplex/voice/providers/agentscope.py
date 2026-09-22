@@ -138,10 +138,11 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
                         await queue.put(ProviderEvent(
                             "transcript" if is_user else "tts_transcript",
                             {"text": ev.delta}))
-                    case DataBlockDeltaEvent() if ev.data:
-                        import base64 as b64
-                        await queue.put(ProviderEvent(
-                            "audio_delta", {"audio": b64.b64decode(ev.data)}))
+                    case DataBlockDeltaEvent():
+                        # 音频统一走 transport.send_audio 单通道下发（RealtimeAgent
+                        # 在同一事件上既调 send_audio 又 emit 本事件；若在此再次
+                        # 映射会导致每个音频块重复两份）。此处仅显式忽略。
+                        pass
                     case ToolCallStartEvent():
                         await queue.put(ProviderEvent(
                             "tool_call", {"call_id": ev.tool_call_id,
@@ -172,6 +173,9 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
                 logger.error(f"AgentScope 事件泵异常: {e}")
                 await queue.put(ProviderEvent(
                     "error", {"code": "fatal", "message": str(e)}))
+        finally:
+            # 无论正常/异常/取消结束，都必须唤醒 events() 消费者
+            await queue.put(None)
 
     async def send_audio(self, pcm_data: bytes) -> None:
         if self._transport is None:  # 未连接（含测试直注场景）：无下游可送
@@ -225,6 +229,11 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
         self._closed = True
         if self._pump_task is not None:
             self._pump_task.cancel()
+            # 等待泵真正退出并回收取消异常，避免悬挂任务与竞态
+            try:
+                await asyncio.gather(self._pump_task, return_exceptions=True)
+            except Exception:  # noqa: BLE001
+                pass
             self._pump_task = None
         if self._transport is not None:
             self._transport.close_uplink()

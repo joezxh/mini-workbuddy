@@ -116,6 +116,13 @@ def resolve_voice_config(
             if row is None:
                 return {"configured": False, "reason": "no_model"}
             key = row.api_key_obj
+            # 平台校验：指定 provider 时所选模型行必须同平台
+            # （防止 provider=openai 误用 DashScope 模型行 / 反之）
+            if provider_key and not _platform_matches(
+                provider_key, _voice_row_platform(row, key)
+            ):
+                return {"configured": False, "reason": "invalid_model",
+                        "model_id": row.id, "model": row.model}
             if not _voice_row_usable(row, key):
                 api_key = key.api_key if key else None
                 if api_key:

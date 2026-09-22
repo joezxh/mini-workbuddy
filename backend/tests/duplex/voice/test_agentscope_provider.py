@@ -71,20 +71,62 @@ async def _drain(p, n):
 
 @pytest.mark.asyncio
 async def test_assistant_reply_mapping():
-    audio = base64.b64encode(b"\x00\x00" * 100).decode()
     p = _make_provider([
         _reply_start("r1", "assistant"),
         TextBlockDeltaEvent(reply_id="r1", block_id="b1", delta="你好"),
-        DataBlockDeltaEvent(reply_id="r1", block_id="b2",
-                            media_type="audio/pcm;rate=24000", data=audio),
+        # 音频统一经 transport.send_audio 下发（见 test_audio_single_channel），
+        # pump 对 DataBlockDeltaEvent 显式忽略，避免音频重复
         _reply_end("r1"),
     ])
     await p._start_pump()
-    got = await _drain(p, 4)
+    got = await _drain(p, 3)
     assert [e.type for e in got] == [
-        "response_started", "tts_transcript", "audio_delta", "playback.ended"]
+        "response_started", "tts_transcript", "playback.ended"]
     assert got[1].data["text"] == "你好"
-    assert got[2].data["audio"] == b"\x00\x00" * 100
+
+
+@pytest.mark.asyncio
+async def test_audio_single_channel_no_duplicate():
+    """端到端防重复：agent 的事件同时含 DataBlockDeltaEvent 与
+    transport.send_audio 回调时，音频块只产生一份 audio_delta。"""
+    audio = base64.b64encode(b"\x00\x00" * 100).decode()
+    p = AgentscopeRealtimeProvider(key="dashscope")
+    p._agent = FakeAgent([])
+    p._queue = asyncio.Queue()
+
+    class AudioEmittingAgent(FakeAgent):
+        """模拟 RealtimeAgent：reply_stream 内同时走两条音频路径。"""
+
+        async def reply_stream(self, transport):
+            yield _reply_start("r1", "assistant")
+            # 路径 1：模型音频事件（agent 内部同时会调 transport.send_audio）
+            yield DataBlockDeltaEvent(reply_id="r1", block_id="b2",
+                                      media_type="audio/pcm;rate=24000",
+                                      data=audio)
+            # 路径 2：transport.send_audio（agent _emit_audio 的实际下发口）
+            await transport.send_audio(b"\x00\x00" * 100, item_id="r1")
+            yield _reply_end("r1")
+            await asyncio.Event().wait()
+
+    p._agent = AudioEmittingAgent()
+
+    class StubTransport:
+        async def send_audio(self, pcm, item_id):
+            from app.duplex.voice.providers.base import ProviderEvent
+            await p._queue.put(ProviderEvent("audio_delta", {"audio": pcm}))
+
+        def close_uplink(self):
+            pass
+
+        async def close(self):
+            pass
+
+    p._transport = StubTransport()
+    await p._start_pump()
+    got = await _drain(p, 3)
+    audio_events = [e for e in got if e.type == "audio_delta"]
+    assert len(audio_events) == 1, f"音频重复下发: {[e.type for e in got]}"
+    assert audio_events[0].data["audio"] == b"\x00\x00" * 100
 
 
 @pytest.mark.asyncio

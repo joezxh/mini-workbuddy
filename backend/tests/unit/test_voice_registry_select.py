@@ -49,3 +49,31 @@ def test_select_keeps_preferred_when_configured(patch_resolve):
 def test_select_unknown_key_returns_default(patch_resolve):
     patch_resolve({"dashscope": True})
     assert ProviderRegistry.select("__nonexistent__") == "dashscope"
+
+
+@pytest.mark.asyncio
+async def test_mcp_resolver_filters_by_tool_bindings(monkeypatch):
+    """tool_bindings 非空时按名单过滤 adapter 工具集。"""
+    from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+
+    class FakeAdapter:
+        def get_tool_schemas(self):
+            return [
+                {"name": "a", "description": "", "inputSchema": {"type": "object"}},
+                {"name": "b", "description": "", "inputSchema": {"type": "object"}},
+            ]
+
+    import app.ai.mcp.tool_adapter as ta
+    monkeypatch.setattr(ta, "MCPAdapter", FakeAdapter)
+    r = McpSessionResolver(mcp_service_ids=["svc1"], tool_bindings=["a"])
+    schemas = await r.resolve_tools()
+    assert [s["name"] for s in schemas] == ["a"]
+
+
+@pytest.mark.asyncio
+async def test_mcp_resolver_empty_bindings_returns_empty():
+    """无任何绑定时零注入（零改动可用）。"""
+    from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+
+    r = McpSessionResolver()
+    assert await r.resolve_tools() == []

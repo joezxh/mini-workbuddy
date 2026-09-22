@@ -44,15 +44,19 @@ async def test_ping_replies_to_client():
 
 
 @pytest.mark.asyncio
-async def test_interrupt_calls_provider():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
+async def test_interrupt_calls_provider(monkeypatch):
+    from app.duplex.voice import websocket_gateway as gw
     from app.duplex.voice.turn_state import TurnState
+
+    # 轮次持久化走真实 DB，单测中打桩（本用例只验证仲裁与透传）
+    monkeypatch.setattr(gw, "mark_interrupted", lambda *a, **k: None)
+    monkeypatch.setattr(gw, "bump_generation", lambda *a, **k: None)
 
     provider = StubProvider()
     turn = TurnState()
     turn.turn_id = "t1"
     turn.on_speech_started()
-    await _handle_control_frame({"type": "interrupt"}, provider, turn, "s1")
+    await gw._handle_control_frame({"type": "interrupt"}, provider, turn, "s1")
     assert provider.interrupted is True
     assert turn.generation >= 1
 

@@ -14,19 +14,38 @@ export function useToolCalls() {
     calls.value.push(call)
   }
 
-  /** tool.confirm_required 帧到达：登记待确认调用 */
+  /** tool.confirm_required 帧到达：登记待确认调用（同 id 去重——
+   *  AgentScope 在权限检查前已发 tool_call 帧，此处转为待确认态） */
   function addConfirm(p: {
     confirmId: string
     name: string
     arguments: Record<string, unknown>
     timeoutMs: number
   }) {
+    const existing = calls.value.find((c) => c.id === p.confirmId)
+    if (existing) {
+      existing.status = 'pending'
+      return
+    }
     calls.value.push({
       id: p.confirmId,
       name: p.name,
       arguments: p.arguments,
       status: 'pending',
     })
+  }
+
+  /** 用户已应答：同意 → 回到"执行中"（等待 tool_result 落位）；拒绝 → 终态 */
+  function markAnswered(id: string, approved: boolean) {
+    const c = calls.value.find((x) => x.id === id)
+    if (!c) return
+    if (approved) {
+      c.status = undefined
+    } else {
+      c.status = 'rejected'
+      c.ok = false
+      c.error = '用户拒绝'
+    }
   }
 
   function update(id: string, patch: Partial<ToolCall>) {
@@ -53,5 +72,15 @@ export function useToolCalls() {
   )
   const failed = computed(() => calls.value.filter((c) => c.ok === false))
 
-  return { calls, add, addConfirm, update, clearPending, clear, pending, failed }
+  return {
+    calls,
+    add,
+    addConfirm,
+    markAnswered,
+    update,
+    clearPending,
+    clear,
+    pending,
+    failed,
+  }
 }
