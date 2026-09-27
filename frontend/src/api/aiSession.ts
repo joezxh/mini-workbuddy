@@ -17,6 +17,13 @@ export interface AiChatSession {
   is_pinned: boolean
   created_at: string
   updated_at: string
+  // 上下文统计信息 (可选，动态添加)
+  contextStats?: {
+    totalTokens?: number
+    sessionMessages?: number
+    vectorMessageCount?: number
+    lastCompaction?: string
+  }
 }
 
 export interface AiChatMessage {
@@ -53,9 +60,13 @@ export function getSession(sessionId: number) {
   return request.get<AiChatSession>(`${BASE}/ai-assistant/sessions/${sessionId}`)
 }
 
-/** 修改会话标题 */
-export function updateSession(sessionId: number, session_title: string) {
-  return request.put<AiChatSession>(`${BASE}/ai-assistant/sessions/${sessionId}`, { session_title })
+/** 修改会话（标题 / 会话内切换模式；传 string 时视为标题，兼容旧调用） */
+export function updateSession(
+  sessionId: number,
+  data: string | { session_title?: string; session_type?: string },
+) {
+  const payload = typeof data === 'string' ? { session_title: data } : data
+  return request.put<AiChatSession>(`${BASE}/ai-assistant/sessions/${sessionId}`, payload)
 }
 
 /** 删除会话 */

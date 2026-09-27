@@ -572,6 +572,24 @@ function handleTeamChange(info: { id: number; code: string; name: string; catego
 
 // session_type 切换时，清理与当前类型不匹配的选中项
 watch(sessionType, (newType) => {
+  // 会话内切换模式：持久化到当前会话，消息与跨模式上下文（L2）延续。
+  // switchSession 也会写 sessionType，但那时 currentSession.session_type 已同步，
+  // 此处相等即跳过，只有用户主动切模式才发请求。
+  if (currentSession.value && newType && currentSession.value.session_type !== newType) {
+    const sid = currentSession.value.session_id
+    const prevType = currentSession.value.session_type
+    apiUpdateSession(sid, { session_type: newType })
+      .then(() => {
+        if (currentSession.value?.session_id === sid) {
+          currentSession.value = { ...currentSession.value, session_type: newType }
+        }
+        antMsg.success(`已切换至${typeLabel(newType)}模式，上下文已继承`)
+      })
+      .catch(() => {
+        antMsg.warning('模式切换持久化失败')
+        sessionType.value = prevType
+      })
+  }
   // 技能对象与模型选择是两个独立关注点，需拆开判断
   if (newType !== 'skill') {
     currentSkill.value = null
