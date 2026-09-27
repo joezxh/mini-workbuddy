@@ -1,4 +1,4 @@
-"""WikiCategory 业务逻辑层（目录归属知识库）。"""
+"""KbCategory 业务逻辑层（目录归属知识库）。"""
 from __future__ import annotations
 
 import re
@@ -7,8 +7,8 @@ from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.wiki.wiki_category import WikiCategory
-from app.repositories.wiki.category_repo import WikiCategoryRepository
+from app.models.kb.kb_category import KbCategory
+from app.repositories.wiki.category_repo import KbCategoryRepository
 from app.schemas.wiki.category import CategoryCreate, CategoryUpdate
 
 
@@ -18,7 +18,7 @@ def _slugify(text: str) -> str:
     return slug or "untitled"
 
 
-def _to_out(c: WikiCategory) -> dict:
+def _to_out(c: KbCategory) -> dict:
     return {
         "id": c.id,
         "name": c.name,
@@ -33,12 +33,12 @@ def _to_out(c: WikiCategory) -> dict:
     }
 
 
-class WikiCategoryService:
+class KbCategoryService:
     """目录管理：创建 / 树形查询（可过滤知识库）/ 更新 / 移动 / 删除。"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
-        self.repo = WikiCategoryRepository(db)
+        self.repo = KbCategoryRepository(db)
 
     def create(self, payload: CategoryCreate, user) -> dict:
         slug = payload.slug or _slugify(payload.name)
@@ -96,7 +96,7 @@ class WikiCategoryService:
         self.repo.delete(obj)
         self.db.commit()
 
-    def _require(self, category_id: int) -> WikiCategory:
+    def _require(self, category_id: int) -> KbCategory:
         obj = self.repo.get_by_id(category_id)
         if not obj:
             raise HTTPException(status_code=404, detail="目录不存在")

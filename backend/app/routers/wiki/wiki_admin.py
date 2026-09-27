@@ -19,7 +19,7 @@ from app.schemas.wiki.article import ArticleOut
 from app.schemas.wiki.category import CategoryCreate, CategoryOut, CategoryUpdate
 from app.schemas.wiki.knowledge import KnowledgeCreate, KnowledgeOut, KnowledgeUpdate
 from app.services.wiki.article_service import WikiArticleService
-from app.services.wiki.category_service import WikiCategoryService
+from app.services.wiki.category_service import KbCategoryService
 from app.services.wiki.knowledge_service import WikiKnowledgeService
 from app.services.wiki.search_service import WikiSearchService
 
@@ -93,7 +93,7 @@ def create_category(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return WikiCategoryService(db).create(body, user)
+    return KbCategoryService(db).create(body, user)
 
 
 @router.get("/categories", response_model=List[CategoryOut])
@@ -102,7 +102,7 @@ def list_category_tree(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return WikiCategoryService(db).tree(knowledge_id)
+    return KbCategoryService(db).tree(knowledge_id)
 
 
 @router.get("/categories/{category_id}", response_model=CategoryOut)
@@ -111,7 +111,7 @@ def get_category(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return WikiCategoryService(db).get(category_id)
+    return KbCategoryService(db).get(category_id)
 
 
 @router.put("/categories/{category_id}", response_model=CategoryOut)
@@ -121,7 +121,7 @@ def update_category(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return WikiCategoryService(db).update(category_id, body)
+    return KbCategoryService(db).update(category_id, body)
 
 
 @router.patch("/categories/{category_id}/move", response_model=CategoryOut)
@@ -131,7 +131,7 @@ def move_category(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return WikiCategoryService(db).move(category_id, parent_id)
+    return KbCategoryService(db).move(category_id, parent_id)
 
 
 @router.delete("/categories/{category_id}", status_code=204)
@@ -140,7 +140,7 @@ def delete_category(
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    WikiCategoryService(db).delete(category_id)
+    KbCategoryService(db).delete(category_id)
     return None
 
 
