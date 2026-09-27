@@ -201,6 +201,8 @@ export default {
     noData: '暫無資料',
     total: '共 {total} 條',
     close: '關閉',
+    closeOthers: '關閉其他',
+    refresh: '重新整理',
   },
   login: {
     title: 'MiniWorkBuddy',
@@ -280,8 +282,8 @@ export default {
       'console-dashboard': '控制台門戶',
       'ai-chat': '智能對話',
       'ai-sessions': '會話管理',
-      'full-duplex': '全雙工文字',
-      'ai-rtc': '全雙工語音',
+      'full-duplex': '文字对话',
+      'ai-rtc': '語音对话',
       'async-task-manage': '非同步任務',
       'skill-management': '技能管理',
       apikey: 'API 金鑰',
@@ -1730,6 +1732,18 @@ export default {
 
 
   kbMgmt: {
+    /* 统一知识库工作台 */
+    generalKb: '通用知識庫',
+    selectKbFirst: '請先在左側選擇知識庫',
+    uploadDocument: '上傳文檔',
+    uploadAccepted: '已上傳，後台處理中',
+    uploadFailed: '上傳失敗',
+    confirmDeleteDoc: '刪除文檔及其全部切片？',
+    retrievalTest: '檢索測試',
+    searchPlaceholder: '輸入測試 query',
+    openExternalPanel: '打開外部整合面板',
+    externalPlaceholder: '外部知識庫為檢索代理，無內部文檔管理',
+
     dataSource: {
       title: '資料來源',
       tabSource: '資料來源',
@@ -1992,6 +2006,7 @@ export default {
     enabled: '啟用',
     disabled: '禁用',
     rag: {
+      title: 'RAG 測試',
       queryPlaceholder: '向知識庫提問',
       modeHybrid: '混合',
       modeSemantic: '語意',
@@ -2014,6 +2029,7 @@ export default {
     noVersions: '暫無版本'
   },
   kmsWiki: {
+    openWiki: '打開 LLM Wiki',
     title: '知識庫',
     titlePlaceholder: '請輸入標題',
     body: '正文',
@@ -2055,7 +2071,37 @@ export default {
     rolledBack: '已回滾',
     rollbackFailed: '回滾失敗',
     operation: '操作',
-    compare: '對比'
+    compare: '對比',
+    addCategory: '新增分類',
+    addChildCategory: '新增子分類',
+    renameCategory: '重新命名',
+    deleteCategory: '刪除分類',
+    categoryName: '分類名稱',
+    categoryDesc: '描述',
+    categorySort: '排序',
+    deleteCategoryConfirm: '刪除後不可復原。確定刪除該分類嗎？',
+    createCategorySuccess: '分類已建立',
+    updateCategorySuccess: '分類已更新',
+    deleteCategorySuccess: '分類已刪除',
+    addKnowledge: '新增知識庫',
+    editKnowledge: '編輯知識庫',
+    viewInfo: '查看資訊',
+    deleteKnowledge: '刪除知識庫',
+    deleteKnowledgeConfirm: '刪除後不可復原。確定刪除該知識庫嗎？',
+    createKnowledgeSuccess: '知識庫已建立',
+    updateKnowledgeSuccess: '知識庫已更新',
+    deleteKnowledgeSuccess: '知識庫已刪除',
+    knowledgeName: '知識庫名稱',
+    knowledgeType: '類型',
+    knowledgeTypeWiki: 'Wiki',
+    knowledgeTypeHint: '知識庫僅支援 Wiki 類型',
+    categoryCount: '分類數',
+    articleCount: '文章數',
+    statusActive: '啟用',
+    statusArchived: '歸檔',
+    createdAt: '建立時間',
+    filterLabel: '篩選',
+    ragEntry: 'RAG 檢索 / 問答測試'
   },
   knowledge: {
     menu: {

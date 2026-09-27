@@ -201,6 +201,8 @@ export default {
     noData: 'No data',
     total: 'Total {total} items',
     close: 'Close',
+    closeOthers: 'Close others',
+    refresh: 'Refresh',
   },
   login: {
     title: 'MiniWorkBuddy',
@@ -1725,6 +1727,18 @@ export default {
 
 
   kbMgmt: {
+    /* 统一知识库工作台 */
+    generalKb: 'General KB',
+    selectKbFirst: 'Select a knowledge base first',
+    uploadDocument: 'Upload document',
+    uploadAccepted: 'Uploaded, processing in background',
+    uploadFailed: 'Upload failed',
+    confirmDeleteDoc: 'Delete document and all its chunks?',
+    retrievalTest: 'Retrieval test',
+    searchPlaceholder: 'Enter test query',
+    openExternalPanel: 'Open external panel',
+    externalPlaceholder: 'External KB is a retrieval proxy without internal documents',
+
     dataSource: {
       title: 'Data Source',
       tabSource: 'Source',
@@ -1987,6 +2001,7 @@ export default {
     enabled: 'Enabled',
     disabled: 'Disabled',
     rag: {
+      title: 'RAG Test',
       queryPlaceholder: 'Ask the knowledge base',
       modeHybrid: 'Hybrid',
       modeSemantic: 'Semantic',
@@ -2009,6 +2024,7 @@ export default {
     noVersions: 'No versions'
   },
   kmsWiki: {
+    openWiki: 'Open LLM Wiki',
     title: 'Knowledge Wiki',
     titlePlaceholder: 'Enter title',
     body: 'Body',
@@ -2050,7 +2066,37 @@ export default {
     rolledBack: 'Rolled back',
     rollbackFailed: 'Rollback failed',
     operation: 'Operation',
-    compare: 'Compare'
+    compare: 'Compare',
+    addCategory: 'Add category',
+    addChildCategory: 'Add subcategory',
+    renameCategory: 'Rename',
+    deleteCategory: 'Delete category',
+    categoryName: 'Category name',
+    categoryDesc: 'Description',
+    categorySort: 'Sort order',
+    deleteCategoryConfirm: 'This cannot be undone. Delete this category?',
+    createCategorySuccess: 'Category created',
+    updateCategorySuccess: 'Category updated',
+    deleteCategorySuccess: 'Category deleted',
+    addKnowledge: 'Add knowledge base',
+    editKnowledge: 'Edit knowledge base',
+    viewInfo: 'View info',
+    deleteKnowledge: 'Delete knowledge base',
+    deleteKnowledgeConfirm: 'This cannot be undone. Delete this knowledge base?',
+    createKnowledgeSuccess: 'Knowledge base created',
+    updateKnowledgeSuccess: 'Knowledge base updated',
+    deleteKnowledgeSuccess: 'Knowledge base deleted',
+    knowledgeName: 'Knowledge base name',
+    knowledgeType: 'Type',
+    knowledgeTypeWiki: 'Wiki',
+    knowledgeTypeHint: 'Only the Wiki type is supported for knowledge bases',
+    categoryCount: 'Categories',
+    articleCount: 'Articles',
+    statusActive: 'Active',
+    statusArchived: 'Archived',
+    createdAt: 'Created at',
+    filterLabel: 'Filter',
+    ragEntry: 'RAG search / QA test'
   },
   knowledge: {
     menu: {

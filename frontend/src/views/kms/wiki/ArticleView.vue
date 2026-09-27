@@ -79,20 +79,13 @@
       :title="t('kmsWiki.versionHistory')"
       :width="480"
     >
-      <a-list
-        :data-source="versions"
-        :loading="loadingVersions"
-        size="small"
-      >
-        <template #renderItem="{ item }">
-          <a-list-item>
-            <a-list-item-meta
-              :title="`v${item.version} - ${item.title}`"
-              :description="`${item.change_note || t('kmsWiki.noNote')} · ${formatDate(item.created_at)}`"
-            />
-          </a-list-item>
-        </template>
-      </a-list>
+      <VersionTimeline
+        v-if="article"
+        ref="timelineRef"
+        :article-id="article.id"
+        :current-version="article.version"
+        @rolled-back="onRolledBack"
+      />
     </a-drawer>
   </div>
   <a-spin v-else style="display: flex; justify-content: center; padding: 100px" />
@@ -106,7 +99,8 @@ import { EditOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons
 import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
-import { getArticleBySlug, deleteArticle, getArticleVersions } from '@/api/wiki'
+import { getArticleBySlug, deleteArticle } from '@/api/wiki'
+import VersionTimeline from './components/VersionTimeline.vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -115,9 +109,8 @@ const { t } = useI18n()
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const article = ref<any>(null)
-const versions = ref<any[]>([])
 const showVersions = ref(false)
-const loadingVersions = ref(false)
+const timelineRef = ref<InstanceType<typeof VersionTimeline> | null>(null)
 
 const renderedContent = computed(() => {
   if (!article.value?.content) return `<p>${t('kmsWiki.noContent')}</p>`
@@ -132,7 +125,7 @@ async function loadArticle() {
   const slug = route.params.slug as string
   try {
     const res = await getArticleBySlug(slug)
-    article.value = res.data
+    article.value = res
   } catch (e: any) {
     message.error(t('kmsWiki.notFound'))
     router.push('/wiki')
@@ -150,20 +143,15 @@ async function handleDelete() {
   }
 }
 
-// 版本历史 - 延迟加载
-watch(showVersions, async (val) => {
-  if (val && article.value && !versions.value.length) {
-    loadingVersions.value = true
-    try {
-      const res = await getArticleVersions(article.value.id)
-      versions.value = res.data || []
-    } catch (e) {
-      message.error(t('kmsWiki.loadVersionsFailed'))
-    } finally {
-      loadingVersions.value = false
-    }
-  }
+// 版本历史 - 打开抽屉时加载；回滚后刷新正文
+watch(showVersions, (val) => {
+  if (val) timelineRef.value?.reload()
 })
+
+async function onRolledBack() {
+  await loadArticle()
+  showVersions.value = false
+}
 
 function formatDate(dateStr: string) {
   if (!dateStr) return ''

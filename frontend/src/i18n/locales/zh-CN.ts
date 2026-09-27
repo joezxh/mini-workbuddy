@@ -201,6 +201,8 @@ export default {
     noData: '暂无数据',
     total: '共 {total} 条',
     close: '关闭',
+    closeOthers: '关闭其他',
+    refresh: '刷新',
   },
   login: {
     title: 'MiniWorkBuddy',
@@ -285,8 +287,8 @@ export default {
       'console-dashboard': '控制台门户',
       'ai-chat': '智能对话',
       'ai-sessions': '会话管理',
-      'full-duplex': '全双工文字',
-      'ai-rtc': '全双工语音',
+      'full-duplex': '文字对话',
+      'ai-rtc': '语音对话',
       'async-task-manage': '异步任务',
       'skill-management': '技能管理',
       apikey: 'API 密钥',
@@ -1733,6 +1735,17 @@ export default {
 
 
   kbMgmt: {
+    /* 统一知识库工作台（spec 知识库统一化 §6） */
+    generalKb: '通用知识库',
+    selectKbFirst: '请先在左侧选择知识库',
+    uploadDocument: '上传文档',
+    uploadAccepted: '已上传，后台处理中',
+    uploadFailed: '上传失败',
+    confirmDeleteDoc: '删除文档及其全部切片？',
+    retrievalTest: '检索测试',
+    searchPlaceholder: '输入测试 query',
+    openExternalPanel: '打开外部集成面板',
+    externalPlaceholder: '外部知识库为检索代理，无内部文档管理',
     dataSource: {
       title: '数据源',
       tabSource: '数据源',
@@ -1995,6 +2008,7 @@ export default {
     enabled: '启用',
     disabled: '禁用',
     rag: {
+      title: 'RAG 测试',
       queryPlaceholder: '向知识库提问',
       modeHybrid: '混合',
       modeSemantic: '语义',
@@ -2017,6 +2031,7 @@ export default {
     noVersions: '暂无版本'
   },
   kmsWiki: {
+    openWiki: '打开 LLM Wiki',
     title: '知识库',
     titlePlaceholder: '请输入标题',
     body: '正文',
@@ -2058,7 +2073,37 @@ export default {
     rolledBack: '已回滚',
     rollbackFailed: '回滚失败',
     operation: '操作',
-    compare: '对比'
+    compare: '对比',
+    addCategory: '新建分类',
+    addChildCategory: '新建子分类',
+    renameCategory: '重命名',
+    deleteCategory: '删除分类',
+    categoryName: '分类名称',
+    categoryDesc: '描述',
+    categorySort: '排序',
+    deleteCategoryConfirm: '删除后不可恢复。确定删除该分类吗？',
+    createCategorySuccess: '分类已创建',
+    updateCategorySuccess: '分类已更新',
+    deleteCategorySuccess: '分类已删除',
+    addKnowledge: '新建知识库',
+    editKnowledge: '编辑知识库',
+    viewInfo: '查看信息',
+    deleteKnowledge: '删除知识库',
+    deleteKnowledgeConfirm: '删除后不可恢复。确定删除该知识库吗？',
+    createKnowledgeSuccess: '知识库已创建',
+    updateKnowledgeSuccess: '知识库已更新',
+    deleteKnowledgeSuccess: '知识库已删除',
+    knowledgeName: '知识库名称',
+    knowledgeType: '类型',
+    knowledgeTypeWiki: 'Wiki',
+    knowledgeTypeHint: '知识库仅支持 Wiki 类型',
+    categoryCount: '分类数',
+    articleCount: '文章数',
+    statusActive: '启用',
+    statusArchived: '归档',
+    createdAt: '创建时间',
+    filterLabel: '筛选',
+    ragEntry: 'RAG 检索 / 问答测试'
   },
   knowledge: {
     menu: {

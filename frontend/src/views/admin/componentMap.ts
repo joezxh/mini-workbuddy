@@ -23,6 +23,15 @@ import TenantPackagePanel from '@/views/admin/system/TenantPackagePanel.vue'
 import TeamList from '@/views/admin/agent-team/TeamList.vue'
 import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
+// 知识治理（数据源 / 知识库 / 外部知识库 / 本体）
+import DataSourcePanel from '@/views/admin/knowledge/DataSourcePanel.vue'
+import KnowledgeBasePanel from '@/views/admin/knowledge/KnowledgeBasePanel.vue'
+import ExternalKbPanel from '@/views/admin/knowledge/ExternalKbPanel.vue'
+import OntologyPanel from '@/views/admin/knowledge/OntologyPanel.vue'
+// wiki 知识库（以控制台 Tab 方式展示）
+import WikiIndex from '@/views/kms/wiki/index.vue'
+// 统一知识库工作台（spec 知识库统一化 §6）
+import KnowledgeBaseManager from '@/views/kms/KnowledgeBaseManager.vue'
 // 调解语音 RTC（迁移自 risk_control）
 import VoiceDemo from '@/views/duplex/VoiceDemo.vue'
 import VoiceSessionConfig from '@/views/admin/duplex/config/VoiceSessionConfig.vue'
@@ -51,6 +60,13 @@ export const componentMap: Record<string, Component> = {
   'tenant-management': markRaw(TenantPanel),
   'tenant-package-management': markRaw(TenantPackagePanel),
   'workflow-management': markRaw(WorkflowManagement),
+  // 知识治理（menuKey 与 sys_menu.path 末段一致）
+  'kg-data-source': markRaw(DataSourcePanel),
+  'kg-kb': markRaw(KnowledgeBasePanel),
+  'kg-external-kb': markRaw(ExternalKbPanel),
+  'kg-ontology': markRaw(OntologyPanel),
+  'kg-private-kb': markRaw(WikiIndex),
+  'kg-knowledge-manager': markRaw(KnowledgeBaseManager),
   // 调解语音 RTC（迁移自 risk_control）
   'voice-demo': markRaw(VoiceDemo),
   'voice-roles': markRaw(VoiceSessionConfig),

@@ -201,6 +201,8 @@ export default {
     noData: 'データなし',
     total: '合計 {total} 件',
     close: '閉じる',
+    closeOthers: '他を閉じる',
+    refresh: '更新',
   },
   login: {
     title: 'MiniWorkBuddy',
@@ -1729,6 +1731,18 @@ export default {
 
 
   kbMgmt: {
+    /* 统一知识库工作台 */
+    generalKb: '汎用ナレッジベース',
+    selectKbFirst: '左側でナレッジベースを選択してください',
+    uploadDocument: 'ドキュメントをアップロード',
+    uploadAccepted: 'アップロード済み、バックグラウンド処理中',
+    uploadFailed: 'アップロード失敗',
+    confirmDeleteDoc: 'ドキュメントと全チャンクを削除しますか？',
+    retrievalTest: '検索テスト',
+    searchPlaceholder: 'テスト query を入力',
+    openExternalPanel: '外部連携パネルを開く',
+    externalPlaceholder: '外部ナレッジベースは検索プロキシで内部ドキュメント管理はありません',
+
     dataSource: {
       title: 'データソース',
       tabSource: 'ソース',
@@ -1991,6 +2005,7 @@ export default {
     enabled: '有効',
     disabled: '無効',
     rag: {
+      title: 'RAG テスト',
       queryPlaceholder: 'ナレッジベースに質問',
       modeHybrid: 'ハイブリッド',
       modeSemantic: 'セマンティック',
@@ -2013,6 +2028,7 @@ export default {
     noVersions: 'バージョンなし'
   },
   kmsWiki: {
+    openWiki: 'LLM Wiki を開く',
     title: 'ナレッジウィキ',
     titlePlaceholder: 'タイトルを入力',
     body: '本文',
@@ -2054,7 +2070,37 @@ export default {
     rolledBack: 'ロールバックしました',
     rollbackFailed: 'ロールバック失敗',
     operation: '操作',
-    compare: '比較'
+    compare: '比較',
+    addCategory: 'カテゴリ追加',
+    addChildCategory: 'サブカテゴリ追加',
+    renameCategory: '名前変更',
+    deleteCategory: 'カテゴリ削除',
+    categoryName: 'カテゴリ名',
+    categoryDesc: '説明',
+    categorySort: '並び順',
+    deleteCategoryConfirm: '削除すると元に戻せません。このカテゴリを削除しますか？',
+    createCategorySuccess: 'カテゴリを作成しました',
+    updateCategorySuccess: 'カテゴリを更新しました',
+    deleteCategorySuccess: 'カテゴリを削除しました',
+    addKnowledge: 'ナレッジベース追加',
+    editKnowledge: 'ナレッジベース編集',
+    viewInfo: '情報表示',
+    deleteKnowledge: 'ナレッジベース削除',
+    deleteKnowledgeConfirm: '削除すると元に戻せません。このナレッジベースを削除しますか？',
+    createKnowledgeSuccess: 'ナレッジベースを作成しました',
+    updateKnowledgeSuccess: 'ナレッジベースを更新しました',
+    deleteKnowledgeSuccess: 'ナレッジベースを削除しました',
+    knowledgeName: 'ナレッジベース名',
+    knowledgeType: 'タイプ',
+    knowledgeTypeWiki: 'Wiki',
+    knowledgeTypeHint: 'ナレッジベースは Wiki タイプのみ対応しています',
+    categoryCount: 'カテゴリ数',
+    articleCount: '記事数',
+    statusActive: '有効',
+    statusArchived: 'アーカイブ',
+    createdAt: '作成日時',
+    filterLabel: '絞り込み',
+    ragEntry: 'RAG検索 / QAテスト'
   },
   knowledge: {
     menu: {

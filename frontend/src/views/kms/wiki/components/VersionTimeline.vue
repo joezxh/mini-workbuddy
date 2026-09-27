@@ -14,7 +14,7 @@
               :version-id="item.id"
               :version-number="item.version"
               :current-version="currentVersion"
-              @done="reload"
+              @done="onRolledBack"
             />
           </template>
         </a-list-item>
@@ -43,6 +43,7 @@ import VersionDiffView from './VersionDiffView.vue'
 import type { VersionItem } from '../types/wiki'
 
 const props = defineProps<{ articleId: number; currentVersion: number }>()
+const emit = defineEmits<{ (e: 'rolled-back'): void }>()
 const { t } = useI18n()
 
 const versions = ref<VersionItem[]>([])
@@ -58,6 +59,11 @@ async function reload() {
   } finally {
     loading.value = false
   }
+}
+
+async function onRolledBack() {
+  await reload()
+  emit('rolled-back')
 }
 
 function showDiff(item: VersionItem) {

@@ -3,7 +3,7 @@
     :open="open"
     :title="t('kmsWiki.diffTitle', { target: targetVersion, current: currentVersion })"
     width="80%"
-    @update:open="(v) => { if (!v) emit('close') }"
+    @update:open="(v: boolean) => { if (!v) emit('close') }"
   >
     <a-spin :spinning="loading">
       <pre class="diff-pre">{{ diff || t('kmsWiki.noDiff') }}</pre>
