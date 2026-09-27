@@ -220,19 +220,19 @@ class TestBreakdownEndpoint:
 
 EXPECTED_SESSION_TYPES = {
     "general", "react", "thinking", "deep_research",
-    "skill", "agent", "team", "scheduled", "shared",
+    "skill", "agent", "team", "data", "scheduled", "shared",
 }
 
 
 class TestStrategiesEndpoint:
-    """GET /strategies 返回 STRATEGY_TABLE(9 模式)。"""
+    """GET /strategies 返回 STRATEGY_TABLE(9 会话模式 + shared 兜底)。"""
 
     def test_strategies_returns_9_session_types(self, client):
-        """成功路径:返回 9 个 session_type。"""
+        """成功路径:返回全部策略(9 会话模式 + shared)。"""
         r = client.get("/ai/context/strategies")
         assert r.status_code == 200, r.text
         items = r.json()["strategies"]
-        assert len(items) == 9
+        assert len(items) == 10
         types = {s["session_type"] for s in items}
         assert types == EXPECTED_SESSION_TYPES
 
@@ -261,7 +261,7 @@ class TestStrategiesEndpoint:
         with patch("app.config.settings.ENABLE_CROSS_MODE_RECORDER", False):
             r = client.get("/ai/context/strategies")
         assert r.status_code == 200
-        assert len(r.json()["strategies"]) == 9
+        assert len(r.json()["strategies"]) == 10
 
 
 # ─────────────────────── 鉴权失败路径 ───────────────────────
@@ -304,4 +304,4 @@ class TestAuthFailure:
         with TestClient(test_app) as c:
             r = c.get("/ai/context/strategies")
         assert r.status_code == 200, r.text
-        assert len(r.json()["strategies"]) == 9
+        assert len(r.json()["strategies"]) == 10

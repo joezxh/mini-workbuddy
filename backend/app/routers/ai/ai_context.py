@@ -439,6 +439,7 @@ MODE_LABELS = {
     "skill":         "技能执行",
     "agent":         "智能体",
     "team":          "智能体团队",
+    "data":          "数据分析",
     "scheduled":     "云端调度",
     "shared":        "共享层",
 }
@@ -451,6 +452,7 @@ MODE_COLORS = {
     "skill":         "green",
     "agent":         "gold",
     "team":          "orange",
+    "data":          "geekblue",
     "scheduled":     "default",
     "shared":        "default",
 }

@@ -222,6 +222,8 @@ def _load_spec(
             return None
         return {
             "user_id": sched.user_id,
+            "tenant_id": getattr(sched, "tenant_id", 1) or 1,
+            "prompt": sched.prompt or "",
             "task_name": f"[定时] {sched.task_name}",
             "target_mode": sched.target_mode,
             "payload": _build_payload(sched),
@@ -256,6 +258,31 @@ async def _trigger_job(sched_id: int) -> None:
         )
         _persist_run_meta(sched_id, last_run_at=datetime.now(), last_task_id=task.id, run_delta=1)
         logger.info(f"[agent_sched] 调度 {sched_id} 已触发 → async_task {task.id}")
+
+        # 跨模式上下文记忆:scheduled 模式仅记 L2 输入,不写 Mem0(策略表驱动,失败静默)
+        try:
+            from app.ai.services.cross_mode_recorder import CrossModeContextRecorder
+            _db = SessionLocal()
+            try:
+                CrossModeContextRecorder(_db).record_finalize(
+                    session_id=int(spec.get("session_id") or 0),
+                    user_id=spec["user_id"],
+                    tenant_id=spec.get("tenant_id", 1),
+                    session_type="scheduled",
+                    payload={
+                        "task_id": task.id,
+                        "task_no": str(getattr(task, "task_no", "") or task.id),
+                        "task_name": spec["task_name"],
+                        "target_mode": spec["target_mode"],
+                        "user_input": spec.get("prompt", ""),
+                        "priority": 5,
+                        "submitted_at": datetime.now().isoformat(),
+                    },
+                )
+            finally:
+                _db.close()
+        except Exception as _cm_exc:  # noqa: BLE001 — 静默降级,不影响调度主流程
+            logger.warning(f"[agent_sched] 跨模式 L2 记录失败 sched={sched_id}: {_cm_exc}")
     except Exception as e:  # noqa: BLE001
         logger.error(f"[agent_sched] 调度 {sched_id} 触发失败: {e}")
         try:

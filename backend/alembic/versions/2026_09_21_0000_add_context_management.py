@@ -79,12 +79,13 @@ def upgrade() -> None:
     )
     
     # Index 3: Last accessed time (for TTL compaction & LRU eviction)
+    # NOTE: 部分索引谓词不能用 NOW()(STABLE,非 IMMUTABLE),PG 会报
+    # "functions in index predicate must be marked IMMUTABLE",故用普通索引
     op.create_index(
         'ix_ai_context_storage_last_access',
         'ai_context_storage',
         ['last_accessed'],
-        descending=[True],
-        postgresql_where=sa.text('expires_at IS NULL OR expires_at > NOW()')
+        descending=[True]
     )
     
     # Index 4: Expiration time (for batch cleanup jobs)

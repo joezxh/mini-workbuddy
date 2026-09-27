@@ -23,6 +23,7 @@ PRIORITY_MAP: Dict[str, int] = {
     "skill":         2,
     "agent":         2,
     "team":          2,
+    "data":          2,
     "scheduled":     4,
     "shared":        5,
 }
@@ -37,6 +38,7 @@ DEFAULT_TTL_HOURS: Dict[str, int] = {
     "skill":         168,
     "agent":         720,   # 30 天
     "team":          168,
+    "data":          48,    # 2 天(查询结果时效性短)
     "scheduled":     720,   # 30 天(调度任务可追溯)
     "shared":        168,
 }
@@ -53,5 +55,17 @@ DEFAULT_PROTECTED_MODES: List[str] = [
 # shared 不写(共享层数据非用户偏好)
 MEM0_ENABLED_MODES: Set[str] = {
     "general", "react", "thinking", "deep_research",
-    "skill", "agent", "team",
+    "skill", "agent", "team", "data",
 }
+
+
+# 9 种会话模式的权威清单(与前端 AssistantPanel fallback 映射 + 字典表对齐)。
+# 会话内切换模式(PUT session_type)以此为唯一校验源。
+SESSION_MODES: List[str] = [
+    "general", "react", "thinking", "deep_research",
+    "skill", "agent", "team", "data", "scheduled",
+]
+
+# 存储层兜底 source_mode(非会话模式):L2 记录默认标记,
+# 无法归类到具体会话模式时使用。
+STORAGE_FALLBACK_MODE: str = "shared"

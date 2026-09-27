@@ -105,10 +105,11 @@ class AIChatContextStorage(Base):
             "user_id",
             "mode",
         ),
+        # 部分索引谓词不能用 NOW()(STABLE,非 IMMUTABLE),改为普通索引;
+        # expires_at 过滤在查询时作为 filter 条件仍可命中此索引
         Index(
             "ix_ai_context_storage_last_access",
             "last_accessed",
-            postgresql_where="expires_at IS NULL OR expires_at > NOW()",
         ),
         Index(
             "ix_ai_context_storage_expires",

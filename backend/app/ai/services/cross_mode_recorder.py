@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -134,6 +135,24 @@ STRATEGY_TABLE: Dict[str, FinalizeStrategy] = {
         },
         extract_summary=lambda p: _truncate(p.get("final_answer", "")),
         context_tags=lambda p: ["team", p.get("team_name", "")],
+    ),
+    "data": FinalizeStrategy(
+        session_type="data", source_mode="data",
+        priority=2, ttl_hours=48, write_mem0=True,
+        extract_payload=lambda p: {
+            "user_input":    _truncate(p.get("user_input", ""), 500),
+            "sql":           _truncate(p.get("sql", ""), 500),
+            "record_count":  p.get("record_count", 0),
+            "datasource_id": p.get("datasource_id"),
+            "chart_type":    p.get("chart_type"),
+        },
+        extract_summary=lambda p: (
+            f"SQL 查询：{_truncate(p.get('sql', ''), 300)}，"
+            f"返回 {p.get('record_count', 0)} 条记录"
+        ),
+        context_tags=lambda p: [
+            "data", f"datasource_{p.get('datasource_id') or 'unknown'}"
+        ],
     ),
     "scheduled": FinalizeStrategy(
         session_type="scheduled", source_mode="scheduled",
@@ -316,3 +335,160 @@ class CrossModeContextRecorder:
             except Exception:
                 pass
             logger.warning(f"[CrossModeRecorder] audit log write failed: {exc}")
+
+
+# ── /chat/stream 收尾闭环(v2.0 G1)────────────────────────────────────
+
+_ANSWER_KEYS = ("answer", "content", "result", "final_report", "final_answer")
+
+
+class StreamAnswerCollector:
+    """从 SSE 事件字符串流中收集最终回答(轻量解析,异常静默)。
+
+    兼容两种事件形态:
+    - SSEBridge 产出的 ``event: {type}\\ndata: {json}\\n\\n`` 字符串
+      (text_delta 累积、tool_call_start 计数)
+    - dict 事件(ResearchAgent/SkillAgent/TeamAgent)中
+      answer/content/result/final_report/final_answer 非空则覆盖 final
+    """
+
+    def __init__(self) -> None:
+        self._parts: List[str] = []
+        self._final: str = ""
+        self.tool_calls_count: int = 0
+
+    def feed(self, sse_event: str) -> None:
+        """喂入一条 SSE 事件字符串;任何解析失败静默跳过。"""
+        try:
+            if not sse_event or not isinstance(sse_event, str):
+                return
+            event_type = ""
+            data: Any = None
+            for line in sse_event.splitlines():
+                if line.startswith("event:"):
+                    event_type = line[len("event:"):].strip()
+                elif line.startswith("data:"):
+                    raw = line[len("data:"):].strip()
+                    try:
+                        data = json.loads(raw)
+                    except Exception:
+                        data = raw
+            if event_type == "text_delta" and isinstance(data, dict):
+                delta = data.get("delta")
+                if isinstance(delta, str):
+                    self._parts.append(delta)
+            elif event_type == "tool_call_start":
+                self.tool_calls_count += 1
+            elif event_type in ("message", "reply_end", "done") and isinstance(data, dict):
+                for key in _ANSWER_KEYS:
+                    value = data.get(key)
+                    if isinstance(value, str) and value.strip():
+                        self._final = value
+                        break
+        except Exception:  # noqa: BLE001 — 收集器绝不允许影响 SSE 转发
+            return
+
+    @property
+    def answer(self) -> str:
+        """最终答案:优先显式 final 字段,否则拼接 text_delta。"""
+        return self._final or "".join(self._parts)
+
+
+def finalize_chat_stream(
+    db: Session,
+    *,
+    session_id: int,
+    user_id: int,
+    tenant_id: int,
+    session_type: str,
+    user_input: str,
+    collector: StreamAnswerCollector,
+    case_number: Optional[str] = None,
+    extra_payload: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    """/chat/stream 收尾统一入口:按策略写 L2 + Mem0 + 审计。
+
+    全程 try/except 静默:任何失败仅 logger,绝不向 SSE 调用方抛出。
+    """
+    try:
+        if not CrossModeContextRecorder.has_strategy(session_type):
+            return None
+        answer = collector.answer
+        payload: Dict[str, Any] = {
+            "user_input": user_input,
+            # 统一填三键,由各策略 extract_summary 各取所需
+            "answer": answer,
+            "final_answer": answer,
+            "final_report": answer,
+            "tool_calls": [None] * collector.tool_calls_count,
+        }
+        if extra_payload:
+            payload.update(extra_payload)
+        recorder = CrossModeContextRecorder(db)
+        return recorder.record_finalize(
+            session_id=session_id,
+            user_id=user_id,
+            tenant_id=tenant_id,
+            session_type=session_type,
+            payload=payload,
+            case_number=case_number,
+        )
+    except Exception as exc:  # noqa: BLE001 — 静默降级
+        logger.warning(f"[CrossModeRecorder] finalize_chat_stream failed: {exc}")
+        return None
+
+
+def build_cross_mode_brief(
+    db: Session,
+    *,
+    session_id: int,
+    tenant_id: int,
+    limit: int = 5,
+) -> str:
+    """构建跨模式上下文摘要(注入 agent sys_prompt,读取侧闭环 G6)。
+
+    读取同会话最近 L2 条目(允许跨模式可见标记),拼成精简摘要文本。
+    flag 关闭 / 无条目 / 查询失败 → 返回空串(静默)。
+    """
+    try:
+        from app.config import settings
+        if not getattr(settings, "ENABLE_CROSS_MODE_RECORDER", True):
+            return ""
+        from app.ai.context_manager import ContextManager
+
+        mgr = ContextManager(tenant_id=tenant_id)
+        entries = mgr.get_context_with_mode_filter(
+            session_id=session_id, user_id=0,
+            allow_cross_mode=True, limit=limit, db=db,
+        )
+        # 过滤已过期条目(expires_at 过滤未在查询层实现,此处兜底)
+        now = datetime.utcnow()
+        lines: List[str] = []
+        for e in entries:
+            expires_raw = e.get("expires_at")
+            if expires_raw:
+                try:
+                    if datetime.fromisoformat(expires_raw) < now:
+                        continue
+                except Exception:
+                    pass
+            data = e.get("context_data") or {}
+            snippet = (
+                data.get("answer") or data.get("final_answer")
+                or data.get("final_report") or data.get("result")
+                or data.get("sql") or ""
+            )
+            if not snippet:
+                continue
+            lines.append(
+                f"[{e.get('source_mode', 'unknown')}] {_truncate(str(snippet), 200)}"
+            )
+        if not lines:
+            return ""
+        return (
+            "以下是本会话此前在其他模式中产生的上下文摘要(跨模式记忆),"
+            "供你延续对话语境:\n" + "\n".join(lines)
+        )
+    except Exception as exc:  # noqa: BLE001 — 静默降级
+        logger.warning(f"[CrossModeRecorder] build_cross_mode_brief failed: {exc}")
+        return ""

@@ -158,6 +158,27 @@ async def chat_stream(
     if req.agent_id and agent_config.get("execution_mode") == "plan":
         session_type = "react"
 
+    # 会话内切换模式：已有会话的请求 session_type 与落库值不一致时同步,
+    # 同一会话切模式,消息与 L2 上下文(按 source_mode)天然延续
+    if session.session_type != session_type:
+        session.session_type = session_type
+        db.commit()
+
+    # 跨模式上下文摘要注入(读取侧闭环;flag 守护,静默降级)
+    try:
+        from app.ai.services.cross_mode_recorder import build_cross_mode_brief
+        _brief = build_cross_mode_brief(
+            db,
+            session_id=session_id,
+            tenant_id=getattr(session, "tenant_id", None) or 1,
+        )
+        if _brief:
+            agent_config["sys_prompt"] = (
+                (agent_config.get("sys_prompt") or "") + "\n\n" + _brief
+            ).strip()
+    except Exception as _brief_exc:
+        logger.warning(f"[chat_stream] cross-mode brief inject failed: {_brief_exc}")
+
     async def event_generator():
         """SSE 事件生成器"""
         try:
@@ -180,12 +201,36 @@ async def chat_stream(
 
             # 通过 SSEBridge 流式输出（同时发布统一信封到 bus）
             bridge = SSEBridge()
+            from app.ai.services.cross_mode_recorder import (
+                StreamAnswerCollector,
+                finalize_chat_stream,
+            )
+            collector = StreamAnswerCollector()
             async for sse_event in bridge.stream_agent_reply(
                 agent, user_msg, bus=bus,
                 execution_id=execution_id, trace_id=None,
                 source_id=agent_config.get("name"),
             ):
+                collector.feed(sse_event)
                 yield sse_event
+
+            # 跨模式上下文收尾:按策略写 L2 + Mem0 + 审计(失败静默,不阻断 SSE)
+            try:
+                finalize_chat_stream(
+                    db,
+                    session_id=session_id,
+                    user_id=uid,
+                    tenant_id=getattr(session, "tenant_id", None) or 1,
+                    session_type=session_type,
+                    user_input=message_text,
+                    collector=collector,
+                    case_number=(
+                        session.context_data.get("case_number")
+                        if isinstance(session.context_data, dict) else None
+                    ),
+                )
+            except Exception as _fin_exc:
+                logger.warning(f"[chat_stream] cross-mode finalize failed: {_fin_exc}")
 
             # 保存助手回复（简化：实际应从事件流中收集完整内容）
             yield create_done_event()

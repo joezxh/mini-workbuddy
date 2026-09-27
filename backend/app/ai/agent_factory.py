@@ -170,6 +170,10 @@ class AgentFactory:
                 return self._create_react_agent(config)
             case "team":
                 return self._create_team_agent(config)
+            case "data":
+                # 数据分析模式：复用通用 Agent，SQLBot 能力经 AgentConfig.tools
+                # （tool_key=sqlbot_*）注入；会话收尾由 STRATEGY_TABLE["data"] 记录
+                return self._create_general_agent(config)
             case _:
                 raise ValueError(f"Unknown session_type: {session_type}")
 

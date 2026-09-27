@@ -152,7 +152,8 @@ class CreateSessionRequest(BaseModel):
 
 
 class UpdateSessionRequest(BaseModel):
-    session_title: str
+    session_title: Optional[str] = None
+    session_type: Optional[str] = None  # 会话内切换模式(∈ context_policies.SESSION_MODES)
 
 
 class PinSessionRequest(BaseModel):
@@ -256,9 +257,30 @@ def update_my_session(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
+    """更新会话标题或切换模式。
+
+    会话内切换模式(session_type)时,消息与 L2 上下文天然延续——
+    L2 条目按 source_mode 标记来源模式,跨模式可读性由
+    is_cross_mode_accessible 控制。
+    """
     svc = AiChatService(db)
-    _get_owned_session(svc, session_id, current_user.user_id)
-    session = svc.update_session_title(session_id, body.session_title)
+    session = _get_owned_session(svc, session_id, current_user.user_id)
+    changed = False
+    if body.session_type:
+        from app.core.context_policies import SESSION_MODES
+        if body.session_type not in SESSION_MODES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"非法会话模式: {body.session_type},可选值: {', '.join(SESSION_MODES)}",
+            )
+        session.session_type = body.session_type
+        changed = True
+    if body.session_title:
+        session.session_title = body.session_title
+        changed = True
+    if changed:
+        db.commit()
+        db.refresh(session)
     return _session_to_dict(session)
 
 
