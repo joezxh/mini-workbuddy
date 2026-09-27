@@ -54,17 +54,22 @@ PUT /ai/assistant/sessions/{id} {session_type} → 会话内切换,消息 + L2 �
 
 ## 5. 测试结果
 
-- `pytest tests/unit`: **187 passed**, 1 skipped, 17 failed
-- 17 个失败**全部为 v1.x 之前遗留**(与 cursor-context.md §10 及本次改动无关):
-  - test_context_manager.py(5): 断言旧 API 形状(`result["data"]`)
-  - test_migration_context_storage.py(3): 需真实 PostgreSQL 环境
-  - test_mem0_service.py(4): patch 目标 `MemoryClient` 属性不存在(mock 形状失配)
-  - test_hitl_coordinator.py(3) / test_skill_event_handler.py(2): 事件序列差异
-- 新增测试全部通过: policies(data/SESSION_MODES) + recorder(data 策略/collector/finalize) + endpoints(strategies=10)
+- `pytest tests/unit`: **204 passed, 1 skipped, 0 failed**(13.96s)
+- 17 个 v1.x 遗留失败已在 v2.0 收尾轮全部修复:
+  - test_context_manager.py(5): 测试断言对齐现 API(SharedContextEntry dataclass、
+    Mem0Service 懒加载 patch 目标);顺带修复 `build_full_context` 摘要推导式
+    缺 `enumerate` 的真实实现 bug(NameError)
+  - test_migration_context_storage.py(3): 类型断言按类型对象、唯一性兼容
+    UniqueConstraint/unique Index 两种建表路径、ScriptDirectory 用 Config 对象
+  - test_mem0_service.py(4): mock 客户端直接注入 `_client`(spec 化,对齐
+    add/search/delete/get_stats 真实调用契约)
+  - test_hitl_coordinator.py(3): 修复真实实现 bug 两处——`execution.py` HITL
+    分支 `pause_time` 未定义(UnboundLocalError)与模块缺 `datetime` 导入;
+    另在 `ai_chat.py` 显式导入 SysInfraFile 修复 mapper 字符串解析
+  - test_skill_event_handler.py(2): 对齐现行 chunk 事件契约(text_chunk/thinking_chunk)
 
 ## 6. 遗留事项
 
-1. 17 个遗留失败建议单独排期修复(多为 mock/断言形状过时,非功能缺陷)。
-2. `get_context_with_mode_filter` 未在 SQL 层过滤 `expires_at`(brief 已兜底过滤),后续可下沉到查询。
-3. 前端 17 个失败对应的 Vitest 套件本轮未运行(v1.x 报告 78/78,前端本轮仅改 aiSession.ts 与 AssistantPanel.vue 的 watch 块,已过 IDE lint)。
-4. Alembic 迁移链: `2026_09_21_0000` 的 `down_revision=None` 与既有链路的关系建议用 `alembic history` 复核(本轮新增迁移 `2026_09_27_0000` 已挂接)。
+1. `get_context_with_mode_filter` 未在 SQL 层过滤 `expires_at`(brief 已兜底过滤),后续可下沉到查询。
+2. 前端 Vitest 套件本轮未运行(v1.x 报告 78/78,前端本轮仅改 aiSession.ts 与 AssistantPanel.vue 的 watch 块,已过 IDE lint)。
+3. Alembic 迁移链: `2026_09_21_0000` 的 `down_revision=None` 与既有链路的关系建议用 `alembic history` 复核(本轮新增迁移 `2026_09_27_0000` 已挂接)。

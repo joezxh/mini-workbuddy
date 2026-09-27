@@ -47,7 +47,7 @@ def _drain(q: asyncio.Queue):
     return items
 
 
-def test_text_delta_not_persisted_but_ssed():
+def test_text_delta_sse_and_block_summary():
     async def main():
         h, bus, out = _handler()
         await h.handle(ReplyStartEvent(reply_id="r1", session_id="s1", name="demo", role="assistant"))
@@ -59,10 +59,10 @@ def test_text_delta_not_persisted_but_ssed():
         sse = [e for e in _drain(out) if e.type == "text"]
         assert "".join(e.data["content"] for e in sse) == "你好世界"
 
-        # DB 侧：reply_start + text_done 汇总，无逐 delta
+        # bus 侧：reply_start + 逐 delta text_chunk + text_done 块级汇总
         types = [e.event_type for e in bus.published]
-        assert types == ["reply_start", "text_done"]
-        done = bus.published[1]
+        assert types == ["reply_start", "text_chunk", "text_chunk", "text_done"]
+        done = bus.published[-1]
         assert done.content == {"text": "你好世界"}
         assert done.reply_id == "r1" and done.block_id == "b1"
         assert done.category == "text"
@@ -75,8 +75,8 @@ def test_thinking_delta_summary():
         await h.handle(ThinkingBlockDeltaEvent(reply_id="r1", block_id="b0", delta="思考中"))
         await h.handle(ThinkingBlockEndEvent(reply_id="r1", block_id="b0"))
         types = [e.event_type for e in bus.published]
-        assert types == ["thinking_done"]
-        assert bus.published[0].content == {"thinking": "思考中"}
+        assert types == ["thinking_chunk", "thinking_done"]
+        assert bus.published[-1].content == {"thinking": "思考中"}
     asyncio.run(main())
 
 

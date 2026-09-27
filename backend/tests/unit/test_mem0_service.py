@@ -4,143 +4,134 @@ from unittest.mock import Mock, patch, MagicMock
 from app.ai.services.mem0_service import Mem0Service, Mem0Config
 
 
+def _service_with_client(mock_client, user_id: str = "123") -> Mem0Service:
+    """构造 Mem0Service 并直接注入 mock 客户端(绕开按配置选择客户端的 init 路径)。"""
+    service = Mem0Service(config=Mem0Config(), user_id=user_id)
+    service._client = mock_client
+    service._health_checked = True
+    return service
+
+
 class TestMem0ServiceRecord:
     """Test record method"""
-    
-    @patch('app.ai.services.mem0_service.MemoryClient')
-    def test_record_success(self, mock_client_class):
+
+    def test_record_success(self):
         """Successful memory recording"""
-        from mem0 import Memory
         mock_client = Mock()
         mock_client.add.return_value = {"total": 100}
-        mock_client_class.return_value = mock_client
-        
-        service = Mem0Service(config=Mem0Config(), user_id="123")
-        
+
+        service = _service_with_client(mock_client, user_id="123")
+
         result = service.record(message="User prefers short answers", metadata={"source": "general"})
-        
+
         assert result is True
         mock_client.add.assert_called_once_with(
             user_id="123",
             message="User prefers short answers",
             metadata={"source": "general"}
         )
-    
+
     def test_record_without_user_id(self):
         """Should fail when user_id is missing"""
         config = Mem0Config()
         service = Mem0Service(config=config)
-        
+
         result = service.record(message="Test")
-        
+
         assert result is False
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl', autospec=True)
-    def test_record_fallback_to_local(self, mock_local_impl_class):
-        """Should fall back to local implementation when mem0 not available"""
-        from mem0 import Memory as MockMemory
-        # Force ImportError-like behavior by making MemoryClient unavailable
-        import sys
-        from unittest.mock import Mock
-        
-        mock_local = Mock()
-        mock_local.record.return_value = True
-        mock_local_impl_class.return_value = mock_local
-        
+
+    def test_record_fallback_to_local(self):
+        """MEM0_ENABLED=false 时 init 回退 LocalMem0Impl(进程内)"""
         service = Mem0Service(config=Mem0Config(), user_id="456")
-        
-        # LocalMem0Impl should be initialized
+        # 默认配置 Mem0 未启用 → init 应给出本地回退客户端
         assert service._client is not None
 
 
 class TestMem0ServiceRetrieve:
     """Test retrieve method"""
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl', autospec=True)
-    def test_retrieve_success(self, mock_local_impl_class):
+
+    def test_retrieve_success(self):
         """Successful semantic search"""
-        mock_local = Mock()
-        mock_local.retrieve.return_value = [
+        from app.ai.services.mem0_service import LocalMem0APIImpl
+        mock_client = Mock(spec=LocalMem0APIImpl)
+        mock_client.search.return_value = [
             {"memory": "User prefers short answers", "confidence": 0.92},
             {"memory": "User works at tech company", "confidence": 0.87},
         ]
-        mock_local_impl_class.return_value = mock_local
-        
-        service = Mem0Service(config=Mem0Config(), user_id="789")
-        
+
+        service = _service_with_client(mock_client, user_id="789")
+
         results = service.retrieve(query="user preferences", limit=2)
-        
+
         assert len(results) == 2
         assert results[0]["memory"] == "User prefers short answers"
         assert results[0]["confidence"] == 0.92
         mock_client.search.assert_called_once_with(query="user preferences", user_id="789", limit=2)
-    
+
     def test_retrieve_without_user_id(self):
         """Should return empty list when no user_id"""
         config = Mem0Config()
         service = Mem0Service(config=config)
-        
+
         results = service.retrieve(query="test query")
-        
+
         assert results == []
-    @patch('app.ai.services.mem0_service.LocalMem0Impl', autospec=True)
-    def test_retrieve_on_error(self, mock_local_impl_class):
+
+    def test_retrieve_on_error(self):
         """Should return empty list on error"""
-        mock_local = Mock()
-        mock_local.retrieve.side_effect = Exception("API error")
-        mock_local_impl_class.return_value = mock_local
-        
-        service = Mem0Service(config=Mem0Config(), user_id="error_test")
-        
+        from app.ai.services.mem0_service import LocalMem0APIImpl
+        mock_client = Mock(spec=LocalMem0APIImpl)
+        mock_client.search.side_effect = Exception("API error")
+
+        service = _service_with_client(mock_client, user_id="error_test")
+
         results = service.retrieve(query="test query")
-        
+
         assert results == []
 
 
 class TestMem0ServiceDelete:
     """Test delete method"""
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl', autospec=True)
-    def test_delete_success(self, mock_local_impl_class):
+
+    def test_delete_success(self):
         """Successful memory deletion"""
-        mock_local = Mock()
-        mock_local.delete.return_value = {"status": "success"}
-        mock_local_impl_class.return_value = mock_local
-        
-        service = Mem0Service(config=Mem0Config(), user_id="delete_user")
-        
+        from app.ai.services.mem0_service import LocalMem0Impl
+        mock_client = Mock(spec=LocalMem0Impl)
+        mock_client.delete.return_value = True
+
+        service = _service_with_client(mock_client, user_id="delete_user")
+
         result = service.delete(memory_id="mem_123")
-        
+
         assert result is True
-        mock_local.delete.assert_called_once_with(memory_id="mem_123")
-    
+        mock_client.delete.assert_called_once_with(memory_id="mem_123", user_id="delete_user")
+
     def test_delete_without_user_id(self):
         """Should fail without user_id"""
         config = Mem0Config()
         service = Mem0Service(config=config)
-        
+
         result = service.delete(memory_id="any_id")
-        
+
         assert result is False
 
 
 class TestMem0ServiceStats:
     """Test get_stats method"""
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl', autospec=True)
-    def test_get_stats_success(self, mock_local_impl_class):
+
+    def test_get_stats_success(self):
         """Get memory statistics"""
-        mock_local = Mock()
-        mock_local.get_stats.return_value = {
+        from app.ai.services.mem0_service import LocalMem0Impl
+        mock_client = Mock(spec=LocalMem0Impl)
+        mock_client.get_stats.return_value = {
             "total_memories": 150,
             "storage_used_mb": 12.5,
         }
-        mock_local_impl_class.return_value = mock_local
-        
-        service = Mem0Service(config=Mem0Config(), user_id="stats_user")
-        
+
+        service = _service_with_client(mock_client, user_id="stats_user")
+
         stats = service.get_stats()
-        
+
         assert stats["total_memories"] == 150
         assert "storage_used_mb" in stats
 

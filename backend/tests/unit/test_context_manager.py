@@ -23,23 +23,24 @@ class TestSharedContext:
     def test_shared_context_set_user_preference(self):
         """Set and retrieve user preferences in shared context"""
         manager = ContextManager(tenant_id=1, user_id="u1")
-        
+
         result = manager.set_shared_context("preferences", {"theme": "dark"})
-        
+
         assert result is True
-        cached_data = manager._shared_context.get("preferences")
-        assert cached_data["data"] == {"theme": "dark"}
-        assert cached_data["access_count"] == 1
-    
+        entry = manager._shared_context.get("preferences")
+        assert entry is not None
+        assert entry.data == {"theme": "dark"}
+        assert entry.access_count == 1
+
     def test_shared_context_retrieve(self):
         """Retrieve data from shared context"""
         manager = ContextManager(tenant_id=1, user_id="u1")
         manager.set_shared_context("user_info", {"name": "Alice"})
-        
+
         result = manager.get_shared_context(key="user_info")
-        
+
         assert result is not None
-        assert result["data"]["name"] == "Alice"
+        assert result["name"] == "Alice"
 
 
 class TestIsolatedContext:
@@ -93,7 +94,7 @@ class TestIsolatedContext:
         # Check expires_at field was set
         stored = manager._isolated_contexts.get(("sqlbot", "temp_query"))
         assert stored is not None
-        assert stored[0].get("expires_at") is not None
+        assert stored[0].expires_at is not None
 
 
 class TestMultiLayerContextBuild:
@@ -150,31 +151,27 @@ class TestMultiLayerContextBuild:
 
 class TestMem0Integration:
     """Test Mem0 long-term memory integration"""
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl')
-    def test_mem0_record_memory(self, mock_local_impl):
+
+    @patch('app.ai.services.mem0_service.Mem0Service')
+    def test_mem0_record_memory(self, MockMem0Service):
         """Record session summary to Mem0"""
-        from unittest.mock import Mock
-        
         mock_mem0 = Mock()
         mock_mem0.record.return_value = True
-        mock_local_impl.return_value = mock_mem0
-        
+        MockMem0Service.return_value = mock_mem0
+
         manager = ContextManager(tenant_id=1, user_id="u1")
-        
+
         result = manager.record_to_mem0(
             message="User prefers Chinese responses",
             metadata={"source": "conversation_summary"}
         )
-        
+
         assert result is True
         mock_mem0.record.assert_called_once()
-    
-    @patch('app.ai.services.mem0_service.LocalMem0Impl')
-    def test_mem0_retrieve_context_injector(self, mock_local_impl):
+
+    @patch('app.ai.services.mem0_service.Mem0Service')
+    def test_mem0_retrieve_context_injector(self, MockMem0Service):
         """Retrieve relevant memories and inject into context"""
-        from unittest.mock import Mock
-        
         mock_mem0 = Mock()
         mock_mem0.retrieve.return_value = [
             {
@@ -182,15 +179,15 @@ class TestMem0Integration:
                 "confidence": 0.9
             }
         ]
-        mock_local_impl.return_value = mock_mem0
-        
+        MockMem0Service.return_value = mock_mem0
+
         manager = ContextManager(tenant_id=1, user_id="u1")
-        
+
         context = manager.build_full_context(
             max_tokens=1000,
             enable_mem0_retrieval=True
         )
-        
+
         # Mem0 data should be injected
         assert "mem0_summary" in context
         assert len(context["mem0_summary"]) > 0

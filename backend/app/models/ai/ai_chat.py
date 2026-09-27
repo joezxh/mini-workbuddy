@@ -9,6 +9,9 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 from app.models.tenant_mixin import TenantMixin
+# 显式导入:确保 relationship('SysInfraFile') 字符串在任何导入顺序下都可解析
+# (部分导入场景下,如单测只引 ai 模块,SysInfraFile 未注册会导致 mapper 配置失败)
+from app.models.sys.sys_infra_file import SysInfraFile  # noqa: F401
 
 
 class AiChatSession(Base, TenantMixin):

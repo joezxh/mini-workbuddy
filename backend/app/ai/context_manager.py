@@ -374,7 +374,7 @@ class ContextManager:
                         # Summarize Mem0 results for prompt injection
                         summary_lines = [
                             f"[Long-term Memory #{i+1}] {item['memory']} (confidence: {item.get('confidence', 0):.2f})"
-                            for item in mem0_data[:3]
+                            for i, item in enumerate(mem0_data[:3])
                         ]
                         mem0_summary = "\n".join(summary_lines)
                         

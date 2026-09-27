@@ -61,11 +61,12 @@ def test_migration_table_column_types():
     assert columns_info['id']['autoincrement'] == True
     
     # Verify JSONB column (PostgreSQL-specific)
-    assert columns_info['context_data']['type'] == 'JSONB'
+    # inspector 返回类型对象(编译为 "JSONB(astext_type=Text())"),按类型名前缀断言
+    assert 'JSONB' in str(columns_info['context_data']['type']).upper()
     
-    # Verify string lengths
-    assert columns_info['mode']['length'] == 32
-    assert columns_info['context_key']['length'] == 255
+    # Verify string lengths(长度在类型对象上,列字典无 'length' 键)
+    assert columns_info['mode']['type'].length == 32
+    assert columns_info['context_key']['type'].length == 255
 
 
 def test_migration_indexes_created():
@@ -92,27 +93,35 @@ def test_migration_indexes_created():
 
 
 def test_migration_unique_constraint():
-    """Verify unique constraint on tenant/session/mode/key."""
+    """Verify unique constraint on tenant/session/mode/key.
+
+    兼容两种建表路径:alembic 迁移建的是命名 UniqueConstraint;
+    Base.metadata.create_all 建的是同列 unique Index——两者都保证唯一性。
+    """
     with engine.connect() as conn:
         result = conn.execute(
             text("SELECT * FROM ai_context_storage LIMIT 0")
         )
-    
+
     inspector = inspect(engine)
-    
+
+    expected_columns = {'tenant_id', 'session_id', 'mode', 'context_key'}
+
     constraints = inspector.get_unique_constraints('ai_context_storage')
-    assert len(constraints) > 0
-    
-    found_constraint = False
-    for constraint in constraints:
-        if constraint['name'] == 'uk_tenant_session_mode_key':
-            found_constraint = True
-            # Verify it covers the right columns
-            assert set(constraint['column_names']) == {
-                'tenant_id', 'session_id', 'mode', 'context_key'
-            }
-    
-    assert found_constraint, "Unique constraint uk_tenant_session_mode_key not found"
+    by_constraint = any(
+        set(c.get('column_names') or []) == expected_columns
+        for c in constraints
+    )
+
+    indexes = inspector.get_indexes('ai_context_storage')
+    by_index = any(
+        i.get('unique') and set(i.get('column_names') or []) == expected_columns
+        for i in indexes
+    )
+
+    assert by_constraint or by_index, (
+        "未发现覆盖 (tenant_id, session_id, mode, context_key) 的唯一约束或唯一索引"
+    )
 
 
 def test_migration_downgrade_removes_table():
@@ -134,12 +143,19 @@ def test_migration_downgrade_removes_table():
         # Note: Actual downgrade would be tested by running:
         # alembic downgrade 2026_09_20_0000  (previous revision)
         # For now, we just verify the downgrade script exists and is callable
+        from pathlib import Path
+        from alembic.config import Config
         from alembic.script import ScriptDirectory
-        from alembic.runtime.environment import EnvironmentContext
-        
-        script_dir = ScriptDirectory.from_config("backend/alembic.ini")
-        # Verify downgrade script is available
-        assert script_dir.get_revision('2026_09_21_0000').downgrade is not None
+
+        # alembic.ini 相对本文件定位(backend/alembic.ini),不依赖 pytest cwd
+        ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+        script_dir = ScriptDirectory.from_config(Config(str(ini_path)))
+        # Verify downgrade script is available(Script 公开属性是 module)
+        rev = script_dir.get_revision('2026_09_21_0000')
+        assert rev is not None
+        assert callable(getattr(rev.module, "downgrade", None)), (
+            "2026_09_21_0000 迁移缺少可调用的 downgrade()"
+        )
 
 
 if __name__ == "__main__":

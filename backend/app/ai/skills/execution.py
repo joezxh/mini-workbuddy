@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import uuid
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
@@ -591,8 +592,10 @@ class SkillExecutionService:
                             # + HITL 超时接管总超时
                             from app.ai.events.hitl import record_pause, PAUSE_TIMEOUT_MINUTES, monitor_pause_timeout
 
+                            # pause_time 必须先于 try 赋值:record_pause 失败(如 DB 不可用)
+                            # 不应导致下方 monitor_pause_timeout 引用未定义变量
+                            pause_time = datetime.now()
                             try:
-                                pause_time = datetime.now()
                                 pause_id = record_pause(_record_db, execution_id=execution_id,
                                                          reply_id=handler.reply_id,
                                                          tool_calls=evt.data.get("tool_calls"))
