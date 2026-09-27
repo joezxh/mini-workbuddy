@@ -1,7 +1,6 @@
 """STRATEGY_TABLE 9 模式 + record_finalize 主入口测试。"""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from app.ai.services.cross_mode_recorder import (
@@ -58,7 +57,8 @@ def test_record_finalize_writes_l2_and_mem0():
     """record_finalize 委托 ContextManager.persist_l2 + sync_to_long_term"""
     fake_db = MagicMock()
     recorder = CrossModeContextRecorder(fake_db)
-    with patch.object(recorder, "_ensure_manager") as mock_ensure:
+    with patch.object(recorder, "_ensure_manager") as mock_ensure, \
+         patch("app.config.settings.ENABLE_CROSS_MODE_RECORDER", True):
         mgr = MagicMock()
         mgr.persist_l2_context.return_value = 42
         mgr.sync_to_long_term.return_value = "mem_xyz"
@@ -85,7 +85,8 @@ def test_record_finalize_silent_on_failure():
     """整体异常被吞,不抛"""
     fake_db = MagicMock()
     recorder = CrossModeContextRecorder(fake_db)
-    with patch.object(recorder, "_ensure_manager", side_effect=RuntimeError("boom")):
+    with patch.object(recorder, "_ensure_manager", side_effect=RuntimeError("boom")), \
+         patch("app.config.settings.ENABLE_CROSS_MODE_RECORDER", True):
         rid = recorder.record_finalize(
             session_id=1, user_id=1, tenant_id=1,
             session_type="skill", payload={},
@@ -97,7 +98,8 @@ def test_record_finalize_skips_mem0_for_scheduled():
     """scheduled 不调 sync_to_long_term"""
     fake_db = MagicMock()
     recorder = CrossModeContextRecorder(fake_db)
-    with patch.object(recorder, "_ensure_manager") as mock_ensure:
+    with patch.object(recorder, "_ensure_manager") as mock_ensure, \
+         patch("app.config.settings.ENABLE_CROSS_MODE_RECORDER", True):
         mgr = MagicMock()
         mgr.persist_l2_context.return_value = 1
         mgr.sync_to_long_term.return_value = None

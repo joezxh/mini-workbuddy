@@ -30,6 +30,7 @@ from ._otel import OTelSettings
 from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
 from ._mem0 import Mem0Settings
+from ._cross_mode_recorder import CrossModeRecorderSettings
 
 
 class Settings(
@@ -43,6 +44,7 @@ class Settings(
     AuditSettings,
     AsyncTaskSettings,
     Mem0Settings,
+    CrossModeRecorderSettings,
     BaseSettings,
 ):
     """应用配置 — 组合所有领域 mixin。

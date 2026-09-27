@@ -194,6 +194,22 @@ class CrossModeContextRecorder:
             )
             return None
 
+        # 功能开关:关闭时立即返回,不写 L2/Mem0(渐进式上线 + 紧急止血)
+        try:
+            from app.config import settings
+
+            if not settings.ENABLE_CROSS_MODE_RECORDER:
+                logger.debug(
+                    f"[CrossModeRecorder] Disabled by flag; skip finalize "
+                    f"session_type={session_type} session_id={session_id}"
+                )
+                return None
+        except Exception as e:
+            # 配置层异常不应阻断 SSE,降级为开启
+            logger.warning(
+                f"[CrossModeRecorder] flag check failed, defaulting to enabled: {e}"
+            )
+
         try:
             data = strategy.extract_payload(payload)
             tags = strategy.context_tags(payload)
