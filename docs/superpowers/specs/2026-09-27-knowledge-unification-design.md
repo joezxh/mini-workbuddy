@@ -1,7 +1,7 @@
 # 知识库管理模块统一化设计（三类知识库整合）
 
 > 日期：2026-09-27
-> 状态：已评审（基于用户确认的 3+2 项关键决策）
+> 状态：已评审 · Phase 1 已实施并通过验收（2026-09-27，见 docs/superpowers/plans/2026-09-27-knowledge-unification-phase1.md）
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
 > 范围：`backend/app/models/{wiki,kb,connectors}`、`backend/app/routers/*`、`frontend/src/views/kms` + `views/admin/knowledge`
 
