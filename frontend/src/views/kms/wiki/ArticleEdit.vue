@@ -91,7 +91,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getArticleBySlug, updateArticle, listCategories } from '@/api/wiki'
+import { getArticle, updateArticle, listCategories } from '@/api/wiki'
 
 const route = useRoute()
 const router = useRouter()
@@ -108,23 +108,15 @@ onMounted(async () => {
 })
 
 async function loadArticle() {
-  const articleId = route.params.id as string
-  // 先通过列表找到 slug, 或直接通过 ID 获取
-  // 由于编辑页面用 ID, 但 API 用 slug, 这里做一个适配
+  const articleId = Number(route.params.id)
+  if (!Number.isFinite(articleId) || articleId <= 0) {
+    message.error(t('kmsWiki.notFound'))
+    router.push('/wiki')
+    return
+  }
   try {
-    // 尝试通过 API 获取 (需要先知道 slug)
-    // 简化: 使用 list API 按 ID 查找
-    const { listArticles } = await import('@/api/wiki')
-    const res = await listArticles({ page: 1, page_size: 1000 })
-    const found = (res.data.items || []).find((a: any) => a.id === Number(articleId))
-    if (found) {
-      // 获取完整文章
-      const detailRes = await getArticleBySlug(found.slug)
-      article.value = detailRes.data
-    } else {
-      message.error(t('kmsWiki.notFound'))
-      router.push('/wiki')
-    }
+    // 直接按 ID 获取（后端 GET /wiki/articles/{id}，G4：消除 page_size=1000 列表遍历 hack）
+    article.value = await getArticle(articleId)
   } catch (e) {
     message.error(t('wikiMgmt.art.loadFailed'))
     router.push('/wiki')
@@ -134,7 +126,7 @@ async function loadArticle() {
 async function loadCategories() {
   try {
     const res = await listCategories()
-    categories.value = res.data || []
+    categories.value = res || []
   } catch (e) {
     // 分类加载失败不阻断
   }
