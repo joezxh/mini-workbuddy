@@ -1,9 +1,27 @@
 /**
  * AI Context Stats API - TypeScript 类型定义
+ * Phase 2 增强版 - 支持详细指标和压缩功能
  */
 
 /**
- * 多模式会话上下文统计信息
+ * 单会话的上下文统计信息 (每个 session)
+ */
+export interface SessionStats {
+  session_id: number  // 会话 ID
+  total_tokens: number  // 总 token 使用量
+  message_counts: {
+    local: number  // 本地消息数
+    vector_store: number  // 向量存储消息数
+    shared_context: number  // 共享层上下文数（租户级别）
+  }
+  vector_store_messages: number  // Mem0 向量存储消息数
+  shared_context_count: number  // 跨租户共享上下文条目总数
+  last_compaction_time: string | null  // 最后压缩时间
+  computed_at: string  // 统计计算时间
+}
+
+/**
+ * 多模式会话上下文统计信息 (旧格式，向后兼容)
  */
 export interface ContextStats {
   shared_context_count: number  // 共享层上下文数量
@@ -27,8 +45,93 @@ export interface ModeStats {
  * 上下文压缩请求体
  */
 export interface CompactionRequest {
-  session_id?: string  // 会话 ID（可选）
-  mode?: string  // 模式标识（dify/sqlbot/agentscope）
-  min_priority_threshold?: number  // 最小优先级阈值（低于此值的可压缩）
-  max_tokens?: number  // 最大保留 token 数
+  mode: string  // 目标模式
+  key: string  // 要压缩的上下文键
+  strategy: 'sliding_window' | 'priority_eviction' | 'access_based' | 'summary_and_keep_latest'
+  target_tokens?: number  // 目标 token 数（1000-32000）
+}
+
+/**
+ * 上下文压缩响应
+ */
+export interface CompactionResponse {
+  success: boolean  // 是否成功
+  mode: string  // 受影响的模式
+  key: string  // 受影响的上下文键
+  strategy: string  // 使用的策略
+  entries_before: number  // 压缩前条目数
+  entries_after: number  // 压缩后条目数
+  tokens_before: number  // 压缩前 token 数
+  tokens_after: number  // 压缩后 token 数
+  compaction_ratio: number  // 压缩比
+  compacted_at: string  // 压缩时间戳
+  error?: string | null  // 错误消息（如果失败）
+}
+
+/**
+ * 审计日志项 - 压缩历史记录
+ */
+export interface CompactionHistoryItem {
+  id: number
+  timestamp: string
+  action: 'compaction_triggered' | 'context_manual_override'
+  target_type: 'context'
+  target_id: string  // "mode:key" 格式
+  details: {
+    type: 'context_compaction' | 'manual_override'
+    session_id: number
+    tenant_id: string
+    user_id?: number
+    mode: string
+    key: string
+    strategy: string
+    result: any
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// PR-3 Task 10: 跨模式上下文 4 个类型（驱动 ModeContextCard 数据驱动）
+// ─────────────────────────────────────────────────────────────
+
+/** L2 短期记忆条目（来自 POST /entries） */
+export interface ContextEntry {
+  id: number
+  session_id: number
+  source_mode: string
+  context_key: string
+  context_data: Record<string, any>
+  context_tags: string[]
+  priority: number
+  is_cross_mode_accessible: boolean
+  case_number: string | null
+  expires_at: string | null
+  created_at: string
+  last_accessed: string | null
+}
+
+/** POST /entries 请求体 */
+export interface ContextEntriesRequest {
+  session_id: number
+  allow_cross_mode?: boolean
+  include_tags?: string[]
+  source_mode?: string
+  limit?: number
+}
+
+/** POST /breakdown 单桶 */
+export interface ContextBreakdownBucket {
+  source_mode: string
+  entry_count: number
+}
+
+/** GET /strategies 单策略（驱动 ModeContextCard 数据驱动） */
+export interface FinalizeStrategy {
+  session_type: string
+  source_mode: string
+  priority: number
+  ttl_hours: number
+  write_mem0: boolean
+  is_cross_mode_accessible: boolean
+  display_label: string
+  display_color: string
 }
