@@ -40,15 +40,27 @@
 
       <div class="chat-main-header">
         <span class="chat-main-title">{{ currentSession ? currentSession.session_title || typeLabel(sessionType) : '智能助手' }}</span>
-        <a-button
-          class="async-task-btn"
-          type="default"
-          shape="round"
-          size="small"
-          @click="openAsyncTaskManage"
-        >
-          <UnorderedListOutlined /> 我的异步任务
-        </a-button>
+        <a-space>
+          <a-button
+            v-if="currentSession"
+            class="cross-mode-btn"
+            type="default"
+            shape="round"
+            size="small"
+            @click="crossModeVisible = true"
+          >
+            <DatabaseOutlined /> 跨模式上下文
+          </a-button>
+          <a-button
+            class="async-task-btn"
+            type="default"
+            shape="round"
+            size="small"
+            @click="openAsyncTaskManage"
+          >
+            <UnorderedListOutlined /> 我的异步任务
+          </a-button>
+        </a-space>
       </div>
       <ChatContainer
         ref="chatContainerRef"
@@ -148,6 +160,20 @@
       />
       </div>
 
+    <!-- 跨模式上下文弹窗(PR-3 Task 18) -->
+    <a-modal
+      v-model:open="crossModeVisible"
+      title="跨模式上下文记忆"
+      :footer="null"
+      width="1100px"
+      :destroy-on-close="true"
+    >
+      <CrossModeStatsPage
+        v-if="currentSession"
+        :session-id="currentSession.session_id"
+      />
+    </a-modal>
+
     <!-- 会话产物抽屉：汇总当前会话所有归一化产物 -->
     <a-button
       v-if="sessionArtifacts.length"
@@ -177,6 +203,7 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { UnorderedListOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 import { message as antMsg } from 'ant-design-vue'
+import CrossModeStatsPage from '@/views/context/CrossModeStatsPage.vue'
 import { parseMsg, type ParsedMsg, type ChatMessage, type SkillInfo, type SqlBotData, type ThinkingStep, type ResearchSubQuestion, type ResearchReport, type AsyncTaskInfo, type UnifiedStep, type UnifiedArtifact, MODEL_SELECTABLE_TYPES } from './types'
 import {
   getMySessions, createSession, deleteSession as apiDeleteSession,
@@ -199,8 +226,15 @@ import StatsCard from '@/components/common/StatsCard.vue'
 import { getToken } from '@/utils/auth'
 import { getDictionaryItems, type DictionaryItem } from '@/api/dictionary'
 import { submitDeepResearch } from '@/api/agentWorkspace'
-import { getContextStats } from '@/api/aiContext'
+import { getContextStats, getStatsForSessions } from '@/api/aiContext'
 import { useExecutionState } from './renderers/execution/useExecutionState'
+
+// 扩展全局 Window 类型以支持上下文统计
+declare global {
+  interface Window {
+    __sessionContextStats?: Record<number, any>
+  }
+}
 
 // ── 状态 ─────────────────────────────────────────────────────────────────────
 const sessions     = ref<AiChatSession[]>([])
@@ -236,6 +270,7 @@ const msgHasMore  = computed(() => messages.value.length < msgTotal.value)
 
 // 会话产物汇总（归一化 artifact）：供抽屉查看/下载
 const showArtifactDrawer = ref(false)
+const crossModeVisible = ref(false)
 const sessionArtifacts = computed(() => {
   const out: UnifiedArtifact[] = []
   for (const m of messages.value) {
@@ -696,11 +731,41 @@ async function copyText(t: string) { await navigator.clipboard.writeText(t); ant
 function scrollToBottom(smooth = true) { chatContainerRef.value?.scrollToBottom(smooth) }
 function toggleThinking(id: number) { thinkingExpanded[id] = !thinkingExpanded[id] }
 
+// ── 上下文统计管理 ────────────────────────────────────────────────────────
+function updateCurrentSessionStats() {
+  if (!currentSession.value?.session_id) return
+  const stats = window.__sessionContextStats?.[currentSession.value.session_id]
+  if (stats) {
+    currentSession.value.contextStats = {
+      totalTokens: stats.total_tokens,
+      sessionMessages: stats.message_counts?.local ?? 0,
+      vectorMessageCount: stats.vector_store_messages ?? 0,
+      lastCompaction: stats.last_compaction_time
+    }
+  }
+}
+
 // ── 会话管理 ─────────────────────────────────────────────────────────────────
 async function loadSessions() {
   loadingSessions.value = true
-  try { const res = await getMySessions({ page: 1, page_size: 100 }) as any; sessions.value = res?.items ?? [] }
-  finally { loadingSessions.value = false }
+  try { 
+    const res = await getMySessions({ page: 1, page_size: 100 }) as any
+    sessions.value = res?.items ?? []
+    
+    // 加载所有会话的上下文统计信息
+    if (sessions.value.length > 0) {
+      const sessionIds = sessions.value.map(s => s.session_id)
+      const statsRes = await getStatsForSessions(sessionIds) as any
+      window.__sessionContextStats = statsRes.items || {}
+      // 更新当前会话的统计信息显示
+      if (currentSession.value) {
+        updateCurrentSessionStats()
+      }
+    }
+  }
+  finally { 
+    loadingSessions.value = false 
+  }
 }
 async function loadMessages(prepend = false) {
   if (!currentSession.value) return
