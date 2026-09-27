@@ -143,6 +143,16 @@ async def lifespan(app: FastAPI):
         logger.warning(f"初始化 OpenTelemetry 失败 [{_time.monotonic()-_t4:.2f}s]: {e}")
 
     logger.info(f"▶ 启动流程全部完成，总耗时 {_time.monotonic()-_startup_t0:.2f}s")
+    # 启动跨模式上下文自动压缩调度器(Task 7)
+    if settings.ENABLE_CROSS_MODE_RECORDER:
+        try:
+            from app.services.auto_compaction_scheduler import initialize_scheduler
+
+            await initialize_scheduler()
+            logger.info("AutoCompactionScheduler 已启动")
+        except Exception as e:
+            logger.error(f"启动 AutoCompactionScheduler 失败: {e}")
+
     yield
 
     # 关闭审计日志批量写入协程
@@ -152,10 +162,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"关闭审计日志写入协程失败: {e}")
 
+    # 关闭跨模式上下文自动压缩调度器(Task 7)
+    try:
+        from app.services.auto_compaction_scheduler import shutdown_scheduler
+
+        await shutdown_scheduler()
+    except Exception as e:
+        logger.error(f"关闭 AutoCompactionScheduler 失败: {e}")
+
     logger.info(f"{settings.APP_NAME} 关闭")
 
 
-# 创建 FastAPI 应用
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
