@@ -1,6 +1,7 @@
 """知识库切片（chunk）+ 向量（pgvector）。"""
 from sqlalchemy import (
-    BigInteger, Column, Integer, String, Text, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Column, ForeignKey, Index, Integer, String, Text, TIMESTAMP,
+    UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -34,6 +35,23 @@ class KbSegment(Base, TenantMixin):
     class_uris = Column(
         JSONB, nullable=True, comment="映射到的本体类 uri 列表（P4 Task 7 检索过滤用）"
     )
+
+    # ── 类型化切片（spec §10.2，Dify 对齐）────────────────────────────────
+    chunk_type = Column(
+        String(16), nullable=False, server_default='text',
+        comment='切片类型: text|qa|table_row|image|parent|child',
+    )
+    # 父子分段：父块 chunk_type='parent'（embedding 为 NULL），子块指向父块
+    parent_id = Column(
+        BigInteger, ForeignKey('kb_segment.id', ondelete='CASCADE'),
+        nullable=True, index=True, comment='父子分段: 子块 → 父块',
+    )
+    answer = Column(
+        Text, nullable=True,
+        comment='chunk_type=qa: 完整答案（content=问题，仅问题做 embedding）',
+    )
+    keywords = Column(JSONB, nullable=True, comment='手动关键词（全文检索加权）')
+
     created_at = Column(
         TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间"
     )
@@ -42,4 +60,5 @@ class KbSegment(Base, TenantMixin):
         UniqueConstraint(
             "collection", "document_id", "chunk_index", name="uq_kb_segment"
         ),
+        Index("idx_kb_segment_parent", "parent_id"),
     )

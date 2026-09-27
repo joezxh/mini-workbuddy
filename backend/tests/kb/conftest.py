@@ -17,6 +17,9 @@ from sqlalchemy.engine import Engine, make_url, URL
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.database import Base
+# 2026-09-27 统一化：kb_collection.knowledge_id → kms_knowledge.id，
+# 测试 schema 建表时必须一并创建被引用表，否则 create_all 抛 NoReferencedTableError
+from app.models.wiki.wiki_knowledge import WikiKnowledge  # noqa: F401
 from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_segment import KbSegment
 from app.models.kb.kb_ref import KbRef
@@ -44,7 +47,9 @@ def _test_db_url() -> str:
 TEST_DB_URL = _test_db_url()
 IS_POSTGRES = make_url(TEST_DB_URL).get_backend_name() == "postgresql"
 
-KB_TABLES = [KbCollection.__table__, KbSegment.__table__, KbRef.__table__]
+KB_TABLES = [
+    WikiKnowledge.__table__, KbCollection.__table__, KbSegment.__table__, KbRef.__table__
+]
 
 
 def _maintenance_url() -> URL:

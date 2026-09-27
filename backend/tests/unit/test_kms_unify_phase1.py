@@ -48,6 +48,14 @@ def test_knowledge_index_mode_and_pipeline_config_columns():
     assert "pipeline_config" in WikiKnowledge.__table__.c
 
 
+def test_segment_typed_columns_added():
+    """spec §10.2：kb_segment 类型化切片列（DB 侧已有，ORM 必须同步）。"""
+    from app.models.kb.kb_segment import KbSegment
+
+    for col in ("chunk_type", "parent_id", "answer", "keywords"):
+        assert col in KbSegment.__table__.c
+
+
 def test_connector_instance_and_log_models_exist():
     """路由此前 import 这两个类即崩，必须存在且字段齐备。"""
     assert ConnectorInstance.__tablename__ == "kms_connector_instance"
