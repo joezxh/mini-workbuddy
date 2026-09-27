@@ -1,9 +1,14 @@
 # 知识库管理模块统一化设计（三类知识库整合）
 
 > 日期：2026-09-27
-> 状态：已评审 · Phase 1 已实施并通过验收（2026-09-27，见 docs/superpowers/plans/2026-09-27-knowledge-unification-phase1.md）
+> 状态：已评审 · Phase 1/2 已实施并通过验收（2026-09-27，见 docs/superpowers/plans/2026-09-27-knowledge-unification-phase{1,2}.md）；Phase 3 计划就绪待执行（2026-09-27-knowledge-unification-phase3.md）
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
 > 范围：`backend/app/models/{wiki,kb,connectors}`、`backend/app/routers/*`、`frontend/src/views/kms` + `views/admin/knowledge`
+>
+> ⚠️ **RAG 实现方案已按 AgentScope 2.0.8 原生能力重构**：本文件 §10.3 / §10.4 / §10.7 的 RAG 链路以
+> [`2026-09-27-rag-agentscope-native-alignment.md`](./2026-09-27-rag-agentscope-native-alignment.md) 为准。
+> 该文档给出偏差裁剪清单（D1–D19）、`PgVectorStore(VectorStoreBase)` 接口、配置结构命名与 `RAGMiddleware` 集成方式。
+> 本文件保留数据模型、路由与前端设计；RAG 章节已就地标注替换点。
 
 ---
 
@@ -228,7 +233,7 @@ ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS schema_config JSONB;
 P0 六项；§3 模型代码（含 §9.2 WikiArticle OKF 增列）；§4 迁移 SQL + schema.sql 再生；`GET /articles/{id}` 等 3 个版本端点；pytest 全绿。
 
 **Phase 2（下周）— 统一分类 + 前端导航 + OKF 合规 + 文档摄取链路**
-kb_category 全面切换（后端 service/router + 前端树）；`KnowledgeBaseManager.vue` 上线（含 kb_format 创建向导骨架）；KB 子应用认证收口；**§10 文档摄取全链路**：kb_document/kb_segment 加列与新表落地、`POST /documents`（上传→解析→清洗→分块→embedding→落库→状态回写）、`POST /retrieve` 统一检索端点、ParentChildChunker 父子分段、文档列表/分段详情前端；语雀连接器（OAuth2ApiConnector 模式）+ Notion 专属连接器（落地后取消 http 别名）；APScheduler 消费 `sync_interval_min`；OKF 服务层 + 3 个端点 + 前端导出/导入/预览入口（§9.3–9.5）。
+kb_category 全面切换（后端 service/router + 前端树）；`KnowledgeBaseManager.vue` 上线（含 kb_format 创建向导骨架）；KB 子应用认证收口（**并按 D1 裁剪自研 `kb_app` 子应用、HTTP 面迁至 `/api/v1/kb/*`**）；**§10 文档摄取全链路（按对齐文档 §5 / §8 实施）**：kb_document/kb_segment 加列与新表落地、`PgVectorStore(VectorStoreBase)` 重写、`POST /documents`（原生 `Parser.parse → Chunker.chunk → KnowledgeBase.insert_document` → 状态回写）、`POST /retrieve` 统一检索端点、ParentChildChunker 父子分段（`metadata.parent_content`）、文档列表/分段详情前端；**Agent 侧 `RAGMiddleware` 接入（`agent_factory.py` 补 `middlewares` + `Toolkit(tools=await mw.list_tools())`）**；语雀连接器（OAuth2ApiConnector 模式）+ Notion 专属连接器（落地后取消 http 别名）；APScheduler 消费 `sync_interval_min`；OKF 服务层 + 3 个端点 + 前端导出/导入/预览入口（§9.3–9.5）。
 
 **Phase 3（下月）— 性能 + 权限 + 体验 + Dify 形态全量**
 HNSW 索引（`m=16, ef_construction=64`）迁移脚本 + 10 万级 P95 < 100ms 验收；Redis 分类树/知识库列表缓存（TTL 1h，写失效）；RBAC 权限点（Wiki/SQL/ExternalKb）；wiki RAG 分块（QaChunker → 复用 `kb_segment`，单向量降级 fallback）；`/ask` 消 N+1 + SSE 流式；前端去重（`r.data||r` 拦截器下沉、DataSourceSelect 抽取、消灭 window.prompt）；**§10 剩余形态**：table（导入/字段映射/行级 CRUD/db_table 直连定时同步）、qa（批量导入导出/启停）、multimodal（Vision embedding + 图搜）、proxy（外部检索代理转发）、pipeline dry-run（§10.7）。
@@ -309,7 +314,7 @@ GET  /articles/{id}/okf                     # 单篇 concept.md 预览
 | ① 非结构化文档 RAG | type=2, `kb_format='document'` | 补齐文档上传→解析→清洗→分块→embedding→落库全链路（现状后端端点缺失：前端调用的 `/retrieve`、`/documents` 等均 404） |
 | ② 结构化表格 KB | type=2, `kb_format='table'` | 行=知识条目；`schema_config` 定义字段；单列 embedding + 其余列作可过滤元数据 |
 | ③ Q&A 问答 KB | type=2, `kb_format='qa'` | 只 embed 问题、返回完整答案；现有 `QaChunker` 收敛为该形态的录入格式，不再承担检索形态 |
-| ④ 多模态图文 KB | type=2, `kb_format='document'` + `multimodal_enabled=true` | 文本分块照旧；图片独立向量化（同库 `chunk_type='image'` 段），支持文搜图/图搜文 |
+| ④ 多模态图文 KB | type=2, `kb_format='document'` + `multimodal_enabled=true` | 文本分块照旧；图片独立向量化（同库 `chunk_type='image'` 段）。**仅支持文搜图**——AgentScope 2.0.8 `DashScopeEmbeddingModel.supports_multimodal` 恒为 `False`，`KnowledgeBase.search` 静默丢弃 `DataBlock` 查询，**图搜图不支持**（见对齐文档 D9） |
 | ⑤ 外部知识库（代理） | type=3, `kb_format='proxy'` | 检索请求转发外部 API，不落内部库、无文档管理；与连接器拉取形态（`kb_format='connector'`，即 §3.4 现有设计）区分 |
 | ⑥ 知识流水线 | 非容器类型：type=2 的 `pipeline_config` 摄取编排 | 数据源/清洗/分块配置化 + dry-run 单步调试；可视化画布推迟（§10.8） |
 
@@ -334,6 +339,7 @@ pipeline_config = Column(JSONB, nullable=True,
 
 - Service 层校验 `(type, kb_format)` 合法性矩阵；创建后拒绝修改 `kb_format`。
 - `index_mode=economy`：摄取时跳过 embedding（`kb_segment.embedding` 留 NULL），检索仅走 pg_trgm 全文分支；允许后端从 economy 升级到 high_quality（触发批量回填 embedding 的后台任务），降级需确认。
+  - ⚠️ **原生边界（D11）**：AgentScope `KnowledgeBase.insert_document` 强制嵌入、`search` 必先嵌入 query，原生无跳过开关。故 economy 实现为 **`PgVectorStore` 内部索引策略**（insert 写 NULL 向量 + 仅建 trigram 索引，search 忽略向量分支）；若要真正零 embedding 消耗，economy 库的检索必须走**独立关键词检索服务**，不经过 `KnowledgeBase` / `RAGMiddleware`。
 
 **`kb_document`（新表）** — 文档/数据文件实体，支撑文档列表页与处理状态（现状 `kb_segment.document_id` 是裸值，无文档实体）：
 
@@ -408,33 +414,43 @@ schema_config = Column(JSONB, nullable=True,
 
 ### 10.3 摄取与分块（type=2）
 
-- **文档上传（format=document/multimodal）**：`POST /kb/collections/{id}/documents`（multipart）→ 建 `kb_document(pending)` → `job_runner.run_in_background` + 独立 Session 执行：解析（pdf/docx/md/txt/html）→ 清洗（`pipeline_config.clean`）→ 分块 → embedding（`embed_batch_sync` + `dimensions` 校验，复用 `ingest_service`）→ `kb_segment` 落库 → 状态回写 completed/failed（错误写 `error_detail`）。`POST /kb/documents/{id}/reprocess` 删旧 chunk 重灌。
-- **分块器**：`CHUNKER_REGISTRY` 新增 `ParentChildChunker`（父块/子块 token 上限、分隔符可配），与 `ApproxTokenChunker` 并存；选择来自创建向导或 `pipeline_config.chunker`。
+> ⚠️ 本节实现以 [`2026-09-27-rag-agentscope-native-alignment.md`](./2026-09-27-rag-agentscope-native-alignment.md) §5 / §8 为准。
+> 链路固定为原生三步：`Parser.parse()` → `Chunker.chunk()` → `KnowledgeBase.insert_document()`；
+> 自研 `ingest_service.ingest_document` / `embed_batch_sync` 落库路径与 `app/ai/knowledge/rag_pipeline.py` 一并裁剪（D4/D5/D17）。
+
+- **文档上传（format=document/multimodal）**：`POST /kb/collections/{id}/documents`（multipart）→ 建 `kb_document(pending)` → `job_runner.run_in_background` + 独立 Session 执行：`select_parser(mime)` 选原生 `*Parser` → `parser.parse(file=bytes, filename=...)` → 清洗（`pipeline_config.clean`）→ `build_chunker(cfg.chunker).chunk(sections)` → `async with PgVectorStore(...)` 内 `kb.ensure_collection()` + `kb.insert_document(chunks, document_metadata=...)`（嵌入由 `KnowledgeBase` 内部完成，维度由 `embedding_model.dimensions` 决定并与 `kb_collection.dimensions` 强校验）→ 状态回写 completed/failed（错误写 `error_detail`）。`POST /kb/documents/{id}/reprocess` = `kb.delete_document(document_id)` 后重灌。
+- **分块器**：`CHUNKER_REGISTRY` 键必须为原生 `ChunkerBase.chunker_type`（`approx_token` / `qa` / `parent_child`），值为 `ChunkerBase` 子类；`ParentChildChunker` 需遵守原生四条约定（不跨 Section、`DataBlock` 透传、`chunk_index` 连续、`total_chunks` 一致）。**父子关联写入 `Chunk.metadata['parent_content']` 随检索结果直接返回，不依赖 `parent_id` join**（D13）；`parent_id` 列降级为前端树形展示用可选列。
 - **表格导入（format=table）**：
   - 文件入口：`POST /kb/collections/{id}/table-records/import`（CSV/Excel，openpyxl 解析，可参考 `app/ai/tool_manager/document_tools.ExcelProcessor`）；
   - 直连数据库：复用 DataOps `meta_data_source`（mysql/doris/postgresql），information_schema 读列预填 `schema_config` → 定时增量同步（Phase 3，复用 §3.4 sync_interval 思路）；
   - 校验：embedding 字段单选、filterable 字段白名单；每行 → `kb_segment(chunk_type='table_row')`；
   - 行级 CRUD：`GET/PUT/DELETE /kb/segments/{id}` + 批量导入更新。
-- **Q&A（format=qa）**：`POST /kb/collections/{id}/qa-records`（question/answer/tags）；Excel/CSV 批量导入导出；只 embed question；禁用态以 `metadata_.enabled` 过滤。
-- **多模态**：文档解析抽取内嵌图片 / 独立图片上传 → `kb_segment_asset` 存文件 → multimodal embedding（Vision 模型，`embedding_config.py` 扩展 provider 能力）→ 独立 `kb_segment(chunk_type='image', embedding=图向量, content=caption/OCR)`；图搜：image query → 向量 → `search_by_vector`（现成）。
+- **Q&A（format=qa）**：`POST /kb/collections/{id}/qa-records`（question/answer/tags）；Excel/CSV 批量导入导出。**不经过 parser/chunker**，直接构造 `Chunk(content=TextBlock(question), metadata={"chunk_type":"qa","answer":...,"tags":[...]})` 调 `kb.insert_document()`；只 embed question（原生 `Chunk.content` 即被嵌入内容）；禁用态以 `metadata_.enabled` 过滤（D15）。
+- **多模态**：文档解析抽取内嵌图片（原生 `ImageParser` / `WordParser(include_image=True)` / `ExcelParser(include_image=True)`）/ 独立图片上传 → `kb_segment_asset` 存文件 → 多模态嵌入（`DashScopeEmbeddingModel(model="qwen3-vl-embedding"|"multimodal-embedding-v1", dimensions=...)`）→ 独立 `kb_segment(chunk_type='image', embedding=图向量, content=caption/OCR)`。**仅支持文搜图**（文本 query 命中图片 chunk）；图搜图不支持（D9）。
 
 ### 10.4 检索与检索测试
 
+> ⚠️ 检索链路以 [`2026-09-27-rag-agentscope-native-alignment.md`](./2026-09-27-rag-agentscope-native-alignment.md) §5.1 / §8.2 为准。
+> 对外唯一原生检索入口是 `KnowledgeBase.search(queries, top_k, score_threshold)`；
+> 自研 `KbRetrievalService.hybrid_search_by_text` / `search_by_vector` 对外方法裁剪，混合检索下沉为 `PgVectorStore.search()` 内部策略（D3）。
+
 统一端点 `POST /kb/collections/{id}/retrieve`（主应用 get_db + get_current_user，补齐现状 404）：
 
-- 通用参数：`query`、`top_k`、`score_threshold`、`metadata_filters`（键值条件，作用于 `kb_segment.metadata_` JSONB）、可选 rerank。
+- 通用参数：`query`、`top_k`、`score_threshold`、可选 rerank；`metadata_filters` **只能在构造 `KnowledgeBase` 时以 `metadata_filter` 固化**（原生 `search()` 无此参数），临时筛选需为该组合构造临时 `KnowledgeBase`（复用同一 store）（D10）。
+- `score` 统一**越大越相关**（余弦距离取负），`score_threshold` 语义随之固定（D12）。
 - 按 kb_format 分支：
 
 | 形态 | 检索行为 |
 |---|---|
-| document / multimodal | `hybrid_search_by_text`（现成向量+trigram RRF）+ metadata 过滤 + 父子展开（命中子块附带 `parent_content` 返回） |
-| document（index_mode=economy） | 同上但**跳过向量分支**，仅 pg_trgm 全文 + metadata 过滤（RRF 退化为单路） |
-| qa | 向量检索 `chunk_type='qa'`，返回 question + answer + score |
-| table | 向量检索 + filterable 字段过滤，返回整行（content + metadata_） |
-| image（multimodal 图搜） | 文搜图返回 asset + 缩略图 URL；支持图片作为查询输入 |
+| document / multimodal | `PgVectorStore.search()` 内部向量 + pg_trgm 混合（RRF）；命中子块由 `Chunk.metadata['parent_content']` 直接带出父块内容，**不做 join** |
+| document（index_mode=economy） | 跳过向量分支，仅 pg_trgm 全文 + metadata 过滤。**注意**：走 `KnowledgeBase.search` 时 query 仍会被嵌入，真正零 embedding 消耗需改走独立关键词检索服务（D11） |
+| qa | 向量检索 `chunk_type='qa'`，返回 question + answer（`metadata.answer`）+ score |
+| table | 向量检索 + filterable 字段过滤（`metadata_filter`），返回整行（content + metadata_） |
+| image（multimodal，文搜图） | 文本 query 命中图片 chunk，返回 asset + 缩略图 URL；**图片作为查询输入不支持**（D9） |
 | proxy（type=3） | 转发 `kms_external_kb_endpoint`（超时/错误结构化返回），可选本地 rerank，统一引用拼接 |
 
 - 返回统一结构 `{segments[], scores[], citations[]}`，前端检索测试面板直接消费。
+- **Agent 运行时检索不走本端点**，由 `RAGMiddleware` 在 `on_reply`/`on_reasoning` 钩子内调用 `KnowledgeBase.search` 完成（见对齐文档 §7）。
 
 ### 10.5 API 增量汇总（/api/v1，主应用认证）
 
@@ -465,7 +481,7 @@ schema_config = Column(JSONB, nullable=True,
 
 ### 10.7 知识流水线（轻量版）
 
-- `pipeline_config`（kms_knowledge）声明式编排：`clean` 步骤（regex / LLM 清洗 / OCR）、`chunker`（token / parent_child / qa + 参数）、`index` 参数；数据源支持 `upload` / `connector`（复用 §3.4 实例拉取产物 `meta_connector_ingest`）/ `db_table`。
+- `pipeline_config`（kms_knowledge）声明式编排，**键名对齐 AgentScope 原生参数名**（D8）：`parser`（`{type, params}`）、`chunker`（`{type=chunker_type, params}` → 直接喂 `ChunkerBase.Parameters(**params)`）、`embedding`（`{provider, model, dimensions}`）、`index`（`{collection, metadata_filter, index_mode}`）、`rag`（`{mode, top_k, score_threshold, rerank_candidate_k, emit_hint_event, persist_hint}` → 直接喂 `RAGMiddleware.Parameters(**rag)`）；数据源支持 `upload` / `connector`（复用 §3.4 实例拉取产物 `meta_connector_ingest`）/ `db_table`。完整 Schema 见对齐文档 §6.1。
 - 摄取任务按 config 顺序执行；`POST /kb/pipelines/dry-run` 接收样例文件 + config，返回各步中间产物预览（提取文本 → 清洗后 → 分块结果），不落库。
 - 每步错误结构化记录到 `kb_document.error_detail`（含步骤名），可单步重试。
 
@@ -484,8 +500,12 @@ schema_config = Column(JSONB, nullable=True,
 | create_all 不会给已有表加列 | 迁移 SQL 以 ALTER 显式执行，schema.sql 仅作权威参考 |
 | 连接器别名映射语义偏差（notion 分页模型 ≠ http 通用分页） | Phase 1 仅落实例 CRUD + 手动 sync；notion 专属拉取逻辑在 Phase 2 补 `NotionApiConnector` 后取消别名 |
 | 前端双入口（/wiki 与工作台）造成维护分叉 | /wiki 保留为深链，列表逻辑组件化后两处共用 |
-| multimodal Vision embedding 供应商能力不确定（embedding_config 现仅 gpustack/nvidia/dashscope 文本模型） | `multimodal_enabled` 仅在配置了 Vision embedding 模型时可选；无供应商时创建向导禁用该形态并提示 |
-| kb_segment 加列影响既有 agentscope 侧写入路径（kb_app 子应用直写） | 新列均 nullable/server_default，旧路径无需感知；Phase 2 认证收口时一并验证 |
+| multimodal Vision embedding 供应商能力不确定（~~embedding_config 现仅 gpustack/nvidia/dashscope 文本模型~~） | **已由原生能力消解**：`agentscope.embedding.DashScopeEmbeddingModel` 原生支持 `qwen3-vl-embedding` / `qwen2.5-vl-embedding` / `multimodal-embedding-v1` / `tongyi-embedding-vision-*`（含按模型的批量限流）。**但 2.0.8 实测 `supports_multimodal` 恒 `False`** → 图搜图不可用，`multimodal_enabled` 仅开放文搜图并在 UI 明示（D9） |
+| kb_segment 加列影响既有 agentscope 侧写入路径（kb_app 子应用直写） | 自研 `kb_app` 子应用按 D1 裁剪、HTTP 面收口到主应用 `/api/v1/kb/*`；新列均 nullable/server_default 且改为 `Chunk.metadata` 的冗余投影，旧路径无需感知 |
+| `PgVectorStore` 自研实现与原生 `VectorStoreBase` 契约不兼容（无 `document_id` 维度、无 `metadata_filter`、非 async context） | 按 D2 重写为 `VectorStoreBase` 子类，7 个抽象方法 + `__aenter__/__aexit__` 全实现；以 `issubclass` + 抽象方法齐全性测试卡口 |
+| `KnowledgeBase` 与 `VectorStoreBase` 生命周期错配（连接泄漏 / 跨请求共享 store） | `KnowledgeBase` 不持有连接；所有 `kb.*` 调用必须包在 `async with PgVectorStore(...)` 内，FastAPI 依赖与后台任务各持一份，禁止跨任务共享（对齐文档 §9.2） |
+| rerank 每次检索额外一次大模型调用，成本与时延上升 | 复用原生 `rerank_candidate_k`（默认 `2×top_k`，上限 50）；失败自动回退向量顺序不中断；成本纳入 Agent 预算控制（`ReplyBudgetControlMiddleware`） |
+| `pipeline_config` 自定义键名与原生参数名漂移 | `chunker.params` / `rag` 段必须能无转换地传入 `ChunkerBase.Parameters` / `RAGMiddleware.Parameters`；以 pytest 参数化断言卡口（验收标准 7） |
 | 外部代理转发引入 SSRF 面（endpoint_url 用户可控） | 校验 URL 协议白名单（https）、禁内网地址段；转发超时/大小上限结构化限制 |
 | OKF 导出/导入往返丢失（frontmatter 往返、时区/时间戳格式、slug 与文件名冲突） | 序列化统一 ISO 8601 UTC；slug 冲突导入时加 `-2` 后缀并记入报告；往返用 pytest 固定样例做 round-trip 断言 |
 | index_mode economy→high_quality 升级触发全量 embedding 回填，大库耗时长/失败中断 | 升级走 `job_runner` 后台批量任务 + 断点续跑（按 kb_document 粒度记录进度）；失败文档保留 economy 分支可检索，升级报告可重试 |
@@ -498,6 +518,6 @@ schema_config = Column(JSONB, nullable=True,
 4. 统一工作台三种类型均可完成一次「建容器 → 建分类 → 进详情」闭环；类型 C 可完成一次真实 sync 且日志状态真实。
 5. `startup_migrations.py` 幂等重跑后，DB schema 与 ORM 定义一致（`docs/sql/kms_unify_20260927.sql` 与之逐条对应，含回滚脚本）。
 6. OKF 合规（§9）：type=1 知识库导出 zip 可被独立工具按规范 §11 校验通过（每个概念含非空 `type` 的 frontmatter、`index.md`/`log.md` 结构合规）；同一 Bundle 导入后文章内容与分类挂载无损；缺可选字段/未知 type/断链的 Bundle 导入不报错且产出报告。
-7. Dify 对齐功能（§10，Phase 2 部分）：format=document 知识库完成「上传 PDF/MD → 状态流转 → chunk 列表 → 编辑单段 → 检索测试返回 score」闭环；父子分段召回子块时返回父块内容；`kb_format` 创建后修改被后端拒绝；index_mode=economy 知识库检索仅命中关键词分支且摄取零 embedding 消耗，升级 high_quality 后向量分支恢复。
-8. Dify 对齐功能（§10，Phase 3 部分）：format=table 完成「Excel 导入 → 字段映射（embedding 单选/filterable）→ 行级编辑 → 元数据过滤检索」；format=qa 完成批量导入导出且检索返回完整答案；multimodal 完成图搜图与文搜图；proxy 完成一次真实外部检索转发与引用拼接；pipeline dry-run 返回各步中间产物且不落库。
+7. Dify 对齐功能（§10，Phase 2 部分）：format=document 知识库完成「上传 PDF/MD → 状态流转 → chunk 列表 → 编辑单段 → 检索测试返回 score」闭环；父子分段召回子块时由 `Chunk.metadata['parent_content']` 返回父块内容（无需 join）；`kb_format` 创建后修改被后端拒绝；index_mode=economy 知识库检索仅命中关键词分支（经独立关键词检索服务时零 embedding 消耗），升级 high_quality 后向量分支恢复。**RAG 链路额外验收见对齐文档 §11（原生符号白名单、`VectorStoreBase` 契约、`RAGMiddleware` 装配、`pipeline_config` 无转换传参）。**
+8. Dify 对齐功能（§10，Phase 3 部分）：format=table 完成「Excel 导入 → 字段映射（embedding 单选/filterable）→ 行级编辑 → 元数据过滤检索」；format=qa 完成批量导入导出且检索返回完整答案；multimodal 完成**文搜图**（图搜图已按 D9 裁剪）；proxy 完成一次真实外部检索转发与引用拼接；pipeline dry-run 返回各步中间产物且不落库。
 9. Phase 2 新表（kb_document / kb_segment_asset / kms_external_kb_endpoint）由模型 create_all 建表且与 ORM 定义一致；存量 kb_segment 行 chunk_type 默认 'text'、既有检索行为回归无差异。
