@@ -38,6 +38,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.database import Base
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+# 2026-09-27 统一化：kms_article.knowledge_id → kms_knowledge.id，
+# 建表时必须一并创建被引用表，否则 create_all 抛 NoReferencedTableError
+from app.models.wiki.wiki_knowledge import WikiKnowledge  # noqa: F401
 from app.models.wiki.wiki_article import WikiArticle
 
 TENANT_A = 100
@@ -108,6 +111,7 @@ def _tables() -> List:
 
     return [
         SysUser.__table__,
+        WikiKnowledge.__table__,
         WikiArticle.__table__,
         Ontology.__table__,
         OntologyClass.__table__,
