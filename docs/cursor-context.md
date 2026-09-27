@@ -7,18 +7,22 @@
 
 ## 1. 任务一句话描述
 
-为 MinWorkBuddy 实现 **9 种会话模式** (`general / react / thinking / deep_research / skill / agent / team / scheduled / shared`) 的 **L2 短期记忆 + 本地私有化 Mem0 永久记忆** 双层基础设施,达成 **跨模式 + 跨会话** 的上下文复用能力。
+为 MinWorkBuddy 实现 **9 种会话模式** (`general / react / thinking / deep_research / skill / agent / team / data / scheduled`) 的 **L2 短期记忆 + 本地私有化 Mem0 永久记忆** 双层基础设施,达成 **跨模式 + 跨会话** 的上下文复用能力。
+
+> **v2.0 勘误**:9 模式权威清单以工程前端 fallback 映射 + 字典表为准,含 **`data`(SQLBot)**;`shared` 仅为 `source_mode` 存储层兜底标记,**不是会话模式**。v1.x 文档曾把 `data` 误写为 `shared`,已修正。
 
 | 维度 | 内容 |
 |------|------|
 | 项目 | MinWorkBuddy |
-| 模式数 | 9 (general/react/thinking/deep_research/skill/agent/team/scheduled/shared) |
+| 模式数 | 9 会话模式 (general/react/thinking/deep_research/skill/agent/team/data/scheduled) + shared 存储兜底 |
 | 记忆层 | L2 短期 (`AIChatContextStorage` JSONB) + Mem0 永久 (本地私有化部署) |
 | 跨模式可读 | 默认 False;`deep_research / agent / team` 三模式 True |
-| 集成点 | `sse_bridge.py:finalize_session`(SSE 会话收尾点零侵入接入) |
+| 集成点 | **v2.0 实测落点**:`routers/ai/ai_agent.py /chat/stream` 收尾(`finalize_chat_stream` + `StreamAnswerCollector`,覆盖 7 种 AgentScope 模式 + data 回退)+ `agent_scheduled_task_service._trigger_job`(scheduled 仅 L2) |
+| 会话内切换 | `PUT /ai/assistant/sessions/{id}` 支持 `session_type`(∈ `SESSION_MODES`),前端 watch 持久化 |
+| 读取侧注入 | `build_cross_mode_brief` → 同会话 L2 摘要拼入 sys_prompt |
 | 入口页 | `CrossModeStatsPage.vue`(`AssistantPanel.vue` 挂载入口按钮) |
 | 子代理 PR | 3 个 (后端基建 / API / 前端) |
-| 总 commit | 18 (实施) + 3 (设计/计划) = 21 commits |
+| 总 commit | 18 (v1.x 实施) + 3 (设计/计划) + v2.0 整合批次 |
 
 ---
 
@@ -224,7 +228,22 @@ ModeContextCard.vue  (单一组件,9 次复用)
 
 ---
 
-## 9. 三个子代理执行记录
+## 9. v2.0 整合审查与补全（2026-09-27）
+
+> 逐符号审查发现 v1.x 实施存在**集成闭环断裂**:全工程无任何生产代码调用 `record_finalize`(设计声称的 `sse_bridge.finalize_session` 并不存在)。v2.0 已补全,详见 spec §13/§14。
+
+| # | v1.x 缺口 | v2.0 修复 |
+|---|---|---|
+| G1 | record_finalize 无调用点(死代码) | `/chat/stream` 收尾 `finalize_chat_stream` + `StreamAnswerCollector` 收集答案 |
+| G2 | 缺 `data`(SQLBot) 模式 | policies + STRATEGY_TABLE 补 data(48h TTL,写 Mem0);AgentFactory 支持 data 回退 |
+| G3 | models/ai/__init__.py 空未注册 | 注册 AIChatContextStorage + AISessionFinalizeLog |
+| G4 | scheduled 未接入 | `_trigger_job` 提交成功后记 L2(不写 Mem0) |
+| G5 | 无会话内切换 | PUT session 支持 session_type(SESSION_MODES 校验)+ 前端 watch 持久化 |
+| G6 | 读取侧未闭环 | `build_cross_mode_brief` 注入 sys_prompt |
+| G7 | create_agent("data") ValueError | data → 通用 Agent(SQLBot 工具经 AgentConfig 注入) |
+| G8 | 测试缺口 | data 策略 / StreamAnswerCollector / finalize_chat_stream 三组单测;全量回归 187 passed(17 失败均为 v1.x 前遗留:context_manager 5、migration 3、mem0_service 4、hitl 3、skill_event_handler 2) |
+
+## 9b. 三个子代理执行记录(v1.x 历史)
 
 | PR | Subagent ID | 输出路径 | 关键产出 |
 |----|-------------|---------|---------|

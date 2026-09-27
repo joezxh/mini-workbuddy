@@ -1,6 +1,6 @@
 # MinWorkBuddy 9 种会话模式 × 跨模式上下文记忆设计方案
 
-> **版本**: v1.0
+> **版本**: v2.0（整合审查版）
 > **日期**: 2026-09-27
 > **状态**: ✅ Approved (brainstorming 已确认 6 个澄清问题 + 7 节设计)
 > **作者**: Cursor Architecture Team
@@ -507,3 +507,94 @@ backend/tests/integration/
 
 **文档结束**
 **下一步**:invoke `writing-plans` skill 生成详细实施计划
+
+---
+
+# v2.0 整合审查与优化（2026-09-27）
+
+> v1.0/v1.1 设计经 Cursor 实施后遗留**集成闭环断裂**。v2.0 基于"逐文件逐符号"代码审查结论，整合修复并补齐功能缺口。
+
+## 13. 审查结论：v1.x 实施产物 vs 真实状态
+
+### 13.1 已落地（保留，不重写）
+
+| 层 | 产物 | 状态 |
+|---|---|---|
+| 策略 | `app/core/context_policies.py`（PRIORITY_MAP/TTL/PROTECTED/MEM0 白名单） | ✅ |
+| 记录器 | `app/ai/services/cross_mode_recorder.py`（STRATEGY_TABLE + flag 守护 + 审计） | ✅ |
+| ORM | `app/models/ai/ai_chat_context_storage.py`（4 新字段）+ `ai_session_finalize_log.py` | ✅ |
+| 持久化 | `ContextManager.persist_l2_context / sync_to_long_term / get_context_with_mode_filter`（db 入参注入式，失败静默） | ✅ |
+| 迁移 | `alembic/versions/2026_09_27_0000_add_cross_mode_context_fields.py` | ✅ |
+| API | `ai_context.py` /entries /breakdown /strategies | ✅ |
+| 配置 | `config/_cross_mode_recorder.py`（ENABLE_CROSS_MODE_RECORDER） | ✅ |
+| 前端 | Pinia `stores/contexts.ts`、`useCrossModeStats`、ModeContextCard / ContextHistoryList / CompactButton / ContextStatsDisplay / ManualOverrideModal、`views/context/CrossModeStatsPage.vue`、AssistantPanel 按钮 | ✅ |
+
+### 13.2 v1.x 真实缺口（v2.0 修复对象）
+
+| # | 缺口 | 严重度 | 修复 |
+|---|---|---|---|
+| G1 | **`record_finalize` 无任何生产调用点**：设计声称的 `sse_bridge.finalize_session` 不存在（SSEBridge 是无状态转换器、不持 db），9 模式 L2/Mem0 写入链为死代码 | 🔴 阻断 | 收尾点落在唯一统一入口 `routers/ai/ai_agent.py /chat/stream` 的 `event_generator`（覆盖 7 种 AgentScope 模式）+ `StreamAnswerCollector` 从 SSE 事件流收集答案 |
+| G2 | **`data`(SQLBot) 模式缺失**：实际 UI 9 模式含 `data`（前端 fallback 映射 + 字典表），v1.x 用 `shared` 顶替了它；`session_type="data"` 被跳过 | 🔴 功能缺失 | policies + STRATEGY_TABLE 补 `data` 策略（TTL 48h、写 Mem0、跨模式隔离）；`shared` 降级为存储层兜底标记（非会话模式） |
+| G3 | `models/ai/__init__.py` 为空，两个新模型未注册（违背项目"新增 Model 必须注册"规范，Base.metadata 不拾取） | 🟠 | 注册 AIChatContextStorage + AISessionFinalizeLog |
+| G4 | scheduled 后台任务未接入：`_trigger_job` 仅提交 async_task | 🟠 | `_load_spec` 补 tenant_id/prompt，触发成功后调 recorder（仅 L2，write_mem0=False） |
+| G5 | 会话内切换模式缺失：`UpdateSessionRequest` 仅 title，切模式=新建会话，上下文丢失 | 🟠 | `PUT /ai/session/{id}` 支持 `session_type`（校验 ∈ SESSION_MODES），同会话切模式、消息与 L2 天然延续 |
+| G6 | 读取侧未闭环：L2 跨模式条目从不注入 prompt，「切换不丢」只有写半边 | 🟠 | `build_cross_mode_brief`：/chat/stream 建 agent 前读同会话 L2 摘要拼入 sys_prompt（flag 守护、静默降级） |
+| G7 | `AgentFactory.create_agent("data")` → ValueError | 🟡 | data 会话回退 general Agent（工具由 AgentConfig.tools 提供） |
+| G8 | 测试缺口：无 data 策略/collector/finalize 单测 | 🟡 | 补 3 组单测并全量回归 |
+
+### 13.3 勘误（v1.x 文档错误声明）
+
+- `cursor-context.md` 第 1 节 9 模式列表把 `data` 换成了 `shared`：**以工程为准，9 种会话模式 = general / react / thinking / deep_research / skill / agent / team / data / scheduled**；`shared` 仅作 `source_mode` 存储默认值与策略兜底。
+- v1.x 声称「SSEBridge.finalize_session 统一收尾点」：SSEBridge 无 db、无该方法；真实收尾点见 G1。
+
+## 14. v2.0 修复方案设计
+
+### 14.1 数据流（修复后）
+
+```
+/chat/stream (ai_agent.py event_generator)
+  ├─ StreamAnswerCollector.feed(sse_event)     ← 累积 text_delta / dict answer
+  ├─ (agent 创建前) build_cross_mode_brief → sys_prompt 注入   [G6]
+  └─ stream 结束 → finalize_chat_stream(db, …)                [G1]
+        └─ CrossModeContextRecorder.record_finalize
+              ├─ STRATEGY_TABLE[session_type]  (9 会话模式 + shared 兜底)
+              ├─ persist_l2_context → ai_context_storage
+              ├─ sync_to_long_term → 本地 Mem0 (scheduled/shared/data 之外按白名单)
+              └─ _write_audit → ai_session_finalize_log
+
+agent_scheduled_task_service._trigger_job                                    [G4]
+  └─ submit_task 成功 → record_finalize(session_type="scheduled", 仅 L2)
+
+PUT /ai/session/{id} {session_type?}                                          [G5]
+  └─ 校验 ∈ SESSION_MODES → 同会话切模式（L2 按 source_mode 跨模式延续）
+```
+
+### 14.2 `data` 策略（补入 STRATEGY_TABLE）
+
+priority=2 / ttl=48h / write_mem0=True / cross_mode_accessible=False / tags=["data", "datasource_{id}"]；payload: user_input、sql、record_count、datasource_id、chart_type；summary: 「SQL 查询：{sql}，返回 {n} 条记录」。
+
+### 14.3 StreamAnswerCollector（答案收集，零依赖）
+
+纯函数式解析 SSE 字符串（`event: X\ndata: {json}\n\n`）：
+- `text_delta` → 追加 delta
+- dict 事件（ResearchAgent/SkillAgent/TeamAgent）data 中 `answer/content/result/final_report/final_answer` 非空 → 覆盖 final
+- `tool_call_start` → 计数
+- 任何解析异常静默跳过（绝不影响 SSE 转发）
+
+finalize 时 payload 统一填 `answer / final_answer / final_report` 三键，由各策略 extract_summary 各取所需。
+
+### 14.4 会话内切换（G5）
+
+- `context_policies.SESSION_MODES: List[str]`（9 种）成为唯一权威校验源
+- `PUT /ai/session/{id}`：body 可选 `session_type`；非法值 400；同会话保留消息 + L2（L2 条目按 `source_mode` 区分来源，读取时 `allow_cross_mode` 控制可见性）
+- 前端 `aiSession.updateSession` 类型放宽 + AssistantPanel 已有会话切模式改调 update
+
+### 14.5 失败语义（继承 v1.1，不变）
+
+persist 失败 warning / Mem0 失败 error / 审计失败 warning / brief 查询失败空串；全程不阻断 SSE 与任务提交。Feature flag `ENABLE_CROSS_MODE_RECORDER` 双重守护（recorder 入口 + brief 入口）。
+
+### 14.6 修订历史追加
+
+| 版本 | 日期 | 修订内容 |
+|------|------|----------|
+| v2.0 | 2026-09-27 | 整合审查：修 G1~G8 缺口，勘误 9 模式清单，收尾点重定位至 /chat/stream + scheduled job + session PUT |
