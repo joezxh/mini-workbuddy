@@ -118,3 +118,32 @@ def test_kb_router_has_expected_paths():
     assert "/api/v1/kb/collections/{collection}/retrieve" in paths
     assert "/api/v1/kb/supported_content_types" in paths
     assert "/api/v1/kb/chunkers" in paths
+
+
+# ── T6: KB 子应用认证收口 ────────────────────────────────────────────────
+
+def test_kb_subapp_requires_auth():
+    from fastapi.testclient import TestClient
+
+    from app.services.kb.kb_app import kb_app
+
+    client = TestClient(kb_app)
+    # 写面（kb_ref CRUD）必须 401，废除裸 X-Tenant-Id 信任
+    assert client.post("/kb", json={"name": "x"}).status_code == 401
+    assert client.delete("/kb/whatever").status_code == 401
+    # 健康检查保持开放（存活探针）
+    assert client.get("/health").status_code == 200
+
+
+def test_kb_subapp_service_token_accepted(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.services.kb import kb_app as kb_app_mod
+
+    monkeypatch.setattr(kb_app_mod, "kb_service_token", lambda: "test-token")
+    client = TestClient(kb_app_mod.kb_app)
+    ok = client.post(
+        "/kb", json={"name": "x"},
+        headers={"X-KB-Service-Token": "test-token"},
+    )
+    assert ok.status_code != 401  # 凭证通过（后续可能 4xx 业务错误，但不 401）

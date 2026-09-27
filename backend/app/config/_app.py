@@ -128,6 +128,9 @@ class AppSettings(BaseModel):
     # Magic API
     MAGIC_API_URL: str = ""
 
+    # KB 子应用服务间调用凭证（spec 知识库统一化 T6）：空=禁用该通道（fail-closed）
+    KB_SERVICE_TOKEN: str = ""
+
     # DataOps 数据源凭据加密密钥（Fernet，32 字节 url-safe base64）
     DATAOPS_ENCRYPTION_KEY: str = ""
 

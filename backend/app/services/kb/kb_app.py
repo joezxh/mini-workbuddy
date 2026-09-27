@@ -22,7 +22,7 @@ from __future__ import annotations
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from loguru import logger
 
 from agentscope.rag import ApproxTokenChunker
@@ -46,10 +46,34 @@ async def _lifespan(app: FastAPI):
     logger.info("[KB-RAG] 子应用 lifespan 关闭")
 
 
+def kb_service_token() -> str:
+    """服务化部署间调用凭证（spec T6）。空值=通道禁用（fail-closed）。"""
+    from app.config import settings
+
+    return getattr(settings, "KB_SERVICE_TOKEN", "") or ""
+
+
+async def require_service_auth(request: Request) -> None:
+    """子应用写面认证收口（spec §5 T6）：废除裸 ``X-Tenant-Id`` 信任。
+
+    接受任一凭证，否则 401：
+    1. ``Authorization: Bearer <JWT>``（语义校验由主应用依赖链完成，此处做门禁）；
+    2. ``X-KB-Service-Token`` == ``settings.KB_SERVICE_TOKEN``（非空才启用）。
+    """
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer ") and len(auth) > 7:
+        return
+    service_token = kb_service_token()
+    if service_token and request.headers.get("x-kb-service-token", "") == service_token:
+        return
+    raise HTTPException(status_code=401, detail="kb_subapp_unauthorized")
+
+
 kb_app = FastAPI(title="AgentScope KB RAG Service", lifespan=_lifespan)
 
-# kb_ref 知识库登记 REST 端点：/kb（创建/列出/获取/删除），强制 X-Tenant-Id 隔离
-kb_app.include_router(kb_router)
+# kb_ref 知识库登记 REST 端点：/kb（创建/列出/获取/删除）
+# 认证收口（spec T6）：写面强制 Bearer JWT 或 X-KB-Service-Token，不再裸信任 X-Tenant-Id
+kb_app.include_router(kb_router, dependencies=[Depends(require_service_auth)])
 
 # 切片器注册表（P1 Task 10 + spec §10.3）：索引管线按 chunker_type 选择切片策略
 CHUNKER_REGISTRY = {
