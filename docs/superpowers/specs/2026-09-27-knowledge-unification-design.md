@@ -172,7 +172,7 @@ ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS keywords JSONB;
 ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS schema_config JSONB;
 ```
 
-- `schema.sql` 按文件末尾命令再生；`kms_article.category_id` FK 补充放在 schema 再生后核对（create_all 不改已有表，需 ALTER 手动补）。
+- 本项目**无 schema.sql / Alembic**（设计早期引用了其他项目的惯例，实测不存在）：迁移权威 = `backend/app/db/startup_migrations.py`（启动期幂等执行）+ `docs/sql/kms_unify_20260927.sql`（不重启服务的手动兜底 / DBA 复核）；§10.2 三张新表（kb_document / kb_segment_asset / kms_external_kb_endpoint）由 Phase 2 模型落地时 `create_all` 建表，Phase 1 不产出其 DDL。
 - 回滚脚本：反向 RENAME + DROP COLUMN（附同文件注释区）。
 
 ## 5. API 路由规划（统一前缀 `/api/v1`，全部走主应用 get_db + get_current_user）
@@ -496,8 +496,8 @@ schema_config = Column(JSONB, nullable=True,
 2. 三份报告中全部 🔴 P0 项在 Phase 1 结束后复验通过（启用对应前端组件不再报 routerMissing / 编译失败）。
 3. 迁移 SQL 在 staging 库执行后：存量 wiki 知识库 type=1、分类树完整、kb_category.kb_type 回填正确。
 4. 统一工作台三种类型均可完成一次「建容器 → 建分类 → 进详情」闭环；类型 C 可完成一次真实 sync 且日志状态真实。
-5. `schema.sql` 再生后与 ORM 定义一致。
+5. `startup_migrations.py` 幂等重跑后，DB schema 与 ORM 定义一致（`docs/sql/kms_unify_20260927.sql` 与之逐条对应，含回滚脚本）。
 6. OKF 合规（§9）：type=1 知识库导出 zip 可被独立工具按规范 §11 校验通过（每个概念含非空 `type` 的 frontmatter、`index.md`/`log.md` 结构合规）；同一 Bundle 导入后文章内容与分类挂载无损；缺可选字段/未知 type/断链的 Bundle 导入不报错且产出报告。
 7. Dify 对齐功能（§10，Phase 2 部分）：format=document 知识库完成「上传 PDF/MD → 状态流转 → chunk 列表 → 编辑单段 → 检索测试返回 score」闭环；父子分段召回子块时返回父块内容；`kb_format` 创建后修改被后端拒绝；index_mode=economy 知识库检索仅命中关键词分支且摄取零 embedding 消耗，升级 high_quality 后向量分支恢复。
 8. Dify 对齐功能（§10，Phase 3 部分）：format=table 完成「Excel 导入 → 字段映射（embedding 单选/filterable）→ 行级编辑 → 元数据过滤检索」；format=qa 完成批量导入导出且检索返回完整答案；multimodal 完成图搜图与文搜图；proxy 完成一次真实外部检索转发与引用拼接；pipeline dry-run 返回各步中间产物且不落库。
-9. 新表（kb_document / kb_segment_asset / kms_external_kb_endpoint）`schema.sql` 再生后与 ORM 定义一致；存量 kb_segment 行 chunk_type 默认 'text'、既有检索行为回归无差异。
+9. Phase 2 新表（kb_document / kb_segment_asset / kms_external_kb_endpoint）由模型 create_all 建表且与 ORM 定义一致；存量 kb_segment 行 chunk_type 默认 'text'、既有检索行为回归无差异。
