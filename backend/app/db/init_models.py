@@ -51,7 +51,8 @@ from app.models.ai.ai_workspace import AiWorkspace                              
 # --- LLM-wiki ---
 from app.models.wiki.wiki_article import WikiArticle                           # noqa: F401
 from app.models.wiki.wiki_article_version import WikiArticleVersion             # noqa: F401
-from app.models.wiki.wiki_category import WikiCategory                         # noqa: F401
+from app.models.wiki.wiki_knowledge import WikiKnowledge, KnowledgeType         # noqa: F401
+from app.models.wiki.wiki_search_log import WikiSearchLog                       # noqa: F401
 
 # --- 本体 (ontology_) ---
 from app.models.ontology.ontology import (                                     # noqa: F401
@@ -65,6 +66,9 @@ from app.models.ontology.model import (                                        #
 from app.models.kb.kb_collection import KbCollection                           # noqa: F401
 from app.models.kb.kb_segment import KbSegment                                # noqa: F401
 from app.models.kb.kb_ref import KbRef                                         # noqa: F401
+from app.models.kb.kb_category import KbCategory                               # noqa: F401
+from app.models.kb.kb_document import KbDocument                               # noqa: F401
+from app.models.kb.kb_segment_asset import KbSegmentAsset                      # noqa: F401
 # --- DataOps (dataops_) ---
 from app.models.dataops.data_source import DataSource                           # noqa: F401
 from app.models.dataops.meta import (                                           # noqa: F401
@@ -77,8 +81,9 @@ from app.models.dataops.write_request import DataWriteRequest                   
 from app.models.dataops.meta_relation import MetaRelation                         # noqa: F401
 # --- 连接器落库 (P3 Task 7) ---
 from app.models.connectors.connector_record import (                              # noqa: F401
-    ConnectorIngest, ConnectorSyncState,
+    ConnectorIngest, ConnectorSyncState, ConnectorInstance, ConnectorSyncLog,
 )
+from app.models.connectors.external_kb_endpoint import ExternalKbEndpoint        # noqa: F401
 # --- 工作流管理 (workflow_) ---
 from app.models.workflow.workflow_flow import WorkflowFlow               # noqa: F401
 from app.models.workflow.workflow_execution_log import WorkflowExecutionLog  # noqa: F401

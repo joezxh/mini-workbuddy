@@ -1,5 +1,5 @@
 """知识库 collection 元数据（AgentScope RAG Service 的 collection 映射）。"""
-from sqlalchemy import BigInteger, Column, Integer, String, TIMESTAMP, func
+from sqlalchemy import BigInteger, Column, ForeignKey, Integer, JSON, String, TIMESTAMP, func
 
 from app.db.database import Base
 from app.models.tenant_mixin import TenantMixin
@@ -18,6 +18,15 @@ class KbCollection(Base, TenantMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     name = Column(String(128), nullable=False, unique=True, comment="集合名(逻辑名)")
     dimensions = Column(Integer, nullable=False, comment="向量维度")
+    knowledge_id = Column(
+        BigInteger,
+        ForeignKey("kms_knowledge.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="所属统一知识库容器（type=2）",
+    )
+    # 表格 KB 字段定义（spec §10.2）：[{name,type,enabled,embedding(单选),filterable}]
+    schema_config = Column(JSON, nullable=True, comment="表格 KB 字段定义")
     created_at = Column(
         TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间"
     )

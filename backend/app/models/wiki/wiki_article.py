@@ -58,6 +58,20 @@ class WikiArticle(Base, TenantMixin):
     view_count = Column(Integer, nullable=False, server_default='0', comment='浏览次数')
     version = Column(Integer, nullable=False, server_default='1', comment='当前版本号')
 
+    # ── OKF 合规层（spec §9.2，Google Open Knowledge Format v0.2）──────────
+    # 全部 nullable + 向后兼容；status 不改列，导出时映射 0→draft / 1→stable / -1→deprecated
+    okf_type = Column(
+        String(64), nullable=True,
+        comment='OKF type: concept|howto|reference|decision|metric 或自定义（缺省导出为 concept）',
+    )
+    resource = Column(String(500), nullable=True, comment='OKF resource: 底层资产 URI')
+    sources = Column(
+        JSONB, nullable=True,
+        comment='OKF §5.1 溯源家族: [{resource(必填), id, title, author, usage_count, last_modified}]',
+    )
+    verified = Column(JSONB, nullable=True, comment='OKF §5.2 验证事件列表: [{by, at}]')
+    stale_after = Column(TIMESTAMP, nullable=True, comment='OKF §5.5 绝对过期时间点')
+
     # 审计
     creator_id = Column(BigInteger, nullable=True, comment='创建者 ID')
     updater_id = Column(BigInteger, nullable=True, comment='最后编辑者 ID')

@@ -6,6 +6,7 @@
 - 编辑审计 (editor + change_note)
 """
 from sqlalchemy import Column, BigInteger, String, Text, Integer, TIMESTAMP, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from app.db.database import Base
 from app.models.tenant_mixin import TenantMixin
@@ -28,6 +29,13 @@ class WikiArticleVersion(Base, TenantMixin):
     content = Column(Text, nullable=True, comment='版本正文快照 (Markdown)')
     slug = Column(String(200), nullable=True, comment='版本 slug 快照')
     change_note = Column(String(500), nullable=True, comment='编辑说明')
+    # 2026-09-27：version_service / article_service 写入该字段，缺失会导致建改文章 TypeError
+    operation_type = Column(
+        String(32), nullable=True, comment='操作类型: create|edit|rollback',
+    )
+    # 回滚时需要把摘要与本体标注一并还原（此前缺失 → 回滚 AttributeError）
+    summary = Column(String(1000), nullable=True, comment='版本摘要快照')
+    owl_class_uris = Column(JSONB, nullable=True, comment='版本 OWL 类 URI 快照')
 
     # 审计
     editor_id = Column(BigInteger, nullable=True, comment='编辑者 ID')
