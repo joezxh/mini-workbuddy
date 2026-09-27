@@ -155,25 +155,33 @@ ROUTER_SPECS: List[RouterSpec] = [
     # --- 26. DataOps（router 自带完整 prefix /api/v1/dataops，故 prefix 留空）---
     RouterSpec("app.routers.dataops.dataops", tags=["DataOps 数据源"]),
 
+    # --- 26.1 外部知识库连接器（自带完整 prefix /api/v1/connectors）---
+    # 2026-09-27 统一化：此前未注册（启用即 import 崩溃），现补齐实例/日志模型后上线
+    RouterSpec("app.routers.connectors.connector", tags=["外部知识库连接器"]),
+
+    # --- 26.2 本体治理（自带完整 prefix /api/v1/ontology）---
+    RouterSpec("app.routers.ontology.ontology", tags=["本体治理"]),
+
+    # --- 26.3 Wiki 管理后台（自带 /wiki/admin，叠加 /api/v1）---
+    RouterSpec("app.routers.wiki.wiki_admin", prefix=API_V1_PREFIX, tags=["Wiki 管理后台"]),
+
     # --- 27. 通知 ---
     RouterSpec("app.routers.sys.sys_notification", prefix=f"{API_V1_PREFIX}/admin", tags=["通知管理"]),
 
-    # --- 未启用 ---
-    # wiki 模块当前未完成（routers/wiki/__init__.py 为空，未导出），
-    # 重构前即未注册，故保持 enabled=False 以维持现状；
-    # 其 router 自带完整 prefix（/wiki、/wiki/owl），启用时 prefix 留空即可。
+    # --- 28. LLM-wiki（router 自带 /wiki、/wiki/owl 相对前缀，此处叠加 /api/v1）---
     RouterSpec(
         "app.routers.wiki.wiki",
+        prefix=API_V1_PREFIX,
         tags=["LLM-wiki"],
-        enabled=False,
-        note="未启用：模块未完成，__init__.py 未导出",
     ),
     RouterSpec(
         "app.routers.wiki.wiki_owl",
+        prefix=API_V1_PREFIX,
         tags=["Wiki OWL 本体"],
-        enabled=False,
-        note="未启用：模块未完成，__init__.py 未导出",
     ),
+
+    # --- 28.1 通用知识库认证路由（spec §10.5；子应用仅内核间调用）---
+    RouterSpec("app.routers.kb.kb", tags=["通用知识库"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),

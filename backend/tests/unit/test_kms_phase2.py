@@ -99,3 +99,22 @@ def test_parent_child_chunker_contract():
     assert len({c.total_chunks for c in chunks}) == 1                    # total_chunks 一致
     assert all("parent_content" in (c.metadata or {}) for c in chunks)
     assert all(c.metadata.get("parent_index") == 0 for c in chunks)
+
+
+# ── T5: /api/v1/kb 认证路由 ──────────────────────────────────────────────
+
+def test_kb_router_registered():
+    from app.core.router_registry import ROUTER_SPECS
+
+    assert any(s.module == "app.routers.kb.kb" and s.enabled for s in ROUTER_SPECS)
+
+
+def test_kb_router_has_expected_paths():
+    from app.routers.kb.kb import router
+
+    paths = {getattr(r, "path", "") for r in router.routes}
+    assert "/api/v1/kb/knowledges/{kid}/documents" in paths
+    assert "/api/v1/kb/documents/status" in paths
+    assert "/api/v1/kb/collections/{collection}/retrieve" in paths
+    assert "/api/v1/kb/supported_content_types" in paths
+    assert "/api/v1/kb/chunkers" in paths
