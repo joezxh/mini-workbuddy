@@ -17,6 +17,8 @@ from app.models.sys.sys_infra_file import SysInfraFile, SysInfraFileContent     
 # --- AI 会话 / Agent (ai_ / agent_) ---
 from app.models.ai.ai_chat import AiChatSession, AiChatMessage               # noqa: F401
 from app.models.ai.ai_api_key import AiApiKey, AiChatModel                    # noqa: F401
+from app.models.ai.ai_chat_context_storage import AIChatContextStorage        # noqa: F401
+from app.models.ai.ai_session_finalize_log import AISessionFinalizeLog        # noqa: F401
 from app.models.agent.agent_config import AgentConfig                           # noqa: F401
 from app.models.agent.agent_team import AgentTeam, AgentTeamMember, AgentTeamEdge  # noqa: F401
 from app.models.agent.agent_team_run import AgentTeamRun                        # noqa: F401
