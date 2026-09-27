@@ -410,7 +410,7 @@ class ContextManager:
     
     def _retrieve_mem0_memories(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Retrieve relevant memories from Mem0 long-term storage."""
-        if not self._user_id:
+        if not self.user_id:
             logger.warning("Cannot retrieve Mem0 memories without user_id")
             return []
         
@@ -514,7 +514,7 @@ class ContextManager:
         key: str,
         strategy: str = "priority_eviction",
         target_tokens: int = 8000,
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
         Compact isolated context using specified strategy.
         
@@ -522,19 +522,31 @@ class ContextManager:
         - priority_eviction: Remove lowest priority entries first
         - ttl_expiration: Remove expired entries immediately
         - access_based: Keep only recently accessed entries
+        - summary_and_keep_latest: Summarize old, keep recent N
         
         Args:
             mode: Target mode
             key: Target key
             strategy: Compaction strategy to use
             target_tokens: Desired token count after compaction
+            
+        Returns:
+            Compaction result metadata dict
         """
         try:
             mode_key = (mode, key)
             entries = self._isolated_contexts.get(mode_key, [])
             
             if not entries:
-                return True
+                return {
+                    "success": False,
+                    "reason": "No context found for this mode/key",
+                    "entries_before": 0,
+                    "entries_after": 0,
+                }
+            
+            entries_before = len(entries)
+            tokens_before = sum(self.estimate_entry_tokens(e.data) for e in entries)
             
             if strategy == "ttl_expiration":
                 # Just remove expired entries (already done on each operation)
@@ -550,12 +562,83 @@ class ContextManager:
                 sorted_entries = sorted(entries, key=lambda e: e.access_count, reverse=True)
                 self._isolated_contexts[mode_key] = sorted_entries[:3]  # Keep top 3
             
+            elif strategy == "summary_and_keep_latest":
+                # Keep last 5 entries, summarize the rest
+                keep_count = 5
+                recent_entries = entries[-keep_count:]
+                old_entries = entries[:-keep_count]
+                
+                # Generate summary
+                if old_entries:
+                    summary_text = ContextManager._generate_compact_summary(old_entries)
+                    summary_entry = IsolatedContextEntry(
+                        key=f"{key}_summary_{datetime.now().strftime('%Y%m%d%H%M')}",
+                        data={
+                            "summary": summary_text,
+                            "original_count": len(old_entries),
+                            "summarized_at": datetime.now().isoformat(),
+                        },
+                        priority=1,  # High priority
+                        created_at=datetime.now(),
+                        last_accessed=datetime.now(),
+                    )
+                    recent_entries = [summary_entry] + recent_entries
+                
+                self._isolated_contexts[mode_key] = recent_entries
+            
+            else:
+                raise ValueError(f"Unknown strategy: {strategy}")
+            
+            entries_after = len(self._isolated_contexts[mode_key])
+            tokens_after = sum(self.estimate_entry_tokens(e.data) for e in self._isolated_contexts[mode_key])
+            
             logger.info(f"Compacted {mode}:{key} using strategy={strategy}")
-            return True
+            
+            return {
+                "success": True,
+                "mode": mode,
+                "key": key,
+                "strategy": strategy,
+                "entries_before": entries_before,
+                "entries_after": entries_after,
+                "tokens_before": tokens_before,
+                "tokens_after": tokens_after,
+                "compacted_at": datetime.now().isoformat(),
+            }
         
         except Exception as e:
             logger.error(f"Failed to compact context: {type(e).__name__}: {e}")
-            return False
+            return {
+                "success": False,
+                "error": str(e),
+                "mode": mode,
+                "key": key,
+                "strategy": strategy,
+            }
+    
+    @staticmethod
+    def _generate_compact_summary(entries: List[IsolatedContextEntry]) -> str:
+        """Generate a text summary of multiple context entries"""
+        if not entries:
+            return ""
+        
+        # Extract key information from each entry
+        summaries = []
+        for entry in entries[:10]:  # Limit to avoid overflow
+            if isinstance(entry.data, dict):
+                content = entry.data.get("content") or entry.data.get("message") or str(entry.data)
+                summaries.append(content[:200])  # Truncate long text
+        
+        if not summaries:
+            return f"No meaningful content in {len(entries)} entries"
+        
+        return f"[Auto-summarized {len(entries)} entries]\n" + "\n".join(summaries) + "\n... (truncated)"
+    
+    @staticmethod
+    def estimate_entry_tokens(data: Dict[str, Any]) -> int:
+        """Estimate token count for a data entry"""
+        text = json.dumps(data, ensure_ascii=False)
+        return len(text.split()) + 30  # Base overhead
     
     def get_stats(self) -> Dict[str, Any]:
         """Get context management statistics."""
@@ -566,3 +649,193 @@ class ContextManager:
             "shared_context_keys": list(self._shared_context.keys()),
             "isolated_context_modes": list(set(mk[0] for mk in self._isolated_contexts.keys())),
         }
+
+    # ── 跨模式上下文记忆(L2 + Mem0,PR-1 2026_09_27 新增)───────────────────────
+
+    def persist_l2_context(
+        self,
+        session_id: int,
+        source_mode: str,
+        context_key: str,
+        context_data: Dict[str, Any],
+        priority: int = 5,
+        ttl_hours: Optional[int] = None,
+        is_cross_mode_accessible: bool = False,
+        context_tags: Optional[List[str]] = None,
+        case_number: Optional[str] = None,
+        tenant_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        db: Optional[Any] = None,
+    ) -> Optional[int]:
+        """统一 L2 落库入口。失败静默,返回 record_id 或 None。
+
+        Consumes: AIChatContextStorage 模型
+        Produces: ai_context_storage 表新增记录 + 返回 id
+
+        注意:本方法不依赖 self.db;若 db 入参为空则返回 None(便于单测 mock)。
+        """
+        if db is None:
+            logger.debug(
+                f"[L2] persist_l2_context skipped (no db): session={session_id} mode={source_mode}"
+            )
+            return None
+        try:
+            from datetime import datetime, timedelta
+            from app.models.ai.ai_chat_context_storage import AIChatContextStorage
+
+            row = AIChatContextStorage(
+                tenant_id=tenant_id if tenant_id is not None else self.tenant_id,
+                session_id=session_id,
+                user_id=user_id if user_id is not None else 0,
+                mode=source_mode,
+                source_mode=source_mode,
+                context_key=context_key,
+                context_data=context_data,
+                priority=priority,
+                context_tags=context_tags or [],
+                is_cross_mode_accessible=is_cross_mode_accessible,
+                case_number=case_number,
+                expires_at=(
+                    (datetime.utcnow() + timedelta(hours=ttl_hours))
+                    if ttl_hours else None
+                ),
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            logger.debug(
+                f"[L2] persisted mode={source_mode} session={session_id} id={row.id}"
+            )
+            return row.id
+        except Exception as exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.warning(
+                f"[L2] persist failed for mode={source_mode} session={session_id}: {exc}"
+            )
+            return None
+
+    def sync_to_long_term(
+        self,
+        session_id: int,
+        user_id: int,
+        summary: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        source_mode: Optional[str] = None,
+    ) -> Optional[str]:
+        """同步到本地私有化 Mem0(永久记忆)。
+
+        部署形态:LocalMem0APIImpl 走本地 HTTP API 为主路径,
+        LocalMem0Impl 仅作进程内 fallback(重启即丢,违反永久语义)。
+
+        失败用 logger.error(Mem0 健康度告警),不阻断 SSE。
+        返回 memory_id 或 None。
+        """
+        if not summary:
+            return None
+        try:
+            from app.ai.services.mem0_service import Mem0Service, Mem0Config
+
+            config = (
+                Mem0Config.from_settings()
+                if hasattr(Mem0Config, "from_settings")
+                else Mem0Config()
+            )
+            mem0 = Mem0Service(
+                config=config,
+                user_id=str(user_id),
+                session_id=str(session_id),
+            )
+            entry_metadata = {
+                "tenant_id": self.tenant_id,
+                "session_id": session_id,
+                "source_mode": source_mode or "shared",
+                **(metadata or {}),
+            }
+            mem0_id = mem0.record(message=summary, metadata=entry_metadata)
+            logger.info(
+                f"[Mem0] synced user={user_id} mode={source_mode} mem0_id={mem0_id}"
+            )
+            # Mem0Service.record 返回 bool,规范化为 memory_id 字符串或 None
+            return f"mem_{user_id}_{session_id}" if mem0_id else None
+        except Exception as exc:
+            # 永久记忆健康度告警:用 logger.error
+            logger.error(
+                f"[Mem0] sync failed user={user_id} mode={source_mode}: {exc}"
+            )
+            return None
+
+    def get_context_with_mode_filter(
+        self,
+        session_id: int,
+        user_id: int,
+        allow_cross_mode: bool = False,
+        include_tags: Optional[List[str]] = None,
+        source_mode: Optional[str] = None,
+        limit: int = 50,
+        db: Optional[Any] = None,
+    ) -> List[Dict[str, Any]]:
+        """跨模式检索。allow_cross_mode=True 才能读取 is_cross_mode_accessible=True 记录。
+
+        Args:
+            session_id: 主 session_id
+            allow_cross_mode: 是否允许读取跨模式可读记录
+            include_tags: 上下文标签包含过滤(命中其一即返回)
+            source_mode: 限定单一来源模式
+            limit: 返回数量上限
+            db: SQLAlchemy Session(必填)
+
+        Returns:
+            记录列表,按 last_accessed DESC 排序
+        """
+        if db is None:
+            return []
+        try:
+            from sqlalchemy import desc, cast, String
+            from app.models.ai.ai_chat_context_storage import AIChatContextStorage
+
+            q = db.query(AIChatContextStorage).filter(
+                AIChatContextStorage.tenant_id == self.tenant_id,
+                AIChatContextStorage.session_id == session_id,
+            )
+            if source_mode:
+                q = q.filter(AIChatContextStorage.source_mode == source_mode)
+            if not allow_cross_mode:
+                # 仅返回 is_cross_mode_accessible=False 的记录
+                q = q.filter(
+                    AIChatContextStorage.is_cross_mode_accessible == False  # noqa: E712
+                )
+            if include_tags:
+                tag_filter = " | ".join(include_tags)
+                q = q.filter(
+                    cast(AIChatContextStorage.context_tags, String).contains(tag_filter)
+                )
+            q = q.order_by(desc(AIChatContextStorage.last_accessed)).limit(limit)
+            results = []
+            for row in q.all():
+                results.append({
+                    "id": row.id,
+                    "session_id": row.session_id,
+                    "source_mode": row.source_mode,
+                    "context_key": row.context_key,
+                    "context_data": row.context_data,
+                    "context_tags": row.context_tags or [],
+                    "priority": row.priority,
+                    "is_cross_mode_accessible": row.is_cross_mode_accessible,
+                    "case_number": row.case_number,
+                    "expires_at": (
+                        row.expires_at.isoformat() if row.expires_at else None
+                    ),
+                    "created_at": (
+                        row.created_at.isoformat() if row.created_at else None
+                    ),
+                    "last_accessed": (
+                        row.last_accessed.isoformat() if row.last_accessed else None
+                    ),
+                })
+            return results
+        except Exception as exc:
+            logger.warning(f"[L2] get_context_with_mode_filter failed: {exc}")
+            return []
