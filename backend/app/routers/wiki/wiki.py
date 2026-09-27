@@ -23,10 +23,13 @@ from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.orm import Session
 
 from app.deps import get_db, get_current_user
+from app.ai.research.llm import llm_complete
 from app.models.sys.sys_user import SysUser
+from app.services.wiki.search_service import WikiSearchService
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_article_version import WikiArticleVersion
-from app.models.wiki.wiki_category import WikiCategory
+from app.models.kb.kb_category import KbCategory
+from app.models.wiki.wiki_knowledge import WikiKnowledge
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +62,51 @@ class ArticleUpdateRequest(BaseModel):
     change_note: Optional[str] = Field(None, max_length=500)
 
 
+class RollbackRequest(BaseModel):
+    version_id: int
+    change_note: Optional[str] = Field(None, max_length=500)
+
+
 class CategoryCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     slug: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     parent_id: Optional[int] = None
+    knowledge_id: Optional[int] = None
     owl_class_uri: Optional[str] = None
     sort_order: int = 0
+
+
+class CategoryUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class KnowledgeCreateRequest(BaseModel):
+    """知识库仅支持 wiki 类型（本模块即 wiki 知识库，无其他类型）。"""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+
+
+class KnowledgeUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    status: Optional[int] = Field(None, description="1=启用 0=归档")
+
+
+class WikiSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    mode: str = Field("hybrid", description="hybrid / semantic / keyword")
+    top_k: int = Field(10, ge=1, le=50)
+    knowledge_id: Optional[int] = None
+
+
+class WikiAskRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    top_k: int = Field(5, ge=1, le=20)
+    knowledge_id: Optional[int] = None
 
 
 def _slugify(text: str) -> str:
@@ -132,6 +173,7 @@ def list_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     category_id: Optional[int] = Query(None),
+    knowledge_id: Optional[int] = Query(None, description="按知识库过滤（文章所属分类归属该知识库）"),
     status: Optional[int] = Query(None),
     tag: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
@@ -145,6 +187,13 @@ def list_articles(
     if category_id is not None:
         stmt = stmt.where(WikiArticle.category_id == category_id)
         count_stmt = count_stmt.where(WikiArticle.category_id == category_id)
+    if knowledge_id is not None:
+        stmt = stmt.join(KbCategory, WikiArticle.category_id == KbCategory.id).where(
+            KbCategory.knowledge_id == knowledge_id
+        )
+        count_stmt = count_stmt.join(KbCategory, WikiArticle.category_id == KbCategory.id).where(
+            KbCategory.knowledge_id == knowledge_id
+        )
     if status is not None:
         stmt = stmt.where(WikiArticle.status == status)
         count_stmt = count_stmt.where(WikiArticle.status == status)
@@ -170,6 +219,52 @@ def list_articles(
         "page_size": page_size,
         "items": [_article_to_dict(a) for a in articles],
     }
+
+
+@router.get("/articles/{article_id}")
+def get_article_by_id(
+    article_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """按 ID 获取文章详情（消除前端 slug hack，spec G4）。
+
+    路由注册顺序在 ``/articles/{slug}`` 之前：数字路径优先命中本端点，
+    非数字路径自动落到 slug 端点。
+    """
+    article = db.get(WikiArticle, article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    return _article_to_dict(article)
+
+
+@router.get("/articles/{article_id}/versions/{version_id}/diff")
+def diff_article_version(
+    article_id: int,
+    version_id: int,
+    target: Optional[int] = Query(None, description="对照版本 ID；缺省=当前版本"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """版本 diff：目标版本 vs 当前版本；指定 target 时为两历史版本互比。"""
+    from app.services.wiki.version_service import WikiVersionService
+
+    return WikiVersionService(db).get_diff(article_id, version_id, target_version_id=target)
+
+
+@router.post("/articles/{article_id}/rollback")
+def rollback_article(
+    article_id: int,
+    body: RollbackRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """非破坏式回滚：以历史版本内容生成新的当前版本（version = max+1）。"""
+    from app.services.wiki.version_service import WikiVersionService
+
+    return WikiVersionService(db).rollback(
+        article_id, body.version_id, current_user, change_note=body.change_note
+    )
 
 
 @router.get("/articles/{slug}")
@@ -321,7 +416,7 @@ def list_categories(
 ):
     """获取分类树。"""
     categories = db.execute(
-        select(WikiCategory).order_by(WikiCategory.sort_order, WikiCategory.name)
+        select(KbCategory).order_by(KbCategory.sort_order, KbCategory.name)
     ).scalars().all()
 
     # 构建树
@@ -348,16 +443,22 @@ def create_category(
     """创建分类。"""
     slug = body.slug or _slugify(body.name)
     existing = db.execute(
-        select(WikiCategory).where(WikiCategory.slug == slug)
+        select(KbCategory).where(KbCategory.slug == slug)
     ).scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=409, detail=f"分类 slug '{slug}' 已存在")
 
-    category = WikiCategory(
+    if body.knowledge_id is not None:
+        kb = db.get(WikiKnowledge, body.knowledge_id)
+        if not kb:
+            raise HTTPException(status_code=404, detail="所属知识库不存在")
+
+    category = KbCategory(
         name=body.name,
         slug=slug,
         description=body.description,
         parent_id=body.parent_id,
+        knowledge_id=body.knowledge_id,
         owl_class_uri=body.owl_class_uri,
         sort_order=body.sort_order,
     )
@@ -365,6 +466,176 @@ def create_category(
     db.commit()
     db.refresh(category)
     return _category_to_dict(category)
+
+
+@router.put("/categories/{category_id}")
+def update_category(
+    category_id: int,
+    body: CategoryUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """更新分类（名称/描述/父级/排序）。slug 保持不变以稳定 URL。"""
+    category = db.get(KbCategory, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="分类不存在")
+
+    if body.parent_id is not None and body.parent_id != category.parent_id:
+        if body.parent_id == category.id:
+            raise HTTPException(status_code=400, detail="父分类不能是自身")
+        parent = db.get(KbCategory, body.parent_id)
+        if not parent:
+            raise HTTPException(status_code=404, detail="目标父分类不存在")
+        # 禁止把分类移动到自己的子树内（沿父链向上检查）
+        node = parent
+        while node is not None:
+            if node.id == category.id:
+                raise HTTPException(status_code=400, detail="不能移动到自身子分类下")
+            node = node.parent
+        category.parent_id = body.parent_id
+
+    if body.name is not None:
+        category.name = body.name
+    if body.description is not None:
+        category.description = body.description
+    if body.sort_order is not None:
+        category.sort_order = body.sort_order
+
+    db.commit()
+    db.refresh(category)
+    return _category_to_dict(category)
+
+
+@router.delete("/categories/{category_id}", status_code=204)
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """删除分类。存在子分类或关联文章时拒绝删除（fail-closed）。"""
+    category = db.get(KbCategory, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="分类不存在")
+
+    has_children = db.execute(
+        select(func.count()).select_from(KbCategory).where(KbCategory.parent_id == category_id)
+    ).scalar()
+    if has_children:
+        raise HTTPException(status_code=409, detail="存在子分类，请先删除子分类")
+
+    article_count = db.execute(
+        select(func.count()).select_from(WikiArticle).where(WikiArticle.category_id == category_id)
+    ).scalar()
+    if article_count:
+        raise HTTPException(status_code=409, detail=f"分类下仍有 {article_count} 篇文章，请先移出")
+
+    db.delete(category)
+    db.commit()
+
+
+# ── 知识库（仅 wiki 类型） ───────────────────────────────────────────────────
+
+def _knowledge_to_dict(kb: WikiKnowledge, category_count: int = 0, article_count: int = 0) -> dict:
+    return {
+        "id": kb.id,
+        "name": kb.name,
+        "slug": kb.slug,
+        "description": kb.description,
+        "status": kb.status,
+        "category_count": category_count,
+        "article_count": article_count,
+        "created_at": str(kb.created_at) if kb.created_at else None,
+        "updated_at": str(kb.updated_at) if kb.updated_at else None,
+    }
+
+
+@router.get("/knowledges")
+def list_knowledges(
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """知识库列表（附分类数 / 文章数统计）。"""
+    kbs = db.execute(select(WikiKnowledge).order_by(WikiKnowledge.id)).scalars().all()
+    cat_rows = db.execute(
+        select(KbCategory.knowledge_id, func.count()).group_by(KbCategory.knowledge_id)
+    ).all()
+    cat_counts = {kid: cnt for kid, cnt in cat_rows if kid is not None}
+    art_rows = db.execute(
+        select(KbCategory.knowledge_id, func.count(WikiArticle.id))
+        .join(WikiArticle, WikiArticle.category_id == KbCategory.id)
+        .group_by(KbCategory.knowledge_id)
+    ).all()
+    art_counts = {kid: cnt for kid, cnt in art_rows if kid is not None}
+    return [
+        _knowledge_to_dict(kb, cat_counts.get(kb.id, 0), art_counts.get(kb.id, 0))
+        for kb in kbs
+    ]
+
+
+@router.post("/knowledges", status_code=201)
+def create_knowledge(
+    body: KnowledgeCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """创建 wiki 类型知识库。"""
+    slug = _slugify(body.name)
+    existing = db.execute(
+        select(WikiKnowledge).where(WikiKnowledge.slug == slug)
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"知识库 slug '{slug}' 已存在")
+
+    kb = WikiKnowledge(name=body.name, slug=slug, description=body.description)
+    db.add(kb)
+    db.commit()
+    db.refresh(kb)
+    return _knowledge_to_dict(kb)
+
+
+@router.put("/knowledges/{knowledge_id}")
+def update_knowledge(
+    knowledge_id: int,
+    body: KnowledgeUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """更新知识库信息。slug 保持不变以稳定 URL。"""
+    kb = db.get(WikiKnowledge, knowledge_id)
+    if not kb:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+
+    if body.name is not None:
+        kb.name = body.name
+    if body.description is not None:
+        kb.description = body.description
+    if body.status is not None:
+        kb.status = body.status
+
+    db.commit()
+    db.refresh(kb)
+    return _knowledge_to_dict(kb)
+
+
+@router.delete("/knowledges/{knowledge_id}", status_code=204)
+def delete_knowledge(
+    knowledge_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """删除知识库。存在分类（或分类下有文章）时拒绝删除（fail-closed）。"""
+    kb = db.get(WikiKnowledge, knowledge_id)
+    if not kb:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+
+    category_count = db.execute(
+        select(func.count()).select_from(KbCategory).where(KbCategory.knowledge_id == knowledge_id)
+    ).scalar()
+    if category_count:
+        raise HTTPException(status_code=409, detail=f"知识库下仍有 {category_count} 个分类，请先删除或移出")
+
+    db.delete(kb)
+    db.commit()
 
 
 # ── 内部工具 ─────────────────────────────────────────────────────────────────
@@ -392,13 +663,14 @@ def _article_to_dict(article: WikiArticle) -> dict:
     }
 
 
-def _category_to_dict(cat: WikiCategory) -> dict:
+def _category_to_dict(cat: KbCategory) -> dict:
     return {
         "id": cat.id,
         "name": cat.name,
         "slug": cat.slug,
         "description": cat.description,
         "parent_id": cat.parent_id,
+        "knowledge_id": cat.knowledge_id,
         "owl_class_uri": cat.owl_class_uri,
         "sort_order": cat.sort_order,
         "article_count": cat.article_count,
@@ -421,3 +693,160 @@ def _update_backlinks(db: Session, article: WikiArticle) -> None:
             if article.slug not in backlinks:
                 backlinks.append(article.slug)
                 target.backlinks = backlinks
+
+
+# ── RAG 检索 / 问答（管理台 RagTestTab 的后端契约） ─────────────────────────
+
+@router.post("/search")
+def wiki_search(
+    body: WikiSearchRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """混合检索（semantic / keyword / hybrid，RRF 融合），自动落检索日志。"""
+    return WikiSearchService(db).search(
+        body.query,
+        mode=body.mode,
+        top_k=body.top_k,
+        knowledge_id=body.knowledge_id,
+        user_id=current_user.id,
+    )
+
+
+@router.get("/search-logs")
+def wiki_search_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    mode: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """检索历史日志。"""
+    return WikiSearchService(db).history(page=page, page_size=page_size, mode=mode)
+
+
+@router.post("/ask")
+async def wiki_ask(
+    body: WikiAskRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """向知识库提问：检索 top_k 篇文章作为上下文，由 LLM 生成带引用的回答。"""
+    res = WikiSearchService(db).search(
+        body.query,
+        mode="hybrid",
+        top_k=body.top_k,
+        knowledge_id=body.knowledge_id,
+        user_id=current_user.id,
+    )
+    sources = []
+    for item in res.get("items", []):
+        art = db.execute(
+            select(WikiArticle).where(WikiArticle.id == item["id"])
+        ).scalar_one_or_none()
+        if not art:
+            continue
+        content = (art.content or "").strip()
+        if not content:
+            continue
+        sources.append({
+            "title": art.title,
+            "slug": art.slug,
+            "content": content[:4000],
+            "snippet": (content[:240] + ("…" if len(content) > 240 else "")),
+        })
+    if not sources:
+        raise HTTPException(status_code=404, detail="未检索到相关文章，无法回答")
+
+    context = "\n\n".join(
+        f"[{i + 1}] {s['title']}\n{s['content']}" for i, s in enumerate(sources)
+    )
+    prompt = (
+        "请根据以下知识库文章内容回答用户问题。只依据给出的资料作答，"
+        "资料不足时如实说明，不要编造。引用资料时标注编号（如 [1]）。"
+        "用中文 Markdown 输出。\n\n"
+        f"=== 知识库资料 ===\n{context}\n\n"
+        f"=== 用户问题 ===\n{body.query}"
+    )
+    try:
+        answer = await llm_complete(prompt)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"[wiki/ask] LLM 调用失败: {e}")
+        raise HTTPException(status_code=502, detail="AI 服务暂不可用，请稍后重试或检查模型配置")
+
+    citations = [
+        {
+            "ref": i + 1,
+            "article_id": res["items"][i]["id"] if i < len(res.get("items", [])) else None,
+            "slug": s["slug"],
+            "title": s["title"],
+            "snippet": s["snippet"],
+        }
+        for i, s in enumerate(sources)
+    ]
+    return {"answer": answer, "citations": citations, "mode": res.get("mode", "hybrid")}
+
+
+# ── OKF 合规层（spec §9.4）：导出 Bundle / 单篇 concept 预览 / 宽容导入 ──────
+
+@router.get("/knowledges/{knowledge_id}/okf-export")
+def okf_export_bundle(
+    knowledge_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """知识库导出 OKF v0.2 Bundle（zip）。"""
+    import io
+    import zipfile
+
+    from fastapi.responses import StreamingResponse
+
+    from app.services.wiki.okf_service import export_bundle
+
+    files = export_bundle(db, knowledge_id)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path, content in files.items():
+            zf.writestr(path, content)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="okf-{knowledge_id}.zip"'},
+    )
+
+
+@router.get("/articles/{article_id}/okf")
+def article_okf_preview(
+    article_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """单篇 concept.md 预览（frontmatter 键序按规范推荐）。"""
+    from app.services.wiki.okf_service import serialize_article
+
+    art = db.get(WikiArticle, article_id)
+    if art is None:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    username = getattr(current_user, "username", None) or str(current_user.id)
+    generated_at = art.updated_at.isoformat() + "Z" if art.updated_at else "1970-01-01T00:00:00Z"
+    return {
+        "filename": f"{art.slug}.md",
+        "content": serialize_article(art, author_actor=f"human:{username}",
+                                     generated_at=generated_at),
+    }
+
+
+@router.post("/knowledges/{knowledge_id}/okf-import")
+async def okf_import_bundle(
+    knowledge_id: int,
+    files: List[dict],
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """宽容导入 Bundle（[{path, content}]）：缺可选字段/未知 type/断链一律接受。"""
+    from app.services.wiki.okf_service import import_bundle
+
+    report = import_bundle(db, knowledge_id, {f["path"]: f["content"] for f in files}, current_user)
+    return report
+
