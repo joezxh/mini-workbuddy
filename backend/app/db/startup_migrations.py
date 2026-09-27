@@ -43,6 +43,8 @@ _TABLE_RENAME_MAP: dict[str, str] = {
     "tool_definition": "ai_tool_definition",
     "tool_group": "ai_tool_group",
     "tool_group_member": "ai_tool_group_member",
+    # 2026-09-27 知识库统一化（spec §3.2）：kms_category → 通用分类容器 kb_category
+    "kms_category": "kb_category",
 }
 
 
@@ -69,12 +71,44 @@ _COLUMN_MIGRATIONS: list[str] = [
     "ALTER TABLE agent_scheduled_task ADD COLUMN IF NOT EXISTS skill_info TEXT",
     "ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS i18n_key VARCHAR(100)",
     # 知识库归属字段：category/article/search_log 补 knowledge_id
-    "ALTER TABLE kms_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
-    "CREATE INDEX IF NOT EXISTS ix_kms_category_knowledge_id ON kms_category (knowledge_id)",
+    # 注：kms_category 已重命名为 kb_category（见 _TABLE_RENAME_MAP），此处同步改名
+    "ALTER TABLE kb_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS ix_kb_category_knowledge_id ON kb_category (knowledge_id)",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
     "CREATE INDEX IF NOT EXISTS ix_kms_article_knowledge_id ON kms_article (knowledge_id)",
     "ALTER TABLE kms_search_log ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
     "CREATE INDEX IF NOT EXISTS ix_kms_search_log_knowledge_id ON kms_search_log (knowledge_id)",
+    # ── 2026-09-27 知识库统一化（spec §3 / §10.2）───────────────────────────
+    # 统一容器类型与二级形态
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS type INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS kb_format VARCHAR(16)",
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS multimodal_enabled BOOLEAN NOT NULL DEFAULT false",
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS index_mode VARCHAR(16) NOT NULL DEFAULT 'high_quality'",
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS pipeline_config JSONB",
+    "CREATE INDEX IF NOT EXISTS idx_kms_knowledge_tenant_type ON kms_knowledge (tenant_id, type)",
+    # 分类容器冗余类型（RENAME 后回填；仅补空值，重复执行安全）
+    "ALTER TABLE kb_category ADD COLUMN IF NOT EXISTS kb_type INTEGER",
+    "UPDATE kb_category c SET kb_type = k.type FROM kms_knowledge k "
+    "WHERE c.knowledge_id = k.id AND c.kb_type IS NULL",
+    # kb_* 三表由迁移 006 独占建表，create_all 不加列，故在此补齐
+    "ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS idx_kb_collection_knowledge ON kb_collection (knowledge_id)",
+    "ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS schema_config JSONB",
+    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text'",
+    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS idx_kb_segment_parent ON kb_segment (parent_id)",
+    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS answer TEXT",
+    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS keywords JSONB",
+    # OKF 合规层（spec §9.2）：文章溯源/验证/过期字段
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS okf_type VARCHAR(64)",
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS resource VARCHAR(500)",
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS sources JSONB",
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS verified JSONB",
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS stale_after TIMESTAMP",
+    # 版本快照：operation_type 缺失会让建/改文章直接 TypeError，summary/owl_class_uris 供回滚还原
+    "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS operation_type VARCHAR(32)",
+    "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS summary VARCHAR(1000)",
+    "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS owl_class_uris JSONB",
 ]
 
 
