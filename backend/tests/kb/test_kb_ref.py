@@ -61,15 +61,19 @@ def test_service_requires_tenant(db):
 # 端点层（依赖覆盖，用测试会话）
 # ------------------------------------------------------------------ #
 @pytest.fixture
-def client(db):
+def client(db, monkeypatch):
+    from app.services.kb import kb_app as kb_app_mod
     from app.services.kb.kb_app import kb_app
     from app.services.kb.kb_router import get_db as kb_get_db
+
+    # T6 认证收口后：端点测试统一走服务令牌通道
+    monkeypatch.setattr(kb_app_mod, "kb_service_token", lambda: "test-token")
 
     def _override():
         yield db
 
     kb_app.dependency_overrides[kb_get_db] = _override
-    with TestClient(kb_app) as c:
+    with TestClient(kb_app, headers={"X-KB-Service-Token": "test-token"}) as c:
         yield c
     kb_app.dependency_overrides.clear()
 
