@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.wiki.wiki_article import WikiArticle
-from app.models.wiki.wiki_category import WikiCategory
+from app.models.kb.kb_category import KbCategory
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.repositories.wiki.knowledge_repo import WikiKnowledgeRepository
 from app.schemas.wiki.knowledge import KnowledgeCreate, KnowledgeUpdate
@@ -29,8 +29,8 @@ def _article_count(db: Session, knowledge_id: int) -> int:
     return db.execute(
         select(func.count())
         .select_from(WikiArticle)
-        .join(WikiCategory, WikiArticle.category_id == WikiCategory.id)
-        .where(WikiCategory.knowledge_id == knowledge_id)
+        .join(KbCategory, WikiArticle.category_id == KbCategory.id)
+        .where(KbCategory.knowledge_id == knowledge_id)
     ).scalar() or 0
 
 
@@ -44,6 +44,10 @@ def _to_out(db: Session, k: WikiKnowledge) -> dict:
         "cover_url": k.cover_url,
         "owner_id": k.owner_id,
         "status": k.status,
+        "type": k.type,
+        "kb_format": k.kb_format,
+        "index_mode": k.index_mode,
+        "multimodal_enabled": k.multimodal_enabled,
         "article_count": _article_count(db, k.id),
         "created_at": str(k.created_at) if k.created_at else None,
         "updated_at": str(k.updated_at) if k.updated_at else None,
@@ -64,7 +68,30 @@ class WikiKnowledgeService:
         data = payload.dict(exclude_none=True)
         data["slug"] = slug
         data.setdefault("owner_id", user.id if user else None)
+
+        # 统一容器校验（spec §10.2）：type/kb_format 合法性矩阵
+        from app.services.kb.kb_format import validate_kb_format
+
+        kb_type = data.get("type", 1)
+        data["type"] = kb_type
+        data["kb_format"] = validate_kb_format(kb_type, data.get("kb_format"))
+
         obj = self.repo.create(data)
+
+        # type=2 联动建 collection（AgentScope 约定 kb_<uuid> 逻辑名，绑定统一容器）
+        if kb_type == 2:
+            from uuid import uuid4
+
+            from app.config import settings
+            from app.models.kb.kb_collection import KbCollection
+
+            self.db.add(KbCollection(
+                name=f"kb_{uuid4().hex}",
+                dimensions=settings.GPUSTACK_EMBEDDING_DIMENSION,
+                knowledge_id=obj.id,
+            ))
+            self.db.flush()
+
         self.db.commit()
         self.db.refresh(obj)
         return _to_out(self.db, obj)
@@ -84,7 +111,12 @@ class WikiKnowledgeService:
 
     def update(self, knowledge_id: int, payload: KnowledgeUpdate) -> dict:
         obj = self._require(knowledge_id)
-        self.repo.update(obj, payload.dict(exclude_none=True))
+        payload_dict = payload.dict(exclude_none=True)
+        # 创建后不可切换（spec §10.2）
+        from app.services.kb.kb_format import assert_format_unchanged
+
+        assert_format_unchanged(obj.kb_format, payload_dict.get("kb_format"))
+        self.repo.update(obj, payload_dict)
         self.db.commit()
         self.db.refresh(obj)
         return _to_out(self.db, obj)

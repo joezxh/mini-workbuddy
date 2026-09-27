@@ -12,6 +12,9 @@ class KnowledgeCreate(BaseModel):
     cover_url: Optional[str] = Field(None, max_length=500)
     owner_id: Optional[int] = None
     status: int = 1
+    # 统一容器（spec §3.1/§10.2）：1=llm-wiki 2=general-kb 3=external-kb
+    type: int = 1
+    kb_format: Optional[str] = Field(None, max_length=16)
 
 
 class KnowledgeUpdate(BaseModel):
@@ -22,6 +25,7 @@ class KnowledgeUpdate(BaseModel):
     cover_url: Optional[str] = Field(None, max_length=500)
     owner_id: Optional[int] = None
     status: Optional[int] = None
+    kb_format: Optional[str] = Field(None, max_length=16)
 
 
 class KnowledgeOut(BaseModel):
