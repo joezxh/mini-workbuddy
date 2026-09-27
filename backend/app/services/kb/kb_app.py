@@ -33,6 +33,7 @@ from app.services.kb.embedding_config import (
     resolve_embedding_config,
 )
 from app.services.kb.kb_router import router as kb_router
+from app.services.kb.parent_child_chunker import ParentChildChunker
 from app.services.kb.qa_chunker import QaChunker
 
 
@@ -50,10 +51,11 @@ kb_app = FastAPI(title="AgentScope KB RAG Service", lifespan=_lifespan)
 # kb_ref 知识库登记 REST 端点：/kb（创建/列出/获取/删除），强制 X-Tenant-Id 隔离
 kb_app.include_router(kb_router)
 
-# 切片器注册表（P1 Task 10）：索引管线按 chunker_type 选择切片策略
+# 切片器注册表（P1 Task 10 + spec §10.3）：索引管线按 chunker_type 选择切片策略
 CHUNKER_REGISTRY = {
     ApproxTokenChunker.chunker_type: ApproxTokenChunker,
     QaChunker.chunker_type: QaChunker,
+    ParentChildChunker.chunker_type: ParentChildChunker,
 }
 
 

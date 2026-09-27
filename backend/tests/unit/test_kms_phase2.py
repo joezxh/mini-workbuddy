@@ -1,4 +1,5 @@
 """知识库统一化 Phase 2 回归（spec §10.2 新模型 / §10.3 摄取管线 / §9 OKF）。"""
+import pytest
 
 
 def test_kb_document_model_fields():
@@ -53,3 +54,48 @@ def test_kb_format_immutable_after_create():
     assert_format_unchanged("document", "document")  # 相同允许
     with pytest.raises(HTTPException):
         assert_format_unchanged("document", "qa")   # 切换拒绝
+
+
+# ── T3: AgentScope Parser 能力发现 + ParentChildChunker ──────────────────
+
+def test_select_parser_by_media_type():
+    from app.services.kb.parser_selector import select_parser
+
+    assert select_parser("text/markdown") is not None
+    assert select_parser("application/pdf") is not None
+    with pytest.raises(ValueError):
+        select_parser("video/mp4")
+
+
+def test_supported_media_types_covers_office():
+    from app.services.kb.parser_selector import supported_media_types
+
+    table = supported_media_types()
+    all_types = [mt for mts in table.values() for mt in mts]
+    assert "application/pdf" in all_types
+    assert any("wordprocessingml" in mt for mt in all_types)
+    assert any("spreadsheetml" in mt or "ms-excel" in mt for mt in all_types)
+
+
+def test_parent_child_chunker_contract():
+    """对齐 agentscope ChunkerBase 契约：chunker_type 唯一 + Parameters + 编号连续。"""
+    import asyncio
+
+    from agentscope.message import TextBlock
+    from agentscope.rag import Section
+
+    from app.services.kb.parent_child_chunker import ParentChildChunker
+
+    assert ParentChildChunker.chunker_type == "parent_child"
+    chunker = ParentChildChunker(parameters=ParentChildChunker.Parameters(
+        parent_size=512, child_size=128, overlap=0,
+    ))
+    long_text = "\n\n".join(f"段落{i} " + "字" * 100 for i in range(6))
+    sections = [Section(content=TextBlock(text=long_text), source="a.md", metadata={})]
+    chunks = asyncio.run(chunker.chunk(sections))
+
+    assert len(chunks) >= 2
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))  # 0..N-1 连续
+    assert len({c.total_chunks for c in chunks}) == 1                    # total_chunks 一致
+    assert all("parent_content" in (c.metadata or {}) for c in chunks)
+    assert all(c.metadata.get("parent_index") == 0 for c in chunks)
