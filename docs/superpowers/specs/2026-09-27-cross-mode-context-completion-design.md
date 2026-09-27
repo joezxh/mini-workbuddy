@@ -32,6 +32,7 @@ MinWorkBuddy 现有 `AIChatContextStorage` 表(由 `2026-09-21` 三层架构设�
 | 4 | 前端改动范围 | **c-rich**:统计页 + 9 张模式卡片 + 历史抽屉全量方案 |
 | 5 | 长期记忆后端 | **a-mem0-only**:统一 Mem0Service + LocalMem0 兜底 |
 | 6 | 实施范围 | **方案 B**:CrossModeContextRecorder + 策略注册表 + 统一钩子 |
+| 7 | Mem0 部署形态 | **本地私有化部署,作为永久记忆**:LocalMem0APIImpl 走本地 HTTP API 为主路径,LocalMem0Impl 仅作进程内 fallback;记录不设 TTL,语义上等同于永久保留 |
 
 ### 1.3 目标
 
@@ -204,7 +205,15 @@ class ContextManager:
         metadata: Optional[Dict[str, Any]] = None,
         source_mode: Optional[str] = None,
     ) -> Optional[str]:
-        """同步到 Mem0。失败静默,返回 memory_id 或 None。"""
+        """同步到本地私有化 Mem0(永久记忆)。
+
+        部署形态:LocalMem0APIImpl 走本地 HTTP API 为主路径,
+        LocalMem0Impl 仅作进程内 fallback(重启即丢,不应被依赖)。
+
+        语义:永久记录,不设 TTL;失败仍静默(SSE 不阻断),但
+        失败时记 logger.error 而非 warning,便于运维感知 Mem0
+        健康度。返回 memory_id 或 None。
+        """
 
     def get_context_with_mode_filter(
         self, session_id: int, user_id: int,
@@ -216,11 +225,13 @@ class ContextManager:
         """跨模式检索。allow_cross_mode=True 才读取 is_cross_mode_accessible=True 记录。"""
 ```
 
-3 个方法签名与 risk_control 完全一致,便于迁移参考工程的集成测试。
+3 个方法签名与 risk_control 完全一致,便于迁移参考工程的集成测试。**`sync_to_long_term` 的 `summary` 建议不截断或截断 ≥ 2000 字符**(详见 § 4.3 STRATEGY_TABLE 注释)。
 
 ### 4.3 `backend/app/ai/services/cross_mode_recorder.py`(新建,~180 行)
 
 **9 模式"零侵入接入"的关键**。策略表 + 收尾触发器。
+
+**本地私有化 Mem0 约束**:`sync_to_long_term` 调用本地 HTTP API(`LocalMem0APIImpl`)为主路径;Mem0 记录为永久记忆(`不设 expires`),`extract_summary` 默认截断长度上调到 2000 字符(原 risk_control 用 1000 是因云端 Mem0 token 计数成本,本地无此约束),保证完整语义落地。
 
 ```python
 @dataclass(frozen=True)
@@ -231,20 +242,16 @@ class FinalizeStrategy:
     ttl_hours: int
     write_mem0: bool
     extract_payload: Callable[[Dict[str, Any]], Dict[str, Any]]
-    extract_summary: Callable[[Dict[str, Any]], str]
+    extract_summary: Callable[[Dict[str, Any]], str]  # 默认截断 2000 字符
     context_tags: Callable[[Dict[str, Any]], List[str]] = lambda p: []
     is_cross_mode_accessible: bool = False
 
 STRATEGY_TABLE: Dict[str, FinalizeStrategy] = {
-    "general":       FinalizeStrategy(...),
-    "react":         FinalizeStrategy(...),
-    "thinking":      FinalizeStrategy(...),
-    "deep_research": FinalizeStrategy(..., is_cross_mode_accessible=True),
-    "skill":         FinalizeStrategy(...),
-    "agent":         FinalizeStrategy(..., is_cross_mode_accessible=True),
-    "team":          FinalizeStrategy(..., is_cross_mode_accessible=True),
-    "scheduled":     FinalizeStrategy(..., write_mem0=False),
-    "shared":        FinalizeStrategy(..., write_mem0=False),
+    "general":       FinalizeStrategy(
+        ..., extract_summary=lambda p: p.get("answer", "")[:2000], ...),
+    # ... 其余 8 种模式同结构 ...
+    "scheduled":     FinalizeStrategy(..., write_mem0=False),  # 永久记忆不写后台调度
+    # ... 其余略 ...
 }
 
 
@@ -255,7 +262,13 @@ class CrossModeContextRecorder:
         session_type: str, payload: Dict[str, Any],
         case_number: Optional[str] = None,
     ) -> Optional[int]:
-        """主入口:按 session_type 选择策略,执行 L2 + Mem0 + 审计。"""
+        """主入口:按 session_type 选择策略,执行 L2 + Mem0 + 审计。
+
+        失败语义:
+        - persist_l2_context 失败 → logger.warning(SSE 不阻断)
+        - sync_to_long_term 失败 → logger.error(Mem0 健康度告警)
+        - 审计日志写失败 → logger.warning(SSE 不阻断)
+        """
 ```
 
 ---
@@ -351,7 +364,8 @@ GET  /api/v1/ai/context/strategies      # 列出 9 种策略(给前端驱动卡�
 | 失败点 | 行为 | 是否阻断 SSE |
 |--------|------|--------------|
 | `persist_l2_context` 失败 | `logger.warning`,`record_finalize` 返回 None | 否 |
-| `sync_to_long_term` 失败(Mem0 不可达) | `logger.warning`,`mem0_id=None` | 否 |
+| `sync_to_long_term` 失败(Mem0 不可达) | `logger.error`(永久记忆健康度告警) | 否 |
+| `LocalMem0APIImpl` 不可达,fallback 到 `LocalMem0Impl`(InMemory) | `logger.warning`(记录在内存,重启即丢,违反永久语义) | 否 |
 | 审计日志写失败 | `logger.warning`,不抛 | 否 |
 | `get_context_with_mode_filter` 失败 | 路由层返回 `[]` + HTTP 200 | 否 |
 | `STRATEGY_TABLE` 缺失 session_type | `has_strategy()` 返回 False,recorder 跳过 | 否 |
@@ -487,6 +501,7 @@ backend/tests/integration/
 |------|------|----------|
 | v0.1 | 2026-09-27 | 初始草案 |
 | v1.0 | 2026-09-27 | 完整版定稿(brainstorming 6 项澄清 + 7 节设计确认通过) |
+| v1.1 | 2026-09-27 | 追加澄清 7:Mem0 本地私有化部署,作为永久记忆;extract_summary 截断长度上调至 2000;sync_to_long_term 失败用 `logger.error` |
 
 ---
 
