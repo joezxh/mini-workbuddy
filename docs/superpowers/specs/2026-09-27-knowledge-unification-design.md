@@ -208,15 +208,79 @@ CREATE INDEX IF NOT EXISTS idx_kb_collection_knowledge ON kb_collection (knowled
 ## 8. 实施路线图
 
 **Phase 1（本周）— 阻断修复 + 统一模型**
-P0 六项；§3 模型代码；§4 迁移 SQL + schema.sql 再生；`GET /articles/{id}` 等 3 个版本端点；pytest 全绿。
+P0 六项；§3 模型代码（含 §9.2 WikiArticle OKF 增列）；§4 迁移 SQL + schema.sql 再生；`GET /articles/{id}` 等 3 个版本端点；pytest 全绿。
 
-**Phase 2（下周）— 统一分类 + 前端导航**
-kb_category 全面切换（后端 service/router + 前端树）；`KnowledgeBaseManager.vue` 上线；KB 子应用认证收口；语雀连接器（OAuth2ApiConnector 模式）+ Notion 专属连接器（落地后取消 http 别名）；APScheduler 消费 `sync_interval_min`。
+**Phase 2（下周）— 统一分类 + 前端导航 + OKF 合规**
+kb_category 全面切换（后端 service/router + 前端树）；`KnowledgeBaseManager.vue` 上线；KB 子应用认证收口；语雀连接器（OAuth2ApiConnector 模式）+ Notion 专属连接器（落地后取消 http 别名）；APScheduler 消费 `sync_interval_min`；OKF 服务层 + 3 个端点 + 前端导出/导入/预览入口（§9.3–9.5）。
 
 **Phase 3（下月）— 性能 + 权限 + 体验**
 HNSW 索引（`m=16, ef_construction=64`）迁移脚本 + 10 万级 P95 < 100ms 验收；Redis 分类树/知识库列表缓存（TTL 1h，写失效）；RBAC 权限点（Wiki/SQL/ExternalKb）；wiki RAG 分块（QaChunker → 复用 `kb_segment`，单向量降级 fallback）；`/ask` 消 N+1 + SSE 流式；前端去重（`r.data||r` 拦截器下沉、DataSourceSelect 抽取、消灭 window.prompt）。
 
-## 9. 风险与缓解
+## 9. OKF 合规层（llm-wiki 增强，对齐 Google Open Knowledge Format v0.2）
+
+> 规范原文：`GoogleCloudPlatform/knowledge-catalog` → `okf/SPEC.md`（v0.2，supersede v0.1）。
+> 定位：OKF（Open Knowledge Format）是 Karpathy LLM-Wiki 理念的厂商中立标准化——Markdown + YAML frontmatter、文件即知识库、Git 可管理、无 SDK/运行时依赖。
+
+### 9.1 合规差距核查（规范要求 vs 现状）
+
+| # | OKF 规范要求（§编号） | 当前实现状态 | 判定 |
+|---|---|---|---|
+| 1 | 每个概念文件含可解析 YAML frontmatter，**非空 `type` 唯一必填**（§11.2） | `kms_article.content` 为裸 Markdown，无 frontmatter 序列化；文章无 `type` 字段 | ❌ |
+| 2 | 推荐字段 `title`/`description`/`resource`/`tags`（§2.2） | `title`/`tags` 有；`summary`≈`description`；`resource` 无 | ⚠️ |
+| 3 | `sources` 溯源家族（entry 内 `resource` 必填、`id` 作 footnote join 键、`author`/`usage_count`/`last_modified` 信号、`usage_window`）（§5.1） | 无对应字段 | ❌ |
+| 4 | `generated`（`by`=actor、`at`=ISO 8601 UTC）与 `verified`（`{by,at}` 列表，写者≠确认者）分离（§5.2） | 有 `creator_id`/`updated_at` 但非 actor 约定；无 `verified` | ❌ |
+| 5 | `status`: `draft\|stable\|deprecated`，缺省=stable（§5.4）；`stale_after` 绝对时间点过期（§5.5） | `status` 为 `1发布/0草稿/-1归档` 整数，语义可映射；无 `stale_after` | ⚠️ |
+| 6 | Bundle 结构：Concept + Bundle；保留文件 `index.md`（无 frontmatter，根可带 `okf_version`）/`log.md`（ISO 日期分组、最新在前）（§3/§8/§9） | 内容存 DB，无 bundle 物化；版本在 `kms_article_version` 但非 log.md 形态 | ❌ |
+| 7 | 链接：标准 markdown，bundle 相对 `/` 路径推荐；断链必须容忍（§6.1） | 内容即 Markdown；但 slug 引用导出时不重写为 bundle 路径 | ⚠️ |
+| 8 | Actor 命名约定：`human:<id>` / `process:<id>` / `<producer>/<version>`（§7，信任分层依据） | 仅 `creator_id` 整数 | ❌ |
+| 9 | Per-claim 归因：footnote label = `sources[].id`（§6.1） | 问答层有 Citations，正文无 footnote↔sources 机制 | ⚠️ |
+| 10 | Body 约定 heading：`# Schema`/`# Examples`/`# Computation`（§4.2） | 无约定、无 lint | ❌ |
+| 11 | 宽容消费：不得因缺可选字段/未知 type/断链/未知键拒绝（§11.3） | 导入链路不存在 | ❌ |
+| 12 | Attested Computation 家族（§10） | 无 | ➖ 推迟 |
+
+**结论：OKF 合规层基本未落地（12 项中 0 项完整、4 项部分可映射）。** 补齐思路：DB 仍是事实源（不推翻现有架构），在其上加一层 **OKF 序列化/反序列化能力**——type=1 的知识库导出即合规 Bundle，导入即宽容消费。
+
+### 9.2 模型扩展（`WikiArticle` 增列，全部 nullable 向后兼容）
+
+```python
+okf_type      = Column(String(64), nullable=True, comment="OKF type: concept|howto|reference|decision|metric 或自定义")
+resource      = Column(String(500), nullable=True, comment="OKF resource: 底层资产 URI")
+sources       = Column(JSONB, nullable=True, comment="OKF §5.1 溯源家族: [{resource(必填), id, title, author, usage_count, last_modified}]")
+verified      = Column(JSONB, nullable=True, comment="OKF §5.2 验证事件列表: [{by, at}]")
+stale_after   = Column(TIMESTAMP, nullable=True, comment="OKF §5.5 绝对过期时间点")
+```
+
+- `status` 不改列，导出映射：`0→draft`、`1→stable`、`-1→deprecated`；导入反向映射，未知值宽容落 `stable`。
+- `generated.by`：`creator_id` join `sys_user` 生成 `human:<username>`；系统生成走 `process:minworkbuddy-wiki`；`generated.at` = `updated_at`（ISO 8601 UTC）。
+- `okf_type` 缺省导出为 `concept`（规范允许仅 `type` 即合规）。
+
+### 9.3 OKF 服务层（新 `backend/app/services/wiki/okf_service.py`）
+
+- `export_bundle(knowledge_id)`：知识库=Bundle，分类=子目录，文章=`<slug>.md`；frontmatter 键序 type→resource→title→description→tags→sources→generated→verified→status→stale_after；每层目录生成 `index.md`（含 description 的条目列表，渐进披露）；`log.md` 由 `kms_article_version` 生成（ISO 日期分组、最新在前）；`okf_version: "0.2"` 仅写根 index.md；`references/` 惯例目录预留。
+- `import_bundle(files)`：宽容解析（缺可选字段/未知 type/未知键/断链一律接受，退化为通用文档继续读取），按 slug upsert 文章 + 匿名分类挂载，返回导入报告（导入数/跳过/警告）。
+- `serialize_article / parse_frontmatter`：单文章 ↔ concept.md 双向转换。
+- 链接重写：导出把 `/wiki/<slug>` 引用重写为 bundle 相对路径，导入反向还原；断链原样保留（§6.1 容忍）。
+- Per-claim 归因：正文中 footnote `[^id]` 原样导出，与 `sources[].id` 对应（join 按键不按位置）。
+
+### 9.4 API（`/api/v1/wiki`）
+
+```
+GET  /knowledges/{id}/okf-export            # 导出 zip（StreamingResponse）
+POST /knowledges/{id}/okf-import            # 上传 zip，宽容导入 + 报告
+GET  /articles/{id}/okf                     # 单篇 concept.md 预览
+```
+
+### 9.5 前端
+
+- 文章视图加「OKF 预览」Tab（单篇 concept.md 渲染）；知识库详情加「导出 OKF Bundle / 导入 OKF」入口（含导入报告反馈）。
+
+### 9.6 明确推迟项（对齐规范 §13 推迟清单）
+
+- Attested Computation 运行时家族（`runtime`/`parameters`/`computation`/`executor`/`attester`）；
+- `usage_count` 自动统计（Phase 3 可从 `kms_search_log` 聚合可选注入）；
+- attestation 缓存、语义层模板（Looker/dbt）模型级比较。
+
+## 10. 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
@@ -224,11 +288,13 @@ HNSW 索引（`m=16, ef_construction=64`）迁移脚本 + 10 万级 P95 < 100ms 
 | create_all 不会给已有表加列 | 迁移 SQL 以 ALTER 显式执行，schema.sql 仅作权威参考 |
 | 连接器别名映射语义偏差（notion 分页模型 ≠ http 通用分页） | Phase 1 仅落实例 CRUD + 手动 sync；notion 专属拉取逻辑在 Phase 2 补 `NotionApiConnector` 后取消别名 |
 | 前端双入口（/wiki 与工作台）造成维护分叉 | /wiki 保留为深链，列表逻辑组件化后两处共用 |
+| OKF 导出/导入往返丢失（frontmatter 往返、时区/时间戳格式、slug 与文件名冲突） | 序列化统一 ISO 8601 UTC；slug 冲突导入时加 `-2` 后缀并记入报告；往返用 pytest 固定样例做 round-trip 断言 |
 
-## 10. 验收标准
+## 11. 验收标准
 
 1. `pytest` 全绿（当前基线 108 passed 只增不减）。
 2. 三份报告中全部 🔴 P0 项在 Phase 1 结束后复验通过（启用对应前端组件不再报 routerMissing / 编译失败）。
 3. 迁移 SQL 在 staging 库执行后：存量 wiki 知识库 type=1、分类树完整、kb_category.kb_type 回填正确。
 4. 统一工作台三种类型均可完成一次「建容器 → 建分类 → 进详情」闭环；类型 C 可完成一次真实 sync 且日志状态真实。
 5. `schema.sql` 再生后与 ORM 定义一致。
+6. OKF 合规（§9）：type=1 知识库导出 zip 可被独立工具按规范 §11 校验通过（每个概念含非空 `type` 的 frontmatter、`index.md`/`log.md` 结构合规）；同一 Bundle 导入后文章内容与分类挂载无损；缺可选字段/未知 type/断链的 Bundle 导入不报错且产出报告。
