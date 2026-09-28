@@ -97,13 +97,20 @@ class WikiKnowledgeService:
         return _to_out(self.db, obj)
 
     def list(self, page: int = 1, page_size: int = 20, status: Optional[int] = None) -> dict:
-        total, items = self.repo.list_all(page, page_size, status)
-        return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": [_to_out(self.db, k) for k in items],
-        }
+        """知识库列表缓存（Phase 3 T2）：写操作后由 create/update/delete 失效。"""
+        from app.services.kb.kb_cache import cache_key, cached
+
+        @cached(key_builder=lambda: cache_key("knowledges", page, page_size, status))
+        def _query() -> dict:
+            total, items = self.repo.list_all(page, page_size, status)
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": [_to_out(self.db, k) for k in items],
+            }
+
+        return _query()
 
     def get(self, knowledge_id: int) -> dict:
         obj = self._require(knowledge_id)
@@ -119,6 +126,9 @@ class WikiKnowledgeService:
         self.repo.update(obj, payload_dict)
         self.db.commit()
         self.db.refresh(obj)
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("knowledges"))
         return _to_out(self.db, obj)
 
     def set_status(self, knowledge_id: int, status: int) -> dict:
@@ -132,6 +142,10 @@ class WikiKnowledgeService:
         obj = self._require(knowledge_id)
         self.repo.delete(obj)
         self.db.commit()
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("knowledges"))  # 列表缓存失效
+        invalidate(cache_key("tree"))        # 目录树缓存失效
 
     def _require(self, knowledge_id: int) -> WikiKnowledge:
         obj = self.repo.get_by_id(knowledge_id)

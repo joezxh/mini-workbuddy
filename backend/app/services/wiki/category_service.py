@@ -49,9 +49,22 @@ class KbCategoryService:
         obj = self.repo.create(data)
         self.db.commit()
         self.db.refresh(obj)
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("tree"))  # 树结构变更 → 失效全部树缓存
         return _to_out(obj)
 
     def tree(self, knowledge_id: Optional[int] = None) -> List[dict]:
+        """目录树：读多写少，走缓存（Phase 3 T2）；写操作在下方各方法内失效。"""
+        from app.services.kb.kb_cache import cache_key, cached
+
+        @cached(key_builder=lambda: cache_key("tree", knowledge_id))
+        def _build() -> List[dict]:
+            return self._build_tree(knowledge_id)
+
+        return _build()
+
+    def _build_tree(self, knowledge_id: Optional[int] = None) -> List[dict]:
         categories = (
             self.repo.list_by_knowledge(knowledge_id)
             if knowledge_id is not None
@@ -78,6 +91,9 @@ class KbCategoryService:
         self.repo.update(obj, payload.dict(exclude_none=True))
         self.db.commit()
         self.db.refresh(obj)
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("tree"))
         return _to_out(obj)
 
     def move(self, category_id: int, parent_id: Optional[int]) -> dict:
@@ -89,12 +105,18 @@ class KbCategoryService:
         obj.parent_id = parent_id
         self.db.commit()
         self.db.refresh(obj)
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("tree"))
         return _to_out(obj)
 
     def delete(self, category_id: int) -> None:
         obj = self._require(category_id)
         self.repo.delete(obj)
         self.db.commit()
+        from app.services.kb.kb_cache import cache_key, invalidate
+
+        invalidate(cache_key("tree"))
 
     def _require(self, category_id: int) -> KbCategory:
         obj = self.repo.get_by_id(category_id)
