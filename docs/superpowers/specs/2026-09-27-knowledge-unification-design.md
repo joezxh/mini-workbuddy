@@ -9,8 +9,15 @@
 > `chunker_factory` 原生 chunker_type 注册表 + Q&A/表格行直构 Chunk）；摄取改为
 > `Parser.parse → Chunker.chunk → KnowledgeBase.insert_document`；`/api/v1/kb` 检索底层唯一入口
 > `KnowledgeBase.search(queries, top_k, score_threshold)`。测试 293 passed（kb+unit）。
-> 待办（本次未做）：D1 裁剪 kb_app 子应用（其 `/kb` 面仍有测试依赖）、D17 裁剪
-> `app/ai/knowledge/rag_pipeline.py`（`wiki_rag.py` 仍引用）、D16 Agent 侧 RAGMiddleware 接入。
+> ✅ **2026-09-28 后续收尾（D1/D16 + Phase 3 T1–T3）**：kb_ref HTTP 面迁入主应用
+> `/api/v1/kb/kb-refs`（子应用仅留 `/health`、`/embedding_models`、`/chunkers`，`kb_router.py` 已删）；
+> Agent 侧接入原生 `RAGMiddleware`（`agent_factory._rag_kwargs`，配置驱动、缺省不启用）；
+> HNSW（`m=16, ef_construction=64`）+ pg_trgm 索引幂等迁移随启动执行；
+> 分类树/知识库列表缓存（`kb_cache.py`，Redis + 内存回退，写后显式失效）；
+> RBAC 权限点 `kb:view/upload/delete/admin` 与 `wiki:write`（管理员直通、查不到即拒绝）。
+> 测试 535 passed / 4 failed（4 个为基线遗留 ai_context 鉴权问题，零新增）。
+> 未做且需另案：D17 裁剪 `app/ai/knowledge/rag_pipeline.py`（D18 明确 wiki `/ask` 链路不走中间件，
+> `wiki_rag.py` 仍依赖它）、`pipeline_config` 键名重命名（D8）、Agent 端到端 RAG 联调。
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
 > 范围：`backend/app/models/{wiki,kb,connectors}`、`backend/app/routers/*`、`frontend/src/views/kms` + `views/admin/knowledge`
 >
