@@ -117,3 +117,28 @@ def add_new_columns(engine: Engine) -> None:
     with engine.begin() as conn:
         for sql in _COLUMN_MIGRATIONS:
             conn.execute(text(sql))
+
+
+# ── 索引迁移（幂等；Phase 3 T1）──────────────────────────────────────────
+# 每项依次尝试执行，任一项失败仅告警不阻断启动（索引属性能优化，非正确性依赖）。
+_INDEX_MIGRATIONS: list[str] = [
+    # kb_segment 向量列：默认暴力 KNN → HNSW（m=16, ef_construction=64，P95 < 100ms）
+    "CREATE INDEX IF NOT EXISTS idx_kb_segment_embedding_hnsw ON kb_segment "
+    "USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)",
+    # 中文子串检索（pg_trgm）供混合检索关键词分支
+    "CREATE INDEX IF NOT EXISTS idx_kb_segment_content_trgm ON kb_segment "
+    "USING gin (content gin_trgm_ops)",
+    # wiki 文章向量（kms_article.content_vector）
+    "CREATE INDEX IF NOT EXISTS idx_kms_article_vector_hnsw ON kms_article "
+    "USING hnsw (content_vector vector_cosine_ops) WITH (m = 16, ef_construction = 64)",
+]
+
+
+def create_performance_indexes(engine: Engine) -> None:
+    """创建/补齐性能索引（幂等）；失败仅告警。"""
+    with engine.begin() as conn:
+        for sql in _INDEX_MIGRATIONS:
+            try:
+                conn.execute(text(sql))
+            except Exception as exc:  # noqa: BLE001 - 索引失败不阻断启动
+                logger.warning(f"索引创建跳过（不影响正确性）: {exc}")

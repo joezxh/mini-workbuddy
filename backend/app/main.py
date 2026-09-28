@@ -108,6 +108,13 @@ async def lifespan(app: FastAPI):
         except Exception as _col_err:
             logger.warning(f"补齐新列失败(忽略): {_col_err}")
 
+        # 性能索引（HNSW / pg_trgm）：幂等，失败仅告警（Phase 3 T1）
+        try:
+            from app.db.startup_migrations import create_performance_indexes
+            create_performance_indexes(engine)
+        except Exception as _idx_err:
+            logger.warning(f"性能索引创建失败(忽略): {_idx_err}")
+
     # 启动审计日志批量写入协程
     try:
         start_audit_writer()
