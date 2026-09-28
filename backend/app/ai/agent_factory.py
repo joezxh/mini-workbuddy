@@ -201,6 +201,86 @@ class AgentFactory:
         toolkit = build_toolkit(self._db, config.get("tools"))
         return model, toolkit
 
+    def _rag_kwargs(self, config: dict, toolkit) -> dict:
+        """按配置装配原生 RAGMiddleware（对齐文档 §7 / D16）。
+
+        未配置 ``knowledge_bases`` 时返回空 dict（不改动既有 Agent 构造语义）；
+        agentic 模式下 ``RAGMiddleware.list_tools`` 不会被 Agent 自动调用，
+        必须手动并入 Toolkit。
+        """
+        kb_ids = config.get("knowledge_bases") or []
+        if not kb_ids:
+            return {}
+
+        import asyncio
+
+        from agentscope.tool import Toolkit
+
+        from app.services.kb.rag.knowledge_factory import knowledge_base
+        from app.services.kb.rag.rag_middleware import build_rag_middleware
+
+        tenant_id = config.get("tenant_id")
+        if not tenant_id:
+            logger.warning("[RAG] 缺少 tenant_id，跳过 RAG 中间件装配")
+            return {}
+
+        from app.db.database import SessionLocal
+        from app.services.kb.rag.embedding_factory import build_embedding_model
+        from app.services.kb.rag.pg_vector_store import PgVectorStore
+        from agentscope.rag import KnowledgeBase
+
+        async def _build():
+            kbs = []
+            for kid in kb_ids:
+                # Agent 运行期检索发生在请求之外，故 store 取长生命周期
+                # （与 Agent 同存活），不走 async with 退出。
+                store = PgVectorStore(
+                    SessionLocal, tenant_id=tenant_id,
+                    dimensions=self._kb_dimensions(f"kb_{kid}"),
+                )
+                await store.__aenter__()
+                kbs.append(KnowledgeBase(
+                    name=str(kid),
+                    description=f"知识库 {kid}",
+                    embedding_model=build_embedding_model(),
+                    vector_store=store,
+                    collection=f"kb_{kid}",
+                    metadata_filter={"tenant_id": tenant_id},  # 深度防御
+                ))
+            return kbs
+
+        try:
+            kbs = asyncio.run(_build())
+        except Exception as exc:  # noqa: BLE001 - RAG 装配失败不阻断 Agent 创建
+            logger.warning(f"[RAG] 知识库装配失败，Agent 以无 RAG 模式创建: {exc}")
+            return {}
+        if not kbs:
+            return {}
+
+        mw = build_rag_middleware(kbs, config.get("rag", {}))
+        try:
+            rag_tools = asyncio.run(mw.list_tools()) or []
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[RAG] 检索工具收集失败: {exc}")
+            rag_tools = []
+        merged_toolkit = Toolkit(tools=[*toolkit.tools, *rag_tools]) if rag_tools else toolkit
+        return {"toolkit": merged_toolkit, "middlewares": [mw]}
+
+    def _kb_dimensions(self, collection_name: str) -> int:
+        """取 collection 维度；缺失时回退嵌入模型维度（D19 由 create_collection 强校验）。"""
+        from sqlalchemy import select
+
+        from app.models.kb.kb_collection import KbCollection
+
+        coll = self._db.execute(
+            select(KbCollection).where(KbCollection.name == collection_name)
+        ).scalar_one_or_none()
+        if coll is not None:
+            return coll.dimensions
+        from app.config import settings
+
+        return settings.GPUSTACK_EMBEDDING_DIMENSION
+
     def _create_general_agent(self, config: dict):
         """通用对话 Agent"""
         from agentscope.agent import Agent
@@ -210,6 +290,7 @@ class AgentFactory:
             system_prompt=config.get("sys_prompt", "你是一个智能助手，可以回答各种问题。"),
             model=model,
             toolkit=toolkit,
+            **self._rag_kwargs(config, toolkit),
         )
 
     def _create_thinking_agent(self, config: dict):
@@ -254,6 +335,7 @@ class AgentFactory:
             system_prompt=config.get("sys_prompt", "你是一位专业领域助手，在特定领域具有深入的专业知识和经验。"),
             model=model,
             toolkit=toolkit,
+            **self._rag_kwargs(config, toolkit),
         )
 
     def _create_react_agent(self, config: dict):

@@ -135,6 +135,17 @@ def test_kb_subapp_no_business_crud_after_d1():
     assert client.get("/health").status_code == 200
 
 
+def test_rag_kwargs_disabled_without_knowledge_bases():
+    """D16：未配置 knowledge_bases 时不改动 Agent 构造（返回空 kwargs）。"""
+    from app.ai.agent_factory import AgentFactory
+
+    factory = AgentFactory.__new__(AgentFactory)  # 不触发 __init__ 的 DB 依赖
+    assert factory._rag_kwargs({}, None) == {}
+    assert factory._rag_kwargs({"knowledge_bases": []}, None) == {}
+    # 有 kb 但缺 tenant_id → 显式跳过（不静默出错）
+    assert factory._rag_kwargs({"knowledge_bases": ["kb_1"]}, None) == {}
+
+
 def test_kb_service_token_channel_default_disabled(monkeypatch):
     """服务令牌通道默认禁用（fail-closed），配置后可用。"""
     from app.services.kb import kb_app as kb_app_mod
