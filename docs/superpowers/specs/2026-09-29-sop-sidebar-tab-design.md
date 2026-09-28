@@ -143,3 +143,117 @@
 - **实时快照频率**：逐步发送 `sop_run` 会增加 SSE 事件量。步骤数为个位数，开销可接受；若后续模板步骤数量级增长，改为仅状态变化时发送。
 - **侧栏信息密度**：严格保持选择器形态，配置能力下沉到抽屉，避免窄侧栏堆砌表单。
 - **内置模板只读**：防止用户改坏系统内置骨架；需要定制走「另存为」。
+
+## 8. 持久化规范：自定义模板的 PostgreSQL 存储
+
+> 本节为存储层**规范说明**，不引入代码改动（已确认只补规范）。§4.1 中的代码改动清单不受本节影响。
+
+### 8.1 存储定位（结论先行）
+
+- 生产环境**已经是 PostgreSQL**：`app/config/_database.py:22` 的 `DATABASE_URL` 固定为 `postgresql://...`；`app/db/database.py` 的 `connect_args` 亦注明"仅对 psycopg2/PostgreSQL 生效"。
+- `SOPTemplate`（`app/models/sop.py`）继承 `app.db.database.Base`，并在 `app/db/init_models.py` 登记，由 `main.py` 的 `Base.metadata.create_all(bind=engine, tables=non_kb)` 建表 —— 与项目其它非 `kb_*` 表**完全同一机制**（`kb_*` 三表由迁移 006 独占）。
+- 出现的 SQLite 仅存在于离线单测 `tests/ai/sop/test_sop_service.py`（`sqlite:///:memory:`），是测试脚手架，不代表生产存储。
+- 因此**不存在"从 SQLite 迁到 PostgreSQL"的数据迁移**。需要规定的是：首次建表的幂等性、种子数据的幂等写入、以及未来表结构演进的通道。
+
+### 8.2 完整字段定义
+
+表 `sop_templates`：
+
+| 字段 | PostgreSQL 类型 | 空 | 默认 | 约束 | 用途 |
+|---|---|---|---|---|---|
+| `id` | BIGSERIAL | 否 | 自增 | 主键 | 代理主键 |
+| `template_key` | VARCHAR(100) | 否 | — | 唯一 + 索引 | 模板稳定标识，对应代码注册表 id；种子幂等依据 |
+| `name` | VARCHAR(200) | 否 | — | | 模板名称 |
+| `description` | TEXT | 是 | NULL | | 模板描述 |
+| `tags` | JSON | 是 | NULL | | 标签列表（字符串数组） |
+| `definition` | JSON | 否 | — | | `SOPDefinition` 序列化结果 |
+| `builtin` | BOOLEAN | 否 | false | | true=系统内置（种子可刷新）；false=预设/用户自建 |
+| `enabled` | BOOLEAN | 否 | true | | 停用后从默认列表隐藏 |
+| `created_by` | VARCHAR(100) | 是 | NULL | | 创建人；种子写入 `"system"` |
+| `created_at` | TIMESTAMP | 否 | now() | | 创建时间 |
+| `updated_at` | TIMESTAMP | 否 | now() | 更新时 now() | 更新时间 |
+
+`definition` 列以 `model_dump(mode="json")` 写入（枚举已转为字符串），结构为：
+`SOPDefinition{name, description, steps[], source, template_id}`，其中每步
+`SOPStepDef{subject, description, executor_agent, verifier_type(ai|human|none), verifier_agent, max_attempts, loop(none|goal), goal_max_iters, goal_max_retries, goal_verifier_reset_ctx, exec_mode(serial|parallel), group_id, artifact_key}`。
+
+### 8.3 表结构 DDL（主键 / 索引 / 约束）
+
+SQLAlchemy 在 PostgreSQL 上实际生成的等价 DDL：
+
+```sql
+CREATE TABLE sop_templates (
+    id            BIGSERIAL     NOT NULL,
+    template_key  VARCHAR(100)  NOT NULL,
+    name          VARCHAR(200)  NOT NULL,
+    description   TEXT,
+    tags          JSON,
+    definition    JSON          NOT NULL,
+    builtin       BOOLEAN       NOT NULL DEFAULT false,
+    enabled       BOOLEAN       NOT NULL DEFAULT true,
+    created_by    VARCHAR(100),
+    created_at    TIMESTAMP     NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP     NOT NULL DEFAULT now(),
+    PRIMARY KEY (id),
+    CONSTRAINT uq_sop_templates_template_key UNIQUE (template_key)
+);
+CREATE INDEX ix_sop_templates_template_key ON sop_templates (template_key);
+-- 各列另有 COMMENT ON COLUMN（由模型 comment= 生成，与 kb_document 等表风格一致）
+```
+
+- **主键**：`id BIGSERIAL`。模型用 `BigInteger().with_variant(Integer, "sqlite")`，PostgreSQL 侧渲染为 BIGSERIAL；sqlite 变体仅供离线单测。
+- **唯一约束**：`template_key` 唯一，同时承担两个职责 —— 种子幂等（不重复插入）与防止同名模板相互覆盖。
+- **索引**：`unique=True` 已隐含唯一索引，`index=True` 额外生成 `ix_sop_templates_template_key`，属冗余但与项目其它表写法一致，保留。
+- **时间列**：依赖数据库 `now()`；`updated_at` 由 SQLAlchemy `onupdate` 维护。
+
+### 8.4 首次建表 / 已有数据兼容
+
+- **首次建表**：`create_all` 默认 `checkfirst=True`，表已存在则跳过，已落库数据不会丢失。
+- **种子幂等**（`SOPTemplateService.seed`）：按 `template_key` 判定 —— 不存在则插入；存在且 `builtin=true` 则刷新 `name/description/tags/definition`（系统拥有的骨架可随代码演进）；存在且非 builtin 则**跳过**，保留用户改动。
+- **存量数据**：`sop_templates` 为本次新增表，无历史存量，无数据迁移工作量。
+- **未来演进**：`create_all` **不会为已存在的表补列**。后续新增/修改列必须走 `alembic` 迁移（仓库已有 `alembic/` 与 001-006），不能依赖重启自动生效。
+- **读取兼容**：`definition` 以 JSON 文本存储，读取侧统一经 `SOPDefinition.model_validate` 校验；今后为 `SOPDefinition` 增加字段必须是可选字段，否则既有行会校验失败。
+
+### 8.5 读写接口与调用逻辑
+
+分层与项目一致（`routers → services → models`）：
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| Model | `app/models/sop.py` | 表定义；登记于 `app/db/init_models.py` |
+| Service | `app/services/sop_service.py` | `list_templates` / `get` / `get_by_key` / `create` / `update` / `delete` / `seed` |
+| Router | `app/routers/sop.py` | `GET`、`POST /api/v1/sop/templates`；`GET/PUT/DELETE /{id}`；`POST /seed` |
+| 执行期解析 | `app/ai/agent_factory.py::_create_sop_agent` | 模板定义解析链（见 §4.3） |
+| 前端 | `frontend/src/api/sop.ts` | 列表 / 新建 / 更新 / 删除 |
+
+调用逻辑要点：
+
+- **检索**：`list_templates` 先按 `enabled` 过滤，再在内存做关键词匹配（模板量级为十位数，无需全文索引）。
+- **执行期解析顺序**：`sop_definition` → 代码注册表 `get_template()` → **DB `get_by_key()`** → `sop_source` → 仅在未提供 `template_key` 时才回退 `builtin:thinking`；给了 `template_key` 却查不到则显式报错（见 §4.3）。
+- **种子触发**：`POST /api/v1/sop/seed`，可重复调用。
+
+### 8.6 并发与事务一致性
+
+- **事务规范**：service 只做 `flush` + `commit`，**禁止** `with self.db.begin()`（项目统一约束；`app/services/base_service.py` 含 `begin`，是历史反例，不得参照）。
+- **会话**：经 `get_db` 依赖注入（`autocommit=False`、`expire_on_commit=False`），单请求一会话。
+- **写冲突**：当前**无乐观锁**。同一模板被两个用户并发编辑时，后提交者整体覆盖先提交者（`update` 为全字段赋值）。缓解手段：唯一约束保证 `template_key` 不重复；`create` 前显式查重并返回 409。
+- **删除**：内置模板（`builtin=true`）由应用层禁止删除并返回 400；表上无外键依赖，删除无级联风险。
+- **批量**：`seed()` 在一次事务内完成全部 upsert 后 `commit`，中途异常由调用方回滚。
+
+> 若后续需要真正的并发编辑保护，再引入 `version` 整数列做乐观锁（`UPDATE ... WHERE id=? AND version=?`，影响行数为 0 即判冲突）。本次不实现。
+
+### 8.7 与项目其它表的一致性核对
+
+| 项 | `sop_templates` | 项目其它表 |
+|---|---|---|
+| 主键 | BigInteger 自增 → BIGSERIAL | 一致（如 `ai_tool_definition`） |
+| 列注释 | `comment=` → COMMENT ON COLUMN | 一致（如 `kb_document`） |
+| 建表方式 | `create_all`（非 kb 表） | 一致；仅 `kb_*` 走迁移 006 |
+| JSON 列 | 使用 `JSON` | 一致（如 `ai_tool_definition`、`ai_mcp_client`） |
+
+### 8.8 未纳入本次的后续项
+
+- `definition` 改 `JSONB` + GIN 索引以支持按内容检索
+- `version` 乐观锁
+- `sop_templates` 的显式 Alembic 迁移脚本（**新增列前必须**）
+- 单测改用真实 PostgreSQL（当前为 SQLite 内存库）
