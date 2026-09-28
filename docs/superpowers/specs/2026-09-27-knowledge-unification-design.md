@@ -16,6 +16,10 @@
 > 分类树/知识库列表缓存（`kb_cache.py`，Redis + 内存回退，写后显式失效）；
 > RBAC 权限点 `kb:view/upload/delete/admin` 与 `wiki:write`（管理员直通、查不到即拒绝）。
 > 测试 535 passed / 4 failed（4 个为基线遗留 ai_context 鉴权问题，零新增）。
+> ✅ **2026-09-28 Phase 3 内容面完成**：QA 直构 Chunk（D15，仅问题嵌入、answer 随 metadata）、
+> 表格行导入/预览（CSV/xlsx，embed_field 单选、其余列进 metadata）、多模态图片资产
+> （2MB/文搜图，D9）、外部代理 CRUD + 连通性测试（SSRF：仅 https、禁内网/环回）、
+> 摄取管线 dry-run（解析→切块中间产物预览，不落库不嵌入）。测试 545 passed / 4 failed（遗留）。
 > 未做且需另案：D17 裁剪 `app/ai/knowledge/rag_pipeline.py`（D18 明确 wiki `/ask` 链路不走中间件，
 > `wiki_rag.py` 仍依赖它）、`pipeline_config` 键名重命名（D8）、Agent 端到端 RAG 联调。
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
