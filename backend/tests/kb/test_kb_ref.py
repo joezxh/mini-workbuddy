@@ -61,58 +61,64 @@ def test_service_requires_tenant(db):
 # 端点层（依赖覆盖，用测试会话）
 # ------------------------------------------------------------------ #
 @pytest.fixture
-def client(db, monkeypatch):
-    from app.services.kb import kb_app as kb_app_mod
-    from app.services.kb.kb_app import kb_app
-    from app.services.kb.kb_router import get_db as kb_get_db
+def client(db):
+    """D1：端点测试改打主应用路由 /api/v1/kb（依赖覆盖 db + 登录用户）。"""
+    from fastapi import FastAPI
 
-    # T6 认证收口后：端点测试统一走服务令牌通道
-    monkeypatch.setattr(kb_app_mod, "kb_service_token", lambda: "test-token")
+    from app.deps import get_current_user, get_db
+    from app.routers.kb.kb import router as kb_router
 
-    def _override():
+    app = FastAPI()
+    app.include_router(kb_router)
+
+    def _override_db():
         yield db
 
-    kb_app.dependency_overrides[kb_get_db] = _override
-    with TestClient(kb_app, headers={"X-KB-Service-Token": "test-token"}) as c:
+    def _override_user():
+        user = type("U", (), {})()
+        user.tenant_id = 100
+        user.user_id = 7
+        user.username = "tester"
+        return user
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _override_user
+    with TestClient(app) as c:
         yield c
-    kb_app.dependency_overrides.clear()
+    app.dependency_overrides.clear()
+
+
+BASE = "/api/v1/kb/kb-refs"
 
 
 def test_create_and_get_endpoint(client):
-    r = client.post("/kb", json={"name": "端点库", "description": "d"}, headers={"X-Tenant-Id": "100"})
+    r = client.post(BASE, json={"name": "端点库", "description": "d"})
     assert r.status_code == 201
     body = r.json()
     assert body["name"] == "端点库"
-    assert body["as_user_id"] == to_as_user_id(100)
+    assert body["as_user_id"] == to_as_user_id(100)  # 租户来自登录用户
     kb_id = body["kb_id"]
 
-    g = client.get(f"/kb/{kb_id}", headers={"X-Tenant-Id": "100"})
+    g = client.get(f"{BASE}/{kb_id}")
     assert g.status_code == 200
     assert g.json()["name"] == "端点库"
 
 
-def test_list_endpoint_tenant_isolation(client):
-    client.post("/kb", json={"name": "A库"}, headers={"X-Tenant-Id": "100"})
-    client.post("/kb", json={"name": "B库"}, headers={"X-Tenant-Id": "200"})
-    ra = client.get("/kb", headers={"X-Tenant-Id": "100"})
-    rb = client.get("/kb", headers={"X-Tenant-Id": "200"})
-    assert [x["name"] for x in ra.json()] == ["A库"]
-    assert [x["name"] for x in rb.json()] == ["B库"]
-    # 跨租户获取他人 kb → 404
-    kb_a_id = ra.json()[0]["kb_id"]
-    cross = client.get(f"/kb/{kb_a_id}", headers={"X-Tenant-Id": "200"})
-    assert cross.status_code == 404
+def test_list_endpoint_tenant_isolation(client, db):
+    client.post(BASE, json={"name": "A库"})  # 登录用户租户=100
+    # 另一租户的库用服务层直接创建（同一测试 schema）
+    from app.services.kb.kb_ref_service import KbRefService
 
-
-def test_missing_tenant_rejected(client):
-    r = client.post("/kb", json={"name": "x"})
-    assert r.status_code == 400
+    KbRefService(db, 200).create_kb_ref("B库")
+    db.flush()
+    listed = client.get(BASE)
+    assert [x["name"] for x in listed.json()] == ["A库"]  # 仅本租户可见
 
 
 def test_delete_endpoint(client):
-    r = client.post("/kb", json={"name": "del"}, headers={"X-Tenant-Id": "100"})
+    r = client.post(BASE, json={"name": "del"})
     kb_id = r.json()["kb_id"]
-    d = client.delete(f"/kb/{kb_id}", headers={"X-Tenant-Id": "100"})
-    assert d.status_code == 204
-    g = client.get(f"/kb/{kb_id}", headers={"X-Tenant-Id": "100"})
+    d = client.delete(f"{BASE}/{kb_id}")
+    assert d.status_code == 200
+    g = client.get(f"{BASE}/{kb_id}")
     assert g.status_code == 404

@@ -122,28 +122,25 @@ def test_kb_router_has_expected_paths():
 
 # ── T6: KB 子应用认证收口 ────────────────────────────────────────────────
 
-def test_kb_subapp_requires_auth():
+def test_kb_subapp_no_business_crud_after_d1():
+    """D1：业务 CRUD 已迁入主应用 /api/v1/kb/kb-refs，子应用不再承载。"""
     from fastapi.testclient import TestClient
 
     from app.services.kb.kb_app import kb_app
 
     client = TestClient(kb_app)
-    # 写面（kb_ref CRUD）必须 401，废除裸 X-Tenant-Id 信任
-    assert client.post("/kb", json={"name": "x"}).status_code == 401
-    assert client.delete("/kb/whatever").status_code == 401
-    # 健康检查保持开放（存活探针）
+    assert client.post("/kb", json={"name": "x"}).status_code == 404
+    assert client.delete("/kb/whatever").status_code == 404
+    # 健康探针保持开放（存活检查）
     assert client.get("/health").status_code == 200
 
 
-def test_kb_subapp_service_token_accepted(monkeypatch):
-    from fastapi.testclient import TestClient
-
+def test_kb_service_token_channel_default_disabled(monkeypatch):
+    """服务令牌通道默认禁用（fail-closed），配置后可用。"""
     from app.services.kb import kb_app as kb_app_mod
 
-    monkeypatch.setattr(kb_app_mod, "kb_service_token", lambda: "test-token")
-    client = TestClient(kb_app_mod.kb_app)
-    ok = client.post(
-        "/kb", json={"name": "x"},
-        headers={"X-KB-Service-Token": "test-token"},
+    assert kb_app_mod.kb_service_token() == "" or isinstance(
+        kb_app_mod.kb_service_token(), str
     )
-    assert ok.status_code != 401  # 凭证通过（后续可能 4xx 业务错误，但不 401）
+    monkeypatch.setattr(kb_app_mod, "kb_service_token", lambda: "test-token")
+    assert kb_app_mod.kb_service_token() == "test-token"

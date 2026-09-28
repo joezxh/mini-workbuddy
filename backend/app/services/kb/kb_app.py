@@ -32,7 +32,6 @@ from app.services.kb.embedding_config import (
     describe_embedding_config,
     resolve_embedding_config,
 )
-from app.services.kb.kb_router import router as kb_router
 from app.services.kb.parent_child_chunker import ParentChildChunker
 from app.services.kb.qa_chunker import QaChunker
 
@@ -71,9 +70,9 @@ async def require_service_auth(request: Request) -> None:
 
 kb_app = FastAPI(title="AgentScope KB RAG Service", lifespan=_lifespan)
 
-# kb_ref 知识库登记 REST 端点：/kb（创建/列出/获取/删除）
-# 认证收口（spec T6）：写面强制 Bearer JWT 或 X-KB-Service-Token，不再裸信任 X-Tenant-Id
-kb_app.include_router(kb_router, dependencies=[Depends(require_service_auth)])
+# D1：kb_ref 业务 HTTP 面已迁入主应用 /api/v1/kb/kb-refs（主 get_db + get_current_user）。
+# 子应用仅保留内核健康探针与能力发现（/health、/embedding_models、/chunkers），
+# 不再承载任何 CRUD；独立部署（uvicorn app.services.kb.kb_app:kb_app）仍可用于内核自检。
 
 # 切片器注册表（P1 Task 10 + spec §10.3）：索引管线按 chunker_type 选择切片策略
 CHUNKER_REGISTRY = {

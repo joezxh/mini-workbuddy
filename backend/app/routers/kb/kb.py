@@ -20,8 +20,8 @@ from app.deps import get_current_user, get_db
 from app.models.kb.kb_document import KbDocument
 from app.models.sys.sys_user import SysUser
 from app.services.kb.document_pipeline import run_document_ingest
-from app.services.kb.kb_app import CHUNKER_REGISTRY
 from app.services.kb.parser_selector import supported_media_types
+from app.services.kb.rag.chunker_factory import CHUNKER_REGISTRY, chunker_schemas
 
 router = APIRouter(prefix="/api/v1/kb", tags=["通用知识库"])
 
@@ -224,8 +224,72 @@ def supported_content_types():
 
 @router.get("/chunkers")
 def chunkers():
-    """已注册切片器（approx_token / qa / parent_child）与参数 Schema。"""
+    """已注册切片器（approx_token / qa / parent_child）与参数 Schema（D6）。"""
+    return chunker_schemas()
+
+
+# ── kb_ref 登记（D1：HTTP 面自子应用迁入主应用，租户取自登录用户）────────────
+
+class KbRefCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+@router.post("/kb-refs", status_code=201)
+def create_kb_ref(
+    body: KbRefCreate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.kb_ref_service import KbRefService
+
+    svc = KbRefService(db, _tenant_id(current_user))
+    ref = svc.create_kb_ref(
+        body.name, body.description,
+        getattr(current_user, "user_id", None),
+    )
+    db.commit()
+    return {"kb_id": ref.kb_id, "name": ref.name, "as_user_id": ref.as_user_id}
+
+
+@router.get("/kb-refs")
+def list_kb_refs(
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.kb_ref_service import KbRefService
+
+    svc = KbRefService(db, _tenant_id(current_user))
     return [
-        {"chunker_type": t, "parameters_schema": cls.Parameters.model_json_schema()}
-        for t, cls in CHUNKER_REGISTRY.items()
+        {"kb_id": r.kb_id, "name": r.name, "as_user_id": r.as_user_id}
+        for r in svc.list_kb_refs()
     ]
+
+
+@router.get("/kb-refs/{kb_id}")
+def get_kb_ref(
+    kb_id: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.kb_ref_service import KbRefService
+
+    ref = KbRefService(db, _tenant_id(current_user)).get_kb_ref(kb_id)
+    if ref is None:
+        raise HTTPException(status_code=404, detail="kb 不存在")
+    return {"kb_id": ref.kb_id, "name": ref.name, "as_user_id": ref.as_user_id}
+
+
+@router.delete("/kb-refs/{kb_id}")
+def delete_kb_ref(
+    kb_id: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.kb_ref_service import KbRefService
+
+    svc = KbRefService(db, _tenant_id(current_user))
+    if not svc.delete_kb_ref(kb_id):
+        raise HTTPException(status_code=404, detail="kb 不存在")
+    db.commit()
+    return {"deleted": kb_id}
