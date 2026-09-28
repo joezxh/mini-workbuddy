@@ -20,6 +20,12 @@ from app.deps import get_current_user, get_db
 from app.models.kb.kb_document import KbDocument
 from app.models.sys.sys_user import SysUser
 from app.services.kb.document_pipeline import run_document_ingest
+from app.services.kb.kb_permissions import (
+    KB_ADMIN,
+    KB_DELETE,
+    KB_UPLOAD,
+    require_kb_permission,
+)
 from app.services.kb.parser_selector import supported_media_types
 from app.services.kb.rag.chunker_factory import CHUNKER_REGISTRY, chunker_schemas
 
@@ -73,8 +79,12 @@ def upload_document(
     chunker_type: str = Query("approx_token"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
 ):
-    """上传文档：落 kb_document(pending)，后台执行 AgentScope 摄取管线。"""
+    """上传文档：落 kb_document(pending)，后台执行 AgentScope 摄取管线。
+
+    权限：``kb:upload``（管理员直通；Phase 3 T3）。
+    """
     tenant_id = _tenant_id(current_user)
     _require_knowledge(db, kid)
 
@@ -131,6 +141,7 @@ def delete_document(
     uuid_code: str,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_DELETE)),
 ):
     tenant_id = _tenant_id(current_user)
     doc = _get_document(db, tenant_id, uuid_code)
@@ -240,6 +251,7 @@ def create_kb_ref(
     body: KbRefCreate,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
 ):
     from app.services.kb.kb_ref_service import KbRefService
 
@@ -285,6 +297,7 @@ def delete_kb_ref(
     kb_id: str,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
 ):
     from app.services.kb.kb_ref_service import KbRefService
 

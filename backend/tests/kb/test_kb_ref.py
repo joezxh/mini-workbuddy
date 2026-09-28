@@ -79,6 +79,8 @@ def client(db):
         user.tenant_id = 100
         user.user_id = 7
         user.username = "tester"
+        # 管理员直通（Phase 3 T3 权限点），避免测试依赖 sys_menu 等系统表
+        user.is_admin = True
         return user
 
     app.dependency_overrides[get_db] = _override_db
