@@ -10,13 +10,14 @@ from __future__ import annotations
 import asyncio
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.job_runner import run_in_background
 from app.deps import get_current_user, get_db
+from app.db.database import SessionLocal
 from app.models.kb.kb_document import KbDocument
 from app.models.sys.sys_user import SysUser
 from app.services.kb.document_pipeline import run_document_ingest
@@ -306,3 +307,167 @@ def delete_kb_ref(
         raise HTTPException(status_code=404, detail="kb 不存在")
     db.commit()
     return {"deleted": kb_id}
+
+
+# ── Phase 3：Q&A / 表格行 / 多模态资产（对齐文档 §8，D15/D9）────────────────
+
+class QaRecordsBody(BaseModel):
+    records: list[dict]  # [{question, answer, tags?}]
+
+
+@router.post("/collections/{collection}/qa-records", status_code=201)
+def create_qa_records(
+    collection: str,
+    body: QaRecordsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """Q&A 直构 Chunk（D15）：仅问题被嵌入，答案随 metadata 返回。"""
+    from app.services.kb.rag.content_service import ingest_qa_records
+
+    count = ingest_qa_records(
+        db, _tenant_id(current_user), collection, body.records,
+        session_factory=SessionLocal,
+    )
+    return {"ingested": count}
+
+
+@router.get("/collections/{collection}/qa-records")
+def get_qa_records(
+    collection: str,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.rag.content_service import list_qa_records
+
+    return list_qa_records(db, _tenant_id(current_user), collection, limit)
+
+
+@router.post("/collections/{collection}/table-records/import", status_code=201)
+def import_table_records(
+    collection: str,
+    file: UploadFile = File(...),
+    embed_field: str = Form(..., description="作为 embedding 的列（单选）"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """表格导入（D15）：embed_field 列被嵌入，其余列作可过滤元数据。"""
+    from app.services.kb.rag.content_service import ingest_table_rows, parse_table_bytes
+
+    data = file.file.read()
+    rows = parse_table_bytes(data, file.filename or "table.csv")
+    count = ingest_table_rows(
+        db, _tenant_id(current_user), collection, rows, embed_field,
+        session_factory=SessionLocal,
+    )
+    return {"ingested": count, "rows": len(rows)}
+
+
+@router.post("/collections/{collection}/table-records/preview")
+def preview_table_records(
+    collection: str,
+    file: UploadFile = File(...),
+    limit: int = Query(20, ge=1, le=200),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """导入前预览：解析前 N 行，校验字段识别（不落库、不嵌入）。"""
+    from app.services.kb.rag.content_service import parse_table_bytes
+
+    data = file.file.read()
+    try:
+        rows = parse_table_bytes(data, file.filename or "t.csv", limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"columns": sorted({k for r in rows for k in r}), "rows": rows}
+
+
+@router.post("/collections/{collection}/assets", status_code=201)
+def upload_asset(
+    collection: str,
+    file: UploadFile = File(...),
+    caption: str = Form("", description="图片描述/OCR 文本（被嵌入，供文搜图）"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """图片资产（D9：仅文搜图——caption 入库被嵌入，图搜图原生不支持）。"""
+    import mimetypes
+
+    from app.config import settings
+    from app.services.kb.rag.content_service import save_image_asset
+
+    data = file.file.read()
+    mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "image/png"
+    try:
+        asset = save_image_asset(
+            db, _tenant_id(current_user), collection, data,
+            file.filename or "image.png", mime, caption,
+            storage_dir=settings.UPLOAD_DIR / "kb_assets",
+            session_factory=SessionLocal,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return {"id": asset.id, "file_path": asset.file_path, "size": asset.size}
+
+
+@router.get("/collections/{collection}/assets")
+def list_assets_endpoint(
+    collection: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    from app.services.kb.rag.content_service import list_assets
+
+    return list_assets(db, _tenant_id(current_user), collection)
+
+
+# ── 摄取管线 dry-run（spec §10.7：单步调试，不落库）────────────────────────
+
+@router.post("/pipelines/dry-run")
+def pipeline_dry_run(
+    file: UploadFile = File(...),
+    chunker_type: str = Form("approx_token"),
+    chunker_params: str = Form('{}', description='JSON，如 {"chunk_size":256}'),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """样例文件走完整解析→切块链路并返回各步中间产物；**不落库、不嵌入**。"""
+    import json as _json
+
+    from app.services.kb.parser_selector import guess_media_type, select_parser
+    from app.services.kb.rag.chunker_factory import build_chunker
+
+    data = file.file.read()
+    filename = file.filename or "sample.md"
+    try:
+        params = _json.loads(chunker_params) if chunker_params else {}
+    except _json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"chunker_params 非 JSON: {exc}")
+
+    try:
+        parser = select_parser(guess_media_type(filename))
+        sections = asyncio.run(parser.parse(
+            file=data if data else filename, filename=filename,
+        ))
+        chunker = build_chunker(chunker_type, params)
+        chunks = asyncio.run(chunker.chunk(sections))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return {
+        "sections": [
+            {"source": s.source,
+             "preview": (s.content.text or "")[:200]
+             if hasattr(s.content, "text") else "[DataBlock]"}
+            for s in sections
+        ],
+        "chunks": [
+            {"chunk_index": c.chunk_index, "total_chunks": c.total_chunks,
+             "preview": (c.content.text or "")[:200]
+             if hasattr(c.content, "text") else "[DataBlock]",
+             "metadata": c.metadata}
+            for c in chunks
+        ],
+    }

@@ -182,6 +182,8 @@ ROUTER_SPECS: List[RouterSpec] = [
 
     # --- 28.1 通用知识库认证路由（spec §10.5；子应用仅内核间调用）---
     RouterSpec("app.routers.kb.kb", tags=["通用知识库"]),
+    # --- 28.2 外部知识库检索代理（spec §10.2 proxy；SSRF 防护）---
+    RouterSpec("app.routers.kb.kb_proxy", tags=["外部知识库代理"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),
