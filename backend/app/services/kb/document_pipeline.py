@@ -1,40 +1,25 @@
-"""文档摄取管线（spec §10.3）：AgentScope Parser → Chunker → KbIngestService。
+"""文档摄取管线（对齐文档 §8.1 / D4）：原生三步，无自研中间格式。
 
-状态机：pending → processing → completed | failed；失败写入
-``kb_document.error_detail``（含步骤名），整档可重试（重灌即幂等 upsert）。
+    select_parser(mime) → parser.parse(bytes) → build_chunker(...).chunk(sections)
+    → await kb.insert_document(chunks, document_id=..., document_metadata=...)
 
-同步执行体供 ``job_runner.run_in_background`` 调用（调用方负责开/关 Session，
-本函数内部按步骤 commit 状态）。``embed_fn`` 可注入（测试替换 / 换 embedding 后端）。
+嵌入由 ``KnowledgeBase`` 内部完成（原生强制），维度与 ``kb_collection.dimensions``
+强校验（D19）。父子段落由 ``Chunk.metadata['parent_content']`` 随检索返回，
+不依赖 join（D13）。后台任务由调用方（``job_runner``）托管 Session。
+
+``knowledge_factory`` 可注入（测试替换真实嵌入模型）。
 """
 from __future__ import annotations
 
 import asyncio
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from loguru import logger
 from sqlalchemy.orm import Session
 
 from app.models.kb.kb_document import KbDocument
-from app.services.kb.ingest_service import EmbedFn, KbIngestService, build_embed_fn
-from app.services.kb.parser_selector import select_parser
-from app.services.kb.pgvector_store import PGVectorStore, SegmentInput
-
-# 扩展名 → IANA 媒体类型（仅供 Parser 选择；能力面仍以 parser.supported_media_types 为准）
-_EXT_MEDIA = {
-    "pdf": "application/pdf",
-    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "xls": "application/vnd.ms-excel",
-    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-    "gif": "image/gif", "bmp": "image/bmp", "webp": "image/webp",
-}
-
-
-def guess_media_type(filename: str) -> str:
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if ext in _EXT_MEDIA:
-        return _EXT_MEDIA[ext]
-    return "text/markdown" if ext in ("md", "markdown") else "text/plain"
+from app.services.kb.parser_selector import guess_media_type, select_parser
+from app.services.kb.rag.chunker_factory import build_chunker
 
 
 def _fail(db: Session, doc_id: int, step: str, exc: Exception) -> None:
@@ -54,12 +39,11 @@ def run_document_ingest(
     filename: str,
     chunker_type: str = "approx_token",
     chunker_params: Optional[dict] = None,
-    embedding_code: Optional[str] = None,
-    embed_fn: Optional[EmbedFn] = None,
+    embedding_code: Optional[str] = None,  # noqa: ARG001 - 兼容旧签名，原生后由 provider 决定
+    embed_fn: Optional[Callable] = None,   # noqa: ARG001 - 兼容旧签名；原生链路不再需要
+    knowledge_factory: Optional[Callable] = None,
 ) -> int:
-    """同步执行整条管线；返回写入切片数。失败落 failed 状态后原样抛出。"""
-    from app.services.kb.kb_app import CHUNKER_REGISTRY
-
+    """同步执行整条原生管线；返回写入切片数。失败落 failed 状态后原样抛出。"""
     doc = db.get(KbDocument, doc_id)
     if doc is None:
         raise ValueError(f"文档不存在: {doc_id}")
@@ -68,39 +52,58 @@ def run_document_ingest(
     db.commit()
 
     try:
-        # 1) 解析（AgentScope Parser；TextParser 兼容 bytes/str）
+        # 1) 解析：原生 Parser（bytes 直传）
         parser = select_parser(guess_media_type(filename))
         sections = asyncio.run(parser.parse(
             file=file_bytes if file_bytes is not None else filename,
             filename=filename,
         ))
 
-        # 2) 切块（注册表内选择；参数经 Parameters 模型校验）
-        chunker_cls = CHUNKER_REGISTRY.get(chunker_type)
-        if chunker_cls is None:
-            raise ValueError(f"未知 chunker_type: {chunker_type!r}")
-        params_model = chunker_cls.Parameters(**(chunker_params or {}))
-        chunker = chunker_cls(parameters=params_model)
+        # 2) 切块：原生 chunker_type 注册表（参数经 Parameters 校验）
+        chunker = build_chunker(chunker_type, chunker_params)
         chunks = asyncio.run(chunker.chunk(sections))
+        if not chunks:
+            raise ValueError(f"文档 {filename} 未产出任何切片")
 
-        # 3)+4) 向量化 + 幂等落库（复用既有服务）
-        if embed_fn is None:
-            embed_fn = build_embed_fn(embedding_code)
-        store = PGVectorStore(db, tenant_id)
-        service = KbIngestService(store, embed_fn)
-        segments: List[SegmentInput] = []
-        for c in chunks:
-            content = c.content.text if hasattr(c.content, "text") else None
-            if not content:
-                continue  # DataBlock（多模态）切片 Phase 2 暂不落库，multimodal 形态处理
-            segments.append(SegmentInput(
-                chunk_index=c.chunk_index,
-                content=content,
-                metadata=dict(c.metadata or {}),
-            ))
-        count = service.ingest_document(doc.collection, doc.uuid_code, segments)
+        # 3) 落库：KnowledgeBase.insert_document（嵌入在其内部完成）
+        async def _insert() -> int:
+            if knowledge_factory is not None:
+                async with knowledge_factory() as kb:
+                    await kb.ensure_collection()
+                    await kb.insert_document(
+                        chunks,
+                        document_id=doc.uuid_code,
+                        document_metadata={
+                            "filename": filename,
+                            "kb_document_id": doc.id,
+                            "source": filename,
+                        },
+                    )
+                return len(chunks)
+            from app.db.database import SessionLocal
+            from app.services.kb.rag.knowledge_factory import knowledge_base
 
-        # 5) 收尾
+            async with knowledge_base(
+                SessionLocal,
+                collection_name=doc.collection,
+                tenant_id=tenant_id,
+                name=doc.name,
+                description=filename,
+            ) as kb:
+                await kb.ensure_collection()
+                await kb.insert_document(
+                    chunks,
+                    document_id=doc.uuid_code,
+                    document_metadata={
+                        "filename": filename,
+                        "kb_document_id": doc.id,
+                        "source": filename,
+                    },
+                )
+            return len(chunks)
+
+        count = asyncio.run(_insert())
+
         doc.status = "completed"
         doc.segment_count = count
         db.commit()

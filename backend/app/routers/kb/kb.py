@@ -7,6 +7,7 @@ Service 内核间调用；前端与业务一律走本路由（主应用认证 + 
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -21,7 +22,6 @@ from app.models.sys.sys_user import SysUser
 from app.services.kb.document_pipeline import run_document_ingest
 from app.services.kb.kb_app import CHUNKER_REGISTRY
 from app.services.kb.parser_selector import supported_media_types
-from app.services.kb.retrieval_service import KbRetrievalService
 
 router = APIRouter(prefix="/api/v1/kb", tags=["通用知识库"])
 
@@ -178,37 +178,38 @@ def retrieve(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """统一检索（spec §10.4）：hybrid=向量+关键词 RRF；metadata_filters 键值过滤。
+    """统一检索（对齐文档 §8.2 / D3/D10）：底层只调 KnowledgeBase.search。
 
-    AgentScope ``metadata_filter`` 语义（key==value 深度防御）本地落地为
-    ``kb_segment.metadata_`` JSONB 的键值匹配；Phase 3 下推 SQL（Task 1 table）。
+    * 原生 ``search(queries, top_k, score_threshold)`` 无 metadata_filters 参数，
+      故临时筛选在构造期以 ``metadata_filter`` 固化；
+    * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）。
     """
     tenant_id = _tenant_id(current_user)
-    svc = KbRetrievalService.from_session(db, tenant_id)
-    if body.hybrid:
-        hits = svc.hybrid_search_by_text(
-            collection, body.query, top_k=body.top_k,
-            score_threshold=body.score_threshold,
-        )
-    else:
-        hits = svc.search_by_text(
-            collection, body.query, top_k=body.top_k,
-            score_threshold=body.score_threshold,
-        )
-    if body.metadata_filters:
-        hits = [
-            h for h in hits
-            if all((h.metadata or {}).get(k) == v
-                   for k, v in body.metadata_filters.items())
-        ]
+    from app.db.database import SessionLocal
+    from app.services.kb.rag.knowledge_factory import knowledge_base
+
+    async def _search():
+        async with knowledge_base(
+            SessionLocal,
+            collection_name=collection,
+            tenant_id=tenant_id,
+            name=collection,
+            metadata_filter=body.metadata_filters,
+        ) as kb:
+            return await kb.search(
+                queries=[body.query], top_k=body.top_k,
+                score_threshold=body.score_threshold,
+            )
+
+    hits = asyncio.run(_search())
     return {
         "results": [
             {
                 "score": h.score,
                 "document_id": h.document_id,
-                "chunk_index": h.chunk_index,
-                "content": h.content,
-                "metadata": h.metadata,
+                "chunk_index": h.chunk.chunk_index,
+                "content": h.chunk.content.text if hasattr(h.chunk.content, "text") else None,
+                "metadata": getattr(h.chunk, "metadata", None),
             }
             for h in hits
         ]

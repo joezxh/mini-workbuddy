@@ -2,6 +2,15 @@
 
 > 日期：2026-09-27
 > 状态：已评审 · Phase 1/2 已实施并通过验收（2026-09-27，见 docs/superpowers/plans/2026-09-27-knowledge-unification-phase{1,2}.md）；Phase 3 计划就绪待执行（2026-09-27-knowledge-unification-phase3.md）
+>
+> ✅ **2026-09-28 原生化重构已落地**：RAG 链路按 D1–D19 切换为 AgentScope 2.0.8 原生形态——
+> 新增 `app/services/kb/rag/`（`PgVectorStore(VectorStoreBase)` 七方法 + async 生命周期、
+> `embedding_factory` 原生 EmbeddingModel、`knowledge_base` 句柄装配、`rag_middleware`、
+> `chunker_factory` 原生 chunker_type 注册表 + Q&A/表格行直构 Chunk）；摄取改为
+> `Parser.parse → Chunker.chunk → KnowledgeBase.insert_document`；`/api/v1/kb` 检索底层唯一入口
+> `KnowledgeBase.search(queries, top_k, score_threshold)`。测试 293 passed（kb+unit）。
+> 待办（本次未做）：D1 裁剪 kb_app 子应用（其 `/kb` 面仍有测试依赖）、D17 裁剪
+> `app/ai/knowledge/rag_pipeline.py`（`wiki_rag.py` 仍引用）、D16 Agent 侧 RAGMiddleware 接入。
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
 > 范围：`backend/app/models/{wiki,kb,connectors}`、`backend/app/routers/*`、`frontend/src/views/kms` + `views/admin/knowledge`
 >
