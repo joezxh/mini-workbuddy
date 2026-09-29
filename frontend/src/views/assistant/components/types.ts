@@ -115,7 +115,7 @@ export type ChatMessage = AiChatMessage & {
    *  research-async：深度研究后台异步任务卡片
    *  research-legacy：旧版深度研究消息（过程面板 + 报告） */
   renderKind?: 'thinking' | 'research' | 'scheduled' | 'general' | 'skill' | 'agent' | 'team' | 'data'
-    | 'research-async' | 'research-legacy' | 'react'
+    | 'research-async' | 'research-legacy' | 'react' | 'sop'
   attachments?: Array<{
     file_id?: string
     db_id?: number
@@ -134,6 +134,16 @@ export type ChatMessage = AiChatMessage & {
   unifiedSteps?: UnifiedStep[]
   /** 统一产物事件（跨模式归一化产物画廊，SSE type=artifact） */
   unifiedArtifacts?: UnifiedArtifact[]
+
+  /** SOP 模式：流程定义 + 运行状态快照（对应后端 SOPRunState，用于刷新后恢复） */
+  sopRun?: {
+    definition: SopDefinition
+    phase: SopPhase
+    steps: SopStepState[]
+    runStateJson?: string
+  }
+  /** SOP 模式：各步交接摘要（from=步骤名，content=交付内容） */
+  sopHandover?: Array<{ from: string; content: string }>
 
   /** 扁平事件（跨模式归一化，含 thinking/text_chunk/tool_call 等，回放时直读） */
   executionEvents?: Array<import('@/types/shared').ExecutionEvent>
@@ -269,6 +279,16 @@ export interface UnifiedStep {
   branch_label?: string | null
   /** 分支判断说明 */
   branch_note?: string | null
+  /** SOP 扩展：当前尝试次数 */
+  attempt?: number
+  /** SOP 扩展：最大尝试次数 */
+  max_attempts?: number
+  /** SOP 扩展：验收方式（ai / human / none） */
+  verifier_type?: string
+  /** SOP 扩展：验收反馈（驳回原因 / 通过意见） */
+  feedback?: string | null
+  /** SOP 扩展：loop=goal 当前迭代轮次 */
+  goal_iter?: number
 }
 
 /** 统一产物事件（对应后端 ArtifactItem，SSE type=artifact） */
@@ -285,5 +305,53 @@ export interface UnifiedArtifact {
   status: 'generating' | 'ready' | 'failed'
   error?: string | null
   suggestion?: string | null
+}
+
+// ─────────────────────────────────────────────────────────────
+// SOP 模式数据结构（对应后端 app/ai/sop/schemas.py）
+// ─────────────────────────────────────────────────────────────
+
+/** SOP 阶段（后端 SOPPhase） */
+export type SopPhase = 'PENDING' | 'RUNNING' | 'AWAITING' | 'COMPLETED' | 'FAILED'
+
+/** SOP 步骤定义（后端 SOPStepDef） */
+export interface SopStepDef {
+  subject: string
+  description?: string
+  executor_agent?: string
+  verifier_type?: 'ai' | 'human' | 'none'
+  verifier_agent?: string | null
+  max_attempts?: number
+  loop?: 'none' | 'goal'
+  goal_max_iters?: number
+  goal_max_retries?: number
+  goal_verifier_reset_ctx?: boolean
+  exec_mode?: 'serial' | 'parallel'
+  group_id?: string | null
+  artifact_key?: string | null
+}
+
+/** SOP 流程定义（后端 SOPDefinition） */
+export interface SopDefinition {
+  name: string
+  description?: string
+  steps: SopStepDef[]
+  source?: string
+  template_id?: number | null
+}
+
+/** SOP 单步运行时状态（后端 StepRuntimeState） */
+export interface SopStepState {
+  index: number
+  subject: string
+  phase: SopPhase
+  attempt: number
+  max_attempts: number
+  verifier_type: string
+  feedback?: string | null
+  output?: string | null
+  goal_iter?: number
+  exec_mode?: string
+  group_id?: string | null
 }
 

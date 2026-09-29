@@ -18,6 +18,7 @@ import ResearchPanel from './renderers/ResearchPanel.vue'
 import ResearchReportRenderer from './renderers/ResearchReportRenderer.vue'
 import DeepResearchTaskCard from './renderers/DeepResearchTaskCard.vue'
 import ScheduledTaskCard from './renderers/ScheduledTaskCard.vue'
+import SOPRenderer from './renderers/sop/SOPRenderer.vue'
 
 /** 主渲染分支种类 */
 export type RenderKind =
@@ -30,6 +31,7 @@ export type RenderKind =
   | 'research-legacy'
   | 'research-async'
   | 'scheduled'
+  | 'sop'
   | 'default'
 
 export interface RenderContext {
@@ -68,6 +70,7 @@ export function resolveRenderKind(msg: ChatMessage, ctx: RenderContext = {}): Re
   if ((msg.skillEvent && (msg.executionId || msg.sseUrl)) || usesTopTimelineBranch(msg)) {
     return 'skill'
   }
+  if (msg.renderKind === 'sop') return 'sop'
   if (msg.renderKind === 'thinking' || (ctx.currentSessionType === 'thinking' && msg.thinkingMode)) {
     return 'thinking'
   }
@@ -167,6 +170,17 @@ export const RENDER_SPECS: Record<RenderKind, RenderSpec> = {
       }),
     }],
     showArtifacts: false, showText: true, textBare: true,
+  },
+  sop: {
+    primary: [{
+      component: SOPRenderer,
+      props: m => ({
+        executionId: m.executionId, streaming: false,
+        sopRun: m.sopRun, sopHandover: m.sopHandover,
+        unifiedSteps: m.unifiedSteps, unifiedArtifacts: m.unifiedArtifacts,
+      }),
+    }],
+    showArtifacts: true, showText: true,
   },
   'research-legacy': {
     primary: [
