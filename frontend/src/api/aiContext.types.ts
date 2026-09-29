@@ -135,3 +135,42 @@ export interface FinalizeStrategy {
   display_label: string
   display_color: string
 }
+
+// ─────────────────────────────────────────────────────────────
+// 记忆子系统（spec 2026-09-29 §9.8 / §12.2）
+// ─────────────────────────────────────────────────────────────
+
+/** GET /memory/health — L3 provider 健康 + 记忆配置摘要 */
+export interface MemoryHealth {
+  ok: boolean
+  provider: string
+  ltm_enabled: boolean
+  recall_enabled: boolean
+  snapshot_enabled: boolean
+  fail_open: boolean
+  top_k: number
+  max_chars: number
+  history_limit: number
+  detail: Record<string, unknown>
+}
+
+/** GET /memory/stats — 按 memory_kind 聚合的单桶 */
+export interface MemoryKindBucket {
+  memory_kind: string
+  count: number
+  tokens: number
+}
+
+/** GET /memory/stats — 按 source_mode 聚合的单桶 */
+export interface MemorySourceModeBucket {
+  source_mode: string
+  count: number
+}
+
+/** GET /memory/stats — 会话记忆统计（已过滤过期条目） */
+export interface MemoryStats {
+  session_id: number
+  total: number
+  by_kind: MemoryKindBucket[]
+  by_source_mode: MemorySourceModeBucket[]
+}

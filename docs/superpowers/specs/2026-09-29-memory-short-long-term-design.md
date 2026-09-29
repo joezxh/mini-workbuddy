@@ -554,6 +554,15 @@ def get_provider() -> LongTermMemoryProvider:
 - `routers/ai/ai_agent.py` `/chat/stream` 读取侧改为 `await abuild_memory_brief(...)`（注入 `agent_config["sys_prompt"]`，原为 legacy `build_cross_mode_brief`）
 - 灰度与降级：`ENABLE_CROSS_MODE_RECORDER=false` → 空（沿用既有灰度语义）；新增 `MEMORY_RECALL_ENABLED`（默认 true）可一键回退 legacy brief；新链路异常/结果为空 → 自动降级 legacy brief，legacy 再失败返回空串，**永不阻断主流程** — `431b5c5`
 
+**记忆健康 / 统计接口（§9.8 / §12.2，原 P2）**
+
+- `routers/ai/ai_context.py` 新增 `GET /ai/context/memory/health`：L3 `provider.health()` + `MEMORY_*` 配置摘要。fail-open 语义——provider 异常仍返回 200 且 `ok=false`，前端无需异常分支；不受 `ENABLE_CROSS_MODE_RECORDER` 影响（与 `/strategies` 同策略）
+- 新增 `GET /ai/context/memory/stats?session_id=`：按 `memory_kind` / `source_mode` 聚合 + `token_estimate` 求和，且**过滤已过期条目**（既有 `/breakdown` 未过滤会统计到 TTL 外数据）；查询命中迁移 0001 新建的 `(tenant_id, memory_kind, expires_at)` 索引
+- 前端：`api/aiContext.ts` 新增 `getMemoryHealth()` / `getMemoryStats(sessionId)`，`aiContext.types.ts` 新增 `MemoryHealth` / `MemoryStats` 等类型
+- 测试：`test_ai_context_endpoints.py` 新增 7 用例（health 3 + stats 4），该文件累计 19 通过
+
+> 注：`ai_context` 路由注册前缀为 `/api/v1/ai/context`（见 §12.1），前端按全路径调用。
+
 **测试**：`test_cross_mode_afinalize.py`、`test_cross_mode_recorder.py`、`test_context_manager_delegation.py`、`test_team_cross_mode_memory.py`、`test_memory_facade.py`（含 L1 快照缓存隔离修复）、`test_memory_read_recall.py`（读取侧 5 用例：来源标注、异常降级、空结果降级、开关回退、flag 守护）
 
 ### 16.2 未完成的本设计功能
@@ -563,7 +572,6 @@ def get_provider() -> LongTermMemoryProvider:
    - ReMe `auto_dream`（daily → digest 沉淀）
    - ReMe `embedded` 模式（`REME_MODE=embedded`）
    - L2 pgvector 语义检索（G6）
-   - 前端 provider 健康 / 记忆统计接口（§9.8 / §12.2：`api/aiContext.ts` 尚未新增）
 
 2. **设计明确不做（符合 G5）**：Graphiti / `UserMemoryManager` 并入 L3 —— 另案，未做。
 

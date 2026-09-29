@@ -72,3 +72,25 @@ export function listFinalizeStrategies() {
     '/api/v1/ai/context/strategies',
   )
 }
+
+// ─────────────────────────────────────────────────────────────
+// 记忆子系统：GET /memory/health、GET /memory/stats（spec 2026-09-29 §9.8 / §12.2）
+// ─────────────────────────────────────────────────────────────
+
+import type { MemoryHealth, MemoryStats } from './aiContext.types'
+
+/**
+ * GET /api/v1/ai/context/memory/health — L3 provider 健康 + 记忆配置摘要
+ *
+ * 后端 fail-open：provider 不可用也返回 200（body.ok=false），前端无需异常分支。
+ */
+export function getMemoryHealth() {
+  return api.get<MemoryHealth>('/api/v1/ai/context/memory/health')
+}
+
+/** GET /api/v1/ai/context/memory/stats?session_id= — 会话记忆统计（已剔除过期条目） */
+export function getMemoryStats(sessionId: string | number) {
+  return api.get<MemoryStats>('/api/v1/ai/context/memory/stats', {
+    params: { session_id: sessionId },
+  })
+}
