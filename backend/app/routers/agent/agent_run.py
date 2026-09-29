@@ -51,6 +51,8 @@ class ConfirmRequest(BaseModel):
     action: str = Field(..., pattern="^(approve|reject|interrupt)$")
     tool_calls: list[dict] = Field(default_factory=list)
     accept_rules: bool = False
+    message: str = ""
+    """人工意见：SOP 步骤验收驳回时填写原因（spec §4.9）。"""
 
 
 @router.post("/{execution_id}/confirm")
@@ -81,7 +83,22 @@ async def confirm_execution(
     from app.ai.events.hitl import resolve_pause, resume_hitl
     resolve_pause(db, execution_id=execution_id, action=req.action,
                   accept_rules=req.accept_rules)
-    resume_hitl(handle, req.action, req.tool_calls)
+
+    # SOP 步骤验收：改走引擎 resume 载荷（携带驳回原因），
+    # 其余模式仍用 agentscope 确认事件，行为不变。
+    resume_payload = None
+    try:
+        from app.ai.sop.agent import SOPAgent
+        if isinstance(getattr(handle, "agent", None), SOPAgent):
+            resume_payload = {
+                "confirmed": req.action == "approve",
+                "message": req.message or "",
+            }
+    except Exception:  # noqa: BLE001 - SOP 包不可用时不影响既有模式
+        resume_payload = None
+
+    resume_hitl(handle, req.action, req.tool_calls,
+                resume_payload=resume_payload)
     return {"ok": True, "action": req.action, "execution_id": execution_id}
 
 

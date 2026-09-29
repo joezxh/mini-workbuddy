@@ -188,6 +188,9 @@ ROUTER_SPECS: List[RouterSpec] = [
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),
 
+    # --- 30.1 SOP 模板库（自带完整 prefix /api/v1/sop，故 prefix 留空）---
+    RouterSpec("app.routers.sop", tags=["SOP 模板"]),
+
     # --- 31~32. 调解语音 RTC（迁移自 risk_control）---
     # voice_gateway 自带 prefix /duplex/voice，此处叠加 /api/v1
     RouterSpec("app.duplex.voice.websocket_gateway", prefix=API_V1_PREFIX, tags=["调解语音"]),

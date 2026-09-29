@@ -89,6 +89,9 @@ from app.models.workflow.workflow_flow import WorkflowFlow               # noqa:
 from app.models.workflow.workflow_execution_log import WorkflowExecutionLog  # noqa: F401
 from app.models.workflow.workflow_chain import WorkflowChain              # noqa: F401
 
+# --- SOP 模板 (sop_) ---
+from app.models.sop import SOPTemplate                                      # noqa: F401
+
 # --- 调解语音 RTC（迁移自 risk_control）---
 from app.models.duplex.duplex_voice_session import DuplexVoiceSession  # noqa: F401
 from app.models.duplex.duplex_voice_turn import DuplexVoiceTurn        # noqa: F401

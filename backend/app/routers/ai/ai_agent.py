@@ -52,6 +52,13 @@ class ChatRequest(BaseModel):
     team_code: Optional[str] = None
     # 技能模式
     skill: Optional[dict] = None
+    # SOP 模式（spec §4.1/§4.3）
+    sop_template_id: Optional[str] = None
+    """所选模板标识；为空时后端回退到内置思考模板。"""
+    sop_definition: Optional[dict] = None
+    """动态生成的 SOPDefinition 字典，优先级高于 sop_template_id。"""
+    use_sop: bool = False
+    """thinking / deep_research 是否下沉为 SOPAgent 编排。"""
 
 
 class SessionCreateRequest(BaseModel):
@@ -199,20 +206,32 @@ async def chat_stream(
             # 通知前端 execution_id，供其打开 /stream 与 HITL 面板
             yield create_sse_response("_gateway_meta", {"execution_id": execution_id})
 
-            # 通过 SSEBridge 流式输出（同时发布统一信封到 bus）
-            bridge = SSEBridge()
             from app.ai.services.cross_mode_recorder import (
                 StreamAnswerCollector,
                 finalize_chat_stream,
             )
             collector = StreamAnswerCollector()
-            async for sse_event in bridge.stream_agent_reply(
-                agent, user_msg, bus=bus,
-                execution_id=execution_id, trace_id=None,
-                source_id=agent_config.get("name"),
-            ):
-                collector.feed(sse_event)
-                yield sse_event
+
+            if session_type == "sop":
+                # SOP 走专用驱动：注册运行以支持人工验收挂起/恢复（spec §4.9），
+                # 并在段末附 sop_run 快照供前端持久化恢复（§4.8）。
+                from app.ai.sop.runner import stream_sop_reply
+                async for sse_event in stream_sop_reply(
+                    agent, user_msg, execution_id=execution_id, bus=bus,
+                    user_id=uid, db=db,
+                ):
+                    collector.feed(sse_event)
+                    yield sse_event
+            else:
+                # 通过 SSEBridge 流式输出（同时发布统一信封到 bus）
+                bridge = SSEBridge()
+                async for sse_event in bridge.stream_agent_reply(
+                    agent, user_msg, bus=bus,
+                    execution_id=execution_id, trace_id=None,
+                    source_id=agent_config.get("name"),
+                ):
+                    collector.feed(sse_event)
+                    yield sse_event
 
             # 跨模式上下文收尾:按策略写 L2 + Mem0 + 审计(失败静默,不阻断 SSE)
             try:
@@ -288,6 +307,14 @@ def _build_agent_config(req: ChatRequest, session_type: str, db: Session) -> dic
     # 技能模式：传递 skill 配置
     if req.skill and session_type == "skill":
         config["skill"] = req.skill
+
+    # SOP 模式：模板标识 / 动态定义 / 下沉开关
+    if getattr(req, "sop_template_id", None):
+        config["sop_template_id"] = req.sop_template_id
+    if getattr(req, "sop_definition", None):
+        config["sop_definition"] = req.sop_definition
+    if getattr(req, "use_sop", False):
+        config["use_sop"] = True
 
     return config
 

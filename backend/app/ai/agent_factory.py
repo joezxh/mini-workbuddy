@@ -170,6 +170,8 @@ class AgentFactory:
                 return self._create_react_agent(config)
             case "team":
                 return self._create_team_agent(config)
+            case "sop":
+                return self._create_sop_agent(config)
             case "data":
                 # 数据分析模式：复用通用 Agent，SQLBot 能力经 AgentConfig.tools
                 # （tool_key=sqlbot_*）注入；会话收尾由 STRATEGY_TABLE["data"] 记录
@@ -296,9 +298,15 @@ class AgentFactory:
     def _create_thinking_agent(self, config: dict):
         """深度思考 Agent — 通过提示词引导逐步推理。
 
+        下沉开关：``config["use_sop"]=True`` 时改为返回内置思考模板的
+        ``SOPAgent``（spec §4.1 / §4.6）。默认仍走原生 Agent。
+
         注：旧版 ``thinking=True`` 参数在 2.x 已移除；若底层模型原生支持思考，
         可在模型配置的 ``parameters`` 中开启。
         """
+        if config.get("use_sop"):
+            return self._create_sop_agent({**config, "sop_source": "builtin:thinking"})
+
         from agentscope.agent import Agent
         model, toolkit = self._build_model_and_toolkit(config)
         return Agent(
@@ -309,12 +317,57 @@ class AgentFactory:
         )
 
     def _create_research_agent(self, config: dict):
-        """深度研究 Agent — 使用 ResearchOrchestrator 多步研究流程"""
+        """深度研究 Agent — 使用 ResearchOrchestrator 多步研究流程。
+
+        下沉开关：``config["use_sop"]=True`` 时改为返回内置研究模板的
+        ``SOPAgent``（spec §4.6）。**默认保留 ResearchOrchestrator**——
+        它会真实联网检索取证，而 SOP 默认执行器目前只调用 LLM，
+        默认切换会丢失联网取证能力，故需显式开启。
+        """
+        if config.get("use_sop"):
+            return self._create_sop_agent({**config, "sop_source": "builtin:research"})
+
         return ResearchAgent(
             db=self._db,
             model_id=config.get("model_id_db"),  # DB 模型 ID
             knowledge_bases=config.get("knowledge_bases"),
             name=config.get("name", "深度研究"),
+        )
+
+    def _create_sop_agent(self, config: dict):
+        """SOP 流程 Agent — 按模板/动态定义驱动多里程碑流程（spec §4.1）。
+
+        config 支持三种指定方式，按优先级：
+        1. ``sop_definition``：SOPDefinition 字典（动态生成场景）
+        2. ``sop_template_id``：代码注册表模板 id（如 ``builtin_thinking``）
+        3. ``sop_source``：内置模式标识（``builtin:thinking`` / ``builtin:research``）
+
+        三者都缺失时回退到内置思考模板，保证 session_type=sop 总有可用编排。
+        """
+        from app.ai.sop.agent import SOPAgent
+        from app.ai.sop.schemas import SOPDefinition
+        from app.ai.sop.templates import get_template, resolve_source
+
+        raw = config.get("sop_definition")
+        if raw:
+            definition = SOPDefinition.model_validate(raw)
+        else:
+            template = None
+            template_id = config.get("sop_template_id")
+            if template_id:
+                template = get_template(template_id)
+            if template is None and config.get("sop_source"):
+                template = resolve_source(config["sop_source"])
+            if template is None:
+                template = resolve_source("builtin:thinking")
+            definition = template.definition
+
+        return SOPAgent(
+            db=self._db,
+            definition=definition,
+            model_id=config.get("model_id_db"),
+            name=config.get("name") or definition.name,
+            state_json=config.get("sop_state_json"),
         )
 
     def _create_skill_agent(self, config: dict):

@@ -89,25 +89,37 @@ def build_resume_event(action: str, reply_id: Optional[str],
 
 
 def resume_hitl(handle: Any, action: str,
-                tool_calls: Optional[list[dict]] = None) -> bool:
+                tool_calls: Optional[list[dict]] = None,
+                resume_payload: Optional[dict] = None) -> bool:
     """恢复暂停中的执行：新起 consumer 续跑 agent.reply_stream(恢复事件)。
 
     handle.status 置回 running，并向 out_q 投递 hitl_resume 控制事件
     （execute 主循环 yield 它时发布信封并更新主记录状态）。
     新 consumer 结束（含异常）时投递哨兵唤醒主循环——与 execute() 的
     done_callback 哨兵机制一致，否则恢复完成后主循环会误判超时。
+
+    ``resume_payload`` 用于 SOP 人工验收路径（spec §4.9）：SOP 引擎以
+    ``{"confirmed", "message"}`` 载荷结算验收，既不接受 agentscope 确认事件，
+    也需要携带驳回原因，故与工具授权路径分开驱动。其余行为完全一致。
     """
     from app.ai.skills.execution import SkillEvent
 
-    tcs = tool_calls or getattr(handle.handler, "hitl_tool_calls", []) or []
-    if action == "interrupt" and handle.handler is not None:
-        # interrupt 恢复路径：ReplyEnd 的 finished_reason 应记为 interrupted
-        handle.handler.interrupted_flag = True
-    event = build_resume_event(action, handle.reply_id, tcs)
+    if resume_payload is None:
+        tcs = tool_calls or getattr(handle.handler, "hitl_tool_calls", []) or []
+        if action == "interrupt" and handle.handler is not None:
+            # interrupt 恢复路径：ReplyEnd 的 finished_reason 应记为 interrupted
+            handle.handler.interrupted_flag = True
+        event = build_resume_event(action, handle.reply_id, tcs)
 
-    async def _resume() -> None:
-        async for ev in handle.agent.reply_stream(inputs=event):
-            await handle.handler.handle(ev)
+        async def _resume() -> None:
+            async for ev in handle.agent.reply_stream(inputs=event):
+                await handle.handler.handle(ev)
+    else:
+        async def _resume() -> None:
+            async for ev in handle.agent.reply_stream(
+                inputs=None, resume=resume_payload
+            ):
+                await handle.handler.handle(ev)
 
     def _on_resumed_done(_task: asyncio.Task) -> None:
         try:
