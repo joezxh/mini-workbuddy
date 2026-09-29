@@ -2,7 +2,7 @@
 
 > **版本**：v1.0
 > **日期**：2026-09-29
-> **状态**：Partially Implemented（P0 + P1 主体已完成；P1 读取侧 recall 接线待收尾；P2 延后）
+> **状态**：Implemented（P0 + P1 全部完成，读写双侧均已接线；仅 P2 待做）
 > **落地工程**：MinWorkBuddy（`backend/app`）
 > **参照**：`docs/superpowers/specs/2026-09-29-context-memory-consolidated-design.md`（同日合并稿）
 
@@ -548,23 +548,26 @@ def get_provider() -> LongTermMemoryProvider:
 - `routers/ai/ai_agent.py` `/chat/stream`：`finalize_chat_stream` 异步化为 `afinalize_chat_stream`，内部 await L3 `provider.capture` + 写真实 `{provider}:{id}` 审计（修 G3）— `617c6ce` / `c7cc94b`
 - `routers/agent/agent_team.py` `/chat` 与 `/run`：按 `conversation_id` 复用/新建 `AiChatSession`（`AiChatSession.conversation_id` 列 + 迁移 `2026_09_29_0002`；`AiChatService.get_or_create_team_session`），再 `await afinalize_chat_stream` 写 L2+L3（真实 id）；`conversation_id` 缺失则 fail-open 跳过
 
-**测试**：`test_cross_mode_afinalize.py`、`test_cross_mode_recorder.py`、`test_context_manager_delegation.py`、`test_team_cross_mode_memory.py`、`test_memory_facade.py`（含 L1 快照缓存隔离修复）
+**读取侧接线（§9 #1）**
+
+- `ai/services/cross_mode_recorder.py` 新增 `abuild_memory_brief()`：`MemoryService.recall()`（L0/L2/L3 装配 + L1 Redis 快照缓存 + 统一预算裁剪）→ `WorkingMemory.to_brief()`（修 G8：每条带 `[kind|src]` 来源标注；`turn`/`system` 不进 brief，避免 L0 重复注入）
+- `routers/ai/ai_agent.py` `/chat/stream` 读取侧改为 `await abuild_memory_brief(...)`（注入 `agent_config["sys_prompt"]`，原为 legacy `build_cross_mode_brief`）
+- 灰度与降级：`ENABLE_CROSS_MODE_RECORDER=false` → 空（沿用既有灰度语义）；新增 `MEMORY_RECALL_ENABLED`（默认 true）可一键回退 legacy brief；新链路异常/结果为空 → 自动降级 legacy brief，legacy 再失败返回空串，**永不阻断主流程** — `431b5c5`
+
+**测试**：`test_cross_mode_afinalize.py`、`test_cross_mode_recorder.py`、`test_context_manager_delegation.py`、`test_team_cross_mode_memory.py`、`test_memory_facade.py`（含 L1 快照缓存隔离修复）、`test_memory_read_recall.py`（读取侧 5 用例：来源标注、异常降级、空结果降级、开关回退、flag 守护）
 
 ### 16.2 未完成的本设计功能
 
-1. **读取侧 recall 未接线（P1 §9 #1，最高优先级缺口）**
-   设计要求的读取入口 `build_cross_mode_brief → MemoryService.recall(...).to_brief()` 尚未落地：`routers/ai/ai_agent.py:170` 仍调用 **legacy** `build_cross_mode_brief`（内部走 `ContextManager.get_context_with_mode_filter`，仅 L2 legacy 读取）。
-   结果：`MemoryService.recall`（L0+L2+L3 装配 + Redis 快照缓存 + 预算裁剪 + `to_brief` / `to_messages`）虽已实现，但在请求入口**未激活**——当前读取路径不享受 L1 Redis 缓存、跨模式 L3 召回与预算裁剪。
-   处置：将 `ai_agent.py` 读取侧改为 `MemoryService.recall(...).to_brief()`（或 `to_messages()` 注入 AgentScope），并保留 legacy 行为作为降级；需回归既有跨模式注入用例（`tests/integration/test_cross_mode_*`）。
-
-2. **P2 明确延后（设计 §13/§14 已标注"本期不做"）**
+1. **P2 明确延后（设计 §13/§14 已标注"本期不做"）**
    - ReMe `auto_memory`（LLM 事实抽取，`REME_AUTO_MEMORY_ENABLED` 默认 false）
    - ReMe `auto_dream`（daily → digest 沉淀）
    - ReMe `embedded` 模式（`REME_MODE=embedded`）
    - L2 pgvector 语义检索（G6）
    - 前端 provider 健康 / 记忆统计接口（§9.8 / §12.2：`api/aiContext.ts` 尚未新增）
 
-3. **设计明确不做（符合 G5）**：Graphiti / `UserMemoryManager` 并入 L3 —— 另案，未做。
+2. **设计明确不做（符合 G5）**：Graphiti / `UserMemoryManager` 并入 L3 —— 另案，未做。
+
+> 至此 §9 集成点 1（读取侧）与 2（写入侧）**双向接线均已落地**，设计 §13 的 P0 + P1 全部完成。
 
 ### 16.3 关联文档 `2026-09-29-context-memory-consolidated-design.md` §14 缺口处置
 
