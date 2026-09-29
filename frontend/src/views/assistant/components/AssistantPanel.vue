@@ -134,6 +134,12 @@
       <!-- P1.3：统一事件流订阅（HITL 确认面板按需渲染） -->
       <AgentEventStream :execution-id="currentExecutionId || ''" />
 
+      <!-- SOP 模式：选择要执行的 SOP 模板（不选则后端回退内置思考流程） -->
+      <SopTemplatePicker
+        v-if="sessionType === 'sop'"
+        v-model="selectedSopTemplateKey"
+      />
+
       <ChatInput
         ref="chatInputRef"
         v-model:input-text="inputText"
@@ -220,6 +226,7 @@ import SessionSidebar from './SessionSidebar.vue'
 import ChatContainer from './ChatContainer.vue'
 import AgentEventStream from './AgentEventStream.vue'
 import ChatInput from './ChatInput.vue'
+import SopTemplatePicker from './SopTemplatePicker.vue'
 import UnifiedTimeline from './UnifiedTimeline.vue'
 import { type UploadedFile } from './FileUploader.vue'
 import StatsCard from '@/components/common/StatsCard.vue'
@@ -313,6 +320,10 @@ watch(currentSession, () => {
 // 流式阶段的统一执行事件（归一化 step / artifact），实时驱动执行详情的时间线 Tab
 const streamingUnifiedStepsRef = ref<UnifiedStep[] | null>(null)
 const streamingUnifiedArtifactsRef = ref<UnifiedArtifact[] | null>(null)
+/** SOP 运行状态快照（后端 sop_run 事件；用于里程碑渲染与刷新恢复，spec §4.8） */
+const streamingSopRunRef = ref<NonNullable<ChatMessage['sopRun']> | undefined>(undefined)
+/** SOP 模式选中的模板标识（随请求体 sop_template_id 提交给后端） */
+const selectedSopTemplateKey = ref<string | null>(null)
 
 // 流式请求中断控制器
 let abortController: AbortController | null = null
@@ -501,7 +512,10 @@ const parsedMessages = computed<ChatMessage[]>(() =>
     // 离开会话/刷新后 loadMessages 拉回的消息需据此渲染 research-async 卡片并自动轮询进度
     const renderKind = (msg as any).renderKind || extra?.renderKind
     const asyncTask = (msg as any).asyncTask || extra?.asyncTask
-    return { ...msg, parsed, sqlbotData, executionId, skillEvent, thinkingMode, thinkingSteps, renderKind, asyncTask }
+    // SOP：运行状态与交接摘要从 extra_data 还原，刷新/重入后里程碑不丢（spec §4.8）
+    const sopRun = (msg as any).sopRun || extra?.sopRun
+    const sopHandover = (msg as any).sopHandover || extra?.sopHandover
+    return { ...msg, parsed, sqlbotData, executionId, skillEvent, thinkingMode, thinkingSteps, renderKind, asyncTask, sopRun, sopHandover }
   })
 )
 
@@ -1026,9 +1040,11 @@ async function sendMessage(text?: string) {
   // 导致 ChatContainer 通过 props 读到的始终是 null，时间线 Tab 无数据）
   const streamingUnifiedSteps = streamingUnifiedStepsRef
   const streamingUnifiedArtifacts = streamingUnifiedArtifactsRef
+  const streamingSopRun = streamingSopRunRef
   // 新一轮对话开始，清空上一轮残留的时间线数据
   streamingUnifiedSteps.value = null
   streamingUnifiedArtifacts.value = null
+  streamingSopRun.value = undefined
   // 执行详情面板模式标志：由后端 engine_decision 的 engine_code 可靠判定（后端 resolve_mode 只看 skill 信息，
   // 与 session_type 无关，故不能仅凭 activeSessionType 判断，否则事件不入队、界面卡在“技能执行中”）。
   // thinking 与 skill 共用该路径（两者 SSE 事件契约一致），保证展示与交互完全一致。
@@ -1096,6 +1112,10 @@ async function sendMessage(text?: string) {
         team_code: currentTeam.value ? currentTeam.value.code : null,
         model_id: selectedModelId.value || null,
         workspace_id: selectedWorkspaceId.value || null,
+        // SOP 模式：提交所选模板标识，未选则由后端回退到内置思考模板
+        ...(activeSessionType === 'sop'
+          ? { sop_template_id: selectedSopTemplateKey.value || null }
+          : {}),
         // SCHEDULED 模式：提交目标模式与优先级/超时/重试参数
         ...(activeSessionType === 'scheduled' ? {
           context: {
@@ -1193,6 +1213,9 @@ async function sendMessage(text?: string) {
                   msg.renderKind = 'team'
                 } else if (activeSessionType === 'scheduled') {
                   msg.renderKind = 'scheduled'; msg.asyncTask = streamingAsyncTask.value || undefined
+                } else if (activeSessionType === 'sop') {
+                  msg.renderKind = 'sop'
+                  msg.sopRun = streamingSopRun.value || undefined
                 }
                 messages.value.push(msg)
                 // team 模式同时被识别为 skill 模式，两个标记都要置位，
@@ -1429,6 +1452,14 @@ async function sendMessage(text?: string) {
                       renderKind: 'team' as const,
                     }
                   : {}),
+                // SOP 模式专属字段：驱动 SOPRenderer 渲染里程碑与人工验收
+                // （unifiedSteps/unifiedArtifacts 由通用分支带上，sopRun 缺失时 SOPRenderer 自动回退）
+                ...(activeSessionType === 'sop'
+                  ? {
+                      renderKind: 'sop' as const,
+                      sopRun: streamingSopRun.value || undefined,
+                    }
+                  : {}),
                 // 深度研究模式专属字段：驱动 DeepResearchExecutionPanel 渲染（Tab 在上、正文在下）
                 ...(activeSessionType === 'deep_research'
                   ? {
@@ -1552,6 +1583,17 @@ async function sendMessage(text?: string) {
               branch_label: chunk.branch_label ?? null,
               branch_note: chunk.branch_note ?? null,
             })
+          } else if (eventType === 'sop_run') {
+            // SOP 运行状态快照（spec §4.8）：供 SOPRenderer 渲染里程碑，
+            // 并在落库 extra_data 后支持刷新/重入恢复
+            if (chunk.definition) {
+              streamingSopRun.value = {
+                definition: chunk.definition,
+                phase: chunk.phase ?? 'RUNNING',
+                steps: chunk.steps ?? [],
+                runStateJson: chunk.runStateJson,
+              }
+            }
           } else if (eventType === 'progress' || eventType === 'engine_decision') {
             // 进度/引擎决策等执行事件：归一化为统一步骤，在执行详情时间线中展示
             // （text_chunk 已在正文显示、thinking 已在思考过程显示，故排除）
@@ -1567,6 +1609,16 @@ async function sendMessage(text?: string) {
                 elapsed_ms: null,
                 artifact_id: null,
               })
+            } else if (chunk.step_index !== undefined) {
+              // SOP 的 AI 验收结论：写回对应步骤的 feedback，而非新增一条伪步骤
+              const target = streamingUnifiedSteps.value.find(
+                (s: UnifiedStep) => s.seq === chunk.step_index
+              )
+              if (target) {
+                target.feedback = chunk.passed
+                  ? (chunk.message || '验收通过')
+                  : (chunk.message || '验收未通过')
+              }
             } else {
               streamingUnifiedSteps.value.push({
                 phase: '引擎决策',
@@ -1742,6 +1794,9 @@ async function sendMessage(text?: string) {
       } else if (activeSessionType === 'scheduled') {
         msg.renderKind = 'scheduled'
         msg.asyncTask = streamingAsyncTask.value || undefined
+      } else if (activeSessionType === 'sop') {
+        msg.renderKind = 'sop'
+        msg.sopRun = streamingSopRun.value || undefined
       }
       messages.value.push(msg)
       scrollToBottom(); await loadSessions()
