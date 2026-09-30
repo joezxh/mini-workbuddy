@@ -2,7 +2,7 @@
 
 > **版本**：v1.0
 > **日期**：2026-09-29
-> **状态**：Implemented（P0 + P1 全部完成，读写双侧均已接线；仅 P2 待做）
+> **状态**：Implemented（P0 + P1 + P2 全部完成；仅 Graphiti 另案按设计不做）
 > **落地工程**：MinWorkBuddy（`backend/app`）
 > **参照**：`docs/superpowers/specs/2026-09-29-context-memory-consolidated-design.md`（同日合并稿）
 
@@ -563,19 +563,19 @@ def get_provider() -> LongTermMemoryProvider:
 
 > 注：`ai_context` 路由注册前缀为 `/api/v1/ai/context`（见 §12.1），前端按全路径调用。
 
-**测试**：`test_cross_mode_afinalize.py`、`test_cross_mode_recorder.py`、`test_context_manager_delegation.py`、`test_team_cross_mode_memory.py`、`test_memory_facade.py`（含 L1 快照缓存隔离修复）、`test_memory_read_recall.py`（读取侧 5 用例：来源标注、异常降级、空结果降级、开关回退、flag 守护）
+**P2 能力（本次一并落地，对应 §13 P2 / §7.3 / G6）**
+
+- **ReMe `auto_memory` / `auto_dream`**：`RemeProvider` 新增两个 LLM 作业方法，job 名与超时可配（`REME_AUTO_MEMORY_JOB` / `REME_DREAM_JOB` / `REME_LLM_JOB_TIMEOUT_MS`）。统一走 `MemoryService.consolidate()`：duck-typing 能力发现（provider 不支持即 no-op）、失败 fail-open。`auto_memory` 随每轮 `afinalize_chat_stream` 的 L3 capture 触发；`auto_dream`（daily→digest，按日幂等、成本高）**不进每轮收尾**，改由运维端点 `POST /ai/context/memory/consolidate` 按需触发
+- **ReMe `embedded` 模式**：新增 `RemeEmbeddedProvider` —— 直接读写 `REME_WORKSPACE_ROOT` 下 Markdown（Memory as File），检索用进程内 BM25（英文词 + 中文 uni/bigram，无分词库依赖），多租户沿用路径前缀。**未**采用 `reme` Python 包：该包依赖 `agentscope.token`，与当前 agentscope 版本不兼容（2026-10-01 实测 `ImportError`）。factory 按 `REME_MODE` 选择 http/embedded，未知 mode fail-closed，缓存键含 mode
+- **L2 语义检索（修 G6）**：迁移 `2026_10_01_0001` 新增 `summary_embedding Vector(768)` + hnsw（`vector_cosine_ops`）；既有 `embedding_vector`（Text）从未写入，无法用于向量检索。**ORM 模型不声明该列**——现有 SQLite 单测会 `create_all` 该表，Vector 在 sqlite 下无编译器会直接报错，故读写改用声明式伪列 + `update`。`semantic_search()` 做余弦检索（租户 + 会话 + 未过期，失败静默）；`_load_l2_items` 改异步，语义命中与结构化结果合并去重并标 `l2s:`（priority=2，优先保留）
+
+**测试**：`test_cross_mode_afinalize.py`、`test_cross_mode_recorder.py`、`test_context_manager_delegation.py`、`test_team_cross_mode_memory.py`、`test_memory_facade.py`、`test_memory_read_recall.py`（读取侧 5 用例）、`test_ai_context_endpoints.py`（health/stats/consolidate 共 10 用例）、`test_memory_p2_consolidate.py`（7 用例）、`test_memory_reme_embedded.py`（10 用例）、`test_memory_l2_semantic.py`（9 用例）
 
 ### 16.2 未完成的本设计功能
 
-1. **P2 明确延后（设计 §13/§14 已标注"本期不做"）**
-   - ReMe `auto_memory`（LLM 事实抽取，`REME_AUTO_MEMORY_ENABLED` 默认 false）
-   - ReMe `auto_dream`（daily → digest 沉淀）
-   - ReMe `embedded` 模式（`REME_MODE=embedded`）
-   - L2 pgvector 语义检索（G6）
+1. **设计明确不做（符合 G5）**：Graphiti / `UserMemoryManager` 并入 L3 —— 另案，未做。
 
-2. **设计明确不做（符合 G5）**：Graphiti / `UserMemoryManager` 并入 L3 —— 另案，未做。
-
-> 至此 §9 集成点 1（读取侧）与 2（写入侧）**双向接线均已落地**，设计 §13 的 P0 + P1 全部完成。
+> 至此 §9 集成点 1（读取侧）与 2（写入侧）双向接线，以及 §13 的 **P0 + P1 + P2** 全部落地；本文仅剩 Graphiti 属设计明确排除项，非遗漏。
 
 ### 16.3 关联文档 `2026-09-29-context-memory-consolidated-design.md` §14 缺口处置
 
