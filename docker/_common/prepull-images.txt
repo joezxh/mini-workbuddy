@@ -1,0 +1,45 @@
+# =============================================================
+# 第三方基础镜像中转白名单
+#
+# 格式（列之间用空白分隔）：
+#   <源镜像>            <目标名（相对 BASE_REGISTRY）>          [实际拉取地址]
+#
+# 第三列可选：当源镜像直连不可达时，指定走 proxy registry 或国内镜像。
+# 缺省时直接用第一列地址拉取。
+#
+# 当前环境已配置代理，全部镜像改为直连官方源拉取，故第三列均未启用。
+# （历史曾用第三方 Docker Hub 镜像加速器，拉取慢且易卡死，已全部移除。）
+#
+# 目标名统一放在 base/ 命名空间下，业务 Dockerfile 全部只依赖这些地址。
+# =============================================================
+
+# ---------- NVIDIA CUDA ----------
+nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04    base/nvidia-cuda:12.8.1-cudnn-runtime-ubuntu24.04
+nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04      base/nvidia-cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+# ---------- 语言运行时 ----------
+python:3.12-slim                                base/python:3.12-slim
+python:3.10-slim                                base/python:3.10-slim
+node:20-alpine                                  base/node:20-alpine
+
+# ---------- Web / 代理 ----------
+nginx:alpine                                    base/nginx:alpine
+
+# ---------- SQLBot 官方基础镜像（已在阿里云 Ao 公开仓储，可直连）----------
+registry.cn-qingdao.aliyuncs.com/dataease/sqlbot-base:latest        base/sqlbot-base:latest
+registry.cn-qingdao.aliyuncs.com/dataease/sqlbot-python-pg:latest   base/sqlbot-python-pg:latest
+dataease/sqlbot:v1.10.1                                             base/sqlbot:v1.10.1
+
+# ---------- Dify 官方组件（remote-dify 直接用业务 tag，不改名）----------
+langgenius/dify-api:1.17.1                      dify-api:1.17.1
+langgenius/dify-web:1.17.1                      dify-web:1.17.1
+langgenius/dify-sandbox:0.2.15                  dify-sandbox:0.2.15
+langgenius/dify-plugin-daemon:0.6.10-local      dify-plugin-daemon:0.6.10-local
+
+# ---------- llama.cpp GGUF 推理服务（speech-to-speech 可选内置 LLM）----------
+ghcr.io/ggml-org/llama.cpp:server-cuda          base/llama-cpp:server-cuda
+
+# ---------- 本地基础设施（docker-compose.infra.yml 依赖）----------
+pgvector/pgvector:pg17                          base/pgvector:pg17
+redis/redis-stack-server:7.4.0-v8-x86_64        base/redis-stack-server:7.4.0-v8-x86_64
+library/neo4j:5.26                              base/neo4j:5.26
