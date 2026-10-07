@@ -1,10 +1,10 @@
 <template>
-  <div class="wiki-index">
+  <div class="wiki-index" :class="{ 'wiki-index--embedded': embedded }">
     <div class="wiki-layout">
       <!-- 左栏：侧边栏（标题 + 操作入口 + 分类树） -->
       <aside class="wiki-side">
         <div class="wiki-side__head">
-          <h2 class="wiki-side__title">{{ t('kmsWiki.title') }}</h2>
+          <h2 v-if="!embedded" class="wiki-side__title">{{ t('kmsWiki.title') }}</h2>
           <div class="wiki-side__actions">
             <a-tooltip :title="t('kmsWiki.addCategory')">
               <a-button class="wiki-side__icon-btn" size="small" @click="openCategoryModal('create')">
@@ -71,6 +71,23 @@
                 <template #icon><ExperimentOutlined /></template>
               </a-button>
             </a-tooltip>
+            <!-- OKF 合规层入口（spec §9.5）：按左栏选中的知识库导出/导入 -->
+            <a-button @click="handleOkfExport">
+              <template #icon><ExportOutlined /></template>
+              {{ t('kmsWiki.okfExport') }}
+            </a-button>
+            <a-button @click="okfFileInput?.click()">
+              <template #icon><ImportOutlined /></template>
+              {{ t('kmsWiki.okfImport') }}
+            </a-button>
+            <input
+              ref="okfFileInput"
+              type="file"
+              multiple
+              accept=".md,.markdown"
+              style="display: none"
+              @change="handleOkfImport"
+            />
             <a-button type="primary" @click="showCreateModal = true">
               <template #icon><PlusOutlined /></template>
               {{ t('kmsWiki.createArticle') }}
@@ -216,13 +233,15 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { BookOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { BookOutlined, ExperimentOutlined, PlusOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listArticles, createArticle, createCategory, updateCategory, deleteCategory, listCategories, searchArticles, listKnowledges, createKnowledge, updateKnowledge, deleteKnowledge } from '@/api/wiki'
+import { exportOkfBundle, importOkfBundle } from '@/api/kb'
 import dayjs from 'dayjs'
 
 const router = useRouter()
 const { t } = useI18n()
+withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 
 const articles = ref<any[]>([])
 const categoryTree = ref<any[]>([])
@@ -606,6 +625,64 @@ function clearFilter() {
   loadArticles()
 }
 
+// ── OKF 合规层（spec §9.5）──────────────────────────────────────────────
+const okfFileInput = ref<HTMLInputElement | null>(null)
+
+/** 导出/导入都以左栏选中的知识库为作用域 */
+function currentKnowledgeId(): number | null {
+  return selectedKind.value === 'knowledge' ? selectedId.value : null
+}
+
+async function handleOkfExport() {
+  const kid = currentKnowledgeId()
+  if (!kid) {
+    message.warning(t('kmsWiki.okfSelectFirst'))
+    return
+  }
+  try {
+    const res: any = await exportOkfBundle(kid)
+    const url = URL.createObjectURL(new Blob([res.data ?? res]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `okf-${kid}.zip`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kmsWiki.okfExportFailed'))
+  }
+}
+
+async function handleOkfImport(e: Event) {
+  const kid = currentKnowledgeId()
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = '' // 允许重复选同一批文件
+  if (!kid) {
+    message.warning(t('kmsWiki.okfSelectFirst'))
+    return
+  }
+  if (!files.length) return
+  try {
+    const payload: { path: string; content: string }[] = []
+    for (const f of files) {
+      payload.push({ path: f.name, content: await f.text() })
+    }
+    const report: any = await importOkfBundle(kid, payload)
+    let msg = t('kmsWiki.okfImportSuccess', {
+      imported: report.imported ?? 0,
+      skipped: report.skipped ?? 0,
+    })
+    if (report.warnings?.length) {
+      msg += t('kmsWiki.okfImportWarnings', { warnings: report.warnings.length })
+    }
+    message.success(msg)
+    page.value = 1
+    loadArticles()
+  } catch (err: any) {
+    message.error(err?.response?.data?.detail || t('kmsWiki.okfImportFailed'))
+  }
+}
+
 function handlePageChange(p: number) {
   page.value = p
   loadArticles()
@@ -779,5 +856,15 @@ function formatDate(dateStr: string) {
     max-height: 320px;
     overflow: auto;
   }
+}
+
+/* 内嵌于知识库管理 tab：去掉页面级留白、高度改自适应、隐藏与 tab 标签重复的标题 */
+.wiki-index--embedded {
+  padding: 0;
+  height: auto;
+}
+
+.wiki-index--embedded .wiki-side__head {
+  justify-content: flex-end;
 }
 </style>
