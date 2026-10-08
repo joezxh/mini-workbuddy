@@ -1,0 +1,79 @@
+# =============================================================
+# Mem0 本地部署（REST API + Dashboard）
+#
+# 复用已存在的外部网络 mwb-infra-network（由根 docker-compose.infra.yml 创建），
+# 其中的 mwb-postgres-pgvector 提供向量库、mwb-neo4j 提供图记忆。
+#
+# 启动前：
+#   cp .env.example .env       # 填入真实口令
+#   SET SRC_MEM0=D:\projects\github\mem0   （PowerShell）
+#   export SRC_MEM0=/path/to/mem0          （Bash）
+#
+# 首次还需要初始化数据库：
+#   docker exec -it mwb-postgres-pgvector psql -U postgres \
+#     -c "CREATE DATABASE mem0;" \
+#     -c "\c mem0" -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#
+# 端口：API 8888（容器内 8000） / Dashboard 3001（容器内 3000）
+# =============================================================
+
+# 镜像由 build.ps1 / build.sh 构建并打标签（因为 Dockerfile 位于本仓库、
+# 构建上下文位于 mem0 源码目录，两者不同根，compose 无法用相对路径表达）。
+# 直接用官方镜像的场景：把 image 改成 ACR 地址即可跳过构建。
+
+name: mem0-local
+
+services:
+  mem0-api:
+    image: ${MEM0_API_IMAGE:-mem0-api:local}
+    container_name: mem0-api
+    ports:
+      - "${MEM0_API_PORT:-8888}:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - POSTGRES_HOST=${POSTGRES_HOST:-mwb-postgres-pgvector}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DB=${POSTGRES_DB:-mem0}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_COLLECTION_NAME=memories
+      - NEO4J_URI=${NEO4J_URI:-bolt://mwb-neo4j:7687}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - APP_DB_NAME=${APP_DB_NAME:-mem0_app}
+      - JWT_SECRET=${JWT_SECRET}
+      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - DASHBOARD_URL=${DASHBOARD_URL:-http://localhost:3001}
+      - MEM0_TELEMETRY=false
+      - MEM0_DIR=/app/data
+      - HISTORY_DB_PATH=/app/data/history.db
+    volumes:
+      - mem0-data:/app/data
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+
+  mem0-dashboard:
+    image: ${MEM0_DASHBOARD_IMAGE:-mem0-dashboard:local}
+    container_name: mem0-dashboard
+    ports:
+      - "${MEM0_DASHBOARD_PORT:-3001}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8888}
+      - API_INTERNAL_URL=http://mem0-api:8000
+      - NEXT_PUBLIC_INSTANCE_NAME=${NEXT_PUBLIC_INSTANCE_NAME:-Mem0}
+    depends_on:
+      - mem0-api
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+
+networks:
+  mwb-infra-network:
+    external: true
+
+volumes:
+  mem0-data:

@@ -1,72 +1,133 @@
-# =============================================================
-# Mem0 本地构建启动脚本
-#
-# 用法：.\build.ps1
-# =============================================================
+<#
+.SYNOPSIS
+    构建 mem0 的 API 与 Dashboard 镜像。
+
+.DESCRIPTION
+    从 mem0 官方源码构建两个镜像，同时打上本地 tag（供 docker-compose.yml 使用）
+    与远端 ACR tag（供 push.ps1 推送）。
+
+.PARAMETER SourceRoot
+    mem0 源码 checkout 根目录，需包含 server/ 与 server/dashboard/。
+
+.PARAMETER Component
+    构建目标：api / dashboard / all，默认 all。
+
+.PARAMETER Tag
+    镜像版本标签，缺省取 registry.env 的 IMAGE_TAG。
+
+.EXAMPLE
+    .\build.ps1
+    .\build.ps1 -Component api -SourceRoot D:\projects\github\mem0 -Force
+#>
+param(
+    [string[]]$Component = @("all"),
+    [string]$SourceRoot = "D:\projects\github\mem0",
+    [string]$Tag,
+    [switch]$Force,
+    [switch]$NoCache
+)
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Mem0 本地部署 - 构建启动" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
-
-# -----------------------------------------------------------
-# 1. 检查 mem0 源码
-# -----------------------------------------------------------
-$mem0Source = "D:\projects\github\mem0"
-if (-not (Test-Path "$mem0Source\server\dashboard")) {
-    Write-Host "[1/4] 错误：mem0 源码不存在于 $mem0Source" -ForegroundColor Red
-    Write-Host "  请先克隆：git clone https://github.com/mem0ai/mem0.git $mem0Source" -ForegroundColor Red
+# ------------------------------------------------------------------
+# 读取 registry.env
+# ------------------------------------------------------------------
+$registryEnv = Join-Path (Split-Path -Parent $PSScriptRoot) "registry.env"
+if (-not (Test-Path $registryEnv)) {
+    Write-Host "[ERROR] 找不到 $registryEnv" -ForegroundColor Red
     exit 1
-} else {
-    Write-Host "[1/4] mem0 源码已就绪：$mem0Source" -ForegroundColor Green
 }
-
-# -----------------------------------------------------------
-# 2. 检查 PostgreSQL 数据库
-# -----------------------------------------------------------
-Write-Host "[2/4] 检查 PostgreSQL 数据库..." -ForegroundColor Yellow
-$pgReady = docker exec mwb-postgres-pgvector pg_isready -U postgres -d mem0 2>&1
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  -> mem0 数据库不存在，请先创建：" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  docker exec -it mwb-postgres-pgvector psql -U postgres \" -ForegroundColor White
-    Write-Host '    -c "CREATE DATABASE mem0;" \' -ForegroundColor White
-    Write-Host '    -c "\c mem0" \' -ForegroundColor White
-    Write-Host '    -c "CREATE EXTENSION IF NOT EXISTS vector;"' -ForegroundColor White
-    Write-Host ""
-    Write-Host "  创建完成后重新运行此脚本。" -ForegroundColor Red
-    exit 1
-} else {
-    Write-Host "  -> mem0 数据库就绪" -ForegroundColor Green
+$envMap = @{}
+foreach ($raw in (Get-Content $registryEnv)) {
+    $line = $raw.Trim()
+    if ($line -eq "" -or $line.StartsWith("#")) { continue }
+    $kv = $line -split "=", 2
+    if ($kv.Count -eq 2) { $envMap[$kv[0].Trim()] = $kv[1].Trim() }
 }
-
-# -----------------------------------------------------------
-# 3. 构建并启动
-# -----------------------------------------------------------
-Write-Host "[3/4] 构建并启动容器..." -ForegroundColor Yellow
-docker compose up -d --build
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "错误：docker compose 启动失败" -ForegroundColor Red
+$registry = $envMap["REGISTRY"]
+if (-not $Tag) { $Tag = $envMap["IMAGE_TAG"] }
+if (-not $registry -or -not $Tag) {
+    Write-Host "[ERROR] registry.env 缺少 REGISTRY / IMAGE_TAG" -ForegroundColor Red
     exit 1
 }
 
-# -----------------------------------------------------------
-# 4. 等待服务就绪并验证
-# -----------------------------------------------------------
-Write-Host "[4/4] 等待服务就绪..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
+# ------------------------------------------------------------------
+# 目标定义
+# ------------------------------------------------------------------
+$targets = [ordered]@{
+    api = @{
+        Context    = Join-Path $SourceRoot "server"
+        Dockerfile = Join-Path $PSScriptRoot "api\Dockerfile"
+        Image      = "mem0-api"
+    }
+    dashboard = @{
+        Context    = Join-Path $SourceRoot "server\dashboard"
+        Dockerfile = Join-Path $PSScriptRoot "dashboard\Dockerfile"
+        Image      = "mem0-dashboard"
+    }
+}
+
+if ($Component -contains "all") { $selected = @($targets.Keys) }
+else { $selected = $Component }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Mem0 部署完成！" -ForegroundColor Green
+Write-Host "  mem0 构建  tag=$Tag" -ForegroundColor Cyan
+Write-Host "  源码：$SourceRoot" -ForegroundColor Gray
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  API Docs   : http://localhost:8888/docs" -ForegroundColor White
-Write-Host "  Dashboard  : http://localhost:3001" -ForegroundColor White
+
+$failed = @()
+
+foreach ($name in $selected) {
+    if (-not $targets.Contains($name)) {
+        Write-Host "[WARN] 未知组件：$name" -ForegroundColor DarkYellow
+        continue
+    }
+    $t = $targets[$name]
+    $remote = "$registry/$($t.Image):$Tag"
+    $local  = "$($t.Image):local"
+
+    if (-not (Test-Path $t.Context)) {
+        Write-Host "[ERROR] 源码目录不存在：$($t.Context)" -ForegroundColor Red
+        Write-Host "        请确认 mem0 源码已 clone，或用 -SourceRoot 指定路径。" -ForegroundColor White
+        $failed += $name
+        continue
+    }
+
+    # 幂等：已存在且未加 -Force 则跳过
+    if (-not $Force) {
+        $existing = docker images -q $remote 2>$null
+        if ($existing) {
+            Write-Host "[SKIP] $remote 已存在" -ForegroundColor DarkGray
+            continue
+        }
+    }
+
+    Write-Host "[BUILD] $($t.Image)  <-  $($t.Context)" -ForegroundColor Yellow
+
+    $buildArgs = @(
+        "build",
+        "-f", $t.Dockerfile,
+        "-t", $remote,
+        "-t", $local
+    )
+    if ($NoCache) { $buildArgs += "--no-cache" }
+    $buildArgs += "--progress=plain"
+    $buildArgs += $t.Context
+
+    docker @buildArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[FAIL] $($t.Image) 构建失败" -ForegroundColor Red
+        $failed += $name
+        continue
+    }
+    Write-Host "[ OK ] $remote" -ForegroundColor Green
+}
+
 Write-Host ""
-Write-Host "  查看日志   : docker compose logs -f" -ForegroundColor Gray
-Write-Host "  停止服务   : docker compose down" -ForegroundColor Gray
-Write-Host ""
+if ($failed.Count -gt 0) {
+    Write-Host "mem0 构建失败：$($failed -join ', ')" -ForegroundColor Red
+    exit 1
+}
+Write-Host "mem0 构建完成。下一步：.\push.ps1" -ForegroundColor Green

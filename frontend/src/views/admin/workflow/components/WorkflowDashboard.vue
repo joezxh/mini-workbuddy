@@ -32,9 +32,9 @@ const stats = reactive({ totalFlows: 0, todayExecutions: 0, successRate: 0, avgL
 onMounted(async () => {
   try {
     const flowRes = await listFlows({ page: 1, page_size: 1 })
-    stats.totalFlows = flowRes.data.total
+    stats.totalFlows = flowRes.total
     const execRes = await listExecutions({ page: 1, page_size: 100 })
-    const items = execRes.data.items || []
+    const items = execRes.items || []
     stats.todayExecutions = items.length
     const successCount = items.filter((i: any) => i.status === 'success').length
     stats.successRate = items.length ? Math.round(successCount / items.length * 100) : 0

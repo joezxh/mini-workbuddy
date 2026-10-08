@@ -23,6 +23,16 @@
             <a-form-item :label="t('kbMgmt.common.title')">
               <a-input v-model:value="article.title" size="large" :placeholder="t('kmsWiki.titlePlaceholder')" />
             </a-form-item>
+            <a-form-item :label="t('kmsWiki.summary')">
+              <a-textarea
+                v-model:value="article.summary"
+                :rows="2"
+                :placeholder="t('kmsWiki.summaryPlaceholder')"
+              />
+            </a-form-item>
+            <a-form-item v-if="!hasContent" :label="t('kmsWiki.docUpload')">
+              <DocUploadPanel @converted="onConverted" />
+            </a-form-item>
             <a-form-item :label="t('kmsWiki.body')">
               <a-textarea
                 v-model:value="article.content"
@@ -30,6 +40,9 @@
                 :placeholder="t('kmsWiki.bodyPlaceholder')"
                 style="font-family: monospace"
               />
+            </a-form-item>
+            <a-form-item v-if="extractedFields.length">
+              <ArticleExtractedFields v-model:values="extracted" :fields="extractedFields" />
             </a-form-item>
             <a-form-item :label="t('kmsWiki.changeNote')">
               <a-input v-model:value="changeNote" :placeholder="t('kmsWiki.changeNotePlaceholder')" />
@@ -39,8 +52,24 @@
       </a-col>
 
       <a-col :span="6">
+        <!-- 所属知识库 -->
+        <a-card :title="t('kmsWiki.articleKb')" size="small">
+          <a-select
+            v-model:value="article.knowledge_id"
+            :placeholder="t('kmsWiki.articleKbPlaceholder')"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            style="width: 100%"
+          >
+            <a-select-option v-for="kb in knowledges" :key="kb.id" :value="kb.id">
+              {{ kb.name }}
+            </a-select-option>
+          </a-select>
+        </a-card>
+
         <!-- 分类 -->
-        <a-card :title="t('wikiMgmt.tabCategory')" size="small">
+        <a-card :title="t('wikiMgmt.tabCategory')" size="small" style="margin-top: 16px">
           <a-tree-select
             v-model:value="article.category_id"
             :tree-data="categories"
@@ -87,11 +116,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getArticle, updateArticle, listCategories } from '@/api/wiki'
+import { getArticle, updateArticle, listCategories, listKnowledges } from '@/api/wiki'
+import DocUploadPanel from './components/DocUploadPanel.vue'
+import ArticleExtractedFields from './components/ArticleExtractedFields.vue'
+
+interface FieldDef {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'select' | 'tags' | 'sources'
+  options?: string[]
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -99,12 +137,61 @@ const { t } = useI18n()
 
 const article = ref<any>(null)
 const categories = ref<any[]>([])
+const knowledges = ref<any[]>([])
 const changeNote = ref('')
 const saving = ref(false)
 
+/** 上传文档后提取到的 OKF 字段（okf_type / resource / sources），动态渲染 */
+const extracted = ref<Record<string, any>>({})
+const extractedFields = ref<FieldDef[]>([])
+
+const OKF_TYPES = ['concept', 'howto', 'reference', 'decision', 'metric']
+const OKF_LABELS: Record<string, string> = {
+  concept: t('kmsWiki.okfConcept'),
+  howto: t('kmsWiki.okfHowto'),
+  reference: t('kmsWiki.okfReference'),
+  decision: t('kmsWiki.okfDecision'),
+  metric: t('kmsWiki.okfMetric'),
+}
+
+/** 正文为空时才显示上传入口，避免覆盖已有内容 */
+const hasContent = computed(() => !!article.value?.content?.trim())
+
+/** 仅渲染「有值」的字段 —— 提取到什么就补什么 */
+function buildFieldDefs(src: { okf_type?: string | null; resource?: string | null; sources?: any[] }): FieldDef[] {
+  const defs: FieldDef[] = []
+  if (src.okf_type) {
+    defs.push({
+      key: 'okf_type',
+      label: t('kmsWiki.okfType'),
+      type: 'select',
+      options: OKF_TYPES,
+      optionLabels: OKF_LABELS,
+    })
+  }
+  if (src.resource) defs.push({ key: 'resource', label: t('kmsWiki.resource'), type: 'text' })
+  if (src.sources?.length) defs.push({ key: 'sources', label: t('kmsWiki.sources'), type: 'sources' })
+  return defs
+}
+
+/** 上传转换完成：回填正文/标题/摘要/标签，并补出 OKF 字段 */
+function onConverted(res: any) {
+  if (!article.value) return
+  article.value.content = res.markdown
+  if (!article.value.title?.trim() && res.title) article.value.title = res.title
+  if (!article.value.summary?.trim() && res.summary) article.value.summary = res.summary
+  if (!(article.value.tags || []).length && res.tags?.length) article.value.tags = res.tags
+  extracted.value = {
+    okf_type: res.okf_type ?? null,
+    resource: res.resource ?? '',
+    sources: res.sources || [],
+  }
+  extractedFields.value = buildFieldDefs(res)
+}
+
 onMounted(async () => {
   await loadArticle()
-  await loadCategories()
+  await Promise.all([loadCategories(), loadKnowledges()])
 })
 
 async function loadArticle() {
@@ -117,6 +204,13 @@ async function loadArticle() {
   try {
     // 直接按 ID 获取（后端 GET /wiki/articles/{id}，G4：消除 page_size=1000 列表遍历 hack）
     article.value = await getArticle(articleId)
+    // 回填已保存的 OKF 字段，便于继续编辑
+    extracted.value = {
+      okf_type: article.value.okf_type ?? null,
+      resource: article.value.resource ?? '',
+      sources: article.value.sources || [],
+    }
+    extractedFields.value = buildFieldDefs(article.value)
   } catch (e) {
     message.error(t('wikiMgmt.art.loadFailed'))
     router.push('/wiki')
@@ -132,6 +226,15 @@ async function loadCategories() {
   }
 }
 
+async function loadKnowledges() {
+  try {
+    const res = await listKnowledges()
+    knowledges.value = res || []
+  } catch (e) {
+    // 知识库加载失败不阻断
+  }
+}
+
 async function handleSave() {
   if (!article.value) return
   if (!article.value.title?.trim()) {
@@ -143,11 +246,16 @@ async function handleSave() {
     await updateArticle(article.value.id, {
       title: article.value.title,
       content: article.value.content,
+      summary: article.value.summary || undefined,
       category_id: article.value.category_id,
+      knowledge_id: article.value.knowledge_id ?? undefined,
       tags: article.value.tags || [],
       owl_class_uris: article.value.owl_class_uris || [],
       status: article.value.status,
       change_note: changeNote.value || undefined,
+      okf_type: extracted.value.okf_type ?? undefined,
+      resource: extracted.value.resource || undefined,
+      sources: extracted.value.sources?.length ? extracted.value.sources : undefined,
     })
     message.success(t('wikiMgmt.saved'))
     router.push(`/wiki/${article.value.slug}`)

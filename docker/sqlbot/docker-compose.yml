@@ -1,0 +1,78 @@
+# =============================================================
+# SQLBot 独立部署（外部 PostgreSQL + Redis）
+#
+# 镜像由 build.ps1 / build.sh 构建，或直接拉取仓库中的 <registry>/sqlbot:<tag>。
+#
+# 关键点：运行期 SECRET_KEY 必须与构建期 SQLBOT_SECRET_KEY 完全一致，
+#        否则前端 AES 加密的账号在后端解不开 —— 表现为"能打开页面但登不上"。
+#
+# 端口：
+#   8000 → UI + API（同源）
+#   8001 → MCP 服务
+# =============================================================
+
+name: sqlbot
+
+services:
+  sqlbot:
+    image: ${SQLBOT_IMAGE:-sqlbot:local}
+    container_name: mwb-sqlbot
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # --- 外部 PostgreSQL 元数据库（变量名与 config.py 一致）---
+      POSTGRES_SERVER: ${POSTGRES_SERVER}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-sqlbot}
+      # --- 安全密钥（必须与构建期 SQLBOT_SECRET_KEY 一致）---
+      SECRET_KEY: ${SECRET_KEY}
+      # --- 基础设置 ---
+      PROJECT_NAME: ${PROJECT_NAME:-SQLBot}
+      DEFAULT_PWD: ${DEFAULT_PWD:-SQLBot@123456}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SQL_DEBUG: ${SQL_DEBUG:-false}
+      # --- 缓存（可选，留空则走本地）---
+      CACHE_TYPE: ${CACHE_TYPE:-redis}
+      CACHE_REDIS_URL: ${CACHE_REDIS_URL:-redis://redis:6379/1}
+      # --- CORS ---
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost,http://localhost:8000}
+      # --- MCP 图片外链 ---
+      SERVER_IMAGE_HOST: ${SERVER_IMAGE_HOST:-http://localhost:8001/images/}
+      # --- 向量/嵌入（默认关闭，关闭时不需要 models 权重）---
+      EMBEDDING_ENABLED: ${EMBEDDING_ENABLED:-false}
+      TABLE_EMBEDDING_ENABLED: ${TABLE_EMBEDDING_ENABLED:-false}
+      TZ: Asia/Shanghai
+    ports:
+      - "${SQLBOT_PORT:-8000}:8000"
+      - "${SQLBOT_MCP_PORT:-8001}:8001"
+    volumes:
+      # 覆盖启动脚本：跳过内置 PG，直连外部库
+      - ./patches/start-external-db.sh:/opt/sqlbot/app/start.sh:ro
+      # 覆盖入口：在 main:app 之上挂载前端 dist，使 UI 与 API 同源
+      - ./patches/serve_ui.py:/opt/sqlbot/app/serve_ui.py:ro
+      # 持久化数据
+      - sqlbot_data_excel:/opt/sqlbot/data/excel
+      - sqlbot_data_file:/opt/sqlbot/data/file
+      - sqlbot_images:/opt/sqlbot/images
+      - sqlbot_logs:/opt/sqlbot/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+
+networks:
+  mwb-infra-network:
+    external: true
+
+volumes:
+  sqlbot_data_excel:
+  sqlbot_data_file:
+  sqlbot_images:
+  sqlbot_logs:

@@ -1,0 +1,19 @@
+# 组件级密钥文件（仅匹配文件名为 .env 的文件，registry.env / mirrors.env 不受影响）
+.env
+
+# 离线镜像包
+*.tar
+dist/
+
+# 构建中间产物
+**/build_output/
+**/.docker-build/
+**/silero-vad/*
+!**/silero-vad/.gitkeep
+**/cache/
+**/wheels/*.whl
+**/.venv/
+
+# 编辑器与系统噪声
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+Px2 found: True
+CHILD h4 ['ltx_title', 'ltx_title_paragraph'] id=None
+CHILD div ['ltx_para', 'ltx_noindent'] id=S3.SS0.SSS0.Px2.p1
+CHILD figure ['ltx_figure'] id=S3.F4
+figure inside Px2 (any depth): S3.F4
+DONE

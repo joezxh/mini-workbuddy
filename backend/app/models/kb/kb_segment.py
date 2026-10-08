@@ -20,7 +20,7 @@ class KbSegment(Base, TenantMixin):
     在 Task 1 迁移一并加入，避免二次迁移。
     """
 
-    __tablename__ = "kb_segment"
+    __tablename__ = "kms_segment"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     collection = Column(String(128), nullable=False, comment="集合名")
@@ -43,7 +43,7 @@ class KbSegment(Base, TenantMixin):
     )
     # 父子分段：父块 chunk_type='parent'（embedding 为 NULL），子块指向父块
     parent_id = Column(
-        BigInteger, ForeignKey('kb_segment.id', ondelete='CASCADE'),
+        BigInteger, ForeignKey('kms_segment.id', ondelete='CASCADE'),
         nullable=True, index=True, comment='父子分段: 子块 → 父块',
     )
     answer = Column(
@@ -58,7 +58,7 @@ class KbSegment(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint(
-            "collection", "document_id", "chunk_index", name="uq_kb_segment"
+            "collection", "document_id", "chunk_index", name="uq_kms_segment"
         ),
-        Index("idx_kb_segment_parent", "parent_id"),
+        Index("idx_kms_segment_parent", "parent_id"),
     )

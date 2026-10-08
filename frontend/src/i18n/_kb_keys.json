@@ -28,16 +28,20 @@
    "ctx": "<a-tab-pane key=\"sql\" :tab=\"t('kbMgmt.dataSource.tabSql')\">",
    "ph": []
   },
-  "kbMgmt.externalKb.title": {
-   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.externalKb.title') }}</h2>",
+  "kbMgmt.externalKb": {
+   "ctx": "<a-tab-pane key=\"3\" :tab=\"t('kbMgmt.externalKb')\" />",
    "ph": []
   },
-  "kbMgmt.externalKb.tabInstances": {
-   "ctx": "<a-tab-pane key=\"instance\" :tab=\"t('kbMgmt.externalKb.tabInstances')\"><InstanceManagement /></a-tab-pane>",
+  "kbMgmt.externalKbPanel.title": {
+   "ctx": "<h2 class=\"kg-panel__title\">{{ t('kbMgmt.externalKbPanel.title') }}</h2>",
    "ph": []
   },
-  "kbMgmt.externalKb.tabSyncJobs": {
-   "ctx": "<a-tab-pane key=\"sync\" :tab=\"t('kbMgmt.externalKb.tabSyncJobs')\"><SyncJobs /></a-tab-pane>",
+  "kbMgmt.externalKbPanel.tabInstances": {
+   "ctx": "<a-tab-pane key=\"instance\" :tab=\"t('kbMgmt.externalKbPanel.tabInstances')\"><InstanceManagement /></a-tab-pane>",
+   "ph": []
+  },
+  "kbMgmt.externalKbPanel.tabSyncJobs": {
+   "ctx": "<a-tab-pane key=\"sync\" :tab=\"t('kbMgmt.externalKbPanel.tabSyncJobs')\"><SyncJobs /></a-tab-pane>",
    "ph": []
   },
   "kbMgmt.kb.title": {

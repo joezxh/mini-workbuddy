@@ -6,6 +6,7 @@
 from sqlalchemy import (
     BigInteger, Column, ForeignKey, String, Text, TIMESTAMP, func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.database import Base
 from app.models.tenant_mixin import TenantMixin
@@ -22,6 +23,11 @@ class ExternalKbEndpoint(Base, TenantMixin):
     auth_key = Column(String(500), nullable=True, comment="鉴权密钥（Fernet 密文）")
     index_name = Column(String(128), nullable=True, comment="外部索引/集合名")
     metadata_mapping = Column(String(500), nullable=True, comment="元数据映射说明/JSON 字符串")
+    # 调用方白名单（spec §10.6 引用与调用方管理）：空/None=不限制
+    allowed_callers = Column(
+        JSONB, nullable=True,
+        comment="允许调用的 Agent/应用标识列表；null=不限制",
+    )
     status = Column(String(32), nullable=False, server_default="active",
                     comment="active|error|disabled")
     error_detail = Column(Text, nullable=True, comment="最近错误")

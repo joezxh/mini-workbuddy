@@ -112,9 +112,15 @@ def export_bundle(db, knowledge_id: int) -> Dict[str, str]:
     if knowledge is None:
         raise ValueError(f"知识库不存在: {knowledge_id}")
 
-    categories = db.execute(
-        select(KbCategory).where(KbCategory.knowledge_id == knowledge_id)
+    articles = db.execute(
+        select(WikiArticle).where(WikiArticle.knowledge_id == knowledge_id)
     ).scalars().all()
+    cat_ids = {a.category_id for a in articles if a.category_id}
+    categories = (
+        db.execute(select(KbCategory).where(KbCategory.id.in_(cat_ids))).scalars().all()
+        if cat_ids
+        else []
+    )
     dir_of = _category_dir_map(categories)
 
     articles = db.execute(

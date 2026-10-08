@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -75,6 +75,38 @@ class MetaStandardService:
         self.db.add(obj)
         self.db.flush()
         return obj
+
+    def update(self, standard_id: int, **fields: Any) -> MetaStandard:
+        """更新标准项可编辑字段（None 值表示「不修改」）。
+
+        :raises ValueError: 编码与其它标准项冲突
+        """
+        obj = self.get_or_404(standard_id)
+        new_code = fields.get("code")
+        if new_code is not None and new_code != obj.code:
+            conflict = self.get_by_code(new_code)
+            if conflict is not None and conflict.id != obj.id:
+                raise ValueError(f"标准项编码已存在: {new_code}")
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if key == "aliases":
+                obj.aliases_json = value
+                continue
+            setattr(obj, key, value)
+        self.db.flush()
+        return obj
+
+    def delete(self, standard_id: int) -> None:
+        """删除标准项（先解绑列级绑定，避免外键残留）。"""
+        obj = self.get_or_404(standard_id)
+        from app.models.dataops.standard import MetaColumnStandard  # 局部导入避免循环依赖
+
+        self.db.query(MetaColumnStandard).filter(
+            MetaColumnStandard.standard_id == standard_id
+        ).delete(synchronize_session=False)
+        self.db.delete(obj)
+        self.db.flush()
 
     def seed_builtins(self, *, only_missing: bool = True) -> int:
         """按 ``BUILTIN_STANDARDS`` 为本租户播种标准项。

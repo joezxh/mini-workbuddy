@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.job_runner import run_in_background
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_article_version import WikiArticleVersion
 from app.services.wiki.article_service import _serialize, _serialize_version
@@ -67,6 +68,8 @@ class WikiVersionService:
             title=target.title,
             content=target.content,
             slug=target.slug,
+            summary=getattr(target, "summary", None),
+            owl_class_uris=getattr(target, "owl_class_uris", None),
             change_note=change_note
             or f"Rollback from v{article.version} to v{target.version}",
             editor_id=user.id,
@@ -84,41 +87,58 @@ class WikiVersionService:
         self.db.commit()
         self.db.refresh(article)
 
-        # 异步重建向量索引
-        try:
-            import threading
-
-            threading.Thread(
-                target=WikiRAGIngestor().index_article,
-                args=(article.id,),
-                daemon=True,
-            ).start()
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[WikiVersionService] 触发 RAG 索引失败(已降级): {e}")
+        # 异步重建向量索引（经 job_runner，独立 Session）
+        run_in_background(
+            WikiRAGIngestor().index_article,
+            article.id,
+            name=f"wiki-index-{article.id}",
+        )
 
         return _serialize(article, include_content=True)
 
-    def get_diff(self, article_id: int, version_id: int) -> dict:
-        """返回目标版本与当前版本的 unified diff（段落级）。"""
+    def get_diff(
+        self,
+        article_id: int,
+        version_id: int,
+        target_version_id: Optional[int] = None,
+    ) -> dict:
+        """返回版本 diff（unified diff，段落级）。
+
+        :param version_id: 基线版本（diff 左侧）
+        :param target_version_id: 对照版本；缺省为文章当前版本（diff 右侧）
+        """
         article = self.db.get(WikiArticle, article_id)
         if not article:
             raise HTTPException(status_code=404, detail="文章不存在")
-        target = self.get_version(version_id)
+        base = self.get_version(version_id)
+        if base.article_id != article_id:
+            raise VersionMismatchError()
 
-        current_lines = (article.content or "").splitlines(keepends=True)
-        target_lines = (target.content or "").splitlines(keepends=True)
+        if target_version_id is None:
+            other_label = f"v{article.version} (current)"
+            other_lines = (article.content or "").splitlines(keepends=True)
+            other_number = article.version
+        else:
+            other = self.get_version(target_version_id)
+            if other.article_id != article_id:
+                raise VersionMismatchError()
+            other_label = f"v{other.version}"
+            other_lines = (other.content or "").splitlines(keepends=True)
+            other_number = other.version
+
         diff = list(
             difflib.unified_diff(
-                target_lines,
-                current_lines,
-                fromfile=f"v{target.version}",
-                tofile=f"v{article.version} (current)",
+                (base.content or "").splitlines(keepends=True),
+                other_lines,
+                fromfile=f"v{base.version}",
+                tofile=other_label,
                 lineterm="",
             )
         )
         return {
             "article_id": article_id,
             "current_version": article.version,
-            "target_version": target.version,
+            "base_version": base.version,
+            "target_version": other_number,
             "diff": "".join(diff),
         }

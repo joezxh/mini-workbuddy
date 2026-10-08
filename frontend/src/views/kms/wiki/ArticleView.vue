@@ -14,6 +14,10 @@
           <template #icon><HistoryOutlined /></template>
           {{ t('wikiMgmt.tabVersion') }} ({{ article.version }})
         </a-button>
+        <a-button @click="openOkf">
+          <template #icon><FileTextOutlined /></template>
+          {{ t('kmsWiki.okfPreview') }}
+        </a-button>
         <a-popconfirm :title="t('wikiMgmt.deleteConfirm')" @confirm="handleDelete">
           <a-button danger>
             <template #icon><DeleteOutlined /></template>
@@ -87,6 +91,23 @@
         @rolled-back="onRolledBack"
       />
     </a-drawer>
+
+    <!-- OKF 预览抽屉（spec §9.5）：单篇 concept.md -->
+    <a-drawer
+      v-model:open="showOkf"
+      :title="t('kmsWiki.okfPreview')"
+      :width="640"
+    >
+      <a-spin v-if="okfLoading" />
+      <template v-else-if="okf.content">
+        <div class="okf-bar">
+          <a-tag color="green">{{ okf.filename }}</a-tag>
+          <a-button size="small" @click="copyOkf">{{ t('common.copy') }}</a-button>
+        </div>
+        <pre class="okf-preview">{{ okf.content }}</pre>
+      </template>
+      <a-empty v-else />
+    </a-drawer>
   </div>
   <a-spin v-else style="display: flex; justify-content: center; padding: 100px" />
 </template>
@@ -95,11 +116,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { EditOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { EditOutlined, HistoryOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import { getArticleBySlug, deleteArticle } from '@/api/wiki'
+import { getArticleOkf } from '@/api/kb'
 import VersionTimeline from './components/VersionTimeline.vue'
 import dayjs from 'dayjs'
 
@@ -111,6 +133,11 @@ const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 const article = ref<any>(null)
 const showVersions = ref(false)
 const timelineRef = ref<InstanceType<typeof VersionTimeline> | null>(null)
+
+// OKF 预览（spec §9.5）
+const showOkf = ref(false)
+const okfLoading = ref(false)
+const okf = ref<{ filename: string; content: string }>({ filename: '', content: '' })
 
 const renderedContent = computed(() => {
   if (!article.value?.content) return `<p>${t('kmsWiki.noContent')}</p>`
@@ -153,6 +180,29 @@ async function onRolledBack() {
   showVersions.value = false
 }
 
+async function openOkf() {
+  if (!article.value) return
+  showOkf.value = true
+  okfLoading.value = true
+  try {
+    const res: any = await getArticleOkf(article.value.id)
+    okf.value = { filename: res.filename, content: res.content }
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kmsWiki.okfLoadFailed'))
+  } finally {
+    okfLoading.value = false
+  }
+}
+
+async function copyOkf() {
+  try {
+    await navigator.clipboard.writeText(okf.value.content)
+    message.success(t('common.copied'))
+  } catch {
+    message.error(t('kmsWiki.okfCopyFailed'))
+  }
+}
+
 function formatDate(dateStr: string) {
   if (!dateStr) return ''
   return dayjs(dateStr).format('YYYY-MM-DD HH:mm')
@@ -193,5 +243,23 @@ function extractLabel(uri: string) {
 .markdown-body {
   line-height: 1.8;
   font-size: 15px;
+}
+.okf-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.okf-preview {
+  background: var(--bg-subtle, #f6f8fa);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
 }
 </style>

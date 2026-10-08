@@ -1,0 +1,72 @@
+# Dify 网关——浏览器统一入口
+# 由 nginx 官方镜像在容器启动时渲染下游地址与端口，避免维护多份 conf。
+#
+# 可用环境变量：
+#   GATEWAY_LISTEN_PORT  监听端口           默认 80
+#   DIFY_API_UPSTREAM    后端 API 地址      默认 dify-api:5001
+#   DIFY_WEB_UPSTREAM    前端 Web 地址      默认 dify-web:3000
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen ${GATEWAY_LISTEN_PORT};
+    server_name _;
+
+    client_max_body_size 100m;
+
+    # --- WebSocket / Socket.IO → 后端 API ---
+    location /socket.io/ {
+        proxy_pass http://${DIFY_API_UPSTREAM};
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+
+        proxy_read_timeout    600s;
+        proxy_send_timeout    600s;
+        proxy_connect_timeout 60s;
+    }
+
+    # --- REST API / 文件下载 → 后端 API ---
+    location ~ ^/(console/api|v1|files|api)/ {
+        proxy_pass http://${DIFY_API_UPSTREAM};
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+
+        proxy_read_timeout    600s;
+        proxy_send_timeout    600s;
+        proxy_connect_timeout 60s;
+    }
+
+    # --- 其余请求 → 前端 SSR ---
+    location / {
+        proxy_pass http://${DIFY_WEB_UPSTREAM};
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection $connection_upgrade;
+
+        proxy_read_timeout    60s;
+        proxy_send_timeout    60s;
+    }
+}

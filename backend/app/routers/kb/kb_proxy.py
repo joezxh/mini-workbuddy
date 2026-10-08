@@ -60,6 +60,7 @@ def _serialize(ep: ExternalKbEndpoint) -> dict:
         "metadata_mapping": ep.metadata_mapping,
         "status": ep.status,
         "error_detail": ep.error_detail,
+        "allowed_callers": ep.allowed_callers,
     }
 
 
@@ -145,6 +146,47 @@ def delete_endpoint(
     db.delete(ep)
     db.commit()
     return {"deleted": endpoint_id}
+
+
+class CallersBody(BaseModel):
+    """调用方白名单（spec §10.6）；``callers=null`` 表示不限制。"""
+    callers: Optional[list[str]] = None
+
+
+def is_caller_allowed(ep: ExternalKbEndpoint, caller: Optional[str]) -> bool:
+    """空名单=不限制；设了名单则必须命中（fail-closed）。"""
+    allowed = ep.allowed_callers
+    if not allowed:
+        return True
+    return bool(caller) and caller in allowed
+
+
+@router.get("/{endpoint_id}/callers")
+def list_callers(
+    endpoint_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """查看该外部库授权的调用方（Agent/应用标识）。"""
+    ep = _get(db, _tenant_id(current_user), endpoint_id)
+    return {"endpoint_id": ep.id, "callers": ep.allowed_callers}
+
+
+@router.put("/{endpoint_id}/callers")
+def update_callers(
+    endpoint_id: int,
+    body: CallersBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """设置调用方白名单；传 null 清空为不限制。"""
+    ep = _get(db, _tenant_id(current_user), endpoint_id)
+    ep.allowed_callers = body.callers if body.callers else None
+    db.commit()
+    db.refresh(ep)
+    return {"endpoint_id": ep.id, "callers": ep.allowed_callers}
 
 
 @router.post("/{endpoint_id}/test")

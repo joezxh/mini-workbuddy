@@ -1,0 +1,74 @@
+# =============================================================
+# speech-to-speech —— LLM 走 GPUStack（推荐：单容器，显存占用更低）
+#
+# 只起 pipeline 容器：VAD + STT + TTS 在本地 GPU，
+# LLM 通过 GPUStack 的 OpenAI 兼容接口调用。
+#
+# 用法：
+#   cp .env.example .env
+#   docker compose -f docker-compose.gpustack.yml --env-file .env up -d
+#
+# 注意：GPUSTACK_BASE_URL 末尾不要带 /v1 —— GPUStack 的 OpenAI 兼容基址是 /v1-openai；
+#       与 GPUStack 同机时用 http://host.docker.internal/v1-openai
+# =============================================================
+
+name: speech-to-speech-gpustack
+
+services:
+  pipeline:
+    # 与 GPUStack 同机时可改为 host 网络，省去 host.docker.internal 映射
+    # network_mode: host
+    image: ${S2S_IMAGE:-s2s-pipeline:local}
+    command:
+      - speech-to-speech
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8765"
+      # chat-completions 后端对 vLLM 兼容性最好
+      - --llm_backend
+      - chat-completions
+      - --model_name
+      - ${GPUSTACK_MODEL:-Qwen3-8B}
+      - --responses_api_base_url
+      - ${GPUSTACK_BASE_URL:-http://host.docker.internal/v1-openai}
+      - --responses_api_api_key
+      - ${GPUSTACK_API_KEY:-not-needed}
+      - --responses_api_stream
+      # 关闭思考链以降低语音延迟
+      - --responses_api_reasoning_effort
+      - none
+      - --stt
+      - ${STT_BACKEND:-parakeet-tdt}
+      - --tts
+      - ${TTS_BACKEND:-qwen3}
+      - --qwen3_tts_backend
+      - ${QWEN3_TTS_BACKEND:-torch}
+      - --qwen3_tts_device
+      - ${QWEN3_TTS_DEVICE:-cuda}
+      - --qwen3_tts_speaker
+      - ${TTS_SPEAKER:-Aiden}
+      - --qwen3_tts_language
+      - ${TTS_LANGUAGE:-auto}
+      - --init_chat_role
+      - system
+      - --init_chat_prompt
+      - ${INIT_CHAT_PROMPT:-You are a helpful voice assistant. Reply concisely and in the user's language.}
+      - --enable_live_transcription
+    ports:
+      - "${PIPELINE_PORT:-8765}:8765"
+    volumes:
+      - ./cache/:/root/.cache/
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - HF_ENDPOINT=${HF_ENDPOINT:-https://hf-mirror.com}
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${PIPELINE_GPU_ID:-0}"]
+              capabilities: [gpu]

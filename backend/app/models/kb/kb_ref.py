@@ -14,7 +14,7 @@ class KbRef(Base, TenantMixin):
     RAG Service 侧的隔离键（详见 P1 Task 6）。
     """
 
-    __tablename__ = "kb_ref"
+    __tablename__ = "kms_ref"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     kb_id = Column(String(64), nullable=False, unique=True, comment="KB 标识")

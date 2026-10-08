@@ -4,7 +4,7 @@
 // 外观与交互沿用 rcs Console 的 topbar：底部一条渐变“总线”高亮线、脉冲状态点、
 // 等宽时钟、胶囊形用户芯片。
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BulbFilled,
   BulbOutlined,
@@ -16,6 +16,7 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
@@ -29,6 +30,27 @@ const { t } = useI18n()
 const user = useUserStore()
 const app = useAppStore()
 const router = useRouter()
+const route = useRoute()
+
+// ── 刷新当前激活 Tab ──
+// 控制台（/admin）的 Tab 系统监听该事件，重挂载当前激活 Tab 的组件；
+// 仅在有 Tab 的页面展示按钮，避免无效操作。
+const showRefreshBtn = computed(() => route.path === '/admin')
+const refreshing = ref(false)
+let refreshTimer: number | undefined
+
+function triggerRefresh() {
+  if (refreshing.value) return
+  refreshing.value = true
+  window.dispatchEvent(new CustomEvent('app:refresh-active-tab'))
+  // 组件重挂载是同步的，这里保持最短可见的加载反馈
+  if (refreshTimer) window.clearTimeout(refreshTimer)
+  refreshTimer = window.setTimeout(() => (refreshing.value = false), 600)
+}
+
+onUnmounted(() => {
+  if (refreshTimer) window.clearTimeout(refreshTimer)
+})
 
 const currentTime = ref('')
 let timer: number | undefined
@@ -98,6 +120,18 @@ function onQuickNav({ key }: { key: string | number }) {
     <span class="topbar-brand-mobile">
       <img src="/brand/logo-icon.svg" width="22" height="22" alt="" aria-hidden="true" />
     </span>
+
+    <!-- 刷新当前激活 Tab（仅控制台 Tab 页展示） -->
+    <button
+      v-if="showRefreshBtn"
+      class="icon-btn refresh-btn"
+      type="button"
+      :class="{ 'refresh-btn--loading': refreshing }"
+      :title="t('common.refresh')"
+      @click="triggerRefresh"
+    >
+      <ReloadOutlined :spin="refreshing" />
+    </button>
 
     <a-dropdown>
       <button class="portal-btn" type="button">
@@ -279,6 +313,13 @@ function onQuickNav({ key }: { key: string | number }) {
   color: var(--accent);
   border-color: var(--border-strong);
   background: var(--bg-hover);
+}
+
+/* 刷新按钮：加载态用主题色高亮，配合图标旋转 */
+.refresh-btn--loading {
+  color: var(--accent);
+  border-color: var(--accent);
+  pointer-events: none;
 }
 
 .portal-btn {

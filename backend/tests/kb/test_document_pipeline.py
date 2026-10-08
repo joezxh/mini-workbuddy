@@ -39,7 +39,7 @@ class _FakeKB:
 
 
 @asynccontextmanager
-async def _fake_kb_factory():
+async def _fake_kb_factory(**kwargs):
     yield _FakeKB()
 
 

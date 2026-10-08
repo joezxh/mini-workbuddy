@@ -15,16 +15,21 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
+from datetime import date
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.deps import get_db, get_current_user
 from app.ai.research.llm import llm_complete
 from app.models.sys.sys_user import SysUser
+from app.services.wiki.doc_converter import SUPPORTED_EXTS, convert_document
 from app.services.wiki.search_service import WikiSearchService
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_article_version import WikiArticleVersion
@@ -38,16 +43,30 @@ router = APIRouter(prefix="/wiki", tags=["LLM-wiki"])
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
+class DocSourceItem(BaseModel):
+    """OKF §5.1 溯源条目（对应 ``kms_article.sources`` 的元素结构）。"""
+
+    resource: str = Field(..., description="源文件 URI / 相对路径（必填）")
+    title: Optional[str] = None
+    author: Optional[str] = None
+    last_modified: Optional[str] = None
+
+
 class ArticleCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     slug: Optional[str] = Field(None, max_length=200)
     content: Optional[str] = None
     summary: Optional[str] = Field(None, max_length=1000)
     category_id: Optional[int] = None
+    knowledge_id: Optional[int] = Field(None, description="所属知识库 ID（默认取当前选中的知识库）")
     tags: Optional[List[str]] = None
     owl_class_uris: Optional[List[str]] = None
     wiki_links: Optional[List[str]] = None
     status: int = 1  # 1=发布 0=草稿
+    # OKF 合规层（文档导入时提取，可人工修改后保存）
+    okf_type: Optional[str] = Field(None, max_length=64)
+    resource: Optional[str] = Field(None, max_length=500)
+    sources: Optional[List[DocSourceItem]] = None
 
 
 class ArticleUpdateRequest(BaseModel):
@@ -55,11 +74,28 @@ class ArticleUpdateRequest(BaseModel):
     content: Optional[str] = None
     summary: Optional[str] = Field(None, max_length=1000)
     category_id: Optional[int] = None
+    knowledge_id: Optional[int] = None
     tags: Optional[List[str]] = None
     owl_class_uris: Optional[List[str]] = None
     wiki_links: Optional[List[str]] = None
     status: Optional[int] = None
     change_note: Optional[str] = Field(None, max_length=500)
+    okf_type: Optional[str] = Field(None, max_length=64)
+    resource: Optional[str] = Field(None, max_length=500)
+    sources: Optional[List[DocSourceItem]] = None
+
+
+class ArticleConvertOut(BaseModel):
+    """文档转换结果：正文 Markdown + 提取到的字段（供前端动态渲染，不写库）。"""
+
+    markdown: str
+    resource: str
+    filename: str
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    tags: List[str] = []
+    okf_type: Optional[str] = None
+    sources: List[DocSourceItem] = []
 
 
 class RollbackRequest(BaseModel):
@@ -72,7 +108,6 @@ class CategoryCreateRequest(BaseModel):
     slug: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     parent_id: Optional[int] = None
-    knowledge_id: Optional[int] = None
     owl_class_uri: Optional[str] = None
     sort_order: int = 0
 
@@ -85,15 +120,24 @@ class CategoryUpdateRequest(BaseModel):
 
 
 class KnowledgeCreateRequest(BaseModel):
-    """知识库仅支持 wiki 类型（本模块即 wiki 知识库，无其他类型）。"""
+    """知识库创建（管理控制台「知识库管理」页）。"""
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
+    # 统一容器（spec §3.1/§10.2）：1=llm-wiki 2=general-kb 3=external-kb
+    type: int = 1
+    kb_format: Optional[str] = Field(None, max_length=16)
+    index_mode: Optional[str] = Field(None, max_length=16)
+    multimodal_enabled: bool = False
+    # 所属类别（知识库管理）：kms_category.id，NULL=未分类
+    category_id: Optional[int] = None
 
 
 class KnowledgeUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     status: Optional[int] = Field(None, description="1=启用 0=归档")
+    # 所属类别（知识库管理）
+    category_id: Optional[int] = None
 
 
 class WikiSearchRequest(BaseModel):
@@ -141,8 +185,12 @@ def create_article(
         owl_class_uris=body.owl_class_uris or [],
         wiki_links=body.wiki_links or [],
         status=body.status,
-        creator_id=current_user.id,
-        updater_id=current_user.id,
+        knowledge_id=body.knowledge_id,
+        okf_type=body.okf_type,
+        resource=body.resource,
+        sources=[s.dict() for s in body.sources] if body.sources else [],
+        creator_id=current_user.user_id,
+        updater_id=current_user.user_id,
         version=1,
     )
     db.add(article)
@@ -156,7 +204,7 @@ def create_article(
         content=article.content,
         slug=article.slug,
         change_note="初始创建",
-        editor_id=current_user.id,
+        editor_id=current_user.user_id,
     )
     db.add(version)
 
@@ -188,12 +236,8 @@ def list_articles(
         stmt = stmt.where(WikiArticle.category_id == category_id)
         count_stmt = count_stmt.where(WikiArticle.category_id == category_id)
     if knowledge_id is not None:
-        stmt = stmt.join(KbCategory, WikiArticle.category_id == KbCategory.id).where(
-            KbCategory.knowledge_id == knowledge_id
-        )
-        count_stmt = count_stmt.join(KbCategory, WikiArticle.category_id == KbCategory.id).where(
-            KbCategory.knowledge_id == knowledge_id
-        )
+        stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
+        count_stmt = count_stmt.where(WikiArticle.knowledge_id == knowledge_id)
     if status is not None:
         stmt = stmt.where(WikiArticle.status == status)
         count_stmt = count_stmt.where(WikiArticle.status == status)
@@ -308,7 +352,7 @@ def update_article(
     for key, value in update_fields.items():
         setattr(article, key, value)
 
-    article.updater_id = current_user.id
+    article.updater_id = current_user.user_id
     article.version = (article.version or 1) + 1
     db.flush()
 
@@ -320,7 +364,7 @@ def update_article(
         content=article.content,
         slug=article.slug,
         change_note=body.change_note,
-        editor_id=current_user.id,
+        editor_id=current_user.user_id,
     )
     db.add(version)
 
@@ -330,6 +374,56 @@ def update_article(
     db.commit()
     db.refresh(article)
     return _article_to_dict(article)
+
+
+@router.post("/articles/convert-document", response_model=ArticleConvertOut)
+def convert_uploaded_document(
+    file: UploadFile = File(...),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """上传文档 → 转 Markdown + 提取字段（**不写库**，前端确认后再保存）。
+
+    源文件落盘到 ``settings.UPLOAD_DIR/wiki_docs/<tenant>/<date>/`` 以便溯源，
+    落盘路径同时写入 ``resource`` 与 ``sources[].resource``。
+    """
+    filename = file.filename or ""
+    ext = Path(filename).suffix.lower()
+    if ext not in SUPPORTED_EXTS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"不支持的文件格式 '{ext or '未知'}'，仅支持 PDF / Word / TXT / Markdown / PPT / Excel",
+        )
+
+    data = file.file.read()
+    try:
+        result = convert_document(filename, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # 落盘：租户 / 日期分目录 + uuid 前缀重命名（防重名与路径穿越）
+    safe_name = re.sub(r"[^\w.\-\u4e00-\u9fa5]", "_", Path(filename).name)[:120] or "doc"
+    rel_dir = Path("wiki_docs") / str(getattr(current_user, "tenant_id", None) or 0) / date.today().isoformat()
+    target_dir: Path = Path(settings.UPLOAD_DIR) / rel_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{uuid.uuid4().hex}_{safe_name}"
+    target.write_bytes(data)
+    resource = str(target)
+
+    return ArticleConvertOut(
+        markdown=result.markdown,
+        resource=resource,
+        filename=filename,
+        title=result.title,
+        summary=result.summary,
+        tags=result.tags,
+        okf_type=result.okf_type,
+        sources=[DocSourceItem(
+            resource=resource,
+            title=result.title,
+            author=result.source_meta.author,
+            last_modified=result.source_meta.last_modified,
+        )],
+    )
 
 
 @router.delete("/articles/{article_id}")
@@ -449,16 +543,13 @@ def create_category(
         raise HTTPException(status_code=409, detail=f"分类 slug '{slug}' 已存在")
 
     if body.knowledge_id is not None:
-        kb = db.get(WikiKnowledge, body.knowledge_id)
-        if not kb:
-            raise HTTPException(status_code=404, detail="所属知识库不存在")
+        raise HTTPException(status_code=400, detail="分类不再归属知识库（knowledge_id 已废弃）")
 
     category = KbCategory(
         name=body.name,
         slug=slug,
         description=body.description,
         parent_id=body.parent_id,
-        knowledge_id=body.knowledge_id,
         owl_class_uri=body.owl_class_uri,
         sort_order=body.sort_order,
     )
@@ -542,6 +633,11 @@ def _knowledge_to_dict(kb: WikiKnowledge, category_count: int = 0, article_count
         "slug": kb.slug,
         "description": kb.description,
         "status": kb.status,
+        "type": kb.type,
+        "kb_format": kb.kb_format,
+        "index_mode": kb.index_mode,
+        "multimodal_enabled": kb.multimodal_enabled,
+        "category_id": kb.category_id,
         "category_count": category_count,
         "article_count": article_count,
         "created_at": str(kb.created_at) if kb.created_at else None,
@@ -556,18 +652,12 @@ def list_knowledges(
 ):
     """知识库列表（附分类数 / 文章数统计）。"""
     kbs = db.execute(select(WikiKnowledge).order_by(WikiKnowledge.id)).scalars().all()
-    cat_rows = db.execute(
-        select(KbCategory.knowledge_id, func.count()).group_by(KbCategory.knowledge_id)
-    ).all()
-    cat_counts = {kid: cnt for kid, cnt in cat_rows if kid is not None}
     art_rows = db.execute(
-        select(KbCategory.knowledge_id, func.count(WikiArticle.id))
-        .join(WikiArticle, WikiArticle.category_id == KbCategory.id)
-        .group_by(KbCategory.knowledge_id)
+        select(WikiArticle.knowledge_id, func.count()).group_by(WikiArticle.knowledge_id)
     ).all()
     art_counts = {kid: cnt for kid, cnt in art_rows if kid is not None}
     return [
-        _knowledge_to_dict(kb, cat_counts.get(kb.id, 0), art_counts.get(kb.id, 0))
+        _knowledge_to_dict(kb, 0, art_counts.get(kb.id, 0))
         for kb in kbs
     ]
 
@@ -586,7 +676,16 @@ def create_knowledge(
     if existing:
         raise HTTPException(status_code=409, detail=f"知识库 slug '{slug}' 已存在")
 
-    kb = WikiKnowledge(name=body.name, slug=slug, description=body.description)
+    kb = WikiKnowledge(
+        name=body.name,
+        slug=slug,
+        description=body.description,
+        type=body.type,
+        kb_format=body.kb_format,
+        index_mode=body.index_mode or "high_quality",
+        multimodal_enabled=body.multimodal_enabled,
+        category_id=body.category_id,
+    )
     db.add(kb)
     db.commit()
     db.refresh(kb)
@@ -611,6 +710,8 @@ def update_knowledge(
         kb.description = body.description
     if body.status is not None:
         kb.status = body.status
+    if body.category_id is not None:
+        kb.category_id = body.category_id
 
     db.commit()
     db.refresh(kb)
@@ -628,12 +729,6 @@ def delete_knowledge(
     if not kb:
         raise HTTPException(status_code=404, detail="知识库不存在")
 
-    category_count = db.execute(
-        select(func.count()).select_from(KbCategory).where(KbCategory.knowledge_id == knowledge_id)
-    ).scalar()
-    if category_count:
-        raise HTTPException(status_code=409, detail=f"知识库下仍有 {category_count} 个分类，请先删除或移出")
-
     db.delete(kb)
     db.commit()
 
@@ -648,6 +743,10 @@ def _article_to_dict(article: WikiArticle) -> dict:
         "summary": article.summary,
         "content": article.content,
         "category_id": article.category_id,
+        "knowledge_id": article.knowledge_id,
+        "okf_type": article.okf_type,
+        "resource": article.resource,
+        "sources": article.sources or [],
         "tags": article.tags or [],
         "owl_class_uris": article.owl_class_uris or [],
         "wiki_links": article.wiki_links or [],
@@ -670,7 +769,6 @@ def _category_to_dict(cat: KbCategory) -> dict:
         "slug": cat.slug,
         "description": cat.description,
         "parent_id": cat.parent_id,
-        "knowledge_id": cat.knowledge_id,
         "owl_class_uri": cat.owl_class_uri,
         "sort_order": cat.sort_order,
         "article_count": cat.article_count,
@@ -709,7 +807,7 @@ def wiki_search(
         mode=body.mode,
         top_k=body.top_k,
         knowledge_id=body.knowledge_id,
-        user_id=current_user.id,
+        user_id=current_user.user_id,
     )
 
 
@@ -737,7 +835,7 @@ async def wiki_ask(
         mode="hybrid",
         top_k=body.top_k,
         knowledge_id=body.knowledge_id,
-        user_id=current_user.id,
+        user_id=current_user.user_id,
     )
     sources = []
     for item in res.get("items", []):
@@ -828,7 +926,7 @@ def article_okf_preview(
     art = db.get(WikiArticle, article_id)
     if art is None:
         raise HTTPException(status_code=404, detail="文章不存在")
-    username = getattr(current_user, "username", None) or str(current_user.id)
+    username = getattr(current_user, "username", None) or str(current_user.user_id)
     generated_at = art.updated_at.isoformat() + "Z" if art.updated_at else "1970-01-01T00:00:00Z"
     return {
         "filename": f"{art.slug}.md",

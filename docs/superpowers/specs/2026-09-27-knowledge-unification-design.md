@@ -22,7 +22,81 @@
 > 摄取管线 dry-run（解析→切块中间产物预览，不落库不嵌入）。测试 545 passed / 4 failed（遗留）。
 > 未做且需另案：D17 裁剪 `app/ai/knowledge/rag_pipeline.py`（D18 明确 wiki `/ask` 链路不走中间件，
 > `wiki_rag.py` 仍依赖它）、`pipeline_config` 键名重命名（D8）、Agent 端到端 RAG 联调。
+>
+> ✅ **2026-09-29 Tier 2.1 / 2.2 落地**：新增 `services/kb/pipeline_runner.py`（`PipelinePlan.from_config`
+> + `run_pipeline` + `PipelineRun.to_preview`；clean 算子注册表，DataBlock 透传；逐步失败抛
+> `PipelineStepError(step)`）——`POST /kb/pipelines/dry-run` 与 `document_pipeline.run_document_ingest`
+> 共用该入口，摄取改由 `WikiKnowledge.pipeline_config`（按 `kb_{id}` 反查）驱动 parse/clean/chunk。
+> `services/kb/index_mode.py` 增 `upgrade_to_high_quality` / `downgrade_to_economy`：按 `kb_document`
+> 粒度回填 NULL 向量（父块 `chunk_type='parent'` 不回填），失败文档保留 economy 可检索并进报告、
+> 全部成功才切 `index_mode`；降级仅置标志保留向量。端点 `POST /kb/collections/{collection}/index-mode`。
+>
+> ✅ **2026-09-29 Tier 1.1 / 1.2 落地**：`kb_collection` 增 `retrieval_settings JSONB`（embedding/rerank
+> 模型 + top_k + score_threshold；`startup_migrations` 与 `docs/sql/kms_unify_20260927.sql` 同步幂等加列）；
+> 新增 `services/kb/collection_settings.py`（键白名单、D19 维度校验、返回 `jobs` 作业列表而不自行跑长任务）
+> 与 `GET/PUT /kb/collections/{collection}/settings`（`kb:admin`）；换嵌入模型 → `reembed`（覆盖全部向量，
+> 父块除外，`index_mode.reembed_collection`），升档 → `upgrade_index`，同一请求多作业按序在单个后台任务内执行。
+> 嵌入模型变更基准为「上次配置值，缺省则取全局默认」，避免首次配置触发无谓全量重灌。
+>
+> ✅ **2026-09-30 Tier 1.3 落地**：新增 `services/kb/segment_service.py`（单段读写 / 关键词 /
+> 引用来源）与端点 `GET/PUT/DELETE /kb/segments/{id}`、`PATCH /kb/segments/{id}/keywords`、
+> `GET /kb/segments/{id}/citations`（权限 `kb:view` / `kb:admin` / `kb:delete`）。改文本后按索引
+> 模式重嵌（economy 库与父块不嵌），关键词按 D14 落 metadata 再投影到列且不触发重嵌；切片即向量
+> 记录，删行即删向量。
+> ⚠️ **顺带修两个真实缺陷**（否则分段编辑/升级/重灌/文档摄取全部不可用）：① `embedding_factory`
+> 用 `api_key`/`base_url` 构造原生模型，而 AgentScope 2.0.8 收 `credential`（`OpenAICredential`
+> / `DashScopeCredential`，`base_url` 属 credential）→ TypeError；② `build_embedding_model` 忽略
+> `EmbeddingSettings.provider`，设置面板选 dashscope 不生效。已加 `tests/kb/test_embedding_factory.py` 卡口。
+>
+> ✅ **2026-10-01 Tier 4 落地（OKF 前端接线）**：`api/kb.ts` 补 `importOkfBundle`（此前只有导出/单篇预览）；
+> `views/kms/wiki/ArticleView.vue` 工具栏加「OKF 预览」按钮 + 抽屉（渲染单篇 concept.md、显示文件名、一键复制）；
+> `views/kms/wiki/index.vue` 工具栏加「导出 OKF Bundle / 导入 OKF」，以左栏选中的知识库为作用域（未选中给提示），
+> 导入直读 `.md` 多选文件拼 `[{path,content}]`（浏览器无 zip 解析依赖），成功后展示后端报告
+> （imported/skipped/warnings）并刷新列表；四语 locale 补 `kmsWiki.okf*` 与 `common.copy/copied`。
+>
+> ✅ **2026-10-01 Tier 3 落地（前端形态组件 + 支撑端点）**：后端补 `GET /kb/documents/{uuid}/segments`
+> （分页 + chunk_type 过滤，分段详情/表格条目/Q&A 三处共用）、`POST /collections/{c}/table-records`
+> （行级新增，chunk_index 取 max+1，按索引模式嵌入）、`POST .../qa-records/import`（CSV/xlsx）、
+> `GET .../qa-records/export`（CSV，BOM 兼容 Excel）；`list_qa_records` 增返回 `segment_id`，前端无需回表定位。
+> 前端新增 `views/kms/kb/SegmentDetail.vue`（分段列表/编辑/关键词/引用来源/父子块）、
+> `TableRecordList.vue`（行级增删改，被嵌入列=content，其余列动态 metadata）、
+> `QaRecordList.vue`（批量导入导出 + 启停开关），并在 `KbDocumentPane` 按形态挂载、文档行加「分段」入口。
+> 顺带修：`previewTableRecords` 漏传 collection（原为字面量 `{collection}` 必 404）；`utils/request` 补 `patch`。
+>
+> ✅ **2026-10-01 剩余项收尾**：
+> - **Tier 5 表格 db_table 定时同步**：新增 `services/kb/table_sync_service.py`——同步配置存
+>   `kb_document.meta.sync`（enabled/interval_min/source_id/sql/embed_field），拉数复用 DataOps
+>   `ReadonlyQueryService`（只读 + SqlGuard + 租户隔离），落库走 `ingest_table_rows(document_id=...)`
+>   **覆盖同文档切片**（先删后灌，幂等、不新建文档行）；端点 `PUT/POST /kb/documents/{uuid}/sync[/run]`；
+>   主应用 lifespan 用 `app.state.scheduler_service` 注册 `IntervalTrigger` 作业（`replace_existing` 幂等）。
+> - **`POST /kb/documents/{uuid}/reprocess`**：重嵌该文档已有切片（`segment_service.reembed_document_segments`）。
+>   `kb_document` 不留存原始字节，故**不重新解析**；economy 库拒绝（D11）。
+> - **proxy 调用方管理（§10.6）**：`kms_external_kb_endpoint` 增 `allowed_callers JSONB`，
+>   端点 `GET/PUT /external-kb-endpoints/{id}/callers`，`is_caller_allowed` 空名单放行、设名单 fail-closed。
+> - **创建向导按 kb_format 分支（§10.6）**：表格字段映射（字段名/类型/可过滤/被嵌入列单选）、
+>   多模态开关 + 强制 Vision 嵌入模型校验（D9 仅文搜图）、proxy 端点配置（https 校验 + 建容器后补建端点）、
+>   type=3 可选 connector/proxy；嵌入模型经 `pipeline_config.embedding` 下发。
+> ⚠️ 顺带修：`KnowledgeCreate` 缺 `index_mode`/`multimodal_enabled` 字段，Pydantic 静默丢弃 extra →
+>   向导选「经济模式/多模态」实际不生效（已补字段 + 服务层规范化 + 测试卡口）。
+>
 > 输入材料：`docs/kms-9-27.md`、`docs/kms-3-9-27.md`、`docs/kms-2-9-27.md`；Dify 知识库六类分类材料（2026-09-27，见 §10）
+>
+> ✅ **2026-09-29 遗留项收尾（D17 / D8 / economy / Agent 端到端 / 前端深度接线）**：
+> - **economy 独立关键词检索服务**（`services/kb/rag/economy_search.py`）：`index_mode=economy` 的库
+>   摄取写 NULL 向量（D11），检索绕开 `KnowledgeBase`/RAGMiddleware 走 pg_trgm（gin_trgm GIN）加速的
+>   中文子串召回，**零 embedding 消耗**（AC7）；`/collections/{c}/retrieve` 与 `document_pipeline`/
+>   `content_service` 摄取均按 collection 名反查 `WikiKnowledge.index_mode` 自动分流。
+> - **D8 `pipeline_config` 键名对齐原生**：`services/kb/pipeline_config.py` 白名单校验仅允许
+>   `parser/chunker/embedding/index/rag`；`KnowledgeCreate/Update` 接受并规范化落库；新增
+>   `GET /pipelines/schema` 与 dry-run 支持完整 `pipeline_config`（chunker 段零转换驱动切块）。
+> - **D17 裁剪**：删除死代码 `app/ai/knowledge/{rag_pipeline,wiki_rag,vector_store,pg_vector_store}.py`
+>   （wiki 实际索引路径为 `services/wiki/rag_ingestor.py`，wiki `/ask` 走 `content_vector`，均不依赖之）。
+> - **Agent 端到端 RAG 联调**：`agent_factory._rag_kwargs` 跳过 economy 库（避免徒耗 query 嵌入）；
+>   `tests/kb/test_rag_e2e.py` 用假嵌入模型验证 PgVectorStore→KnowledgeBase 摄取检索往返 +
+>   RAGMiddleware 装配暴露检索工具 + economy 写 NULL 向量。
+> - **前端深度接线**：`KnowledgeBaseManager` 新增「新建知识库」向导（type/kb_format/index_mode/pipeline_config），
+>   `KbDocumentPane` 新增形态切换（文档/表格/问答/管线）：表格字段映射面板（embed_field 选择）、
+>   Q&A 批量导入、管线 dry-run 预览；检索测试自动显示 `index_mode` 徽标。（新增 9 个 e2e/单测，零新增失败）
 > 范围：`backend/app/models/{wiki,kb,connectors}`、`backend/app/routers/*`、`frontend/src/views/kms` + `views/admin/knowledge`
 >
 > ⚠️ **RAG 实现方案已按 AgentScope 2.0.8 原生能力重构**：本文件 §10.3 / §10.4 / §10.7 的 RAG 链路以

@@ -1,0 +1,145 @@
+# =============================================================
+# serve_remote.yaml — 远程 LLM 调用模式配置（模板）
+#
+# 架构：本地运行 SigLip2 + Whisper 多模态编码，LLM 推理通过 HTTP API
+#       转发至远程 GPUStack 上的 Qwen3-8B（OpenAI 兼容接口）
+#
+# ⚠️  架构限制说明（重要）：
+# MiniCPM-o 4.5 的 Thinker 管线把音频/视觉嵌入直接注入 LLM 内部
+# （inputs_embeds → LLM backbone），并从 LLM 中间层提取 hidden_states 驱动 Talker。
+# 这意味着：
+#   1. 纯 OpenAI /v1/chat/completions API 无法接收多模态嵌入（仅接受文本 token）
+#   2. API 无法返回 LLM 中间层 hidden_states（Talker TTS 需要）
+#   3. KV cache 无法跨 HTTP 共享（duplex 流式生成需要逐 token 解码）
+#
+# 因此本文件当前只是「远程 LLM 调用」的参考模板，
+# 完整实现需要自研 RemoteLlmBackend 适配层（见文件底部注释）。
+#
+# 占位符 MODEL_PATH_PLACEHOLDER / REMOTE_LLM_*_PLACEHOLDER / LOCAL_ASR_IP
+# 需在挂载前替换为真实值（原上游由 start_remote.sh 自动替换）。
+# =============================================================
+
+model:
+  # 远程模式下仅加载 processor / tokenizer，不加载 LLM 权重
+  model_name_or_path: MODEL_PATH_PLACEHOLDER
+  processor_name_or_path: MODEL_PATH_PLACEHOLDER
+  trust_remote_code: true
+  torch_dtype: bfloat16
+  attn_implementation: sdpa
+  init_vision: true
+  init_audio: true
+  init_tts: true
+  token2wav_dir: MODEL_PATH_PLACEHOLDER/assets/token2wav
+  token2wav_n_timesteps: 10
+  token2wav_enable_float16: false
+  low_cpu_mem_usage: true
+  device_map: auto
+  # INT4 量化：远程模式下只影响本地编码器
+  quantization_4bit: false
+
+server:
+  host: 0.0.0.0
+  port: 8000
+  runtime_dir: /tmp/gander/runtime
+  ledger_dir: /tmp/gander/ledger
+  mode: lean
+  log_level: info
+  cuda_visible_devices: "0"
+
+asr:
+  # 本地 ASR 容器通过 Docker 网络或主机 IP 访问
+  mode: external
+  url: "http://LOCAL_ASR_IP:8995"
+
+remote_llm:
+  base_url: "REMOTE_LLM_BASE_URL_PLACEHOLDER"
+  api_key: "REMOTE_LLM_API_KEY_PLACEHOLDER"
+  model: "Qwen3-8B"
+  stream: true
+  connect_timeout: 10
+  read_timeout: 30
+  max_retries: 3
+  max_concurrent: 4
+
+duplex:
+  checkpoint: THINKER_CKPT_PLACEHOLDER
+  talker_checkpoint: TALKER_CKPT_PLACEHOLDER
+  talker_emit_speech_tokens: 25
+  generate_audio: true
+  decode_mode: sampling
+  ref_audio_path: MODEL_PATH_PLACEHOLDER/assets/system_ref_audio.wav
+  trailing_silence_sec: 60.0
+  turn_bind_grace_sec: 5.0
+  media_mode: voice
+  allow_client_video: true
+  client_video_mode: omni
+  client_video_sources:
+    - camera
+    - screen
+  vision_max_slice_nums: 1
+  vision_batch_feed: false
+  codex_frame_rate_multiplier: 3.0
+  codex_screen_history_seconds: 8.0
+  sliding_window_mode: context_slate
+  expose_task_slate_to_model: true
+  speak_text_tokens_per_unit: 8
+  talker_speech_tokens_per_unit: 50
+  max_new_speak_tokens_per_chunk: 11
+  max_new_tool_tokens: 256
+  max_tool_response_tokens: 256
+  context_max_units: 128
+  context_previous_max_tokens: 1500
+  memory_slate_max_tokens: 256
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 20
+  warm_first_unit: true
+
+worker:
+  provider: codex
+  cwd: /workspace
+  profile: full
+  settings:
+    codex_bin: codex
+    model: null
+    reasoning_effort: medium
+    codex_home: null
+    sandbox: workspace-write
+    approval_policy: on-request
+
+# =============================================================
+# 实现远程 LLM 模式所需的代码改造（参考）
+#
+# 需要开发 RemoteLlmBackend 适配层，核心接口：
+#
+#   class RemoteLlmBackend:
+#       """将 MiniCPM-o 的 LLM 调用转发至 OpenAI 兼容 API"""
+#
+#       def __init__(self, base_url, api_key, model, **kwargs):
+#           self.client = OpenAI(base_url=base_url, api_key=api_key)
+#           self.model = model
+#
+#       def generate(self, text_messages, **kwargs):
+#           return self.client.chat.completions.create(
+#               model=self.model,
+#               messages=text_messages,
+#               stream=kwargs.get("stream", True),
+#           )
+#
+# 需要修改的文件：
+#   1. minicpm_ft/mcpmft/modeling/omni_forward.py
+#      - 在 _build_inputs_embeds() 之后，将多模态嵌入序列化为文本描述
+#      - 或扩展 API 支持自定义 embedding 输入（需 GPUStack 端配合）
+#   2. minicpm_ft/mcpmft/infer/online.py
+#      - 将逐 token 解码改为 chunk-level API 调用
+#      - KV cache 管理改为服务端维护
+#   3. minicpm_ft/mcpmft/infer/common.py
+#      - InferBundle 支持 remote_llm_backend 字段，条件跳过本地 LLM 加载
+#   4. gander_runtime/gander_runtime/online_duplex.py
+#      - 适配远程推理的延迟特性（网络 RTT），调整 duplex 流式参数
+#
+# 当前可行的折中方案：
+#   - 本地保留完整 MiniCPM-o（INT4 量化），仅把 GPUStack 作为 Codex Brain
+#   - 即 GPUStack Qwen3-8B 替代 worker.provider=codex，不替代 Thinker LLM
+#   - 这样无需改造核心推理管线，只需配置 worker 使用远程 API
+# =============================================================

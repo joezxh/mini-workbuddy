@@ -87,7 +87,11 @@ async def lifespan(app: FastAPI):
         from app.db.database import Base, engine
         # 基础表由 create_all 负责；kb_* 三表交由迁移 006 独占（建表+索引+pg_trgm 扩展），
         # 避免 create_all 与 alembic 重复建表导致索引/扩展缺失或冲突（见 P1 简报 Task 1）。
-        non_kb = [t for t in Base.metadata.tables.values() if not t.name.startswith("kb_")]
+        # 检索三表（kms_collection / kms_segment / kms_ref）由迁移 006 独占建表
+        #（含 pg_trgm / HNSW 索引），不应由 create_all 创建，否则索引/扩展缺失或冲突。
+        # 2026-09-27 统一化：原 kb_* 前缀已全部改名 kms_*，此处用显式集合排除。
+        KB_RETRIEVAL_TABLES = {"kms_collection", "kms_segment", "kms_ref"}
+        non_kb = [t for t in Base.metadata.tables.values() if t.name not in KB_RETRIEVAL_TABLES]
         Base.metadata.create_all(bind=engine, tables=non_kb)
         logger.info("已通过 Base.metadata.create_all 完成基础表建表（kb_* 交由迁移 006）")
 
@@ -150,6 +154,18 @@ async def lifespan(app: FastAPI):
         logger.warning(f"初始化 OpenTelemetry 失败 [{_time.monotonic()-_t4:.2f}s]: {e}")
 
     logger.info(f"▶ 启动流程全部完成，总耗时 {_time.monotonic()-_startup_t0:.2f}s")
+    # 启动表格 KB 的 db_table 定时同步（spec §10.8）
+    try:
+        from app.services.kb.table_sync_service import register_table_sync_jobs
+
+        scheduler = getattr(app.state, "scheduler_service", None)
+        if scheduler is not None:
+            count = register_table_sync_jobs(scheduler.scheduler, SessionLocal)
+            if count:
+                logger.info(f"表格 KB 定时同步已注册 {count} 个作业")
+    except Exception as e:
+        logger.warning(f"注册表格 KB 定时同步失败（不影响启动）: {e}")
+
     # 启动跨模式上下文自动压缩调度器(Task 7)
     if settings.ENABLE_CROSS_MODE_RECORDER:
         try:

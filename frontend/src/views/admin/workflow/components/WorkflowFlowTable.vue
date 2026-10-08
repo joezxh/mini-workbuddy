@@ -63,21 +63,23 @@ const flowTypeItems = computed(() => dictItems(DictType.FLOW_TYPE))
 const categoryItems = computed(() => dictItems(DictType.WORKFLOW_CATEGORY))
 
 const columns = [
-  { title: '编码', dataIndex: 'flow_code', key: 'flow_code' },
-  { title: '名称', dataIndex: 'flow_name', key: 'flow_name' },
-  { title: '平台', key: 'platform_type' },
-  { title: '类型', dataIndex: 'flow_type', key: 'flow_type' },
-  { title: '类别', key: 'workflow_category' },
-  { title: '状态', key: 'is_active' },
-  { title: '操作', key: 'action', width: 180 },
+  { title: '编码', dataIndex: 'flow_code', key: 'flow_code', width: 140 },
+  { title: '名称', dataIndex: 'flow_name', key: 'flow_name', width: 160 },
+  { title: '平台', key: 'platform_type', width: 90 },
+  { title: '类型', dataIndex: 'flow_type', key: 'flow_type', width: 130 },
+  { title: '类别', key: 'workflow_category', width: 110 },
+  { title: 'API 基地址', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
+  { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '状态', key: 'is_active', width: 90 },
+  { title: '操作', key: 'action', width: 180, fixed: 'right' },
 ]
 
 async function loadData() {
   loading.value = true
   try {
     const res = await listFlows({ ...filters, page: pagination.current, page_size: pagination.pageSize })
-    data.value = res.data.items
-    pagination.total = res.data.total
+    data.value = res.items
+    pagination.total = res.total
   } finally { loading.value = false }
 }
 

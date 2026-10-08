@@ -1,4 +1,4 @@
-"""add kb_collection/kb_segment/kb_ref tables (P1 Task 1)
+"""add kms_collection/kms_segment/kms_ref tables (P1 Task 1)
 
 Revision ID: 006_kb_tables
 Revises: 005_add_ontology_modeling_tables
@@ -20,17 +20,17 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
     op.create_table(
-        "kb_collection",
+        "kms_collection",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("name", sa.String(128), nullable=False, unique=True),
         sa.Column("dimensions", sa.Integer(), nullable=False),
         sa.Column("tenant_id", sa.BigInteger(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_kb_collection_tenant_id", "kb_collection", ["tenant_id"])
+    op.create_index("ix_kms_collection_tenant_id", "kms_collection", ["tenant_id"])
 
     op.create_table(
-        "kb_segment",
+        "kms_segment",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("collection", sa.String(128), nullable=False),
         sa.Column("document_id", sa.String(128), nullable=False),
@@ -42,28 +42,28 @@ def upgrade() -> None:
         sa.Column("class_uris", postgresql.JSONB(), nullable=True),
         sa.Column("tenant_id", sa.BigInteger(), nullable=True),
         sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False),
-        sa.UniqueConstraint("collection", "document_id", "chunk_index", name="uq_kb_segment"),
+        sa.UniqueConstraint("collection", "document_id", "chunk_index", name="uq_kms_segment"),
     )
-    op.create_index("ix_kb_segment_collection", "kb_segment", ["collection"])
-    op.create_index("ix_kb_segment_tenant_id", "kb_segment", ["tenant_id"])
+    op.create_index("ix_kms_segment_collection", "kms_segment", ["collection"])
+    op.create_index("ix_kms_segment_tenant_id", "kms_segment", ["tenant_id"])
     op.create_index(
-        "ix_kb_segment_embedding",
-        "kb_segment",
+        "ix_kms_segment_embedding",
+        "kms_segment",
         ["embedding"],
         postgresql_using="hnsw",
         postgresql_with={"m": 16, "ef_construction": 64},
         postgresql_ops={"embedding": "vector_cosine_ops"},
     )
     op.execute(
-        "CREATE INDEX ix_kb_segment_content_trgm ON kb_segment "
+        "CREATE INDEX ix_kms_segment_content_trgm ON kms_segment "
         "USING gin (content gin_trgm_ops)"
     )
 
     op.create_table(
-        "kb_ref",
+        "kms_ref",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("tenant_id", sa.BigInteger(), nullable=True),
-        sa.Column("kb_id", sa.String(64), nullable=False, unique=True),
+        sa.Column("kms_id", sa.String(64), nullable=False, unique=True),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("as_user_id", sa.String(64), nullable=False),
@@ -73,13 +73,13 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.TIMESTAMP(), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_kb_ref_tenant_id", "kb_ref", ["tenant_id"])
+    op.create_index("ix_kms_ref_tenant_id", "kms_ref", ["tenant_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_kb_segment_content_trgm", table_name="kb_segment")
-    op.drop_index("ix_kb_segment_embedding", table_name="kb_segment")
-    op.drop_table("kb_segment")
-    op.drop_table("kb_ref")
-    op.drop_table("kb_collection")
+    op.drop_index("ix_kms_segment_content_trgm", table_name="kms_segment")
+    op.drop_index("ix_kms_segment_embedding", table_name="kms_segment")
+    op.drop_table("kms_segment")
+    op.drop_table("kms_ref")
+    op.drop_table("kms_collection")
     op.execute("DROP EXTENSION IF EXISTS pg_trgm")

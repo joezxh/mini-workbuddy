@@ -96,7 +96,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
-  ShareOutlined,
+  ShareAltOutlined,
   ReloadOutlined,
   LoadingOutlined
 } from '@ant-design/icons-vue'
@@ -117,7 +117,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   title: 'AI Context Stats',
-  icon: ShareOutlined,
+  icon: ShareAltOutlined,
   mode: 'default',
   loading: false
 })

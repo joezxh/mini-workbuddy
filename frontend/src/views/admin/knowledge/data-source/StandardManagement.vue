@@ -73,7 +73,8 @@ function openForm(row?: any) {
 async function save() {
   const payload = { ...form.value, aliases: aliasesText.value.split(',').map((s) => s.trim()).filter(Boolean) }
   try {
-    if (form.value.id) await api.createStandard(payload)
+    // 编辑走 PUT，新增走 POST（修复：此前编辑也调 create 导致重复建项）
+    if (form.value.id) await api.updateStandard(form.value.id, payload)
     else await api.createStandard(payload)
     message.success(t('kbMgmt.std.saveSuccess'))
     formOpen.value = false
@@ -82,8 +83,15 @@ async function save() {
     message.error(e?.response?.data?.detail || t('kbMgmt.std.saveFailed'))
   }
 }
-async function remove(_row?: any) {
-  message.info(t('kbMgmt.std.deleteNotImplemented'))
+async function remove(row?: any) {
+  if (!row?.id) return
+  try {
+    await api.deleteStandard(row.id)
+    message.success(t('kbMgmt.common.deleted'))
+    load()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.common.deleteFailed'))
+  }
 }
 async function seed() {
   try {

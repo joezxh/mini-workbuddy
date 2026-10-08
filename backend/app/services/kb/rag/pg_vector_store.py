@@ -2,8 +2,8 @@
 
 实现 AgentScope ``VectorStoreBase`` 全部 7 个抽象方法 + ``async with`` 生命周期：
 
-* ``collection`` → ``kb_collection.name``；``document_id`` → ``kb_segment.document_id``；
-* ``Chunk.metadata`` → ``kb_segment.metadata_``，并按 D14 冗余投影到
+* ``collection`` → ``kb_collection.name``；``document_id`` → ``kms_segment.document_id``；
+* ``Chunk.metadata`` → ``kms_segment.metadata_``，并按 D14 冗余投影到
   ``chunk_type`` / ``answer`` / ``keywords`` 列（投影只服务 SQL 过滤，写入源是 metadata）；
 * ``score`` 统一**越大越相关**（余弦距离取负，D12）；
 * ``metadata_filter`` 按 ``key == value`` 翻译成 JSONB 包含过滤；
@@ -162,7 +162,7 @@ class PgVectorStore(VectorStoreBase):
         sql = f"""
             SELECT s.document_id, s.chunk_index, s.content, s.metadata,
                    (s.embedding <=> CAST(:v AS vector)) AS distance
-            FROM kb_segment s
+            FROM kms_segment s
             WHERE s.collection = :c AND s.tenant_id = :t AND s.embedding IS NOT NULL{filt}
             ORDER BY distance ASC
             LIMIT :k
@@ -190,7 +190,7 @@ class PgVectorStore(VectorStoreBase):
         # 注意：PG 无 max(jsonb) 聚合，取任一代表 metadata 用 MIN(metadata::text)
         sql = f"""
             SELECT s.document_id, MIN(s.metadata::text) AS metadata, COUNT(*) AS chunk_count
-            FROM kb_segment s
+            FROM kms_segment s
             WHERE s.collection = :c AND s.tenant_id = :t{filt}
             GROUP BY s.document_id
             ORDER BY s.document_id

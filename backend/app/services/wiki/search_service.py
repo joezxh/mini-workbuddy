@@ -20,7 +20,6 @@ from sqlalchemy import func, select
 from app.ai.embedding_client import get_embedding_client
 from app.core.tenant_context import get_tenant_id
 from app.models.wiki.wiki_article import WikiArticle
-from app.models.wiki.wiki_category import WikiCategory
 from app.models.wiki.wiki_search_log import WikiSearchLog
 
 
@@ -153,10 +152,7 @@ class WikiSearchService:
 
     def _apply_filters(self, stmt, knowledge_id, owl_class_filter):
         if knowledge_id is not None:
-            join = WikiCategory.id == WikiArticle.category_id
-            stmt = stmt.join(WikiCategory, join).where(
-                WikiCategory.knowledge_id == knowledge_id
-            )
+            stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
         if owl_class_filter:
             stmt = stmt.where(WikiArticle.owl_class_uris.op("&&")(owl_class_filter))
         return stmt

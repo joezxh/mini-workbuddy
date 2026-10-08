@@ -10,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.wiki.wiki_article import WikiArticle
-from app.models.kb.kb_category import KbCategory
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.repositories.wiki.knowledge_repo import WikiKnowledgeRepository
 from app.schemas.wiki.knowledge import KnowledgeCreate, KnowledgeUpdate
@@ -29,8 +28,7 @@ def _article_count(db: Session, knowledge_id: int) -> int:
     return db.execute(
         select(func.count())
         .select_from(WikiArticle)
-        .join(KbCategory, WikiArticle.category_id == KbCategory.id)
-        .where(KbCategory.knowledge_id == knowledge_id)
+        .where(WikiArticle.knowledge_id == knowledge_id)
     ).scalar() or 0
 
 
@@ -48,6 +46,8 @@ def _to_out(db: Session, k: WikiKnowledge) -> dict:
         "kb_format": k.kb_format,
         "index_mode": k.index_mode,
         "multimodal_enabled": k.multimodal_enabled,
+        "pipeline_config": k.pipeline_config,
+        "category_id": k.category_id,
         "article_count": _article_count(db, k.id),
         "created_at": str(k.created_at) if k.created_at else None,
         "updated_at": str(k.updated_at) if k.updated_at else None,
@@ -75,6 +75,19 @@ class WikiKnowledgeService:
         kb_type = data.get("type", 1)
         data["type"] = kb_type
         data["kb_format"] = validate_kb_format(kb_type, data.get("kb_format"))
+
+        # 索引模式（spec §10.2）：仅两档，未传/非法回落 high_quality
+        mode = (data.get("index_mode") or "high_quality").lower()
+        data["index_mode"] = mode if mode in ("high_quality", "economy") else "high_quality"
+        # 多模态仅 type=2/document 有意义（§10.1 ④）
+        data["multimodal_enabled"] = bool(data.get("multimodal_enabled")) and kb_type == 2
+
+        # pipeline_config 规范化（D8：键名对齐原生）
+        from app.services.kb.pipeline_config import normalize_pipeline_config
+
+        data["pipeline_config"] = normalize_pipeline_config(
+            payload.pipeline_config if hasattr(payload, "pipeline_config") else None
+        )
 
         obj = self.repo.create(data)
 
@@ -123,6 +136,13 @@ class WikiKnowledgeService:
         from app.services.kb.kb_format import assert_format_unchanged
 
         assert_format_unchanged(obj.kb_format, payload_dict.get("kb_format"))
+        # pipeline_config 规范化（D8）
+        if "pipeline_config" in payload_dict:
+            from app.services.kb.pipeline_config import normalize_pipeline_config
+
+            payload_dict["pipeline_config"] = normalize_pipeline_config(
+                payload_dict.get("pipeline_config")
+            )
         self.repo.update(obj, payload_dict)
         self.db.commit()
         self.db.refresh(obj)

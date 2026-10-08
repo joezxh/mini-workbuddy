@@ -43,8 +43,13 @@ _TABLE_RENAME_MAP: dict[str, str] = {
     "tool_definition": "ai_tool_definition",
     "tool_group": "ai_tool_group",
     "tool_group_member": "ai_tool_group_member",
-    # 2026-09-27 知识库统一化（spec §3.2）：kms_category → 通用分类容器 kb_category
-    "kms_category": "kb_category",
+    # 2026-09-27 知识库统一化（spec §3.2）：kb_* 分类/检索表统一改名 kms_*
+    "kb_category": "kms_category",
+    "kb_collection": "kms_collection",
+    "kb_segment": "kms_segment",
+    "kb_ref": "kms_ref",
+    "kb_document": "kms_document",
+    "kb_segment_asset": "kms_segment_asset",
 }
 
 
@@ -66,14 +71,22 @@ def rename_legacy_tables(engine: Engine) -> None:
 # ── 轻量列迁移 ─────────────────────────────────────────────────────────────
 # 每条 SQL 均为幂等（ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）。
 _COLUMN_MIGRATIONS: list[str] = [
+    # 表改名后，原 kb_ 索引名随表保留，需一并改名为 kms_（幂等；
+    # 迁移 006 新建库已是 kms_ 名则 no-op；开发库旧索引名随之统一）
+    "ALTER INDEX IF EXISTS idx_kb_category_slug RENAME TO idx_kms_category_slug",
+    "ALTER INDEX IF EXISTS idx_kb_category_parent RENAME TO idx_kms_category_parent",
+    "ALTER INDEX IF EXISTS idx_kb_segment_parent RENAME TO idx_kms_segment_parent",
+    "ALTER INDEX IF EXISTS idx_kb_collection_knowledge RENAME TO idx_kms_collection_knowledge",
+    "ALTER INDEX IF EXISTS ix_kb_category_knowledge_id RENAME TO ix_kms_category_knowledge_id",
+    "ALTER INDEX IF EXISTS ix_kb_collection_knowledge_id RENAME TO ix_kms_collection_knowledge_id",
     "ALTER TABLE agent_async_task ADD COLUMN IF NOT EXISTS execution_id VARCHAR(100)",
     "CREATE INDEX IF NOT EXISTS ix_agent_async_task_execution_id ON agent_async_task (execution_id)",
     "ALTER TABLE agent_scheduled_task ADD COLUMN IF NOT EXISTS skill_info TEXT",
     "ALTER TABLE sys_menu ADD COLUMN IF NOT EXISTS i18n_key VARCHAR(100)",
     # 知识库归属字段：category/article/search_log 补 knowledge_id
-    # 注：kms_category 已重命名为 kb_category（见 _TABLE_RENAME_MAP），此处同步改名
-    "ALTER TABLE kb_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
-    "CREATE INDEX IF NOT EXISTS ix_kb_category_knowledge_id ON kb_category (knowledge_id)",
+    # 注：kb_category 已统一改名 kms_category（见 _TABLE_RENAME_MAP），此处同步改名
+    "ALTER TABLE kms_category ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS ix_kms_category_knowledge_id ON kms_category (knowledge_id)",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
     "CREATE INDEX IF NOT EXISTS ix_kms_article_knowledge_id ON kms_article (knowledge_id)",
     "ALTER TABLE kms_search_log ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
@@ -86,19 +99,25 @@ _COLUMN_MIGRATIONS: list[str] = [
     "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS index_mode VARCHAR(16) NOT NULL DEFAULT 'high_quality'",
     "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS pipeline_config JSONB",
     "CREATE INDEX IF NOT EXISTS idx_kms_knowledge_tenant_type ON kms_knowledge (tenant_id, type)",
-    # 分类容器冗余类型（RENAME 后回填；仅补空值，重复执行安全）
-    "ALTER TABLE kb_category ADD COLUMN IF NOT EXISTS kb_type INTEGER",
-    "UPDATE kb_category c SET kb_type = k.type FROM kms_knowledge k "
-    "WHERE c.knowledge_id = k.id AND c.kb_type IS NULL",
-    # kb_* 三表由迁移 006 独占建表，create_all 不加列，故在此补齐
-    "ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
-    "CREATE INDEX IF NOT EXISTS idx_kb_collection_knowledge ON kb_collection (knowledge_id)",
-    "ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS schema_config JSONB",
-    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text'",
-    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT",
-    "CREATE INDEX IF NOT EXISTS idx_kb_segment_parent ON kb_segment (parent_id)",
-    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS answer TEXT",
-    "ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS keywords JSONB",
+    # 知识库所属类别（知识库管理）：引用 kms_category 树节点
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS category_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS idx_kms_knowledge_category ON kms_knowledge (category_id)",
+    # 旧关系清理（2026-10-08）：分类不再归属知识库，移除 knowledge_id / kb_type
+    "ALTER TABLE kms_category DROP COLUMN IF EXISTS knowledge_id",
+    "ALTER TABLE kms_category DROP COLUMN IF EXISTS kb_type",
+    # kms_* 检索表由迁移 006 独占建表，create_all 不加列，故在此补齐
+    "ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS knowledge_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS idx_kms_collection_knowledge ON kms_collection (knowledge_id)",
+    "ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS schema_config JSONB",
+    # 检索设置面板（spec §10.5）：embedding/rerank 模型 + 检索参数
+    "ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS retrieval_settings JSONB",
+    # 外部代理调用方白名单（spec §10.6 引用与调用方管理）
+    "ALTER TABLE kms_external_kb_endpoint ADD COLUMN IF NOT EXISTS allowed_callers JSONB",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text'",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS idx_kms_segment_parent ON kms_segment (parent_id)",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS answer TEXT",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS keywords JSONB",
     # OKF 合规层（spec §9.2）：文章溯源/验证/过期字段
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS okf_type VARCHAR(64)",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS resource VARCHAR(500)",
@@ -117,6 +136,53 @@ def add_new_columns(engine: Engine) -> None:
     with engine.begin() as conn:
         for sql in _COLUMN_MIGRATIONS:
             conn.execute(text(sql))
+
+
+# ── 字典数据播种（幂等）──────────────────────────────────────────────────────
+# SOP 助手模式（spec §4）作为独立会话类型落地，需在 session_type 字典中登记 sop
+# 项，否则前端模式下拉（getDictionaryItems('session_type')）不会展示，用户无法进入。
+# 仅插入 sop 一项；其余模式（general/thinking/...）由既有数据/管理后台维护。
+_SESSION_TYPE_SEED: list[dict] = [
+    {
+        "item_code": "sop",
+        "item_name": "SOP 流程",
+        "item_value": "sop",
+        "color": "purple",
+        "sort_order": 90,
+    },
+]
+
+
+def seed_session_type_dictionary(engine: Engine) -> None:
+    """幂等登记 session_type 字典的 sop 项（重复运行安全）。"""
+    with engine.begin() as conn:
+        for item in _SESSION_TYPE_SEED:
+            exists = conn.execute(
+                text(
+                    "SELECT 1 FROM sys_dictionary_item "
+                    "WHERE dict_code = 'session_type' AND item_code = :code"
+                ),
+                {"code": item["item_code"]},
+            ).first()
+            if exists:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO sys_dictionary_item "
+                    "(dict_code, item_code, item_name, item_value, color, "
+                    " sort_order, is_active, is_deleted, tenant_id) "
+                    "VALUES ('session_type', :code, :name, :value, :color, "
+                    " :sort, true, false, 0)"
+                ),
+                {
+                    "code": item["item_code"],
+                    "name": item["item_name"],
+                    "value": item["item_value"],
+                    "color": item["color"],
+                    "sort": item["sort_order"],
+                },
+            )
+            logger.info(f"已登记 session_type 字典项: {item['item_code']}")
 
 
 # ── 索引迁移（幂等；Phase 3 T1）──────────────────────────────────────────

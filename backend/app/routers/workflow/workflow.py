@@ -54,7 +54,7 @@ def create_flow(
     flow = svc.create_flow(db, {**data.model_dump(exclude={"api_key"}),
                                  "api_key": data.api_key,
                                  "tenant_id": user.tenant_id,
-                                 "created_by": user.id})
+                                 "created_by": user.user_id})
     db.commit()
     return WorkflowFlowOut.model_validate(flow)
 
@@ -97,7 +97,7 @@ async def test_flow(flow_id: int, data: WorkflowTestReq,
     gateway = WorkflowGateway(db)
     result = await gateway.execute(
         flow_code=flow.flow_code, tenant_id=user.tenant_id,
-        inputs=data.inputs, user_id=str(user.id), timeout=data.timeout,
+        inputs=data.inputs, user_id=str(user.user_id), timeout=data.timeout,
     )
     return WorkflowTestResp(success=result.success, output=result.output,
                             error=result.error, latency_ms=result.latency_ms)
@@ -133,7 +133,7 @@ def list_chains(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=
 def create_chain(data: WorkflowChainCreate,
                  db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
     chain = svc.create_chain(db, {**data.model_dump(), "tenant_id": user.tenant_id,
-                                   "created_by": user.id})
+                                   "created_by": user.user_id})
     db.commit()
     return WorkflowChainOut.model_validate(chain)
 

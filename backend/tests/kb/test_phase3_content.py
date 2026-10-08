@@ -29,7 +29,7 @@ class _FakeKB:
 
 
 @asynccontextmanager
-async def _fake_kb_factory():
+async def _fake_kb_factory(**kwargs):
     yield _FakeKB()
 
 
@@ -146,8 +146,19 @@ def test_validate_endpoint_url_rejects_http_and_private():
         validate_endpoint_url("https://127.0.0.1/x")          # 环回地址
 
 
-def test_validate_endpoint_url_accepts_public_https():
+def test_validate_endpoint_url_accepts_public_https(monkeypatch):
+    """公网 https 放行。
+
+    ``example.com`` 的解析结果随环境 DNS 而变（曾命中 198.18/15 等保留段被 SSRF
+    拦截），故固定解析为公网地址，断言只针对校验逻辑而非真实 DNS。
+    """
+    import socket
+
     from app.routers.kb.kb_proxy import validate_endpoint_url
 
+    monkeypatch.setattr(
+        socket, "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, 0, 0, "", ("93.184.216.34", 443))],
+    )
     assert validate_endpoint_url("https://example.com/retrieve") == \
         "https://example.com/retrieve"

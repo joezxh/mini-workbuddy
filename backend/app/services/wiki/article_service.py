@@ -198,6 +198,8 @@ class WikiArticleService:
             title=article.title,
             content=article.content,
             slug=article.slug,
+            summary=article.summary,
+            owl_class_uris=article.owl_class_uris,
             change_note=change_note,
             editor_id=editor_id,
             operation_type=operation_type,
@@ -229,15 +231,16 @@ class WikiArticleService:
                     target.backlinks = backlinks
 
     def _enqueue_index(self, article_id: int) -> None:
-        """异步触发 RAG 索引（不阻塞主写链路）。失败仅记日志，不影响写请求。"""
-        try:
-            from app.services.wiki.rag_ingestor import WikiRAGIngestor
-            import threading
+        """异步触发 RAG 索引（不阻塞主写链路）。
 
-            threading.Thread(
-                target=WikiRAGIngestor().index_article,
-                args=(article_id,),
-                daemon=True,
-            ).start()
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[WikiArticleService] 触发 RAG 索引失败(已降级): {e}")
+        经 job_runner 提交：索引任务自带独立 Session（WikiRAGIngestor 内 SessionLocal），
+        失败仅降级记日志，不影响写请求。
+        """
+        from app.core.job_runner import run_in_background
+        from app.services.wiki.rag_ingestor import WikiRAGIngestor
+
+        run_in_background(
+            WikiRAGIngestor().index_article,
+            article_id,
+            name=f"wiki-index-{article_id}",
+        )

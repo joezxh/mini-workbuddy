@@ -1,0 +1,63 @@
+# =============================================================
+# PP-StructureV3 版面解析服务（CPU 推理，可选变体）
+#
+# 构建上下文：PaddleOCR 源码仓库根目录
+#   docker build -f docker/paddleOCR/Dockerfile.structurev3 <PaddleOCR 根目录>
+#
+# 说明：PP-StructureV3 比 PP-OCRv6 重得多（版面分析 + 表格识别等多子模型），
+#       CPU 推理单页耗时可达数秒，生产建议使用官方 GPU 侧的 PaddleOCR-VL。
+#       变体与 ppocrv6 保持一致的源策略与分层顺序。
+# =============================================================
+# syntax=docker/dockerfile:1
+
+ARG BASE_REGISTRY=crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base
+
+FROM ${BASE_REGISTRY}/python:3.10-slim
+
+ARG PIP_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple
+ARG PIP_EXTRA_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL} \
+    PIP_TRUSTED_HOST="repo.huaweicloud.com mirrors.aliyun.com" \
+    PADDLE_PDX_MODEL_SOURCE=modelscope \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+
+RUN sed -i 's#deb.debian.org#mirrors.tuna.tsinghua.edu.cn#g' \
+        /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 \
+        fonts-dejavu-core fonts-liberation curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY wheels/ /wheels/
+RUN ls /wheels/*.whl >/dev/null 2>&1 || \
+    (echo "ERROR: wheels/ 下缺少 paddlepaddle wheel，请先运行 build.ps1 / build.sh 自动下载" && false)
+RUN pip install --no-cache-dir /wheels/*.whl
+
+WORKDIR /src
+COPY pyproject.toml README.md MANIFEST.in /src/
+COPY paddleocr/ /src/paddleocr/
+COPY ppstructure/ /src/ppstructure/
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=3.7.0
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir /src && \
+    pip install --no-cache-dir fastapi "uvicorn[standard]" python-multipart pillow numpy opencv-python-headless
+
+ENV PADDLEX_HOME=/models_cache
+
+# 构建期预热版面解析流水线
+RUN python -c "from paddleocr import PPStructureV3; PPStructureV3()"
+
+WORKDIR /app
+COPY app_structure.py /app/app.py
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=8s --start-period=90s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5).status==200 else 1)"
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

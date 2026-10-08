@@ -92,7 +92,7 @@ mcp>=1.15.0,<2.0.0
 
 # AgentScope 2.x 运行时（realtime 语音内核：RealtimeAgent + DashScope 实时模型）
 # 注意：2.0.8 发布版不含 OpenAIRealtimeModel（gpt-realtime 需升级框架，见 duplex/voice spec §2.3）
-agentscope==2.0.8  # 固定 2.0.8：原生 Agent Team API + 流式修复
+agentscope==2.0.9  # 固定 2.0.9：原生 Agent Team API + 流式修复
 # Windows 无 ripgrep>=15 预编译 wheel（需 Rust 源码构建会挂起），本地 venv 已降级安装 14.1.0
 #ripgrep>=15.0.0
 

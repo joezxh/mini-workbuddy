@@ -31,8 +31,7 @@ def test_knowledge_type_column_defaults_to_wiki():
 
 
 def test_category_table_renamed_and_typed():
-    assert KbCategory.__tablename__ == "kb_category"
-    assert "kb_type" in KbCategory.__table__.c
+    assert KbCategory.__tablename__ == "kms_category"
 
 
 def test_collection_has_knowledge_link():

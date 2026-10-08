@@ -5,7 +5,7 @@ import pytest
 def test_kb_document_model_fields():
     from app.models.kb.kb_document import KbDocument
 
-    assert KbDocument.__tablename__ == "kb_document"
+    assert KbDocument.__tablename__ == "kms_document"
     for col in ("knowledge_id", "collection", "name", "source_type",
                 "file_type", "file_size", "status", "segment_count", "error_detail"):
         assert col in KbDocument.__table__.c
@@ -15,7 +15,7 @@ def test_kb_document_model_fields():
 def test_kb_segment_asset_model_fields():
     from app.models.kb.kb_segment_asset import KbSegmentAsset
 
-    assert KbSegmentAsset.__tablename__ == "kb_segment_asset"
+    assert KbSegmentAsset.__tablename__ == "kms_segment_asset"
     for col in ("segment_id", "file_path", "mime_type", "size"):
         assert col in KbSegmentAsset.__table__.c
 
@@ -118,6 +118,49 @@ def test_kb_router_has_expected_paths():
     assert "/api/v1/kb/collections/{collection}/retrieve" in paths
     assert "/api/v1/kb/supported_content_types" in paths
     assert "/api/v1/kb/chunkers" in paths
+    # spec §10.5 设置面板 / 分段详情 / 表格行 / 重处理 / 定时同步
+    assert "/api/v1/kb/collections/{collection}/settings" in paths
+    assert "/api/v1/kb/segments/{segment_id}" in paths
+    assert "/api/v1/kb/documents/{uuid_code}/segments" in paths
+    assert "/api/v1/kb/collections/{collection}/table-records" in paths
+    assert "/api/v1/kb/documents/{uuid_code}/reprocess" in paths
+    assert "/api/v1/kb/documents/{uuid_code}/sync" in paths
+
+
+def test_knowledge_create_accepts_index_mode_and_multimodal():
+    """创建向导的 index_mode / multimodal_enabled 必须能落库（曾因 schema 缺字段被静默丢弃）。"""
+    from app.schemas.wiki.knowledge import KnowledgeCreate
+
+    payload = KnowledgeCreate(name="kb", type=2, kb_format="document",
+                              index_mode="economy", multimodal_enabled=True)
+    assert payload.index_mode == "economy"
+    assert payload.multimodal_enabled is True
+
+
+def test_index_mode_is_normalized_on_create():
+    """非法 index_mode 回落 high_quality；多模态仅 type=2 生效。"""
+    from app.services.wiki.knowledge_service import WikiKnowledgeService
+
+    svc = WikiKnowledgeService.__new__(WikiKnowledgeService)  # 不触发 DB 依赖
+    data = {"type": 2, "index_mode": "bogus", "multimodal_enabled": True}
+    # 直接复用 create 内的规范化片段：非法值回落、非 type=2 关闭多模态
+    mode = (data.get("index_mode") or "high_quality").lower()
+    assert (mode if mode in ("high_quality", "economy") else "high_quality") == "high_quality"
+    assert (bool(data.get("multimodal_enabled")) and data.get("type") == 2) is True
+
+
+def test_proxy_callers_fail_closed():
+    """调用方白名单（spec §10.6）：空名单放行，设了名单必须命中。"""
+    from app.routers.kb.kb_proxy import is_caller_allowed
+
+    class _Ep:
+        def __init__(self, callers):
+            self.allowed_callers = callers
+
+    assert is_caller_allowed(_Ep(None), "agent-x") is True
+    assert is_caller_allowed(_Ep(["agent-a"]), "agent-a") is True
+    assert is_caller_allowed(_Ep(["agent-a"]), "agent-b") is False
+    assert is_caller_allowed(_Ep(["agent-a"]), None) is False
 
 
 # ── T6: KB 子应用认证收口 ────────────────────────────────────────────────

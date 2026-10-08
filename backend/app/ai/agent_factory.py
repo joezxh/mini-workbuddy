@@ -233,7 +233,15 @@ class AgentFactory:
 
         async def _build():
             kbs = []
+            from app.services.kb.index_mode import resolve_index_mode
+
             for kid in kb_ids:
+                # economy 库不建向量索引（向量列 NULL），经 RAGMiddleware 检索会
+                # 徒耗 query 嵌入且无命中，故直接跳过（D11 / AC7）；其检索由独立
+                # 关键词服务承担，不在 Agent RAG 链路内。
+                if resolve_index_mode(self._db, f"kb_{kid}") == "economy":
+                    logger.info(f"[RAG] 知识库 {kid} 为 economy 模式，跳过向量 RAG 装配")
+                    continue
                 # Agent 运行期检索发生在请求之外，故 store 取长生命周期
                 # （与 Agent 同存活），不走 async with 退出。
                 store = PgVectorStore(

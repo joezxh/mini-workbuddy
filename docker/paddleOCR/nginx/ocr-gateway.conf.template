@@ -1,0 +1,44 @@
+# OCR 服务鉴权网关
+# 文件名以 .template 结尾，由 nginx 官方镜像在容器启动时渲染到 /etc/nginx/conf.d/
+#
+# 可用环境变量：
+#   OCR_LISTEN_PORT   监听端口        默认 80
+#   OCR_UPSTREAM      上游 OCR 服务   默认 pp-ocrv6:8000
+#   PADDLE_API_KEY    调用方需携带的 X-API-Key（未设置则拒绝全部请求）
+
+# map 指令里的密钥由 envsubst 渲染，nginx 自身变量一律写成 $xxx 形式（单 $）
+map $http_x_api_key $paddle_key_valid {
+    default 0;
+    "${PADDLE_API_KEY}" 1;
+}
+
+server {
+    listen ${OCR_LISTEN_PORT};
+    server_name _;
+
+    client_max_body_size 30m;
+
+    # 健康检查不鉴权，便于容器编排探测
+    location = /health {
+        proxy_pass http://${OCR_UPSTREAM}/health;
+        proxy_read_timeout 10s;
+    }
+
+    location / {
+        if ($paddle_key_valid = 0) {
+            return 401 '{"status":"error","detail":"missing or invalid X-API-Key"}';
+        }
+
+        proxy_pass http://${OCR_UPSTREAM};
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # OCR 单页 CPU 推理可能达数秒，超时要给足
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+        proxy_connect_timeout 10s;
+    }
+}

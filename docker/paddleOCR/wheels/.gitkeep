@@ -1,0 +1,2 @@
+# 本目录放置 paddlepaddle 的预下载 wheel（约 185MB，不入库）。
+# build.ps1 / build.sh 会在缺失时自动从华为云 PyPI 源下载。

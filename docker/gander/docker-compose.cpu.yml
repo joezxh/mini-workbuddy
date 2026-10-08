@@ -1,0 +1,14 @@
+# =============================================================
+# Gander CPU 模式覆盖层（无 GPU 运行 ASR）
+#
+# 用法：
+#   docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+# =============================================================
+
+services:
+  asr:
+    deploy:
+      resources: {}
+    environment:
+      - ASR_DEVICE=cpu
+      - ASR_COMPUTE_TYPE=int8

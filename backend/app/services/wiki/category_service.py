@@ -25,7 +25,6 @@ def _to_out(c: KbCategory) -> dict:
         "slug": c.slug,
         "description": c.description,
         "parent_id": c.parent_id,
-        "knowledge_id": c.knowledge_id,
         "owl_class_uri": c.owl_class_uri,
         "sort_order": c.sort_order or 0,
         "article_count": c.article_count or 0,
@@ -34,7 +33,7 @@ def _to_out(c: KbCategory) -> dict:
 
 
 class KbCategoryService:
-    """目录管理：创建 / 树形查询（可过滤知识库）/ 更新 / 移动 / 删除。"""
+    """目录管理：创建 / 树形查询 / 更新 / 移动 / 删除。"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -54,22 +53,18 @@ class KbCategoryService:
         invalidate(cache_key("tree"))  # 树结构变更 → 失效全部树缓存
         return _to_out(obj)
 
-    def tree(self, knowledge_id: Optional[int] = None) -> List[dict]:
+    def tree(self) -> List[dict]:
         """目录树：读多写少，走缓存（Phase 3 T2）；写操作在下方各方法内失效。"""
         from app.services.kb.kb_cache import cache_key, cached
 
-        @cached(key_builder=lambda: cache_key("tree", knowledge_id))
+        @cached(key_builder=lambda: cache_key("tree"))
         def _build() -> List[dict]:
-            return self._build_tree(knowledge_id)
+            return self._build_tree()
 
         return _build()
 
-    def _build_tree(self, knowledge_id: Optional[int] = None) -> List[dict]:
-        categories = (
-            self.repo.list_by_knowledge(knowledge_id)
-            if knowledge_id is not None
-            else self.repo.list_all()
-        )
+    def _build_tree(self) -> List[dict]:
+        categories = self.repo.list_all()
         node_map: dict = {}
         roots: list = []
         for c in categories:

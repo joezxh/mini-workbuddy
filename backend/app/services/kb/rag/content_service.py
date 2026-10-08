@@ -31,6 +31,7 @@ ASSET_MAX_PER_SEGMENT = 10          # 单 chunk ≤ 10 张
 def _insert_via_kb(
     session_factory: Optional[Callable],
     *,
+    db: Session,
     collection: str,
     tenant_id: int,
     document_id: str,
@@ -38,11 +39,17 @@ def _insert_via_kb(
     kb_factory: Optional[Callable] = None,
     document_metadata: Optional[dict] = None,
 ) -> None:
-    """经 KnowledgeBase.insert_document 落库（嵌入内部完成）。"""
+    """经 KnowledgeBase.insert_document 落库（嵌入内部完成）。
+
+    economy 模式写 NULL 向量（D11）；检索走独立关键词服务（AC7）。
+    """
 
     async def _run() -> None:
+        from app.services.kb.index_mode import resolve_index_mode
+
+        index_mode = resolve_index_mode(db, collection)
         if kb_factory is not None:
-            async with kb_factory() as kb:
+            async with kb_factory(index_mode=index_mode) as kb:
                 await kb.ensure_collection()
                 await kb.insert_document(chunks, document_id=document_id,
                                          document_metadata=document_metadata)
@@ -52,7 +59,7 @@ def _insert_via_kb(
 
         async with knowledge_base(
             SessionLocal, collection_name=collection, tenant_id=tenant_id,
-            name=collection,
+            name=collection, index_mode=index_mode,
         ) as kb:
             await kb.ensure_collection()
             await kb.insert_document(chunks, document_id=document_id,
@@ -88,7 +95,7 @@ def ingest_qa_records(
     doc_id = new_document_uuid()
     chunks = build_qa_chunks(records, source="qa-import")
     _insert_via_kb(
-        session_factory, collection=collection, tenant_id=tenant_id,
+        session_factory, db=db, collection=collection, tenant_id=tenant_id,
         document_id=doc_id, chunks=chunks, kb_factory=kb_factory,
         document_metadata={"source": "qa-import"},
     )
@@ -98,13 +105,15 @@ def ingest_qa_records(
 
 def list_qa_records(db: Session, tenant_id: int, collection: str,
                     limit: int = 100) -> list[dict]:
+    """Q&A 条目列表；``segment_id`` 供前端直接改单条（启停/编辑）而不必回表定位。"""
     rows = db.execute(text(
-        "SELECT document_id, chunk_index, content, metadata"
-        " FROM kb_segment WHERE collection = :c AND tenant_id = :t"
+        "SELECT id, document_id, chunk_index, content, metadata"
+        " FROM kms_segment WHERE collection = :c AND tenant_id = :t"
         " AND metadata->>'chunk_type' = 'qa' ORDER BY id DESC LIMIT :k"
     ), {"c": collection, "t": tenant_id, "k": limit}).all()
     return [
         {
+            "segment_id": r.id,
             "document_id": r.document_id,
             "chunk_index": r.chunk_index,
             "question": r.content,
@@ -152,20 +161,27 @@ def ingest_table_rows(
     embed_field: str,
     session_factory: Optional[Callable] = None,
     kb_factory: Optional[Callable] = None,
+    document_id: Optional[str] = None,
 ) -> int:
-    """表格行直构 Chunk：embed_field 列被嵌入，其余列进 metadata（可过滤）。"""
+    """表格行直构 Chunk：embed_field 列被嵌入，其余列进 metadata（可过滤）。
+
+    ``document_id`` 供定时同步覆盖同一文档（spec §10.8）；缺省新建文档 ID。
+    """
     if not rows:
         return 0
     if embed_field not in rows[0]:
         raise ValueError(f"embedding 字段 {embed_field!r} 不在表头中")
-    doc_id = new_document_uuid()
+    doc_id = document_id or new_document_uuid()
     chunks = build_table_row_chunks(rows, embed_field=embed_field, source="table-import")
     _insert_via_kb(
-        session_factory, collection=collection, tenant_id=tenant_id,
+        session_factory, db=db, collection=collection, tenant_id=tenant_id,
         document_id=doc_id, chunks=chunks, kb_factory=kb_factory,
         document_metadata={"source": "table-import", "embed_field": embed_field},
     )
-    _track_document(db, tenant_id, collection, f"table-{doc_id[:8]}", "db_table", len(chunks))
+    # 定时同步传入已有 document_id 时不新建文档（避免重复文档行）
+    if document_id is None:
+        _track_document(db, tenant_id, collection, f"table-{doc_id[:8]}",
+                        "db_table", len(chunks))
     return len(chunks)
 
 
@@ -180,7 +196,7 @@ def save_image_asset(
 ) -> KbSegmentAsset:
     """图片落盘 + caption 文本 chunk 入库（文搜图）+ 资产行登记。
 
-    资产行挂在 insert_document 产生的首个 kb_segment 行上（D9：原生 Chunk 无
+    资产行挂在 insert_document 产生的首个 kms_segment 行上（D9：原生 Chunk 无
     segment id，取该文档 chunk_index=0 的行）。
     """
     if len(data) > ASSET_MAX_BYTES:
@@ -199,7 +215,7 @@ def save_image_asset(
         metadata={"chunk_type": "image", "filename": filename, "mime": mime_type},
     )
     _insert_via_kb(
-        session_factory, collection=collection, tenant_id=tenant_id,
+        session_factory, db=db, collection=collection, tenant_id=tenant_id,
         document_id=doc_id, chunks=[chunk], kb_factory=kb_factory,
         document_metadata={"source": "image", "filename": filename},
     )
@@ -211,7 +227,7 @@ def save_image_asset(
     path.write_bytes(data)
 
     segment = db.execute(
-        text("SELECT id FROM kb_segment WHERE collection=:c AND document_id=:d"
+        text("SELECT id FROM kms_segment WHERE collection=:c AND document_id=:d"
              " AND chunk_index=0 LIMIT 1"),
         {"c": collection, "d": doc_id},
     ).scalar_one()
@@ -228,11 +244,11 @@ def save_image_asset(
 
 def list_assets(db: Session, tenant_id: int, collection: str,
                 limit: int = 100) -> list[dict]:
-    """按 collection 列出图片资产（经 kb_segment 反查）。"""
+    """按 collection 列出图片资产（经 kms_segment 反查）。"""
     rows = db.execute(text(
         "SELECT a.id, a.file_path, a.mime_type, a.size, a.created_at"
-        " FROM kb_segment_asset a"
-        " JOIN kb_segment s ON s.id = a.segment_id"
+        " FROM kms_segment_asset a"
+        " JOIN kms_segment s ON s.id = a.segment_id"
         " WHERE s.collection = :c AND a.tenant_id = :t"
         " ORDER BY a.id DESC LIMIT :k"
     ), {"c": collection, "t": tenant_id, "k": limit}).all()

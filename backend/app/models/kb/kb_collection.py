@@ -13,7 +13,7 @@ class KbCollection(Base, TenantMixin):
     ``dimensions`` 是运行时向量维度真值（迁移里列的 ``Vector`` 维度只是默认值）。
     """
 
-    __tablename__ = "kb_collection"
+    __tablename__ = "kms_collection"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     name = Column(String(128), nullable=False, unique=True, comment="集合名(逻辑名)")
@@ -27,6 +27,12 @@ class KbCollection(Base, TenantMixin):
     )
     # 表格 KB 字段定义（spec §10.2）：[{name,type,enabled,embedding(单选),filterable}]
     schema_config = Column(JSON, nullable=True, comment="表格 KB 字段定义")
+    # 检索设置（spec §10.5 设置面板）：embedding/rerank 模型 + top_k + score_threshold
+    retrieval_settings = Column(
+        JSON, nullable=True,
+        comment="检索设置: {embedding_provider,embedding_model,embedding_dimensions,"
+                "rerank_provider,rerank_model,top_k,score_threshold}",
+    )
     created_at = Column(
         TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间"
     )

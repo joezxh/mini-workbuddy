@@ -1,0 +1,80 @@
+# =============================================================
+# PP-OCRv6 文本识别服务（CPU 推理，零显存占用）
+#
+# 构建上下文：PaddleOCR 源码仓库根目录
+#   docker build -f docker/paddleOCR/Dockerfile.ppocrv6 <PaddleOCR 根目录>
+#
+# 国内化要点：
+#   1) 基础镜像来自个人 ACR 的 base/python:3.10-slim
+#   2) apt 换清华源（Debian bookworm 的 sources.list.d/*.sources 新格式也一并处理）
+#   3) pip 主源华为云（实测 ~6.1MB/s）+ 备源阿里云
+#   4) paddlepaddle 这种 ~185MB 的超大 wheel 走离线目录 wheels/，
+#      避免构建期长时间抖动 —— 实测回源速率：aliyun 84KB/s、清华 1.6MB/s、
+#      华为云 6.1MB/s、pypi.org 7.2MB/s
+#   5) 模型权重走 ModelScope 国内源，并在构建期预热进 /models_cache
+# =============================================================
+# syntax=docker/dockerfile:1
+
+ARG BASE_REGISTRY=crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base
+
+FROM ${BASE_REGISTRY}/python:3.10-slim
+
+ARG PIP_INDEX_URL=https://repo.huaweicloud.com/repository/pypi/simple
+ARG PIP_EXTRA_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL} \
+    PIP_TRUSTED_HOST="repo.huaweicloud.com mirrors.aliyun.com pypi.tuna.tsinghua.edu.cn" \
+    PADDLE_PDX_MODEL_SOURCE=modelscope \
+    PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+
+# Debian apt 换清华源（bookworm 用 sources.list.d/*.sources，旧版用 sources.list）
+RUN sed -i 's#deb.debian.org#mirrors.tuna.tsinghua.edu.cn#g' \
+        /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+
+# 系统依赖：OpenCV / Paddle 推理所需底层库 + 中文字体
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 libgomp1 \
+        fonts-dejavu-core fonts-liberation curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- 1) paddlepaddle（CPU 版）离线安装 ----
+# wheels/ 下的 wheel 由 build.ps1 / build.sh 自动下载（不入 git）
+COPY wheels/ /wheels/
+RUN ls /wheels/*.whl >/dev/null 2>&1 || \
+    (echo "ERROR: wheels/ 下缺少 paddlepaddle wheel，请先运行 build.ps1 / build.sh 自动下载" && false)
+RUN pip install --no-cache-dir /wheels/*.whl
+
+# ---- 2) PaddleX OCR 推理后端 + FastAPI 服务栈 ----
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir \
+        "paddlex[ocr-core]==3.7.2" \
+        fastapi "uvicorn[standard]" python-multipart pillow numpy
+
+# ---- 3) 从源码安装 paddleocr（PaddleOCR() 默认即 PP-OCRv6 Medium 34.5M）----
+WORKDIR /src
+COPY pyproject.toml README.md MANIFEST.in /src/
+COPY paddleocr/ /src/paddleocr/
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=3.7.0
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir /src
+
+# 模型权重缓存目录：运行时挂载宿主机卷，避免重启重下
+ENV PADDLEX_HOME=/models_cache
+
+# 构建期预热：从 ModelScope 国内源预下载 PP-OCRv6 权重
+# 失败会中断构建 —— 这是刻意的，避免镜像发布后才暴露模型源问题
+RUN python -c "from paddleocr import PaddleOCR; PaddleOCR()"
+
+# ---- 4) 服务入口 ----
+WORKDIR /app
+COPY app.py /app/app.py
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=8s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5).status==200 else 1)"
+
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

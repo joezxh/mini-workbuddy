@@ -344,6 +344,43 @@
   filter: brightness(1.06);
 }
 
+/* Button-style radio group (tab-like switchers, e.g. menu type in
+ * PermissionManager): antd's checked style uses colorBgContainer for the
+ * background, which is overridden to a near-black surface in the dark skin,
+ * making the selected tab indistinguishable (and solid-mode text unreadable).
+ * Use the skin's accent fill with bright, high-contrast text — including on
+ * hover, so the label stays readable in the dark theme. */
+.ant-radio-group .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover)) !important;
+  border-color: var(--accent) !important;
+}
+
+.ant-radio-group .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled)::before {
+  background: var(--accent) !important;
+}
+
+/* Tabs: the active tab label resolves from antd's `colorText` token, which can
+ * fall back to the browser's initial (black) colour in the dark skin — making
+ * the selected tab invisible on the dark surface. Force the skin foreground so
+ * the selected label stays readable; inactive labels use the secondary tone. */
+.ant-tabs .ant-tabs-tab {
+  color: var(--fg-secondary);
+}
+
+.ant-tabs .ant-tabs-tab:hover {
+  color: var(--fg);
+}
+
+.ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--fg) !important;
+}
+
+/* Segmented control: selected option must keep high-contrast text in dark. */
+.ant-segmented .ant-segmented-item-selected {
+  color: var(--fg) !important;
+}
+
 /* ------------------------------------------------------------------ *
  * HUD garnish — the sci-fi accent layer
  *

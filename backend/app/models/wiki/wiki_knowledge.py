@@ -60,6 +60,11 @@ class WikiKnowledge(Base, TenantMixin):
         JSONB, nullable=True,
         comment='摄取编排: {clean:[...], chunker:{type,params}, index:{...}}',
     )
+    # 所属类别（知识库管理）：引用 kms_category 树节点，NULL=未分类
+    category_id = Column(
+        BigInteger, nullable=True, index=True,
+        comment='所属类别（kms_category.id），NULL=未分类',
+    )
 
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment='创建时间')
     updated_at = Column(

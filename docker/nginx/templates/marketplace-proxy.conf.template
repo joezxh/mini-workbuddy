@@ -1,0 +1,80 @@
+# Dify Marketplace 反向代理（国内加速 + 本地缓存）
+# 首次请求走海外网络（较慢），后续直接命中缓存（毫秒级）。
+#
+# 可用环境变量：
+#   MARKETPLACE_LISTEN_PORT  监听端口              默认 8888
+#   MARKETPLACE_UPSTREAM     上游地址              默认 marketplace.dify.ai
+#   MARKETPLACE_RESOLVER     DNS 解析器            默认 127.0.0.11（Docker 内嵌 DNS）
+#
+# 说明：在自定义 bridge 网络里，127.0.0.11 由 Docker 提供解析，
+# 比写死公共 DNS（223.5.5.5 / 8.8.8.8）更能适配不同网络环境。
+
+proxy_cache_path /var/cache/nginx/marketplace
+    levels=1:2
+    keys_zone=marketplace_cache:10m
+    max_size=1g
+    inactive=7d
+    use_temp_path=off;
+
+server {
+    listen ${MARKETPLACE_LISTEN_PORT};
+    server_name _;
+
+    resolver ${MARKETPLACE_RESOLVER} valid=30s ipv6=off;
+
+    # --- Marketplace API（后端 MARKETPLACE_API_URL 指向此处）---
+    location ~ ^/api/v1/ {
+        proxy_pass https://${MARKETPLACE_UPSTREAM};
+
+        proxy_set_header Host              ${MARKETPLACE_UPSTREAM};
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+        proxy_connect_timeout 30s;
+
+        proxy_ssl_server_name on;
+        proxy_ssl_protocols   TLSv1.2 TLSv1.3;
+
+        proxy_cache            marketplace_cache;
+        proxy_cache_methods    GET;
+        proxy_cache_valid      200 1h;
+        proxy_cache_valid      301 302 10m;
+        proxy_cache_valid      any 1m;
+        proxy_cache_key        $request_uri$is_args$args$request_method;
+        add_header             X-Cache-Status $upstream_cache_status;
+
+        proxy_next_upstream    off;
+        proxy_ignore_headers   Cache-Control Expires;
+    }
+
+    # --- Marketplace 前端页面（iframe 用）---
+    location / {
+        proxy_pass https://${MARKETPLACE_UPSTREAM};
+
+        proxy_set_header Host              ${MARKETPLACE_UPSTREAM};
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept-Encoding   "";
+
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+        proxy_connect_timeout 30s;
+
+        proxy_ssl_server_name on;
+        proxy_ssl_protocols   TLSv1.2 TLSv1.3;
+
+        proxy_cache            marketplace_cache;
+        proxy_cache_methods    GET;
+        proxy_cache_valid      200 1h;
+        proxy_cache_valid      any 10m;
+        proxy_cache_key        $request_uri$is_args$args$request_method;
+        add_header             X-Cache-Status $upstream_cache_status;
+
+        proxy_next_upstream    off;
+        proxy_ignore_headers   Cache-Control Expires;
+    }
+}

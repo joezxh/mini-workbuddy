@@ -1,0 +1,72 @@
+# =============================================================
+# Gander 远端变体 —— Thinker 服务（编码器 + Talker TTS）
+#
+# 构建上下文：Omni-Interaction-Agent 仓库根目录
+#   docker build -f docker/gander/Dockerfile.remote <Omni-Interaction-Agent 根目录>
+#
+# 相对上游 deploy/Dockerfile.remote 的改造：基础镜像中转、apt 换源、torch 换国内索引。
+#
+# ⚠️ 能力边界：MiniCPM-o 的 Thinker 需要 inputs_embeds 注入与 hidden_states 回传，
+#    纯 OpenAI 兼容 API 做不到，「远程 LLM 模式」需要自研 RemoteLlmBackend 适配层，
+#    详见 configs/serve_remote.yaml 底部注释与 README。
+# =============================================================
+# syntax=docker/dockerfile:1
+
+ARG BASE_REGISTRY=crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base
+ARG CUDA_IMAGE_TAG=12.4.1-cudnn-devel-ubuntu22.04
+
+FROM ${BASE_REGISTRY}/nvidia-cuda:${CUDA_IMAGE_TAG}
+
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+ARG TORCH_INDEX_URL=https://mirrors.aliyun.com/pytorch-wheels/cu124
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    CUDA_HOME=/usr/local/cuda
+
+RUN sed -i 's#archive.ubuntu.com#mirrors.aliyun.com#g; s#security.ubuntu.com#mirrors.aliyun.com#g' \
+        /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 python3.10-venv python3-pip python3-dev \
+        git wget curl libsndfile1 libgl1-mesa-glx ffmpeg \
+        build-essential ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.10 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir \
+        torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 \
+        --index-url ${TORCH_INDEX_URL}
+
+# INT4 量化依赖
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir "bitsandbytes>=0.45.0"
+
+COPY minicpm_ft /workspace/minicpm_ft
+COPY gander_runtime /workspace/gander_runtime
+WORKDIR /workspace
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir \
+        sentencepiece==0.2.1 \
+        "minicpmo-utils[tts]==1.0.6" \
+        ./minicpm_ft[talker] \
+        ./gander_runtime
+
+# 模型权重与配置均由运行时挂载 / 覆盖
+RUN mkdir -p /models /workspace
+
+ENV PYTHONPATH="/workspace/minicpm_ft:/workspace/gander_runtime"
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["python", "-m", "gander_runtime.cli", "--config", "/workspace/serve.yaml"]

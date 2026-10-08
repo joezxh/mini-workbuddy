@@ -21,13 +21,16 @@
         <a-card size="small" class="wiki-side__tree">
           <a-tree
             :tree-data="treeData"
-            :field-names="{ title: 'name', key: 'id', children: 'children' }"
+            :field-names="{ title: 'name', key: 'treeKey', children: 'children' }"
             :selected-keys="selectedKeys"
             @select="handleCategorySelect"
             default-expand-all
           >
             <template #title="{ data }">
-              <a-dropdown :trigger="['contextmenu']">
+              <a-dropdown
+                v-if="data.kind === 'knowledge' || data.kind === 'category'"
+                :trigger="['contextmenu']"
+              >
                 <span class="cat-node">
                   <BookOutlined v-if="data.kind === 'knowledge'" class="kb-icon" />
                   {{ data.name }}
@@ -37,7 +40,6 @@
                     <a-menu-item key="view">{{ t('kmsWiki.viewInfo') }}</a-menu-item>
                     <template v-if="data.kind === 'knowledge'">
                       <a-menu-item key="edit">{{ t('kmsWiki.editKnowledge') }}</a-menu-item>
-                      <a-menu-item key="add-child">{{ t('kmsWiki.addChildCategory') }}</a-menu-item>
                       <a-menu-divider />
                       <a-menu-item key="delete" danger>{{ t('kmsWiki.deleteKnowledge') }}</a-menu-item>
                     </template>
@@ -50,6 +52,10 @@
                   </a-menu>
                 </template>
               </a-dropdown>
+              <span v-else class="cat-node">
+                <BookOutlined v-if="data.kind === 'knowledge'" class="kb-icon" />
+                {{ data.name }}
+              </span>
             </template>
           </a-tree>
         </a-card>
@@ -88,7 +94,7 @@
               style="display: none"
               @change="handleOkfImport"
             />
-            <a-button type="primary" @click="showCreateModal = true">
+            <a-button type="primary" @click="openCreateModal">
               <template #icon><PlusOutlined /></template>
               {{ t('kmsWiki.createArticle') }}
             </a-button>
@@ -120,6 +126,10 @@
               </a-list-item-meta>
               <div class="article-meta">
                 <a-tag v-for="tag in (item.tags || []).slice(0, 3)" :key="tag">{{ tag }}</a-tag>
+                <a-tag v-if="item.okf_type" :color="okfColor(item.okf_type)">{{ okfLabel(item.okf_type) }}</a-tag>
+                <span v-if="item.sources?.length" class="meta-text">
+                  {{ t('kmsWiki.sourceCount', { count: item.sources.length }) }}
+                </span>
                 <span class="meta-text">v{{ item.version }} · {{ t('kmsWiki.views', { count: item.view_count }) }} · {{ formatDate(item.updated_at) }}</span>
               </div>
               <template #actions>
@@ -155,8 +165,31 @@
         <a-form-item label="Slug">
           <a-input v-model:value="newArticle.slug" :placeholder="t('kmsWiki.slugPlaceholder')" />
         </a-form-item>
+        <a-form-item :label="t('kmsWiki.articleKb')">
+          <a-select
+            v-model:value="newArticle.knowledge_id"
+            :placeholder="t('kmsWiki.articleKbPlaceholder')"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            style="width: 100%"
+          >
+            <a-select-option v-for="kb in knowledges" :key="kb.id" :value="kb.id">
+              {{ kb.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item :label="t('kmsWiki.summary')">
           <a-textarea v-model:value="newArticle.summary" :rows="2" :placeholder="t('kmsWiki.summaryPlaceholder')" />
+        </a-form-item>
+        <a-form-item :label="t('kmsWiki.docUpload')">
+          <DocUploadPanel @converted="onConvertedCreate" />
+        </a-form-item>
+        <a-form-item v-if="newArticle.content" :label="t('kmsWiki.body')">
+          <a-textarea v-model:value="newArticle.content" :rows="6" style="font-family: monospace" />
+        </a-form-item>
+        <a-form-item v-if="createExtractedFields.length">
+          <ArticleExtractedFields v-model:values="createExtracted" :fields="createExtractedFields" />
         </a-form-item>
         <a-form-item :label="t('wikiMgmt.tabCategory')">
           <a-tree-select
@@ -211,6 +244,16 @@
         <a-form-item :label="t('kmsWiki.knowledgeName')" required>
           <a-input v-model:value="knowledgeModal.name" :placeholder="t('kmsWiki.knowledgeName')" />
         </a-form-item>
+        <a-form-item :label="t('wikiMgmt.tabCategory')">
+          <a-tree-select
+            v-model:value="knowledgeModal.category_id"
+            :tree-data="categoryTree"
+            :field-names="{ label: 'name', value: 'id', children: 'children' }"
+            :placeholder="t('kbMgmt.categoryPlaceholder')"
+            allow-clear
+            tree-default-expand-all
+          />
+        </a-form-item>
         <a-form-item :label="t('kmsWiki.categoryDesc')">
           <a-textarea v-model:value="knowledgeModal.description" :rows="2" />
         </a-form-item>
@@ -236,6 +279,16 @@ import { useRouter } from 'vue-router'
 import { BookOutlined, ExperimentOutlined, PlusOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listArticles, createArticle, createCategory, updateCategory, deleteCategory, listCategories, searchArticles, listKnowledges, createKnowledge, updateKnowledge, deleteKnowledge } from '@/api/wiki'
+import DocUploadPanel from './components/DocUploadPanel.vue'
+import ArticleExtractedFields from './components/ArticleExtractedFields.vue'
+
+interface FieldDef {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'select' | 'tags' | 'sources'
+  options?: string[]
+  optionLabels?: Record<string, string>
+}
 import { exportOkfBundle, importOkfBundle } from '@/api/kb'
 import dayjs from 'dayjs'
 
@@ -264,8 +317,84 @@ const newArticle = ref({
   slug: '',
   summary: '',
   category_id: null as number | null,
+  knowledge_id: null as number | null,
+  content: '',
   tags: [] as string[],
 })
+
+/** 新建弹窗里由文档提取到的 OKF 字段（提取到什么就渲染什么） */
+const createExtracted = ref<Record<string, any>>({})
+const createExtractedFields = ref<FieldDef[]>([])
+
+const OKF_TYPES = ['concept', 'howto', 'reference', 'decision', 'metric']
+const OKF_LABELS: Record<string, string> = {
+  concept: t('kmsWiki.okfConcept'),
+  howto: t('kmsWiki.okfHowto'),
+  reference: t('kmsWiki.okfReference'),
+  decision: t('kmsWiki.okfDecision'),
+  metric: t('kmsWiki.okfMetric'),
+}
+const OKF_COLORS: Record<string, string> = {
+  concept: 'default',
+  howto: 'blue',
+  reference: 'cyan',
+  decision: 'purple',
+  metric: 'orange',
+}
+
+function okfLabel(type: string) {
+  return OKF_LABELS[type] || type
+}
+function okfColor(type: string) {
+  return OKF_COLORS[type] || 'default'
+}
+
+/** 仅渲染「有值」的 OKF 字段 */
+function buildOkfFieldDefs(src: { okf_type?: string | null; resource?: string | null; sources?: any[] }): FieldDef[] {
+  const defs: FieldDef[] = []
+  if (src.okf_type) {
+    defs.push({
+      key: 'okf_type',
+      label: t('kmsWiki.okfType'),
+      type: 'select',
+      options: OKF_TYPES,
+      optionLabels: OKF_LABELS,
+    })
+  }
+  if (src.resource) defs.push({ key: 'resource', label: t('kmsWiki.resource'), type: 'text' })
+  if (src.sources?.length) defs.push({ key: 'sources', label: t('kmsWiki.sources'), type: 'sources' })
+  return defs
+}
+
+/** 打开新建弹窗：默认归属左栏当前选中的知识库 */
+function openCreateModal() {
+  newArticle.value = {
+    title: '',
+    slug: '',
+    summary: '',
+    category_id: null,
+    knowledge_id: selectedKind.value === 'knowledge' ? selectedId.value : null,
+    content: '',
+    tags: [],
+  }
+  createExtracted.value = {}
+  createExtractedFields.value = []
+  showCreateModal.value = true
+}
+
+/** 文档转换完成：回填正文/标题/摘要/标签，并动态补出 OKF 字段 */
+function onConvertedCreate(res: any) {
+  newArticle.value.content = res.markdown
+  if (!newArticle.value.title.trim() && res.title) newArticle.value.title = res.title
+  if (!newArticle.value.summary.trim() && res.summary) newArticle.value.summary = res.summary
+  if (!newArticle.value.tags.length && res.tags?.length) newArticle.value.tags = res.tags
+  createExtracted.value = {
+    okf_type: res.okf_type ?? null,
+    resource: res.resource ?? '',
+    sources: res.sources || [],
+  }
+  createExtractedFields.value = buildOkfFieldDefs(res)
+}
 
 onMounted(() => {
   loadArticles()
@@ -315,20 +444,53 @@ async function loadTreeData() {
 }
 
 /**
- * 组合树：知识库节点（kind='knowledge'，key 为 'kb-{id}' 避免与分类 id 冲突）
- * 作为其下分类的父节点展示；未归属知识库的分类保持顶级。
+ * 组合树（与新 spec 一致）：分类为父节点，知识库作为叶子挂在「所属类别」(kb.category_id) 下；
+ * 未归属任何分类的知识库归入「未分类知识库」分组（分组本身不可选中，仅作容器）。
+ * 旧关系（category.knowledge_id：每知识库一套分类）不再用于左栏结构，文章仍可按 category_id 过滤。
+ *
+ * 注意：categoryTree 由服务端返回「已嵌套」的层级（根类别 + 递归 children），
+ * 必须递归遍历 c.children 来重建，否则子类别（及更深层级）会被丢弃。
  */
 const treeData = computed(() => {
-  const roots = categoryTree.value
-  const kbNodes = knowledges.value.map((kb: any) => ({
+  const cats = categoryTree.value || []
+  const kbs = knowledges.value || []
+
+  const buildKb = (kb: any) => ({
     kind: 'knowledge',
-    id: `kb-${kb.id}`,
+    treeKey: `kb-${kb.id}`,
+    id: kb.id,
     kbId: kb.id,
     name: kb.name,
-    children: roots.filter((c: any) => c.knowledge_id === kb.id),
-  }))
-  const orphans = roots.filter((c: any) => !c.knowledge_id)
-  return [...kbNodes, ...orphans]
+    children: [],
+  })
+
+  /** 递归重建：保留服务端返回的任意深度子类别，并把该类别下的知识库挂为叶子 */
+  const buildCat = (c: any): any => ({
+    ...c,
+    kind: 'category',
+    treeKey: `cat-${c.id}`,
+    id: c.id,
+    name: c.name,
+    children: [
+      ...(c.children || []).map(buildCat),
+      ...kbs.filter((k: any) => k.category_id === c.id).map(buildKb),
+    ],
+  })
+
+  const roots: any[] = cats.map(buildCat)
+
+  const uncatKbs = kbs.filter((k: any) => k.category_id == null).map(buildKb)
+  if (uncatKbs.length) {
+    roots.push({
+      kind: 'group',
+      treeKey: 'uncat',
+      id: 'uncat',
+      name: t('kbMgmt.uncategorized'),
+      selectable: false,
+      children: uncatKbs,
+    })
+  }
+  return roots
 })
 
 // ── 分类管理（新建 / 重命名 / 删除） ──
@@ -337,7 +499,6 @@ const categoryModal = reactive({
   mode: 'create' as 'create' | 'rename',
   targetId: null as number | null,
   parentId: null as number | null,
-  kbId: null as number | null,
   parentName: '',
   name: '',
   description: '',
@@ -361,20 +522,8 @@ function openCategoryModal(mode: 'create' | 'rename', node?: any) {
     categoryModal.name = ''
     categoryModal.description = ''
     categoryModal.sort_order = 0
-    if (node && node.kind === 'knowledge') {
-      // 知识库节点下新建子分类：归属该知识库
-      categoryModal.parentId = null
-      categoryModal.kbId = node.kbId
-      categoryModal.parentName = node.name
-    } else if (node) {
-      categoryModal.parentId = node.id
-      categoryModal.kbId = null
-      categoryModal.parentName = node.name
-    } else {
-      categoryModal.parentId = null
-      categoryModal.kbId = null
-      categoryModal.parentName = ''
-    }
+    categoryModal.parentId = node ? node.id : null
+    categoryModal.parentName = node ? node.name : ''
   }
   categoryModal.open = true
 }
@@ -446,7 +595,6 @@ async function submitCategory() {
         description: categoryModal.description || undefined,
         sort_order: categoryModal.sort_order,
         parent_id: categoryModal.parentId ?? undefined,
-        knowledge_id: categoryModal.kbId ?? undefined,
       })
       message.success(t('kmsWiki.createCategorySuccess'))
     }
@@ -467,6 +615,7 @@ const knowledgeModal = reactive({
   targetId: null as number | null,
   name: '',
   description: '',
+  category_id: null as number | null,
 })
 const knowledgeSaving = ref(false)
 
@@ -477,10 +626,14 @@ function openKnowledgeModal(mode: 'create' | 'edit', node?: any) {
     knowledgeModal.targetId = node.kbId
     knowledgeModal.name = kb.name || ''
     knowledgeModal.description = kb.description || ''
+    // 所属类别（spec 知识库管理）：优先用知识库已有类别
+    knowledgeModal.category_id = kb.category_id ?? null
   } else {
     knowledgeModal.targetId = null
     knowledgeModal.name = ''
     knowledgeModal.description = ''
+    // 默认归属到当前选中的分类节点（spec 知识库管理）
+    knowledgeModal.category_id = selectedKind.value === 'category' ? selectedId.value : null
   }
   knowledgeModal.open = true
 }
@@ -497,12 +650,14 @@ async function submitKnowledge() {
       await updateKnowledge(knowledgeModal.targetId, {
         name,
         description: knowledgeModal.description || undefined,
+        category_id: knowledgeModal.category_id ?? undefined,
       })
       message.success(t('kmsWiki.updateKnowledgeSuccess'))
     } else {
       await createKnowledge({
         name,
         description: knowledgeModal.description || undefined,
+        category_id: knowledgeModal.category_id ?? undefined,
       })
       message.success(t('kmsWiki.createKnowledgeSuccess'))
     }
@@ -568,6 +723,7 @@ function openKnowledgeInfo(node: any) {
   const kb = knowledges.value.find(k => k.id === node.kbId) || {}
   openInfoModal(kb.name || node.name, [
     { label: t('kmsWiki.knowledgeName'), value: kb.name },
+    { label: t('wikiMgmt.tabCategory'), value: findCategoryName(kb.category_id) },
     { label: 'Slug', value: kb.slug },
     { label: t('kmsWiki.knowledgeType'), value: t('kmsWiki.knowledgeTypeWiki') },
     { label: t('kmsWiki.categoryDesc'), value: kb.description || '-' },
@@ -581,12 +737,12 @@ function openKnowledgeInfo(node: any) {
 /** 树选中 → 右栏内容联动过滤 */
 function handleCategorySelect(keys: any) {
   const key = keys[0]
-  if (typeof key === 'number') {
-    selectedKind.value = 'category'
-    selectedId.value = key
-  } else if (typeof key === 'string' && key.startsWith('kb-')) {
+  if (typeof key === 'string' && key.startsWith('kb-')) {
     selectedKind.value = 'knowledge'
     selectedId.value = Number(key.slice(3))
+  } else if (typeof key === 'string' && key.startsWith('cat-')) {
+    selectedKind.value = 'category'
+    selectedId.value = Number(key.slice(4))
   } else {
     selectedKind.value = null
     selectedId.value = null
@@ -597,7 +753,7 @@ function handleCategorySelect(keys: any) {
 
 /** 受控选中态：回填树的选中高亮 */
 const selectedKeys = computed(() => {
-  if (selectedKind.value === 'category' && selectedId.value) return [selectedId.value]
+  if (selectedKind.value === 'category' && selectedId.value) return [`cat-${selectedId.value}`]
   if (selectedKind.value === 'knowledge' && selectedId.value) return [`kb-${selectedId.value}`]
   return []
 })
@@ -611,11 +767,17 @@ const selectedNodeName = computed(() => {
 
 function findNodeName(nodes: any[], key: string | number): string {
   for (const node of nodes) {
-    if (node.id === key) return node.name
+    if (node.treeKey === key) return node.name
     const found = node.children?.length ? findNodeName(node.children, key) : ''
     if (found) return found
   }
   return ''
+}
+
+/** 由分类 id 反查分类名称（用于信息弹窗展示所属类别） */
+function findCategoryName(id: number | null): string {
+  if (id == null) return '-'
+  return findNodeName(categoryTree.value, id) || String(id)
 }
 
 function clearFilter() {
@@ -717,11 +879,21 @@ async function handleCreate() {
       slug: newArticle.value.slug || undefined,
       summary: newArticle.value.summary || undefined,
       category_id: newArticle.value.category_id || undefined,
+      knowledge_id: newArticle.value.knowledge_id ?? undefined,
+      content: newArticle.value.content || undefined,
       tags: newArticle.value.tags.length ? newArticle.value.tags : undefined,
+      okf_type: createExtracted.value.okf_type ?? undefined,
+      resource: createExtracted.value.resource || undefined,
+      sources: createExtracted.value.sources?.length ? createExtracted.value.sources : undefined,
     })
     message.success(t('kbMgmt.dataset.createSuccess'))
     showCreateModal.value = false
-    newArticle.value = { title: '', slug: '', summary: '', category_id: null, tags: [] }
+    newArticle.value = {
+      title: '', slug: '', summary: '', category_id: null,
+      knowledge_id: null, content: '', tags: [],
+    }
+    createExtracted.value = {}
+    createExtractedFields.value = []
     loadArticles()
   } catch (e: any) {
     message.error(e.response?.data?.detail || t('kbMgmt.dataset.createFailed'))
@@ -749,6 +921,8 @@ function formatDate(dateStr: string) {
   padding: 24px;
   height: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 左右两栏：侧栏定宽区间，主窗体自适应；窄屏纵向堆叠 */
@@ -756,7 +930,9 @@ function formatDate(dateStr: string) {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .wiki-side {
@@ -764,6 +940,8 @@ function formatDate(dateStr: string) {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  height: 100%;
+  min-height: 0;
 }
 
 .wiki-side__head {
@@ -792,12 +970,27 @@ function formatDate(dateStr: string) {
   color: var(--accent);
 }
 
+/* 类别树：撑满侧栏剩余高度；内容超出时纵向 + 横向滚动；树内浅色背景 */
 .wiki-side__tree {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-radius: 8px;
+}
+
+.wiki-side__tree :deep(.ant-card-body) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-subtle, #f5f7fa);
+  border-radius: 6px;
 }
 
 .wiki-main {
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -824,6 +1017,9 @@ function formatDate(dateStr: string) {
 
 .article-meta {
   margin-top: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .meta-text {
   color: var(--fg-muted);
@@ -834,6 +1030,7 @@ function formatDate(dateStr: string) {
   display: inline-block;
   width: 100%;
   user-select: none;
+  white-space: nowrap;
 }
 .kb-icon {
   margin-right: 4px;

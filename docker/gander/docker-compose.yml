@@ -1,0 +1,54 @@
+# =============================================================
+# Gander 本地侧编排（ASR + Nginx 反向代理）
+#
+# 镜像由 build.ps1 / build.sh 构建；需要 NVIDIA Container Toolkit。
+#
+# 端口：
+#   80    → 容器内 80   （浏览器入口，反代到远端 Thinker）
+#   8995  → 容器内 8995 （ASR 服务，供远端 Thinker 回调）
+#
+# 无 GPU 时：docker compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+# =============================================================
+
+name: gander
+
+services:
+  asr:
+    image: ${GANDER_LOCAL_IMAGE:-gander-asr:local}
+    container_name: gander-asr
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - REMOTE_THINKER_HOST=${REMOTE_THINKER_HOST:-127.0.0.1}
+      - REMOTE_THINKER_PORT=${REMOTE_THINKER_PORT:-8000}
+      - ASR_MODEL_PATH=${ASR_MODEL_PATH:-/models/faster-whisper-large-v3}
+      - ASR_DEVICE=${ASR_DEVICE:-cuda}
+      - ASR_DEVICE_INDEX=${ASR_DEVICE_INDEX:-0}
+      - ASR_COMPUTE_TYPE=${ASR_COMPUTE_TYPE:-float16}
+      - ASR_BEAM_SIZE=${ASR_BEAM_SIZE:-3}
+    ports:
+      - "${WEB_PORT:-80}:80"
+      - "${ASR_PORT:-8995}:8995"
+    volumes:
+      # 宿主机模型目录必须存在；缺省值仅为占位，请通过 .env 覆盖
+      - ${ASR_MODEL_DIR:-./models/faster-whisper-large-v3}:${ASR_MODEL_PATH:-/models/faster-whisper-large-v3}:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${ASR_GPU_ID:-0}"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8995/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    networks:
+      - gander-net
+
+networks:
+  gander-net:
+    driver: bridge

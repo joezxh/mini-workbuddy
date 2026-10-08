@@ -62,6 +62,12 @@ export function listStandards() {
 export function createStandard(data: Record<string, any>) {
   return request.post(`${BASE}/standards`, data)
 }
+export function updateStandard(id: number, data: Record<string, any>) {
+  return request.put(`${BASE}/standards/${id}`, data)
+}
+export function deleteStandard(id: number) {
+  return request.delete(`${BASE}/standards/${id}`)
+}
 export function seedStandards() {
   return request.post(`${BASE}/standards/seed`)
 }

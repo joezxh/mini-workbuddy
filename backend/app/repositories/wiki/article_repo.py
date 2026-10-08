@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.wiki.wiki_article import WikiArticle
-from app.models.wiki.wiki_category import WikiCategory
 
 
 class WikiArticleRepository:
@@ -38,11 +37,8 @@ class WikiArticleRepository:
             stmt = stmt.where(WikiArticle.category_id == category_id)
             count_stmt = count_stmt.where(WikiArticle.category_id == category_id)
         if knowledge_id is not None:
-            join = WikiCategory.id == WikiArticle.category_id
-            stmt = stmt.join(WikiCategory, join).where(WikiCategory.knowledge_id == knowledge_id)
-            count_stmt = count_stmt.join(WikiCategory, join).where(
-                WikiCategory.knowledge_id == knowledge_id
-            )
+            stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
+            count_stmt = count_stmt.where(WikiArticle.knowledge_id == knowledge_id)
         if status is not None:
             stmt = stmt.where(WikiArticle.status == status)
             count_stmt = count_stmt.where(WikiArticle.status == status)

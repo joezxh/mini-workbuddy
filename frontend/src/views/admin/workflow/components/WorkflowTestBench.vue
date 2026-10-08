@@ -40,7 +40,7 @@ async function runTest() {
   running.value = true
   try {
     const res = await testFlow(props.flowId, { inputs, user_id: 'test' })
-    result.value = res.data
+    result.value = res
   } catch (e: any) {
     result.value = { success: false, error: e?.response?.data?.detail || '执行失败', output: {} }
   } finally { running.value = false }

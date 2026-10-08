@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
@@ -476,6 +477,61 @@ def create_standard(
         db.rollback()
         raise HTTPException(status_code=500, detail="标准创建失败，请稍后重试")
     return MetaStandardService.serialize(obj)
+
+
+class StandardUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    aliases: Optional[list] = None
+    semantic_type: Optional[str] = None
+    security_level: Optional[str] = None
+    data_type_expect: Optional[str] = None
+    domain: Optional[str] = None
+
+
+@router.put("/standards/{standard_id}")
+def update_standard(
+    standard_id: int,
+    body: StandardUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = MetaStandardService(db, _require_tenant_id(current_user))
+    try:
+        obj = svc.update(
+            standard_id,
+            **body.model_dump(exclude_none=True),
+        )
+        db.commit()
+    except KeyError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="标准项不存在")
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="标准更新失败，请稍后重试")
+    return MetaStandardService.serialize(obj)
+
+
+@router.delete("/standards/{standard_id}")
+def delete_standard(
+    standard_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = MetaStandardService(db, _require_tenant_id(current_user))
+    try:
+        svc.delete(standard_id)
+        db.commit()
+    except KeyError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="标准项不存在")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="标准删除失败，请稍后重试")
+    return {"deleted": standard_id}
 
 
 @router.post("/sources/{source_id}/bind", status_code=200)

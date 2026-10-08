@@ -102,6 +102,10 @@ const request = {
 
   delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return service.delete(url, config) as Promise<T>
+  },
+
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return service.patch(url, data, config) as Promise<T>
   }
 }
 

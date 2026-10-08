@@ -25,6 +25,7 @@ from app.services.kb.kb_permissions import (
     KB_ADMIN,
     KB_DELETE,
     KB_UPLOAD,
+    KB_VIEW,
     require_kb_permission,
 )
 from app.services.kb.parser_selector import supported_media_types
@@ -57,6 +58,17 @@ def _get_document(db: Session, tenant_id: int, uuid_code: str) -> KbDocument:
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
     return doc
+
+
+def _index_mode_for_collection(db: Session, collection: str) -> str:
+    """由 collection 名推导知识库索引模式（spec §10.2）。
+
+    collection 命名约定为 ``kb_{knowledge_id}``，反查 ``WikiKnowledge.index_mode``；
+    缺省 high_quality。economy 库检索必须绕开向量链路（D11）。
+    """
+    from app.services.kb.index_mode import resolve_index_mode
+
+    return resolve_index_mode(db, collection)
 
 
 def _serialize(doc: KbDocument) -> dict:
@@ -194,9 +206,22 @@ def retrieve(
 
     * 原生 ``search(queries, top_k, score_threshold)`` 无 metadata_filters 参数，
       故临时筛选在构造期以 ``metadata_filter`` 固化；
-    * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）。
+    * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）；
+    * ``index_mode=economy`` 时绕开向量链路，走独立关键词检索（D11 / AC7）。
     """
     tenant_id = _tenant_id(current_user)
+
+    # economy 库：独立关键词检索，零 embedding（D11 / AC7）
+    if _index_mode_for_collection(db, collection) == "economy":
+        from app.services.kb.rag.economy_search import economy_search
+
+        hits = economy_search(
+            db, tenant_id, collection, body.query,
+            top_k=body.top_k, metadata_filter=body.metadata_filters,
+            score_threshold=body.score_threshold,
+        )
+        return {"results": hits, "index_mode": "economy"}
+
     from app.db.database import SessionLocal
     from app.services.kb.rag.knowledge_factory import knowledge_base
 
@@ -224,8 +249,426 @@ def retrieve(
                 "metadata": getattr(h.chunk, "metadata", None),
             }
             for h in hits
-        ]
+        ],
+        "index_mode": "high_quality",
     }
+
+
+class IndexModeBody(BaseModel):
+    mode: str  # high_quality | economy
+
+
+@router.post("/collections/{collection}/index-mode")
+def set_index_mode(
+    collection: str,
+    body: IndexModeBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """索引模式升降级（spec §10.2 / 验收 7）。
+
+    economy → high_quality 触发后台回填任务（按文档粒度，失败文档保留 economy
+    可检索）；high_quality → economy 仅置标志并保留向量，再次升级无需重嵌。
+    """
+    from app.services.kb.index_mode import (
+        ECONOMY,
+        HIGH_QUALITY,
+        downgrade_to_economy,
+        resolve_knowledge_id,
+        resolve_index_mode,
+        upgrade_to_high_quality,
+    )
+
+    if body.mode not in (HIGH_QUALITY, ECONOMY):
+        raise HTTPException(status_code=422, detail=f"mode 仅支持 {HIGH_QUALITY}|{ECONOMY}")
+    from app.models.wiki.wiki_knowledge import WikiKnowledge
+
+    tenant_id = _tenant_id(current_user)
+    kid = resolve_knowledge_id(collection)
+    if kid is None:
+        raise HTTPException(status_code=400, detail=f"无法从 collection 解析知识库: {collection}")
+    if db.get(WikiKnowledge, kid) is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+
+    current = resolve_index_mode(db, collection)
+    if current == body.mode:
+        return {"changed": False, "index_mode": current}
+
+    if body.mode == ECONOMY:
+        return downgrade_to_economy(db, kid)
+
+    def _run():
+        from app.db.database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            upgrade_to_high_quality(s, tenant_id, kid, collection)
+        finally:
+            s.close()
+
+    run_in_background(_run, name=f"kb-upgrade-{collection}")
+    # 回填期间保持 economy，库仍可经关键词分支检索；完成后自动切 high_quality
+    return {"changed": True, "index_mode": ECONOMY, "pending": True}
+
+
+class CollectionSettingsBody(BaseModel):
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
+    embedding_dimensions: Optional[int] = None
+    rerank_provider: Optional[str] = None
+    rerank_model: Optional[str] = None
+    top_k: Optional[int] = None
+    score_threshold: Optional[float] = None
+    index_mode: Optional[str] = None
+
+
+class SegmentUpdateBody(BaseModel):
+    content: Optional[str] = None
+    keywords: Optional[list] = None
+    metadata: Optional[dict] = None
+
+
+class KeywordsBody(BaseModel):
+    keywords: list
+
+
+class TableRowBody(BaseModel):
+    document_id: str
+    content: str
+    metadata: Optional[dict] = None
+
+
+class TableSyncBody(BaseModel):
+    """db_table 定时同步配置（spec §10.8）；``enabled=false`` 表示停用并移除配置。"""
+    enabled: bool = True
+    interval_min: int = 60
+    source_id: Optional[int] = None
+    sql: Optional[str] = None
+    embed_field: Optional[str] = None
+
+
+@router.put("/documents/{uuid_code}/sync")
+def configure_table_sync(
+    uuid_code: str,
+    body: TableSyncBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """配置 db_table 定时同步；启用后由调度器按 interval_min 周期拉取覆盖。"""
+    from app.services.kb.table_sync_service import set_sync_config
+
+    tenant_id = _tenant_id(current_user)
+    cfg = None
+    if body.enabled:
+        missing = [k for k in ("source_id", "sql", "embed_field")
+                   if getattr(body, k) in (None, "")]
+        if missing:
+            raise HTTPException(status_code=422, detail=f"启用同步需提供: {missing}")
+        cfg = {
+            "enabled": True,
+            "interval_min": max(1, body.interval_min),
+            "source_id": body.source_id,
+            "sql": body.sql,
+            "embed_field": body.embed_field,
+        }
+    try:
+        doc = set_sync_config(db, tenant_id, uuid_code, cfg)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"document_id": uuid_code, "sync": (doc.meta or {}).get("sync")}
+
+
+@router.post("/documents/{uuid_code}/sync/run")
+def run_table_sync(
+    uuid_code: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """立即执行一次同步（与定时作业共用同一实现）。"""
+    from app.services.kb.table_sync_service import run_sync_now
+
+    try:
+        return run_sync_now(db, _tenant_id(current_user), uuid_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/documents/{uuid_code}/reprocess")
+def reprocess_document(
+    uuid_code: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """重处理文档：重新嵌入其已有切片（spec §10.5）。
+
+    ``kb_document`` 不留存原始文件字节，故**不会**重新解析；适用场景是换嵌入
+    模型后单文档重嵌，或修复失败的嵌入。文本与切片结构保持原样。
+    """
+    from app.services.kb.segment_service import reembed_document_segments
+
+    tenant_id = _tenant_id(current_user)
+    doc = _get_document(db, tenant_id, uuid_code)
+    try:
+        count = reembed_document_segments(db, tenant_id, doc.collection, doc.uuid_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"document_id": uuid_code, "reembedded": count}
+
+
+@router.post("/collections/{collection}/table-records", status_code=201)
+def create_table_record(
+    collection: str,
+    body: TableRowBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """新增表格行（spec §10.5 行级新增）：content 为被嵌入列，其余列进 metadata。"""
+    from app.services.kb.segment_service import create_segment, serialize_segment
+
+    seg = create_segment(
+        db, _tenant_id(current_user), collection, body.document_id, body.content,
+        {**(body.metadata or {}), "chunk_type": "table_row"},
+    )
+    return serialize_segment(seg)
+
+
+@router.get("/segments/{segment_id}")
+def get_segment(
+    segment_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """分段详情（spec §10.5）。"""
+    from app.services.kb.segment_service import get_segment as _get, serialize_segment
+
+    seg = _get(db, _tenant_id(current_user), segment_id)
+    if seg is None:
+        raise HTTPException(status_code=404, detail="分段不存在")
+    return serialize_segment(seg)
+
+
+@router.put("/segments/{segment_id}")
+def update_segment(
+    segment_id: int,
+    body: SegmentUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """编辑分段（spec §10.5）；改文本后按索引模式重嵌，避免索引与内容不一致。"""
+    from app.services.kb.segment_service import serialize_segment
+    from app.services.kb.segment_service import update_segment as _update
+
+    try:
+        seg = _update(
+            db, _tenant_id(current_user), segment_id,
+            content=body.content, keywords=body.keywords, metadata=body.metadata,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return serialize_segment(seg)
+
+
+@router.delete("/segments/{segment_id}")
+def delete_segment(
+    segment_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_DELETE)),
+):
+    """删除分段（spec §10.5）；子块由外键 CASCADE 连带。"""
+    from app.services.kb.segment_service import delete_segment as _delete
+
+    try:
+        _delete(db, _tenant_id(current_user), segment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"deleted": segment_id}
+
+
+@router.patch("/segments/{segment_id}/keywords")
+def patch_segment_keywords(
+    segment_id: int,
+    body: KeywordsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """只改关键词（spec §10.5）：不触发重嵌。"""
+    from app.services.kb.segment_service import serialize_segment, update_keywords
+
+    try:
+        seg = update_keywords(db, _tenant_id(current_user), segment_id, body.keywords)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return serialize_segment(seg)
+
+
+@router.get("/segments/{segment_id}/citations")
+def segment_citations(
+    segment_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """查看引用来源（spec §10.5）：来源文档 + 父块链 + 子块。"""
+    from app.services.kb.segment_service import get_citations
+
+    try:
+        return get_citations(db, _tenant_id(current_user), segment_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/collections/{collection}/settings")
+def get_collection_settings(
+    collection: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """设置面板当前值（spec §10.5）：检索设置 + 索引模式。"""
+    from app.services.kb.collection_settings import get_retrieval_settings
+
+    return {
+        "retrieval_settings": get_retrieval_settings(db, collection),
+        "index_mode": _index_mode_for_collection(db, collection),
+    }
+
+
+@router.put("/collections/{collection}/settings")
+def update_collection_settings(
+    collection: str,
+    body: CollectionSettingsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """设置面板写入（spec §10.5）：检索参数即时落库，重灌走后台任务。
+
+    换嵌入模型 → ``reembed``（覆盖全部向量）；索引模式升档 → ``upgrade_index``
+    （回填 NULL 后翻标志）。同一请求产生多个作业时按序在单个后台任务内执行。
+    """
+    from app.services.kb.collection_settings import apply_collection_settings
+    from app.services.kb.index_mode import (
+        reembed_collection,
+        resolve_knowledge_id,
+        upgrade_to_high_quality,
+    )
+
+    tenant_id = _tenant_id(current_user)
+    kid = resolve_knowledge_id(collection)
+    if kid is None:
+        raise HTTPException(status_code=400, detail=f"无法从 collection 解析知识库: {collection}")
+
+    try:
+        applied = apply_collection_settings(db, collection, body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    jobs = applied["jobs"]
+    if jobs:
+        def _run():
+            from app.db.database import SessionLocal
+
+            s = SessionLocal()
+            try:
+                for job in jobs:  # 有序：先重嵌，再回填 NULL 并翻标志
+                    if job == "reembed":
+                        reembed_collection(s, tenant_id, kid, collection)
+                    elif job == "upgrade_index":
+                        upgrade_to_high_quality(s, tenant_id, kid, collection)
+            finally:
+                s.close()
+
+        run_in_background(_run, name=f"kb-settings-{collection}")
+
+    return {**applied, "pending": bool(jobs)}
+
+
+@router.get("/documents/{uuid_code}/segments")
+def list_document_segments(
+    uuid_code: str,
+    chunk_type: Optional[str] = Query(None, description="按形态过滤: text|qa|table_row|image|parent|child"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """文档的分段列表（spec §10.5 分段详情 / 表格条目 / Q&A 列表共用）。"""
+    from app.services.kb.segment_service import list_document_segments as _list
+
+    try:
+        return _list(db, _tenant_id(current_user), uuid_code,
+                     chunk_type=chunk_type, page=page, page_size=page_size)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/collections/{collection}/qa-records/import", status_code=201)
+async def import_qa_records(
+    collection: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """Q&A 批量导入（spec §10.5）：CSV/xlsx，列名 question/answer/tags。"""
+    from app.services.kb.rag.content_service import ingest_qa_records, parse_table_bytes
+
+    data = await file.read()
+    filename = file.filename or "qa.csv"
+    try:
+        rows = parse_table_bytes(data, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    records = [
+        {"question": str(r.get("question", "")).strip(),
+         "answer": str(r.get("answer", "")).strip(),
+         "tags": [t.strip() for t in str(r.get("tags") or "").split(";") if t.strip()]}
+        for r in rows if r.get("question")
+    ]
+    if not records:
+        raise HTTPException(status_code=422, detail="未解析到任何 question 列数据")
+
+    count = ingest_qa_records(db, _tenant_id(current_user), collection, records)
+    return {"imported": count}
+
+
+@router.get("/collections/{collection}/qa-records/export")
+def export_qa_records(
+    collection: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """Q&A 导出 CSV（spec §10.5），UTF-8 BOM 兼容 Excel。"""
+    import csv as _csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from app.services.kb.rag.content_service import list_qa_records
+
+    rows = list_qa_records(db, _tenant_id(current_user), collection, limit=100000)
+    buf = io.StringIO()
+    writer = _csv.writer(buf)
+    writer.writerow(["question", "answer", "tags"])
+    for r in rows:
+        writer.writerow([r["question"] or "", r["answer"] or "", ";".join(r["tags"])])
+    buf.seek(0)
+    return StreamingResponse(
+        io.BytesIO(("\ufeff" + buf.getvalue()).encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="qa-{collection}.csv"'},
+    )
 
 
 @router.get("/supported_content_types")
@@ -238,6 +681,14 @@ def supported_content_types():
 def chunkers():
     """已注册切片器（approx_token / qa / parent_child）与参数 Schema（D6）。"""
     return chunker_schemas()
+
+
+@router.get("/pipelines/schema")
+def pipeline_schema():
+    """摄取编排 Schema（spec §10.7 / D8）：原生键名 + chunker/rag 参数 Schema。"""
+    from app.services.kb.pipeline_config import pipeline_config_schema
+
+    return pipeline_config_schema()
 
 
 # ── kb_ref 登记（D1：HTTP 面自子应用迁入主应用，租户取自登录用户）────────────
@@ -431,43 +882,45 @@ def pipeline_dry_run(
     file: UploadFile = File(...),
     chunker_type: str = Form("approx_token"),
     chunker_params: str = Form('{}', description='JSON，如 {"chunk_size":256}'),
+    pipeline_config: str = Form(None, description='完整原生编排 JSON（D8）；优先于 chunker_* 扁平参数'),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """样例文件走完整解析→切块链路并返回各步中间产物；**不落库、不嵌入**。"""
+    """样例文件走完整解析→清洗→切块链路并返回各步中间产物；**不落库、不嵌入**。
+
+    支持两种入参：扁平 ``chunker_type``/``chunker_params``（兼容旧向导），
+    或完整 ``pipeline_config``（D8 原生键名，``parser``/``clean``/``chunker``
+    段零转换驱动）。与真实摄取共用 ``pipeline_runner``，预览即落库结果。
+    """
     import json as _json
 
-    from app.services.kb.parser_selector import guess_media_type, select_parser
-    from app.services.kb.rag.chunker_factory import build_chunker
+    from app.services.kb.pipeline_runner import run_pipeline_from_config
 
     data = file.file.read()
     filename = file.filename or "sample.md"
+
+    # D8：pipeline_config 优先（parser/clean/chunker 段全部生效）
+    pc: dict | None = None
+    if pipeline_config:
+        try:
+            from app.services.kb.pipeline_config import normalize_pipeline_config
+
+            pc = normalize_pipeline_config(_json.loads(pipeline_config)) or {}
+        except (_json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"pipeline_config 非法: {exc}")
+
     try:
         params = _json.loads(chunker_params) if chunker_params else {}
     except _json.JSONDecodeError as exc:
         raise HTTPException(status_code=422, detail=f"chunker_params 非 JSON: {exc}")
 
     try:
-        parser = select_parser(guess_media_type(filename))
-        sections = asyncio.run(parser.parse(
-            file=data if data else filename, filename=filename,
-        ))
-        chunker = build_chunker(chunker_type, params)
-        chunks = asyncio.run(chunker.chunk(sections))
+        result = run_pipeline_from_config(
+            data, filename,
+            pipeline_config=pc,
+            chunker_type=chunker_type,
+            chunker_params=params,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    return {
-        "sections": [
-            {"source": s.source,
-             "preview": (s.content.text or "")[:200]
-             if hasattr(s.content, "text") else "[DataBlock]"}
-            for s in sections
-        ],
-        "chunks": [
-            {"chunk_index": c.chunk_index, "total_chunks": c.total_chunks,
-             "preview": (c.content.text or "")[:200]
-             if hasattr(c.content, "text") else "[DataBlock]",
-             "metadata": c.metadata}
-            for c in chunks
-        ],
-    }
+    return result.to_preview()

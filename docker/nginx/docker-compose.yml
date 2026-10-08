@@ -1,0 +1,36 @@
+# =============================================================
+# 网关独立编排（本地验证用）
+#
+# 复用已存在的外部网络 mwb-infra-network，与
+# 根 docker-compose.infra.yml 中的 Dify 服务互通。
+#
+# 端口：
+#   3000 → 容器 80   （Dify Web 统一入口）
+#   8888 → 容器 8888 （Marketplace 缓存代理）
+# =============================================================
+
+name: nginx-gateway
+
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-mwb-nginx-gateway:local}
+    container_name: mwb-nginx-gateway
+    ports:
+      - "${GATEWAY_PORT:-3000}:${GATEWAY_LISTEN_PORT:-80}"
+      - "${MARKETPLACE_PORT:-8888}:${MARKETPLACE_LISTEN_PORT:-8888}"
+    environment:
+      # --- 网关 ---
+      - GATEWAY_LISTEN_PORT=${GATEWAY_LISTEN_PORT:-80}
+      - DIFY_API_UPSTREAM=${DIFY_API_UPSTREAM:-dify-api:5001}
+      - DIFY_WEB_UPSTREAM=${DIFY_WEB_UPSTREAM:-dify-web:3000}
+      # --- Marketplace 代理 ---
+      - MARKETPLACE_LISTEN_PORT=${MARKETPLACE_LISTEN_PORT:-8888}
+      - MARKETPLACE_UPSTREAM=${MARKETPLACE_UPSTREAM:-marketplace.dify.ai}
+      - MARKETPLACE_RESOLVER=${MARKETPLACE_RESOLVER:-127.0.0.11}
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+
+networks:
+  mwb-infra-network:
+    external: true

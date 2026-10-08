@@ -11,10 +11,10 @@ from app.models.tenant_mixin import TenantMixin
 
 
 class KbSegmentAsset(Base, TenantMixin):
-    __tablename__ = "kb_segment_asset"
+    __tablename__ = "kms_segment_asset"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
-    segment_id = Column(BigInteger, ForeignKey("kb_segment.id", ondelete="CASCADE"),
+    segment_id = Column(BigInteger, ForeignKey("kms_segment.id", ondelete="CASCADE"),
                         nullable=False, index=True, comment="所属切片")
     file_path = Column(String(500), nullable=False, comment="存储路径/对象 URL")
     mime_type = Column(String(64), nullable=False, comment="图片 MIME")

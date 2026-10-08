@@ -2,6 +2,7 @@
 from typing import Optional, List, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
+from fastapi import HTTPException
 
 from app.models.workflow.workflow_flow import WorkflowFlow
 from app.models.workflow.workflow_execution_log import WorkflowExecutionLog
@@ -39,6 +40,18 @@ class WorkflowService:
         )).first()
 
     def create_flow(self, db: Session, data: dict) -> WorkflowFlow:
+        flow_code = data.get("flow_code")
+        tenant_id = data.get("tenant_id")
+        if flow_code and tenant_id is not None:
+            dup = db.scalars(
+                select(WorkflowFlow).where(
+                    WorkflowFlow.flow_code == flow_code,
+                    WorkflowFlow.tenant_id == tenant_id,
+                    WorkflowFlow.is_deleted == False,
+                )
+            ).first()
+            if dup:
+                raise HTTPException(409, f"流程编码 '{flow_code}' 已存在，请更换后再保存")
         api_key_plain = data.pop("api_key")
         data["api_key_enc"] = encrypt_api_key(api_key_plain)
         flow = WorkflowFlow(**data)
@@ -48,6 +61,18 @@ class WorkflowService:
 
     def update_flow(self, db: Session, flow: WorkflowFlow, data: dict) -> WorkflowFlow:
         api_key = data.pop("api_key", None)
+        new_code = data.get("flow_code")
+        if new_code and new_code != flow.flow_code:
+            dup = db.scalars(
+                select(WorkflowFlow).where(
+                    WorkflowFlow.flow_code == new_code,
+                    WorkflowFlow.tenant_id == flow.tenant_id,
+                    WorkflowFlow.is_deleted == False,
+                    WorkflowFlow.id != flow.id,
+                )
+            ).first()
+            if dup:
+                raise HTTPException(409, f"流程编码 '{new_code}' 已存在，请更换后再保存")
         for k, v in data.items():
             if v is not None:
                 setattr(flow, k, v)

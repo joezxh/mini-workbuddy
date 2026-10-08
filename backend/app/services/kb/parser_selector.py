@@ -25,6 +25,11 @@ _PARSER_CLASSES: List[Type[ParserBase]] = [
     TextParser,
 ]
 
+# 类名 → 类（pipeline_config.parser.type 的取值空间，spec §10.7）
+PARSER_REGISTRY: Dict[str, Type[ParserBase]] = {
+    cls.__name__: cls for cls in _PARSER_CLASSES
+}
+
 
 def supported_media_types() -> Dict[str, List[str]]:
     """能力发现表：{parser 类名: [支持的 IANA 媒体类型]}（供 /supported_content_types）。"""
@@ -32,6 +37,11 @@ def supported_media_types() -> Dict[str, List[str]]:
         cls.__name__: list(cls.supported_media_types)
         for cls in _PARSER_CLASSES
     }
+
+
+def parser_names() -> List[str]:
+    """可选 parser 类名（前端向导 / Schema 发现）。"""
+    return sorted(PARSER_REGISTRY)
 
 
 # 扩展名 → IANA 媒体类型（仅用于上传入口按文件名推断；能力面仍以
@@ -63,3 +73,11 @@ def select_parser(media_type: str) -> ParserBase:
         if normalized in cls.supported_media_types:
             return cls()
     raise ValueError(f"不支持的文件类型: {media_type!r}（可用: {supported_media_types()}）")
+
+
+def select_parser_by_name(name: str) -> ParserBase:
+    """按原生 Parser 类名选择解析器（pipeline_config.parser.type）；未知显式失败。"""
+    cls = PARSER_REGISTRY.get(name or "")
+    if cls is None:
+        raise ValueError(f"未知 parser 类型: {name!r}；可选 {parser_names()}")
+    return cls()

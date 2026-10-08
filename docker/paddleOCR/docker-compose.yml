@@ -1,0 +1,67 @@
+# =============================================================
+# PaddleOCR 部署（PP-OCRv6 CPU 推理 + 鉴权网关）
+#
+# 端口：
+#   8080 → OCR 网关（对外，需 X-API-Key）
+#   8011 → OCR 服务直连（仅本机，便于排障）
+#
+# 注意：服务器上 80 端口常被其它服务占用，这里默认对外用 8080。
+# =============================================================
+
+name: paddleocr
+
+services:
+  pp-ocrv6:
+    image: ${OCRV6_IMAGE:-pp-ocrv6:local}
+    container_name: pp-ocrv6
+    environment:
+      # 模型权重缓存目录，与镜像内 PADDLEX_HOME 一致；构建期已预热
+      - PADDLEX_HOME=/models_cache
+      - PADDLE_PDX_MODEL_SOURCE=modelscope
+      - PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+    volumes:
+      - models_cache:/models_cache
+    # 只映射到宿主机本机，对外访问统一走网关
+    ports:
+      - "127.0.0.1:${OCR_DIRECT_PORT:-8011}:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PP-StructureV3 变体（按需启用：--profile structurev3）
+  pp-structurev3:
+    image: ${STRUCTUREV3_IMAGE:-pp-structurev3:local}
+    container_name: pp-structurev3
+    profiles: ["structurev3"]
+    environment:
+      - PADDLEX_HOME=/models_cache
+      - PADDLE_PDX_MODEL_SOURCE=modelscope
+      - PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
+    volumes:
+      - models_cache:/models_cache
+    ports:
+      - "127.0.0.1:${STRUCTURE_DIRECT_PORT:-8012}:8000"
+    restart: unless-stopped
+
+  # 鉴权网关：复用中转后的 nginx 官方镜像，conf 由官方模板机制渲染
+  paddle-nginx:
+    image: ${NGINX_IMAGE:-crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base/nginx:alpine}
+    container_name: paddle-nginx
+    depends_on:
+      - pp-ocrv6
+    ports:
+      - "${OCR_GATEWAY_PORT:-8080}:${OCR_LISTEN_PORT:-80}"
+    environment:
+      - OCR_LISTEN_PORT=${OCR_LISTEN_PORT:-80}
+      - OCR_UPSTREAM=${OCR_UPSTREAM:-pp-ocrv6:8000}
+      - PADDLE_API_KEY=${PADDLE_API_KEY}
+    volumes:
+      - ./nginx/ocr-gateway.conf.template:/etc/nginx/templates/ocr-gateway.conf.template:ro
+    restart: unless-stopped
+
+volumes:
+  models_cache:

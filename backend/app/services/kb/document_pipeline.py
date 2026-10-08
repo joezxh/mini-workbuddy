@@ -18,8 +18,10 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from app.models.kb.kb_document import KbDocument
-from app.services.kb.parser_selector import guess_media_type, select_parser
-from app.services.kb.rag.chunker_factory import build_chunker
+from app.services.kb.pipeline_runner import (
+    PipelineStepError,
+    run_pipeline_from_config,
+)
 
 
 def _fail(db: Session, doc_id: int, step: str, exc: Exception) -> None:
@@ -29,6 +31,20 @@ def _fail(db: Session, doc_id: int, step: str, exc: Exception) -> None:
         doc.error_detail = f"[{step}] {type(exc).__name__}: {exc}"
         db.commit()
     logger.error(f"[KB 管线] 文档 {doc_id} 在 {step} 步失败: {exc}")
+
+
+def _resolve_index_mode(db: Session, collection: str) -> str:
+    """由 collection 名反查知识库索引模式（spec §10.2）；复用共享实现。"""
+    from app.services.kb.index_mode import resolve_index_mode
+
+    return resolve_index_mode(db, collection)
+
+
+def _resolve_pipeline_config(db: Session, collection: str) -> Optional[dict]:
+    """由 collection 名取知识库编排配置（spec §10.7）；驱动 parse/clean/chunk。"""
+    from app.services.kb.pipeline_config import resolve_knowledge_pipeline_config
+
+    return resolve_knowledge_pipeline_config(db, collection)
 
 
 def run_document_ingest(
@@ -52,23 +68,26 @@ def run_document_ingest(
     db.commit()
 
     try:
-        # 1) 解析：原生 Parser（bytes 直传）
-        parser = select_parser(guess_media_type(filename))
-        sections = asyncio.run(parser.parse(
-            file=file_bytes if file_bytes is not None else filename,
-            filename=filename,
-        ))
-
-        # 2) 切块：原生 chunker_type 注册表（参数经 Parameters 校验）
-        chunker = build_chunker(chunker_type, chunker_params)
-        chunks = asyncio.run(chunker.chunk(sections))
+        # 1)-3) 解析 → 清洗 → 切块：与 dry-run 共用的编排执行器（spec §10.7）
+        #    知识库 pipeline_config 优先，扁平 chunker_* 参数作兜底
+        result = run_pipeline_from_config(
+            file_bytes,
+            filename,
+            pipeline_config=_resolve_pipeline_config(db, doc.collection),
+            chunker_type=chunker_type,
+            chunker_params=chunker_params,
+        )
+        chunks = result.chunks
         if not chunks:
             raise ValueError(f"文档 {filename} 未产出任何切片")
 
         # 3) 落库：KnowledgeBase.insert_document（嵌入在其内部完成）
+        #    economy 模式写 NULL 向量（D11），检索走独立关键词服务
+        index_mode = _resolve_index_mode(db, doc.collection)
+
         async def _insert() -> int:
             if knowledge_factory is not None:
-                async with knowledge_factory() as kb:
+                async with knowledge_factory(index_mode=index_mode) as kb:
                     await kb.ensure_collection()
                     await kb.insert_document(
                         chunks,
@@ -89,6 +108,7 @@ def run_document_ingest(
                 tenant_id=tenant_id,
                 name=doc.name,
                 description=filename,
+                index_mode=index_mode,
             ) as kb:
                 await kb.ensure_collection()
                 await kb.insert_document(
@@ -108,6 +128,11 @@ def run_document_ingest(
         doc.segment_count = count
         db.commit()
         return count
+    except PipelineStepError as exc:
+        # §10.7 单步可观测：error_detail 带具体步名（parse/clean/chunk）
+        db.rollback()
+        _fail(db, doc_id, exc.step, exc)
+        raise
     except Exception as exc:  # noqa: BLE001 - 管线失败必须落库可观测后原样抛出
         db.rollback()
         _fail(db, doc_id, "pipeline", exc)

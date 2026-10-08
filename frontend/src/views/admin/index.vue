@@ -19,13 +19,32 @@
             @click.stop="closeTab(tab.key)"
             :title="t('common.close')"
           >&times;</span>
+          <span
+            class="tab-close-others"
+            @click.stop="closeOtherTabs(tab.key)"
+            :title="t('common.closeOthers')"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2 4h6v6H2z M4 2h6v6"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </span>
         </div>
       </div>
 
       <!-- Tab 内容区域 -->
       <div class="tab-content" v-if="openTabs.length > 0">
         <div v-for="tab in openTabs" :key="tab.key" v-show="activeTab === tab.key" class="content-section">
-            <component :is="getTabComponent(tab.key)" v-bind="getTabProps(tab.key)" />
+            <component
+              :is="getTabComponent(tab.key)"
+              :key="`${tab.key}#${tabRefreshSeq[tab.key] ?? 0}`"
+              v-bind="getTabProps(tab.key)"
+            />
         </div>
       </div>
     </div>
@@ -97,6 +116,16 @@ interface TabItem {
 }
 const openTabs = ref<TabItem[]>([])
 const activeTab = ref('')
+
+// 每个 Tab 的刷新序号：顶栏「刷新」按钮递增激活 Tab 的序号，:key 变化触发组件重挂载
+const tabRefreshSeq = reactive<Record<string, number>>({})
+
+/** 顶栏刷新按钮 → 重挂载当前激活 Tab 的组件（其他 Tab 不受影响） */
+function handleRefreshActiveTab() {
+  const key = activeTab.value
+  if (!key) return
+  tabRefreshSeq[key] = (tabRefreshSeq[key] ?? 0) + 1
+}
 
 // 组件映射表已抽到 ./componentMap，供本控制台的 Tab 使用
 function getTabComponent(key: string): Component | undefined {
@@ -215,6 +244,15 @@ function closeTab(key: string) {
   }
 }
 
+/** 关闭其他 Tab：仅保留目标 Tab 与不可关闭的页签（如控制台自身） */
+function closeOtherTabs(key: string) {
+  openTabs.value = openTabs.value.filter(t => t.key === key || t.closable === false)
+  // 目标 Tab 未激活（或被保留页签挤出激活态）时，激活目标 Tab
+  if (!openTabs.value.some(t => t.key === activeTab.value)) {
+    activeTab.value = key
+  }
+}
+
 // 菜单树数据（从后端接口获取）
 interface MenuItem {
   id: number
@@ -328,6 +366,8 @@ onMounted(async () => {
   window.addEventListener('open-agent-team-editor', handleOpenAgentTeamEditor)
   window.addEventListener('close-agent-team-editor', handleCloseAgentTeamEditor)
   window.addEventListener('open-async-task-manage', handleOpenAsyncTaskManage)
+  // 监听顶栏“刷新当前 Tab”事件
+  window.addEventListener('app:refresh-active-tab', handleRefreshActiveTab)
 })
 
 /** 处理 open-skill-tab 事件：在标签页系统中打开技能管理并定位到指定技能包 */
@@ -368,6 +408,7 @@ onUnmounted(() => {
   window.removeEventListener('open-agent-team-editor', handleOpenAgentTeamEditor)
   window.removeEventListener('close-agent-team-editor', handleCloseAgentTeamEditor)
   window.removeEventListener('open-async-task-manage', handleOpenAsyncTaskManage)
+  window.removeEventListener('app:refresh-active-tab', handleRefreshActiveTab)
 })
 
 // 监听 URL 参数（来自左侧 rail 的点击）：打开/激活对应 Tab
@@ -464,6 +505,28 @@ watch(() => route.query.tab, (newTab) => {
   &:hover {
     background: var(--err-soft);
     color: var(--err);
+  }
+}
+
+.tab-close-others {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+
+  .tab-item:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--accent-cyan);
   }
 }
 

@@ -18,7 +18,7 @@ def new_document_uuid() -> str:
 
 
 class KbDocument(Base, TenantMixin):
-    __tablename__ = "kb_document"
+    __tablename__ = "kms_document"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     uuid_code = Column(String(64), nullable=False, unique=True,

@@ -8,6 +8,7 @@ export function listArticles(params: {
   page?: number
   page_size?: number
   category_id?: number
+  knowledge_id?: number
   status?: number
   keyword?: string
 }) {
@@ -18,16 +19,25 @@ export function getArticleBySlug(slug: string) {
   return request.get(`${API_PREFIX}/wiki/articles/${slug}`)
 }
 
+/** 按 ID 获取文章（消除 slug hack，配套后端 GET /wiki/articles/{id}） */
+export function getArticle(id: number) {
+  return request.get(`${API_PREFIX}/wiki/articles/${id}`)
+}
+
 export function createArticle(data: {
   title: string
   slug?: string
   content?: string
   summary?: string
   category_id?: number
+  knowledge_id?: number | null
   tags?: string[]
   owl_class_uris?: string[]
   wiki_links?: string[]
   status?: number
+  okf_type?: string | null
+  resource?: string | null
+  sources?: DocSource[]
 }) {
   return request.post(`${API_PREFIX}/wiki/articles`, data)
 }
@@ -37,11 +47,15 @@ export function updateArticle(id: number, data: {
   content?: string
   summary?: string
   category_id?: number
+  knowledge_id?: number | null
   tags?: string[]
   owl_class_uris?: string[]
   wiki_links?: string[]
   status?: number
   change_note?: string
+  okf_type?: string | null
+  resource?: string | null
+  sources?: DocSource[]
 }) {
   return request.put(`${API_PREFIX}/wiki/articles/${id}`, data)
 }
@@ -54,8 +68,70 @@ export function getArticleVersions(articleId: number) {
   return request.get(`${API_PREFIX}/wiki/articles/${articleId}/versions`)
 }
 
+/** 版本 diff：目标版本 vs 当前版本；传 target 时为两历史版本互比 */
+export function diffArticle(articleId: number, versionId: number, target?: number) {
+  return request.get(`${API_PREFIX}/wiki/articles/${articleId}/versions/${versionId}/diff`, {
+    params: target ? { target } : undefined,
+  })
+}
+
+/** 非破坏式回滚：以历史版本内容生成新的当前版本 */
+export function rollbackArticle(articleId: number, versionId: number, changeNote?: string) {
+  return request.post(`${API_PREFIX}/wiki/articles/${articleId}/rollback`, {
+    version_id: versionId,
+    change_note: changeNote,
+  })
+}
+
 export function searchArticles(q: string, top_k?: number) {
   return request.get(`${API_PREFIX}/wiki/search`, { params: { q, top_k } })
+}
+
+export function searchWiki(data: {
+  query: string
+  mode?: 'semantic' | 'keyword' | 'hybrid'
+  top_k?: number
+  knowledge_id?: number
+}) {
+  return request.post(`${API_PREFIX}/wiki/search`, data)
+}
+
+export function askWiki(data: { query: string; top_k?: number; knowledge_id?: number }) {
+  return request.post(`${API_PREFIX}/wiki/ask`, data)
+}
+
+export function listSearchLogs(params: { page?: number; page_size?: number; mode?: string }) {
+  return request.get(`${API_PREFIX}/wiki/search-logs`, { params })
+}
+
+// ── 文档导入（上传转 Markdown + 字段提取，不写库）──
+
+export interface DocSource {
+  resource: string
+  title?: string | null
+  author?: string | null
+  last_modified?: string | null
+}
+
+export interface ArticleConvertResult {
+  markdown: string
+  resource: string
+  filename: string
+  title?: string | null
+  summary?: string | null
+  tags: string[]
+  okf_type?: string | null
+  sources: DocSource[]
+}
+
+/** 上传文档 → 后端转 Markdown 并提取字段（结果需人工确认后再保存） */
+export function convertDocument(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post(`${API_PREFIX}/wiki/articles/convert-document`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  })
 }
 
 // ── 分类 ──
@@ -69,10 +145,56 @@ export function createCategory(data: {
   slug?: string
   description?: string
   parent_id?: number
+  knowledge_id?: number
   owl_class_uri?: string
   sort_order?: number
 }) {
   return request.post(`${API_PREFIX}/wiki/categories`, data)
+}
+
+export function updateCategory(id: number, data: {
+  name?: string
+  description?: string
+  parent_id?: number
+  sort_order?: number
+}) {
+  return request.put(`${API_PREFIX}/wiki/categories/${id}`, data)
+}
+
+export function deleteCategory(id: number) {
+  return request.delete(`${API_PREFIX}/wiki/categories/${id}`)
+}
+
+// ── 知识库（仅 wiki 类型） ──
+
+export function listKnowledges() {
+  return request.get(`${API_PREFIX}/wiki/knowledges`)
+}
+
+export function createKnowledge(data: {
+  name: string
+  description?: string
+  type?: number
+  kb_format?: string | null
+  index_mode?: string
+  multimodal_enabled?: boolean
+  pipeline_config?: Record<string, unknown> | null
+  category_id?: number | null
+}) {
+  return request.post(`${API_PREFIX}/wiki/knowledges`, data)
+}
+
+export function updateKnowledge(id: number, data: {
+  name?: string
+  description?: string
+  status?: number
+  category_id?: number | null
+}) {
+  return request.put(`${API_PREFIX}/wiki/knowledges/${id}`, data)
+}
+
+export function deleteKnowledge(id: number) {
+  return request.delete(`${API_PREFIX}/wiki/knowledges/${id}`)
 }
 
 // ── OWL ──

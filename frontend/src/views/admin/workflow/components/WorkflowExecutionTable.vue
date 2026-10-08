@@ -45,8 +45,8 @@ async function loadData() {
   loading.value = true
   try {
     const res = await listExecutions({ status: filterStatus.value, page: pagination.current, page_size: pagination.pageSize })
-    data.value = res.data.items
-    pagination.total = res.data.total
+    data.value = res.items
+    pagination.total = res.total
   } finally { loading.value = false }
 }
 

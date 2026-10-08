@@ -53,6 +53,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '文章', hidden: true }
       },
       {
+        // RAG 检索 / 问答测试台（自 admin/llm-wiki/RagTestTab 迁移）
+        path: 'wiki/rag',
+        name: 'WikiRagTest',
+        component: () => import('@/views/kms/wiki/RagTest.vue'),
+        meta: { title: 'RAG 测试', hidden: true }
+      },
+      {
         path: 'admin',
         name: 'Admin',
         component: () => import('@/views/admin/index.vue'),

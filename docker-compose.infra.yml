@@ -21,6 +21,10 @@
 #     -c "\c dify" -c "CREATE EXTENSION IF NOT EXISTS vector;" \
 #     -c "CREATE DATABASE dify_plugin;" \
 #     -c "CREATE DATABASE sqlbot;"
+#
+# 镜像可按全部指向个人阿里云仓库（见 docker/registry.env），
+# 通过同名环境变量覆盖即可，例如 PGVECTOR_IMAGE、DIFY_API_IMAGE、SQLBOT_IMAGE。
+# 网关镜像需先构建：docker/nginx 目录下执行 build.ps1 或 build.sh。
 # =============================================================
 
 services:
@@ -28,7 +32,8 @@ services:
   # PostgreSQL 17 + pgvector 向量扩展
   # -----------------------------------------------------------
   postgres:
-    image: pgvector/pgvector:pg17
+    # 默认用官方镜像；建议在 .env 中指向 _common/prepull.* 已中转的个人仓库地址
+    image: ${PGVECTOR_IMAGE:-pgvector/pgvector:pg17}
     container_name: mwb-postgres-pgvector
     environment:
       POSTGRES_USER: postgres
@@ -55,7 +60,7 @@ services:
   # 注意：redis-stack-server 不含 RedisInsight Web UI，仅 6379 端口
   # -----------------------------------------------------------
   redis:
-    image: redis/redis-stack-server:7.4.0-v8-x86_64
+    image: ${REDIS_IMAGE:-redis/redis-stack-server:7.4.0-v8-x86_64}
     container_name: mwb-redis-stack
     environment:
       REDIS_ARGS: "--appendonly yes"
@@ -78,7 +83,7 @@ services:
   # Neo4j 5 知识图谱数据库
   # -----------------------------------------------------------
   neo4j:
-    image: library/neo4j:5.26
+    image: ${NEO4J_IMAGE:-library/neo4j:5.26}
     container_name: mwb-neo4j
     environment:
       NEO4J_AUTH: neo4j/neo4j123
@@ -107,7 +112,7 @@ services:
   # 复用已有 PostgreSQL (pgvector) + Redis Stack
   # -----------------------------------------------------------
   dify-api:
-    image: langgenius/dify-api:1.17.1
+    image: ${DIFY_API_IMAGE:-langgenius/dify-api:1.17.1}
     container_name: mwb-dify-api
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -171,7 +176,7 @@ services:
   # Dify — Worker（后台任务处理：文档解析/嵌入/异步队列）
   # -----------------------------------------------------------
   dify-worker:
-    image: langgenius/dify-api:1.17.1
+    image: ${DIFY_API_IMAGE:-langgenius/dify-api:1.17.1}
     container_name: mwb-dify-worker
     environment:
       MODE: worker
@@ -217,7 +222,7 @@ services:
   # Dify — Web 前端（Next.js）
   # -----------------------------------------------------------
   dify-web:
-    image: langgenius/dify-web:1.17.1
+    image: ${DIFY_WEB_IMAGE:-langgenius/dify-web:1.17.1}
     container_name: mwb-dify-web
     environment:
       # 留空：浏览器通过 nginx 同源代理，自动检测请求地址
@@ -238,14 +243,20 @@ services:
   # Dify — Nginx 网关（统一入口，代理 web + api）
   # -----------------------------------------------------------
   dify-gateway:
-    image: nginx:alpine
+    # 自建网关镜像：docker/nginx 目录下构建，或用 _common/prepull.* 已中转的地址
+    image: ${GATEWAY_IMAGE:-mwb-nginx-gateway:local}
     container_name: mwb-dify-gateway
     ports:
       - "3000:80"    # Dify Web 入口
       - "8888:8888"  # Marketplace 代理入口
+    environment:
+      - GATEWAY_LISTEN_PORT=80
+      - DIFY_API_UPSTREAM=dify-api:5001
+      - DIFY_WEB_UPSTREAM=dify-web:3000
+      - MARKETPLACE_LISTEN_PORT=8888
+      - MARKETPLACE_RESOLVER=127.0.0.11
     volumes:
-      - ./docker/nginx/dify-gateway.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/nginx/marketplace-proxy.conf:/etc/nginx/conf.d/marketplace-proxy.conf:ro
+      - nginx_cache:/var/cache/nginx/marketplace
     depends_on:
       - dify-web
       - dify-api
@@ -257,7 +268,7 @@ services:
   # Dify — Sandbox（Python/JS 代码安全沙箱执行）
   # -----------------------------------------------------------
   dify-sandbox:
-    image: langgenius/dify-sandbox:0.2.15
+    image: ${DIFY_SANDBOX_IMAGE:-langgenius/dify-sandbox:0.2.15}
     container_name: mwb-dify-sandbox
     environment:
       API_KEY: dify-sandbox
@@ -273,7 +284,7 @@ services:
   # Dify — Plugin Daemon（插件管理系统，提供 model/provider 服务）
   # -----------------------------------------------------------
   plugin-daemon:
-    image: langgenius/dify-plugin-daemon:0.6.10-local
+    image: ${DIFY_PLUGIN_DAEMON_IMAGE:-langgenius/dify-plugin-daemon:0.6.10-local}
     container_name: mwb-dify-plugin-daemon
     privileged: true
     environment:
@@ -334,7 +345,7 @@ services:
   # Web UI：http://localhost:8000    MCP：http://localhost:8001
   # -----------------------------------------------------------
   sqlbot:
-    image: dataease/sqlbot:v1.10.1
+    image: ${SQLBOT_IMAGE:-dataease/sqlbot:v1.10.1}
     container_name: mwb-sqlbot
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -368,9 +379,9 @@ services:
       - "8001:8001"   # MCP 服务
     volumes:
       # 覆盖启动脚本: 跳过内置 PG，直连外部库
-      - ./docker/sqlbot/start-external-db.sh:/opt/sqlbot/app/start.sh:ro
+      - ./docker/sqlbot/patches/start-external-db.sh:/opt/sqlbot/app/start.sh:ro
       # 覆盖入口: 在 main:app 之上挂载前端 dist，使 UI 与 API 同源
-      - ./docker/sqlbot/serve_ui.py:/opt/sqlbot/app/serve_ui.py:ro
+      - ./docker/sqlbot/patches/serve_ui.py:/opt/sqlbot/app/serve_ui.py:ro
       # 持久化数据目录
       - sqlbot_data_excel:/opt/sqlbot/data/excel
       - sqlbot_data_file:/opt/sqlbot/data/file
@@ -401,6 +412,7 @@ volumes:
   redis_stack_data:
   neo4j_data:
   neo4j_logs:
+  nginx_cache:         # Marketplace 代理缓存
   dify_storage:        # Dify 文件存储（上传文档/头像等）
   sqlbot_data_excel:   # SQLBot Excel 上传文件
   sqlbot_data_file:    # SQLBot 通用数据文件

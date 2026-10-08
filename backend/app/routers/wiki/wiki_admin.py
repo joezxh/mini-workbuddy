@@ -98,11 +98,10 @@ def create_category(
 
 @router.get("/categories", response_model=List[CategoryOut])
 def list_category_tree(
-    knowledge_id: int = Query(..., description="所属知识库 ID"),
     db: Session = Depends(get_db),
     user: SysUser = Depends(get_current_user),
 ):
-    return KbCategoryService(db).tree(knowledge_id)
+    return KbCategoryService(db).tree()
 
 
 @router.get("/categories/{category_id}", response_model=CategoryOut)

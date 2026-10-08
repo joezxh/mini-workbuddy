@@ -6,6 +6,10 @@
 --    _COLUMN_MIGRATIONS），服务启动时幂等执行。本文件用于：
 --    1) 生产库在**不重启服务**的情况下先行落库；
 --    2) DBA 复核与回滚参考（回滚脚本见文件末尾）。
+--
+-- 2026-09-27 统一化：原 kb_* 检索/分类表（kb_category / kb_collection / kb_segment /
+--    kb_ref / kb_document / kb_segment_asset）已全部统一为 kms_* 前缀，与 wiki 系
+--    容器表（kms_knowledge / kms_article / kms_article_version / kms_search_log）一致。
 -- =============================================================================
 
 BEGIN;
@@ -25,29 +29,35 @@ COMMENT ON COLUMN kms_knowledge.index_mode IS '索引模式: high_quality=向量
 ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS pipeline_config JSONB;
 COMMENT ON COLUMN kms_knowledge.pipeline_config IS '摄取编排: {clean:[...], chunker:{type,params}, index:{...}}';
 
--- 002 分类表改造：kms_category → 通用分类容器 kb_category
-ALTER TABLE IF EXISTS kms_category RENAME TO kb_category;
-ALTER INDEX IF EXISTS idx_wiki_category_slug   RENAME TO idx_kb_category_slug;
-ALTER INDEX IF EXISTS idx_wiki_category_parent RENAME TO idx_kb_category_parent;
-ALTER TABLE kb_category ADD COLUMN IF NOT EXISTS kb_type INTEGER;
-COMMENT ON COLUMN kb_category.kb_type IS '冗余的知识库类型（随 knowledge_id 回填；null=未归类）';
-UPDATE kb_category c SET kb_type = k.type FROM kms_knowledge k
+-- 002 分类表改造：kb_category → 通用分类容器 kms_category
+ALTER TABLE IF EXISTS kb_category RENAME TO kms_category;
+ALTER INDEX IF EXISTS idx_kb_category_slug   RENAME TO idx_kms_category_slug;
+ALTER INDEX IF EXISTS idx_kb_category_parent RENAME TO idx_kms_category_parent;
+ALTER INDEX IF EXISTS ix_kb_category_knowledge_id RENAME TO ix_kms_category_knowledge_id;
+ALTER TABLE kms_category ADD COLUMN IF NOT EXISTS kb_type INTEGER;
+COMMENT ON COLUMN kms_category.kb_type IS '冗余的知识库类型（随 knowledge_id 回填；null=未归类）';
+UPDATE kms_category c SET kb_type = k.type FROM kms_knowledge k
  WHERE c.knowledge_id = k.id AND c.kb_type IS NULL;
 
--- 003 kb_collection 挂接容器 + 表格 KB 字段定义
-ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS knowledge_id BIGINT REFERENCES kms_knowledge(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS idx_kb_collection_knowledge ON kb_collection (knowledge_id);
-ALTER TABLE kb_collection ADD COLUMN IF NOT EXISTS schema_config JSONB;
-COMMENT ON COLUMN kb_collection.schema_config IS '表格 KB 字段定义: [{name,type,enabled,embedding(单选),filterable}]';
+-- 003 kms_collection 挂接容器 + 表格 KB 字段定义
+ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS knowledge_id BIGINT REFERENCES kms_knowledge(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_kms_collection_knowledge ON kms_collection (knowledge_id);
+ALTER INDEX IF EXISTS idx_kb_collection_knowledge RENAME TO idx_kms_collection_knowledge;
+ALTER INDEX IF EXISTS ix_kb_collection_knowledge_id RENAME TO ix_kms_collection_knowledge_id;
+ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS schema_config JSONB;
+COMMENT ON COLUMN kms_collection.schema_config IS '表格 KB 字段定义: [{name,type,enabled,embedding(单选),filterable}]';
+ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS retrieval_settings JSONB;
+COMMENT ON COLUMN kms_collection.retrieval_settings IS '检索设置(spec §10.5): {embedding_provider,embedding_model,embedding_dimensions,rerank_provider,rerank_model,top_k,score_threshold}';
 
--- 003b kb_segment 类型化切片（spec §10.2）
-ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text';
-COMMENT ON COLUMN kb_segment.chunk_type IS 'text|qa|table_row|image|parent|child';
-ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT REFERENCES kb_segment(id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS idx_kb_segment_parent ON kb_segment (parent_id);
-ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS answer TEXT;
-COMMENT ON COLUMN kb_segment.answer IS 'chunk_type=qa: 完整答案（content=问题，仅问题做 embedding）';
-ALTER TABLE kb_segment ADD COLUMN IF NOT EXISTS keywords JSONB;
+-- 003b kms_segment 类型化切片（spec §10.2）
+ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text';
+COMMENT ON COLUMN kms_segment.chunk_type IS 'text|qa|table_row|image|parent|child';
+ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT REFERENCES kms_segment(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_kms_segment_parent ON kms_segment (parent_id);
+ALTER INDEX IF EXISTS idx_kb_segment_parent RENAME TO idx_kms_segment_parent;
+ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS answer TEXT;
+COMMENT ON COLUMN kms_segment.answer IS 'chunk_type=qa: 完整答案（content=问题，仅问题做 embedding）';
+ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS keywords JSONB;
 
 -- 004 外部连接器实例层（新表；ORM create_all 亦会建，此处为手动执行兜底）
 CREATE TABLE IF NOT EXISTS kms_connector_instance (
@@ -121,13 +131,13 @@ COMMIT;
 --     DROP COLUMN IF EXISTS sources, DROP COLUMN IF EXISTS resource, DROP COLUMN IF EXISTS okf_type;
 -- DROP TABLE IF EXISTS kms_connector_sync_log;
 -- DROP TABLE IF EXISTS kms_connector_instance;
--- ALTER TABLE kb_segment DROP COLUMN IF EXISTS keywords, DROP COLUMN IF EXISTS answer,
+-- ALTER TABLE kms_segment DROP COLUMN IF EXISTS keywords, DROP COLUMN IF EXISTS answer,
 --     DROP COLUMN IF EXISTS parent_id, DROP COLUMN IF EXISTS chunk_type;
--- ALTER TABLE kb_collection DROP COLUMN IF EXISTS schema_config, DROP COLUMN IF EXISTS knowledge_id;
--- ALTER TABLE kb_category DROP COLUMN IF EXISTS kb_type;
--- ALTER TABLE kb_category RENAME TO kms_category;
--- ALTER INDEX IF EXISTS idx_kb_category_slug   RENAME TO idx_wiki_category_slug;
--- ALTER INDEX IF EXISTS idx_kb_category_parent RENAME TO idx_wiki_category_parent;
+-- ALTER TABLE kms_collection DROP COLUMN IF EXISTS schema_config, DROP COLUMN IF EXISTS knowledge_id;
+-- ALTER TABLE kms_category DROP COLUMN IF EXISTS kb_type;
+-- ALTER TABLE kms_category RENAME TO kb_category;
+-- ALTER INDEX IF EXISTS idx_kms_category_slug   RENAME TO idx_kb_category_slug;
+-- ALTER INDEX IF EXISTS idx_kms_category_parent RENAME TO idx_kb_category_parent;
 -- ALTER TABLE kms_knowledge DROP COLUMN IF EXISTS pipeline_config, DROP COLUMN IF EXISTS index_mode,
 --     DROP COLUMN IF EXISTS multimodal_enabled, DROP COLUMN IF EXISTS kb_format,
 --     DROP COLUMN IF EXISTS type;

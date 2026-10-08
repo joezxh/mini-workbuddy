@@ -1,0 +1,12 @@
+# 本目录放置 snakers4/silero-vad 仓库内容（含 hubconf.py 与 src/silero_vad）。
+#
+# 为什么必须本地预置：
+#   VAD/vad_handler.py 用 torch.hub.load('/opt/silero-vad', 'silero_vad', source='local')，
+#   容器内连不上 github.com，无法在线拉取 → FileNotFoundError(hubconf.py) → pipeline 崩溃、
+#   8765 端口无人监听。
+#
+# 准备方式（在能访问 GitHub 的宿主机执行一次）：
+#   git clone --depth 1 https://github.com/snakers4/silero-vad.git
+#   cp -r silero-vad/* docker/speech-to-speech/silero-vad/
+#
+# 目录内容不入库（见 docker/.gitignore）。
