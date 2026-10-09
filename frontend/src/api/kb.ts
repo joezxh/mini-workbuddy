@@ -246,9 +246,16 @@ export function updateProxyCallers(id: number, callers: string[] | null) {
 }
 
 /**
- * 宽容导入 OKF Bundle（spec §9.4）：后端按 path→content 导入并返回报告。
- * 浏览器侧直读 .md 文件，避免为解析 zip 引入额外依赖。
+ * 宽容导入 OKF Bundle（spec §9.4）：上传导出的 zip，由服务端解包导入并返回报告。
+ *
+ * 早期实现是浏览器直读 .md 文本后提交 [{path, content}]，导致导出的 zip 无法导回；
+ * 现在两端都以 zip 为单位，解析与安全限制统一放在服务端。
  */
-export function importOkfBundle(kid: number, files: { path: string; content: string }[]) {
-  return request.post(`/api/v1/wiki/knowledges/${kid}/okf-import`, files)
+export function importOkfBundle(kid: number, file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post(`/api/v1/wiki/knowledges/${kid}/okf-import`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120_000,
+  })
 }

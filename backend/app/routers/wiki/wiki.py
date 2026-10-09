@@ -16,7 +16,8 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from datetime import date
+import zipfile
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -47,9 +48,12 @@ class DocSourceItem(BaseModel):
     """OKF §5.1 溯源条目（对应 ``kms_article.sources`` 的元素结构）。"""
 
     resource: str = Field(..., description="源文件 URI / 相对路径（必填）")
+    # §6.1：id 是 footnote 的 join 键（label = sources[].id），缺失则逐条归因无法成立
+    id: Optional[str] = None
     title: Optional[str] = None
     author: Optional[str] = None
     last_modified: Optional[str] = None
+    usage_count: Optional[int] = None
 
 
 class ArticleCreateRequest(BaseModel):
@@ -67,6 +71,11 @@ class ArticleCreateRequest(BaseModel):
     okf_type: Optional[str] = Field(None, max_length=64)
     resource: Optional[str] = Field(None, max_length=500)
     sources: Optional[List[DocSourceItem]] = None
+    # OKF §5.2 验证事件列表 [{by, at}]；§5.5 绝对过期时间点
+    verified: Optional[List[dict]] = None
+    stale_after: Optional[str] = None
+    # OKF §10 Attested Computation 契约（spec §9.6 推迟项，本次补齐）
+    attested_computation: Optional[dict] = None
 
 
 class ArticleUpdateRequest(BaseModel):
@@ -83,6 +92,11 @@ class ArticleUpdateRequest(BaseModel):
     okf_type: Optional[str] = Field(None, max_length=64)
     resource: Optional[str] = Field(None, max_length=500)
     sources: Optional[List[DocSourceItem]] = None
+    # OKF §5.2 / §5.5
+    verified: Optional[List[dict]] = None
+    stale_after: Optional[str] = None
+    # OKF §10 Attested Computation
+    attested_computation: Optional[dict] = None
 
 
 class ArticleConvertOut(BaseModel):
@@ -160,6 +174,21 @@ def _slugify(text: str) -> str:
     return slug or "untitled"
 
 
+def _parse_optional_datetime(value: Optional[str]):
+    """把 ISO 8601 字符串解析为 datetime；不可解析返回 None（宽容，不拒绝请求）。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
 # ── 文章 CRUD ────────────────────────────────────────────────────────────────
 
 @router.post("/articles")
@@ -168,52 +197,17 @@ def create_article(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """创建 Wiki 文章。"""
-    slug = body.slug or _slugify(body.title)
-    # 检查 slug 唯一性
-    existing = db.execute(select(WikiArticle).where(WikiArticle.slug == slug)).scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=409, detail=f"slug '{slug}' 已存在")
+    """创建 Wiki 文章。
 
-    article = WikiArticle(
-        slug=slug,
-        title=body.title,
-        content=body.content,
-        summary=body.summary,
-        category_id=body.category_id,
-        tags=body.tags or [],
-        owl_class_uris=body.owl_class_uris or [],
-        wiki_links=body.wiki_links or [],
-        status=body.status,
-        knowledge_id=body.knowledge_id,
-        okf_type=body.okf_type,
-        resource=body.resource,
-        sources=[s.dict() for s in body.sources] if body.sources else [],
-        creator_id=current_user.user_id,
-        updater_id=current_user.user_id,
-        version=1,
-    )
-    db.add(article)
-    db.flush()
+    写入统一走 ``WikiArticleService``（版本快照 / 反向链接 / 异步向量索引的唯一实现），
+    保持对外响应形状与历史内联实现一致。
+    """
+    from app.services.wiki.article_service import WikiArticleService
 
-    # 创建初始版本
-    version = WikiArticleVersion(
-        article_id=article.id,
-        version=1,
-        title=article.title,
-        content=article.content,
-        slug=article.slug,
-        change_note="初始创建",
-        editor_id=current_user.user_id,
-    )
-    db.add(version)
-
-    # 更新 backlinks
-    _update_backlinks(db, article)
-
-    db.commit()
-    db.refresh(article)
-    return _article_to_dict(article)
+    payload = body.model_dump(exclude_none=False)
+    payload["sources"] = [s.model_dump() for s in body.sources] if body.sources else []
+    payload["stale_after"] = _parse_optional_datetime(body.stale_after)
+    return WikiArticleService(db).create(payload, current_user)
 
 
 @router.get("/articles")
@@ -225,10 +219,12 @@ def list_articles(
     status: Optional[int] = Query(None),
     tag: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    sort: str = Query("updated_at", description="排序字段：updated_at | title | version | view_count"),
+    order: str = Query("desc", description="排序方向：asc | desc"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """获取文章列表 (分页)。"""
+    """获取文章列表 (分页 + 排序)。"""
     stmt = select(WikiArticle)
     count_stmt = select(func.count()).select_from(WikiArticle)
 
@@ -250,9 +246,18 @@ def list_articles(
         stmt = stmt.where(WikiArticle.title.ilike(pattern) | WikiArticle.content.ilike(pattern))
         count_stmt = count_stmt.where(WikiArticle.title.ilike(pattern) | WikiArticle.content.ilike(pattern))
 
+    # 排序：白名单映射，未知字段一律退化为 updated_at，避免把用户输入拼进 ORDER BY
+    sort_col = {
+        "updated_at": WikiArticle.updated_at,
+        "title": WikiArticle.title,
+        "version": WikiArticle.version,
+        "view_count": WikiArticle.view_count,
+    }.get(sort, WikiArticle.updated_at)
+    order_by = sort_col.asc() if str(order).lower() == "asc" else sort_col.desc()
+
     total = db.execute(count_stmt).scalar() or 0
     articles = db.execute(
-        stmt.order_by(WikiArticle.updated_at.desc())
+        stmt.order_by(order_by)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).scalars().all()
@@ -265,7 +270,7 @@ def list_articles(
     }
 
 
-@router.get("/articles/{article_id}")
+@router.get("/articles/{article_id:int}")
 def get_article_by_id(
     article_id: int,
     db: Session = Depends(get_db),
@@ -273,8 +278,8 @@ def get_article_by_id(
 ):
     """按 ID 获取文章详情（消除前端 slug hack，spec G4）。
 
-    路由注册顺序在 ``/articles/{slug}`` 之前：数字路径优先命中本端点，
-    非数字路径自动落到 slug 端点。
+    路径使用 ``{article_id:int}`` 转换器：仅数字路径命中本端点，
+    非数字路径（slug）自动落到下方的 ``/articles/{slug}`` 端点，避免 422。
     """
     article = db.get(WikiArticle, article_id)
     if not article:
@@ -342,38 +347,20 @@ def update_article(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """更新文章 (自动创建版本快照)。"""
-    article = db.get(WikiArticle, article_id)
-    if not article:
-        raise HTTPException(status_code=404, detail="文章不存在")
+    """更新文章（自动创建版本快照 + 触发异步重新索引）。
 
-    # 应用变更
-    update_fields = body.dict(exclude_none=True, exclude={"change_note"})
-    for key, value in update_fields.items():
-        setattr(article, key, value)
+    写入统一走 ``WikiArticleService``，与创建路径共用一处实现。
+    """
+    from app.services.wiki.article_service import WikiArticleService
 
-    article.updater_id = current_user.user_id
-    article.version = (article.version or 1) + 1
-    db.flush()
-
-    # 创建版本快照
-    version = WikiArticleVersion(
-        article_id=article.id,
-        version=article.version,
-        title=article.title,
-        content=article.content,
-        slug=article.slug,
-        change_note=body.change_note,
-        editor_id=current_user.user_id,
+    data = body.model_dump(exclude_none=True, exclude={"change_note"})
+    if body.sources is not None:
+        data["sources"] = [s.model_dump() for s in body.sources]
+    if "stale_after" in data:
+        data["stale_after"] = _parse_optional_datetime(data["stale_after"])
+    return WikiArticleService(db).update(
+        article_id, data, body.change_note, current_user,
     )
-    db.add(version)
-
-    # 更新 backlinks
-    _update_backlinks(db, article)
-
-    db.commit()
-    db.refresh(article)
-    return _article_to_dict(article)
 
 
 @router.post("/articles/convert-document", response_model=ArticleConvertOut)
@@ -748,6 +735,8 @@ def _article_to_dict(article: WikiArticle) -> dict:
         "resource": article.resource,
         "sources": article.sources or [],
         "tags": article.tags or [],
+        # OKF §10 Attested Computation
+        "attested_computation": getattr(article, "attested_computation", None),
         "owl_class_uris": article.owl_class_uris or [],
         "wiki_links": article.wiki_links or [],
         "backlinks": article.backlinks or [],
@@ -901,7 +890,7 @@ def okf_export_bundle(
 
     from app.services.wiki.okf_service import export_bundle
 
-    files = export_bundle(db, knowledge_id)
+    files = export_bundle(db, knowledge_id, tenant_id=current_user.tenant_id)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for path, content in files.items():
@@ -921,30 +910,66 @@ def article_okf_preview(
     current_user: SysUser = Depends(get_current_user),
 ):
     """单篇 concept.md 预览（frontmatter 键序按规范推荐）。"""
-    from app.services.wiki.okf_service import serialize_article
+    from app.services.wiki.okf_service import _to_utc_iso, serialize_article
 
     art = db.get(WikiArticle, article_id)
     if art is None:
         raise HTTPException(status_code=404, detail="文章不存在")
     username = getattr(current_user, "username", None) or str(current_user.user_id)
-    generated_at = art.updated_at.isoformat() + "Z" if art.updated_at else "1970-01-01T00:00:00Z"
     return {
         "filename": f"{art.slug}.md",
         "content": serialize_article(art, author_actor=f"human:{username}",
-                                     generated_at=generated_at),
+                                     generated_at=_to_utc_iso(art.updated_at), db=db),
     }
 
 
 @router.post("/knowledges/{knowledge_id}/okf-import")
 async def okf_import_bundle(
     knowledge_id: int,
-    files: List[dict],
+    file: UploadFile = File(..., description="OKF Bundle（zip）"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """宽容导入 Bundle（[{path, content}]）：缺可选字段/未知 type/断链一律接受。"""
-    from app.services.wiki.okf_service import import_bundle
+    """宽容导入 Bundle（zip）：缺可选字段 / 未知 type / 断链一律接受（§11.3）。
 
-    report = import_bundle(db, knowledge_id, {f["path"]: f["content"] for f in files}, current_user)
-    return report
+    解包在服务端完成（条目数、体积与路径穿越均有上限），浏览器不需要 zip 解析依赖。
+    """
+    from app.services.wiki.okf_service import extract_zip, import_bundle
+
+    raw = await file.read()
+    try:
+        files = extract_zip(raw)
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail=f"不是合法的 zip 文件: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Bundle 校验失败: {exc}") from exc
+
+    return import_bundle(
+        db, knowledge_id, files, current_user, tenant_id=current_user.tenant_id,
+    )
+
+
+@router.post("/reindex")
+def reindex_articles(
+    knowledge_id: Optional[int] = Query(None, description="限定知识库；缺省为当前租户全部文章"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """后台重建文章向量索引（存量修复入口）。
+
+    ``WikiRAGIngestor.reindex_all`` 此前没有任何 HTTP 入口，导致历史文章
+    ``content_vector`` 恒为 NULL、语义检索永远为空集。本端点补齐该入口。
+    """
+    from app.core.job_runner import run_in_background
+    from app.services.wiki.rag_ingestor import WikiRAGIngestor
+
+    tenant_id = getattr(current_user, "tenant_id", None)
+    run_in_background(
+        WikiRAGIngestor().reindex_all,
+        batch_size=200,
+        tenant_id=tenant_id,
+        knowledge_id=knowledge_id,
+        name=f"wiki-reindex-{tenant_id}-{knowledge_id}",
+    )
+    return {"started": True, "tenant_id": tenant_id, "knowledge_id": knowledge_id}
 

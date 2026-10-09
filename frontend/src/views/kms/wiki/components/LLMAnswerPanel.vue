@@ -16,14 +16,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import CitationCard from './CitationCard.vue'
 import type { CitationItem } from '../types/wiki'
+import { openDynamicTab } from '@/utils/shellTab'
 
 const props = defineProps<{ answer: string; citations: CitationItem[] }>()
-const router = useRouter()
 const { t } = useI18n()
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
@@ -32,7 +31,10 @@ const renderedAnswer = computed(() =>
 )
 
 function navigate(slug: string) {
-  router.push(`/wiki/${slug}`)
+  openDynamicTab(
+    { key: `kg-wiki-view:${slug}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug } },
+    `/wiki/${slug}`,
+  )
 }
 </script>
 

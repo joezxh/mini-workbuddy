@@ -71,6 +71,11 @@ class WikiArticle(Base, TenantMixin):
     )
     verified = Column(JSONB, nullable=True, comment='OKF §5.2 验证事件列表: [{by, at}]')
     stale_after = Column(TIMESTAMP, nullable=True, comment='OKF §5.5 绝对过期时间点')
+    # OKF §10 Attested Computation 契约：{runtime(必填), parameters, computation, executor, attester}
+    attested_computation = Column(
+        JSONB, nullable=True,
+        comment='OKF §10 Attested Computation: {runtime, parameters, computation, executor, attester}',
+    )
 
     # 审计
     creator_id = Column(BigInteger, nullable=True, comment='创建者 ID')

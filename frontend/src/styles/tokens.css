@@ -66,6 +66,8 @@
   --bg-hover: rgba(74, 163, 255, 0.08);
   --bg-active: rgba(74, 163, 255, 0.14);
   --bg-input: rgba(3, 8, 14, 0.55);
+  /* 浅层表面（树面板 / 卡片内区）：深色下为极淡提亮，避免 fallback 的近白色在暗色皮肤中过亮且与树背景不统一 */
+  --bg-subtle: rgba(255, 255, 255, 0.05);
 
   --fg: #ebf3ff;
   --fg-secondary: #8fa8c6;
@@ -125,6 +127,7 @@
   --bg-hover: rgba(59, 130, 246, 0.06);
   --bg-active: rgba(59, 130, 246, 0.1);
   --bg-input: #ffffff;
+  --bg-subtle: #f5f7fa;
 
   --fg: #1f2937;
   --fg-secondary: #5a6b80;

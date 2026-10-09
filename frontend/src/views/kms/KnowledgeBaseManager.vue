@@ -6,23 +6,63 @@
       <a-tab-pane key="3" :tab="t('kbMgmt.externalKb')" />
     </a-tabs>
 
-    <a-row v-if="activeType !== '1'" :gutter="16" align="stretch" class="kb-manager__body">
-      <a-col :span="6" class="kb-manager__side">
-        <a-card :title="t('wikiMgmt.tabCategory')" size="small" class="kb-manager__tree">
-          <template #extra>
-            <a-button size="small" @click="openEdit" :disabled="!selectedId">{{ t('kbMgmt.edit') }}</a-button>
-            <a-button size="small" type="primary" @click="openCreate">{{ t('kbMgmt.create') }}</a-button>
-          </template>
+    <a-row v-if="activeType !== '1'" class="kb-manager__body">
+      <a-col class="kb-manager__side">
+        <div class="kb-manager__tree-head">
+          <a-tooltip :title="t('kmsWiki.addCategory')">
+            <a-button class="kb-manager__tree-icon-btn" size="small" @click="openCreateCategory">
+              <template #icon><PlusOutlined /></template>
+            </a-button>
+          </a-tooltip>
+          <a-tooltip :title="t('kmsWiki.addKnowledge')">
+            <a-button class="kb-manager__tree-icon-btn" size="small" @click="openCreate">
+              <template #icon><BookOutlined /></template>
+            </a-button>
+          </a-tooltip>
+        </div>
+        <a-card size="small" class="kb-manager__tree">
           <a-spin v-if="loading" />
           <a-empty v-else-if="!treeData.length" />
           <a-tree
             v-else
             :tree-data="treeData"
+            :expanded-keys="expandedKeys"
             @select="onSelectKnowledge"
-          />
+            @expand="(keys) => expandedKeys = keys"
+          >
+            <template #title="{ data }">
+              <a-dropdown
+                v-if="data.type === 'kb' || data.type === 'category'"
+                :trigger="['contextmenu']"
+              >
+                <span class="kb-cat-node">
+                  <BookOutlined v-if="data.type === 'kb'" class="kb-icon" />
+                  {{ data.title }}
+                </span>
+                <template #overlay>
+                  <a-menu @click="(e) => onNodeMenu(String(e.key), data)">
+                    <a-menu-item key="view">{{ t('kmsWiki.viewInfo') }}</a-menu-item>
+                    <a-menu-item v-if="data.type === 'kb'" key="edit">{{ t('kmsWiki.editKnowledge') }}</a-menu-item>
+                    <a-menu-divider v-if="data.type === 'kb'" />
+                    <a-menu-item v-if="data.type === 'kb'" key="delete" danger>{{ t('kmsWiki.deleteKnowledge') }}</a-menu-item>
+                    <template v-else>
+                      <a-menu-item key="add-child">{{ t('kmsWiki.addChildCategory') }}</a-menu-item>
+                      <a-menu-item key="rename">{{ t('kmsWiki.renameCategory') }}</a-menu-item>
+                      <a-menu-divider />
+                      <a-menu-item key="delete" danger>{{ t('kmsWiki.deleteCategory') }}</a-menu-item>
+                    </template>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <span v-else class="kb-cat-node">
+                <BookOutlined v-if="data.type === 'kb'" class="kb-icon" />
+                {{ data.title }}
+              </span>
+            </template>
+          </a-tree>
         </a-card>
       </a-col>
-      <a-col :span="18" class="kb-manager__main">
+      <a-col class="kb-manager__main">
         <KbDocumentPane v-if="activeType === '2' && selectedId" :knowledge-id="selectedId" />
         <a-empty v-else-if="activeType === '2'" :description="t('kbMgmt.selectKbFirst')" />
         <ExternalLinkPane v-else />
@@ -138,15 +178,48 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 新建/编辑分类（与 Wiki 左树右键菜单一致） -->
+    <a-modal
+      v-model:open="catModal.open"
+      :title="catModal.mode === 'rename' ? t('kmsWiki.renameCategory') : t('kmsWiki.addCategory')"
+      :confirm-loading="catSaving"
+      @ok="submitCategory"
+    >
+      <a-form layout="vertical">
+        <a-form-item :label="t('kmsWiki.categoryName')" required>
+          <a-input v-model:value="catModal.name" :placeholder="t('kmsWiki.categoryName')" />
+        </a-form-item>
+        <a-form-item :label="t('kmsWiki.categoryDesc')">
+          <a-textarea v-model:value="catModal.description" :rows="2" />
+        </a-form-item>
+        <a-form-item :label="t('kmsWiki.categorySort')">
+          <a-input-number v-model:value="catModal.sort_order" :min="0" style="width: 100%" />
+        </a-form-item>
+        <div v-if="catModal.parentName" class="category-parent-hint">
+          {{ t('wikiMgmt.tabCategory') }}: {{ catModal.parentName }}
+        </div>
+      </a-form>
+    </a-modal>
+
+    <!-- 节点信息查看弹窗（只读，右键「查看信息」） -->
+    <a-modal v-model:open="infoModal.open" :title="infoModal.title" :footer="null">
+      <a-descriptions :column="1" size="small" bordered>
+        <a-descriptions-item v-for="f in infoModal.fields" :key="f.label" :label="f.label">
+          {{ f.value }}
+        </a-descriptions-item>
+      </a-descriptions>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { message } from 'ant-design-vue'
-import { createKnowledge, listKnowledges, listCategories, updateKnowledge } from '@/api/wiki'
+import { message, Modal } from 'ant-design-vue'
+import { createKnowledge, listKnowledges, listCategories, updateKnowledge, createCategory, updateCategory, deleteCategory, deleteKnowledge } from '@/api/wiki'
 import { createProxyEndpoint } from '@/api/kb'
+import { PlusOutlined, BookOutlined } from '@ant-design/icons-vue'
 import KbDocumentPane from './kb/KbDocumentPane.vue'
 import ExternalLinkPane from './kb/ExternalLinkPane.vue'
 import WikiHome from '@/views/kms/wiki/index.vue'
@@ -210,6 +283,8 @@ function setEmbedField(i: number) {
   })
 }
 
+const expandedKeys = ref<string[]>([])
+
 /** 左侧类别树：类别为父节点，知识库作为叶子挂到所属类别下 */
 function rebuildTree() {
   const typeKbs = knowledges.value.filter((k) => String(k.type) === activeType.value)
@@ -218,7 +293,7 @@ function rebuildTree() {
 
   const ensureNode = (c: any): any => {
     if (nodeMap.has(c.id)) return nodeMap.get(c.id)
-    const node = { key: 'c-' + c.id, title: c.name, type: 'category', rawId: c.id, isLeaf: false, children: [] }
+    const node = { key: 'c-' + c.id, title: c.name, type: 'category', rawId: c.id, rawDesc: c.description, rawSort: c.sort_order, isLeaf: !(c.children && c.children.length), children: [] }
     nodeMap.set(c.id, node)
     return node
   }
@@ -254,6 +329,17 @@ function rebuildTree() {
       children: uncategorized,
     })
   }
+  const collect = (nodes: any[]): string[] => {
+    const keys: string[] = []
+    nodes.forEach((n) => {
+      if (n.children && n.children.length) {
+        keys.push(n.key)
+        keys.push(...collect(n.children))
+      }
+    })
+    return keys
+  }
+  expandedKeys.value = collect(roots)
   treeData.value = roots
 }
 
@@ -383,6 +469,185 @@ async function submit() {
   }
 }
 
+// ── 分类新建/编辑（左树头部 +分类 与右键菜单，与 Wiki 左树一致） ──
+const catModal = reactive({
+  open: false,
+  mode: 'create' as 'create' | 'rename',
+  targetId: null as number | null,
+  parentId: null as number | null,
+  parentName: '',
+  name: '',
+  description: '',
+  sort_order: 0,
+})
+const catSaving = ref(false)
+
+function openCreateCategory(node?: any) {
+  catModal.mode = 'create'
+  catModal.targetId = null
+  catModal.parentId = node ? node.rawId : null
+  catModal.parentName = node ? node.title : ''
+  catModal.name = ''
+  catModal.description = ''
+  catModal.sort_order = 0
+  catModal.open = true
+}
+
+function openRenameCategory(node: any) {
+  catModal.mode = 'rename'
+  catModal.targetId = node.rawId
+  catModal.parentId = null
+  catModal.parentName = ''
+  catModal.name = node.title
+  catModal.description = node.rawDesc || ''
+  catModal.sort_order = node.rawSort || 0
+  catModal.open = true
+}
+
+async function submitCategory() {
+  const name = catModal.name.trim()
+  if (!name) {
+    message.warning(t('kmsWiki.categoryName'))
+    return
+  }
+  catSaving.value = true
+  try {
+    if (catModal.mode === 'rename' && catModal.targetId) {
+      await updateCategory(catModal.targetId, {
+        name,
+        description: catModal.description || undefined,
+        sort_order: catModal.sort_order,
+      })
+      message.success(t('kmsWiki.updateCategorySuccess'))
+    } else {
+      await createCategory({
+        name,
+        description: catModal.description || undefined,
+        sort_order: catModal.sort_order,
+        parent_id: catModal.parentId ?? undefined,
+      })
+      message.success(t('kmsWiki.createCategorySuccess'))
+    }
+    catModal.open = false
+    await load()
+  } catch (e: any) {
+    const detail = e?.response?.data?.detail
+    message.error(typeof detail === 'string' ? detail : t('common.error'))
+  } finally {
+    catSaving.value = false
+  }
+}
+
+// ── 左树右键菜单（分类 / 知识库） ──
+function onNodeMenu(key: string, node: any) {
+  if (node.type === 'kb') {
+    if (key === 'view') openKbInfo(node)
+    else if (key === 'edit') {
+      selectedId.value = Number(node.rawId)
+      openEdit()
+    } else if (key === 'delete') confirmDeleteKb(node)
+  } else {
+    if (key === 'view') openCatInfo(node)
+    else if (key === 'add-child') openCreateCategory(node)
+    else if (key === 'rename') openRenameCategory(node)
+    else if (key === 'delete') confirmDeleteCategory(node)
+  }
+}
+
+function confirmDeleteCategory(node: { rawId: number; title: string }) {
+  Modal.confirm({
+    title: t('kmsWiki.deleteCategory'),
+    content: `${node.title}：${t('kmsWiki.deleteCategoryConfirm')}`,
+    okType: 'danger',
+    okText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    onOk: async () => {
+      try {
+        await deleteCategory(node.rawId)
+        message.success(t('kmsWiki.deleteCategorySuccess'))
+        await load()
+      } catch (e: any) {
+        const detail = e?.response?.data?.detail
+        message.error(typeof detail === 'string' ? detail : t('kbMgmt.common.deleteFailed'))
+      }
+    },
+  })
+}
+
+function confirmDeleteKb(node: any) {
+  Modal.confirm({
+    title: t('kmsWiki.deleteKnowledge'),
+    content: `${node.title}：${t('kmsWiki.deleteKnowledgeConfirm')}`,
+    okType: 'danger',
+    okText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    onOk: async () => {
+      try {
+        await deleteKnowledge(Number(node.rawId))
+        message.success(t('kmsWiki.deleteKnowledgeSuccess'))
+        selectedId.value = null
+        await load()
+      } catch (e: any) {
+        const detail = e?.response?.data?.detail
+        message.error(typeof detail === 'string' ? detail : t('kbMgmt.common.deleteFailed'))
+      }
+    },
+  })
+}
+
+// ── 节点信息查看（只读） ──
+const infoModal = reactive({
+  open: false,
+  title: '',
+  fields: [] as { label: string; value: any }[],
+})
+
+function openInfoModal(title: string, fields: { label: string; value: any }[]) {
+  infoModal.title = title
+  infoModal.fields = fields
+  infoModal.open = true
+}
+
+function findCategoryName(id: number | null): string {
+  if (id == null) return '-'
+  const walk = (cats: any[]): string => {
+    for (const c of cats) {
+      if (c.id === id) return c.name
+      const found = c.children?.length ? walk(c.children) : ''
+      if (found) return found
+    }
+    return ''
+  }
+  return walk(categories.value) || String(id)
+}
+
+function openCatInfo(node: any) {
+  openInfoModal(node.title, [
+    { label: t('kmsWiki.categoryName'), value: node.title },
+    { label: t('kmsWiki.categoryDesc'), value: node.rawDesc || '-' },
+    { label: t('kmsWiki.categorySort'), value: node.rawSort ?? 0 },
+  ])
+}
+
+function openKbInfo(node: any) {
+  const kb = knowledges.value.find((k) => k.id === Number(node.rawId)) || {}
+  openInfoModal(kb.name || node.title, [
+    { label: t('kmsWiki.knowledgeName'), value: kb.name },
+    { label: t('wikiMgmt.tabCategory'), value: findCategoryName(kb.category_id) },
+    { label: 'Slug', value: kb.slug },
+    { label: t('kmsWiki.knowledgeType'), value: t('kmsWiki.knowledgeTypeWiki') },
+    { label: t('kmsWiki.categoryDesc'), value: kb.description || '-' },
+    { label: t('kmsWiki.articleCount'), value: kb.article_count ?? 0 },
+    { label: t('kmsWiki.publishStatus'), value: kb.status === 0 ? t('kmsWiki.statusArchived') : t('kmsWiki.statusActive') },
+    { label: t('kmsWiki.createdAt'), value: formatDate(kb.created_at) || '-' },
+  ])
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return ''
+  return String(dateStr).replace('T', ' ').slice(0, 16)
+}
+
 async function load() {
   loading.value = true
   try {
@@ -414,15 +679,43 @@ watch(activeType, () => {
   flex-direction: column;
 }
 
-/* 主体两栏撑满剩余高度：左栏类别树满高度到底部 */
+/* 主体两栏：与 Wiki 左树一致（侧栏流式宽 240–320px，主窗体自适应） */
 .kb-manager__body {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 20px;
+  align-items: stretch;
   flex: 1;
   min-height: 0;
 }
 .kb-manager__side {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  height: 100%;
   min-height: 0;
+}
+.kb-manager__tree-head {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.kb-manager__tree-icon-btn {
+  color: var(--fg-secondary);
+}
+.kb-manager__tree-icon-btn:hover {
+  color: var(--accent);
+}
+.kb-cat-node {
+  display: inline-block;
+  width: 100%;
+  user-select: none;
+  white-space: nowrap;
+}
+.kb-icon {
+  margin-right: 4px;
+  color: var(--accent);
 }
 .kb-manager__main {
   min-height: 0;
@@ -451,5 +744,12 @@ watch(activeType, () => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+.category-parent-hint {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  background: var(--bg-hover);
+  border-radius: 4px;
+  padding: 6px 10px;
 }
 </style>

@@ -24,6 +24,20 @@ export function getArticle(id: number) {
   return request.get(`${API_PREFIX}/wiki/articles/${id}`)
 }
 
+/** OKF §10 Attested Computation 契约 */
+export interface AttestedComputation {
+  /** 必填（spec §10.2）：bigquery | postgres | dbt | python | Looker 等 */
+  runtime?: string
+  /** 参数声明：[{ name, type, required }] */
+  parameters?: { name: string; type: string; required?: boolean }[]
+  /** 计算文件相对路径（§6.2）；缺省用正文 # Computation 代码块 */
+  computation?: string
+  /** 运行指令（resource）+ 运行必须返回的收据字段（receipt） */
+  executor?: { resource?: string; receipt?: string[] }
+  /** 确定性检查代码路径（无 LLM） */
+  attester?: { resource?: string }
+}
+
 export function createArticle(data: {
   title: string
   slug?: string
@@ -38,6 +52,8 @@ export function createArticle(data: {
   okf_type?: string | null
   resource?: string | null
   sources?: DocSource[]
+  /** OKF §10 Attested Computation 契约 */
+  attested_computation?: AttestedComputation | null
 }) {
   return request.post(`${API_PREFIX}/wiki/articles`, data)
 }
@@ -56,6 +72,12 @@ export function updateArticle(id: number, data: {
   okf_type?: string | null
   resource?: string | null
   sources?: DocSource[]
+  /** OKF §5.2 验证事件列表 [{by, at}] */
+  verified?: { by?: string; at?: string }[]
+  /** OKF §5.5 绝对过期时间点（ISO 8601） */
+  stale_after?: string
+  /** OKF §10 Attested Computation 契约 */
+  attested_computation?: AttestedComputation | null
 }) {
   return request.put(`${API_PREFIX}/wiki/articles/${id}`, data)
 }
@@ -104,13 +126,28 @@ export function listSearchLogs(params: { page?: number; page_size?: number; mode
   return request.get(`${API_PREFIX}/wiki/search-logs`, { params })
 }
 
+/**
+ * 后台重建文章向量索引（存量为 NULL 的 content_vector 的唯一修复入口）。
+ * 返回 { started, tenant_id, knowledge_id }，索引在后台线程执行，不阻塞界面。
+ */
+export function reindexWiki(knowledgeId?: number | null) {
+  return request.post(
+    `${API_PREFIX}/wiki/reindex`,
+    null,
+    { params: knowledgeId ? { knowledge_id: knowledgeId } : undefined },
+  )
+}
+
 // ── 文档导入（上传转 Markdown + 字段提取，不写库）──
 
 export interface DocSource {
   resource: string
+  /** OKF §6.1：footnote 的 join 键（正文 [^id] ↔ sources[].id） */
+  id?: string | null
   title?: string | null
   author?: string | null
   last_modified?: string | null
+  usage_count?: number | null
 }
 
 export interface ArticleConvertResult {

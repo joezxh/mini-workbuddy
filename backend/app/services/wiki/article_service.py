@@ -17,9 +17,21 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.tenant_context import get_tenant_id
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_article_version import WikiArticleVersion
 from app.repositories.wiki.article_repo import WikiArticleRepository
+
+
+def _user_id(user) -> Optional[int]:
+    """取用户主键。
+
+    ``SysUser`` 的主键是 ``user_id``（没有 ``id``），service 曾误用 ``user.id``，
+    因该路径是死代码而未被发现；启用后必须正确取 ``user_id``。
+    """
+    if user is None:
+        return None
+    return getattr(user, "user_id", None) or getattr(user, "id", None)
 
 
 def _slugify(text: str) -> str:
@@ -28,13 +40,24 @@ def _slugify(text: str) -> str:
     return slug or "untitled"
 
 
-def _serialize(a: WikiArticle, include_content: bool = False) -> dict:
+def _serialize(a: WikiArticle, include_content: bool = True) -> dict:
+    """文章 → 响应 dict。
+
+    字段集与路由层历史实现 ``wiki._article_to_dict`` 保持一致（含 ``content``、
+    ``knowledge_id`` 与 OKF 合规字段），避免切换到 service 后前端响应形状变化。
+    """
     d = {
         "id": a.id,
         "slug": a.slug,
         "title": a.title,
         "summary": a.summary,
         "category_id": a.category_id,
+        # 新增字段用 getattr 取值：既有测试与部分调用方传入的是轻量替身对象，
+        # 直接取属性会在缺列时抛 AttributeError。
+        "knowledge_id": getattr(a, "knowledge_id", None),
+        "okf_type": getattr(a, "okf_type", None),
+        "resource": getattr(a, "resource", None),
+        "sources": getattr(a, "sources", None) or [],
         "tags": a.tags or [],
         "owl_class_uris": a.owl_class_uris or [],
         "wiki_links": a.wiki_links or [],
@@ -47,9 +70,18 @@ def _serialize(a: WikiArticle, include_content: bool = False) -> dict:
         "updater_id": a.updater_id,
         "created_at": str(a.created_at) if a.created_at else None,
         "updated_at": str(a.updated_at) if a.updated_at else None,
+        # OKF §5.2 / §5.5：验证事件与绝对过期时间（导出与前端编辑用）
+        "verified": getattr(a, "verified", None) or [],
+        "stale_after": (
+            str(getattr(a, "stale_after", None))
+            if getattr(a, "stale_after", None)
+            else None
+        ),
+        # OKF §10 Attested Computation（导出与前端编辑用）
+        "attested_computation": getattr(a, "attested_computation", None),
     }
     if include_content:
-        d["content"] = a.content
+        d["content"] = getattr(a, "content", None)
     return d
 
 
@@ -73,7 +105,7 @@ class WikiArticleService:
         self.db = db
         self.repo = WikiArticleRepository(db)
 
-    def create(self, data: dict, user) -> dict:
+    def create(self, data: dict, user, tenant_id: Optional[int] = None) -> dict:
         slug = data.get("slug") or _slugify(data["title"])
         if self.repo.get_by_slug(slug):
             raise HTTPException(status_code=409, detail=f"slug '{slug}' 已存在")
@@ -83,17 +115,27 @@ class WikiArticleService:
             content=data.get("content"),
             summary=data.get("summary"),
             category_id=data.get("category_id"),
+            knowledge_id=data.get("knowledge_id"),
             tags=data.get("tags") or [],
             owl_class_uris=data.get("owl_class_uris") or [],
             wiki_links=data.get("wiki_links") or [],
             status=data.get("status", 1),
-            creator_id=user.id,
-            updater_id=user.id,
+            # OKF 合规层（§5.1 / §5.2 / §5.5）：新建即可写入，导入路径复用同一处
+            okf_type=data.get("okf_type"),
+            resource=data.get("resource"),
+            sources=data.get("sources") or [],
+            verified=data.get("verified") or [],
+            stale_after=data.get("stale_after"),
+            # OKF §10 Attested Computation（spec §9.6 推迟项，本次补齐）
+            attested_computation=data.get("attested_computation"),
+            tenant_id=tenant_id if tenant_id is not None else get_tenant_id(),
+            creator_id=_user_id(user),
+            updater_id=_user_id(user),
             version=1,
         )
         self.db.add(article)
         self.db.flush()
-        self._create_version(article, "初始创建", user.id, operation_type="create")
+        self._create_version(article, "初始创建", _user_id(user), operation_type="create")
         self._update_backlinks(article)
         self._enqueue_index(article.id)
         self.db.commit()
@@ -148,10 +190,10 @@ class WikiArticleService:
         for key, value in data.items():
             if value is not None:
                 setattr(article, key, value)
-        article.updater_id = user.id
+        article.updater_id = _user_id(user)
         article.version = (article.version or 1) + 1
         self.db.flush()
-        self._create_version(article, change_note, user.id, operation_type="edit")
+        self._create_version(article, change_note, _user_id(user), operation_type="edit")
         self._update_backlinks(article, old_links)
         self._enqueue_index(article.id)
         self.db.commit()
@@ -164,6 +206,32 @@ class WikiArticleService:
             raise HTTPException(status_code=404, detail="文章不存在")
         self.db.delete(article)
         self.db.commit()
+
+    def slug_exists(self, slug: str) -> bool:
+        """slug 全局是否已占用（``kms_article.slug`` 是全局唯一索引）。"""
+        return (
+            self.db.execute(
+                select(WikiArticle.id).where(WikiArticle.slug == slug)
+            ).scalar_one_or_none()
+            is not None
+        )
+
+    def find_scoped(
+        self,
+        slug: str,
+        tenant_id: Optional[int],
+        knowledge_id: Optional[int],
+    ) -> Optional[WikiArticle]:
+        """按 ``tenant_id + knowledge_id + slug`` 定位文章（OKF 导入的 upsert 作用域）。
+
+        只在本租户、本知识库内命中才算同一篇文章；跨知识库的同名 slug 一律视为冲突，
+        由调用方决定是否加后缀新建，绝不覆盖他人文章。
+        """
+        stmt = select(WikiArticle).where(WikiArticle.slug == slug)
+        stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
+        if tenant_id is not None:
+            stmt = stmt.where(WikiArticle.tenant_id == tenant_id)
+        return self.db.execute(stmt).scalar_one_or_none()
 
     def list_versions(self, article_id: int) -> List[dict]:
         versions = self.db.execute(

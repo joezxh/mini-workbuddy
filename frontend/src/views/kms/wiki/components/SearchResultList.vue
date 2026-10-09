@@ -19,16 +19,18 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { SearchItem } from '../types/wiki'
+import { openDynamicTab } from '@/utils/shellTab'
 
 defineProps<{ items: SearchItem[]; loading?: boolean }>()
-const router = useRouter()
 const { t } = useI18n()
 
 function open(item: SearchItem) {
-  router.push(`/wiki/${item.slug}`)
+  openDynamicTab(
+    { key: `kg-wiki-view:${item.slug}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug: item.slug } },
+    `/wiki/${item.slug}`,
+  )
 }
 </script>
 

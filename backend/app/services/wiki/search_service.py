@@ -155,6 +155,11 @@ class WikiSearchService:
             stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
         if owl_class_filter:
             stmt = stmt.where(WikiArticle.owl_class_uris.op("&&")(owl_class_filter))
+        # 租户隔离：此前只按 knowledge_id / owl 过滤，租户为 NULL 的导入文章会被
+        # 其它租户检索到（OKF 导入曾写死 tenant_id=None），此处补上租户条件。
+        tenant_id = get_tenant_id()
+        if tenant_id is not None:
+            stmt = stmt.where(WikiArticle.tenant_id == tenant_id)
         return stmt
 
     @staticmethod

@@ -2,11 +2,11 @@
   <div class="article-view" v-if="article">
     <div class="article-toolbar">
       <a-breadcrumb>
-        <a-breadcrumb-item><a @click="$router.push('/wiki')">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
+        <a-breadcrumb-item><a @click="backToList">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
         <a-breadcrumb-item>{{ article.title }}</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="toolbar-actions">
-        <a-button @click="$router.push(`/wiki/edit/${article.id}`)">
+        <a-button @click="openEdit">
           <template #icon><EditOutlined /></template>
           {{ t('common.edit') }}
         </a-button>
@@ -58,7 +58,7 @@
           <a-list :data-source="article.backlinks" size="small">
             <template #renderItem="{ item }">
               <a-list-item>
-                <a @click="$router.push(`/wiki/${item}`)">{{ item }}</a>
+                <a @click="openLinked(item)">{{ item }}</a>
               </a-list-item>
             </template>
           </a-list>
@@ -69,10 +69,38 @@
           <a-list :data-source="article.wiki_links" size="small">
             <template #renderItem="{ item }">
               <a-list-item>
-                <a @click="$router.push(`/wiki/${item}`)">{{ item }}</a>
+                <a @click="openLinked(item)">{{ item }}</a>
               </a-list-item>
             </template>
           </a-list>
+        </a-card>
+
+        <!-- OKF §10 Attested Computation -->
+        <a-card
+          :title="t('kmsWiki.okfAttestedComputation')"
+          size="small"
+          v-if="article.attested_computation"
+          style="margin-top: 16px"
+        >
+          <div class="field-label">{{ t('kmsWiki.okfRuntime') }}</div>
+          <a-tag color="geekblue">{{ article.attested_computation.runtime || '—' }}</a-tag>
+          <template v-if="article.attested_computation.parameters?.length">
+            <div class="field-label" style="margin-top: 8px">{{ t('kmsWiki.okfParameters') }}</div>
+            <a-list :data-source="article.attested_computation.parameters" size="small">
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <span><code class="okf-mono">{{ item.name }}</code>: {{ item.type }}{{ item.required ? ' *' : '' }}</span>
+                </a-list-item>
+              </template>
+            </a-list>
+          </template>
+          <div class="field-label" style="margin-top: 8px">{{ t('kmsWiki.okfComputation') }}</div>
+          <code class="okf-mono">{{ article.attested_computation.computation || '—' }}</code>
+          <div class="field-label" style="margin-top: 8px">{{ t('kmsWiki.okfExecutor') }}</div>
+          <div class="okf-sub">resource: {{ article.attested_computation.executor?.resource || '—' }}</div>
+          <div class="okf-sub">receipt: {{ (article.attested_computation.executor?.receipt || []).join(', ') || '—' }}</div>
+          <div class="field-label" style="margin-top: 8px">{{ t('kmsWiki.okfAttester') }}</div>
+          <div class="okf-sub">resource: {{ article.attested_computation.attester?.resource || '—' }}</div>
         </a-card>
       </a-col>
     </a-row>
@@ -115,7 +143,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { EditOutlined, HistoryOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import MarkdownIt from 'markdown-it'
@@ -124,10 +152,13 @@ import { getArticleBySlug, deleteArticle } from '@/api/wiki'
 import { getArticleOkf } from '@/api/kb'
 import VersionTimeline from './components/VersionTimeline.vue'
 import dayjs from 'dayjs'
+import { openDynamicTab, closeShellTab, setShellTabTitle } from '@/utils/shellTab'
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
+const props = defineProps<{ slug?: string }>()
+const slug = computed(() => props.slug ?? (route.params.slug as string))
+const tabKey = computed(() => `kg-wiki-view:${slug.value}`)
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true })
 
 const article = ref<any>(null)
@@ -146,16 +177,17 @@ const renderedContent = computed(() => {
 })
 
 onMounted(() => loadArticle())
-watch(() => route.params.slug, () => loadArticle())
+watch(() => slug.value, () => loadArticle())
 
 async function loadArticle() {
-  const slug = route.params.slug as string
   try {
-    const res = await getArticleBySlug(slug)
+    const res = await getArticleBySlug(slug.value)
     article.value = res
+    // 加载成功后用文章标题命名当前 Tab
+    setShellTabTitle(tabKey.value, res.title || t('kmsWiki.articleView'))
   } catch (e: any) {
     message.error(t('kmsWiki.notFound'))
-    router.push('/wiki')
+    closeShellTab(tabKey.value, '/wiki')
   }
 }
 
@@ -164,7 +196,7 @@ async function handleDelete() {
   try {
     await deleteArticle(article.value.id)
     message.success(t('kbMgmt.common.deleted'))
-    router.push('/wiki')
+    closeShellTab(tabKey.value, '/wiki')
   } catch (e) {
     message.error(t('kbMgmt.common.deleteFailed'))
   }
@@ -213,6 +245,28 @@ function extractLabel(uri: string) {
   const parts = uri.split(/[#/]/)
   return parts[parts.length - 1] || uri
 }
+
+// ── 导航：保持在控制台 Tab 系统内，避免跳到外壳独立路由 ──
+function backToList() {
+  // 关闭当前查看 Tab，回到上一页（通常是 Wiki 列表 Tab）；外壳不可用时回退 /wiki
+  closeShellTab(tabKey.value, '/wiki')
+}
+
+function openEdit() {
+  if (!article.value) return
+  closeShellTab(tabKey.value)
+  openDynamicTab(
+    { key: `kg-wiki-edit:${article.value.id}`, component: 'kg-wiki-edit', titleKey: 'common.edit', icon: 'EditOutlined', props: { id: article.value.id } },
+    `/wiki/edit/${article.value.id}`,
+  )
+}
+
+function openLinked(item: string) {
+  openDynamicTab(
+    { key: `kg-wiki-view:${item}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug: item } },
+    `/wiki/${item}`,
+  )
+}
 </script>
 
 <style scoped>
@@ -249,6 +303,16 @@ function extractLabel(uri: string) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+.okf-mono {
+  font-family: monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.okf-sub {
+  font-size: 12px;
+  color: var(--fg-muted);
+  word-break: break-all;
 }
 .okf-preview {
   background: var(--bg-subtle, #f6f8fa);

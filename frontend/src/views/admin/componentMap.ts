@@ -24,10 +24,10 @@ import TeamList from '@/views/admin/agent-team/TeamList.vue'
 import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 // 知识治理（数据源 / 知识库 / 外部知识库 / 本体）
-import DataSourcePanel from '@/views/admin/knowledge/DataSourcePanel.vue'
-import KnowledgeBasePanel from '@/views/admin/knowledge/KnowledgeBasePanel.vue'
-import ExternalKbPanel from '@/views/admin/knowledge/ExternalKbPanel.vue'
-import OntologyPanel from '@/views/admin/knowledge/OntologyPanel.vue'
+import DataSourcePanel from '@/views/kms/DataSourcePanel.vue'
+import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
+import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
+import OntologyPanel from '@/views/ontology/OntologyPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）
 import WikiIndex from '@/views/kms/wiki/index.vue'
 // 统一知识库工作台（spec 知识库统一化 §6）
@@ -38,6 +38,10 @@ import VoiceSessionConfig from '@/views/admin/duplex/config/VoiceSessionConfig.v
 import VoiceModelConfig from '@/views/admin/duplex/config/VoiceModelConfig.vue'
 import AgentConfigPanel from '@/views/admin/ai-config/agents/AgentConfigPanel.vue'
 import ToolPolicyEditor from '@/views/admin/ai/components/ToolPolicyEditor.vue'
+// Wiki 文章查看 / 编辑 / RAG 测试：带动态参数（slug / id），由外壳 Tab 系统按需打开
+import WikiArticleView from '@/views/kms/wiki/ArticleView.vue'
+import WikiArticleEdit from '@/views/kms/wiki/ArticleEdit.vue'
+import WikiRagTest from '@/views/kms/wiki/RagTest.vue'
 
 export const componentMap: Record<string, Component> = {
   dashboard: markRaw(DashboardPanel),
@@ -73,4 +77,15 @@ export const componentMap: Record<string, Component> = {
   'voice-models': markRaw(VoiceModelConfig),
   'voice-agents': markRaw(AgentConfigPanel),
   'voice-tool-policy': markRaw(ToolPolicyEditor),
+}
+
+/**
+ * 动态 Tab 注册表：key 为「组件注册名」，value 为组件。
+ * 与 componentMap 不同，这里登记的是需要携带动态参数（slug / id）打开的页面，
+ * 由 admin/index.vue 的 open-dynamic-tab 事件按需查表后打开成外壳 Tab。
+ */
+export const dynamicComponentRegistry: Record<string, Component> = {
+  'kg-wiki-view': markRaw(WikiArticleView),
+  'kg-wiki-edit': markRaw(WikiArticleEdit),
+  'kg-wiki-rag': markRaw(WikiRagTest),
 }

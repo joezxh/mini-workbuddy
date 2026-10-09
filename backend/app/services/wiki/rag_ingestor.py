@@ -48,8 +48,22 @@ class WikiRAGIngestor:
         finally:
             db.close()
 
-    def reindex_all(self, batch_size: int = 200) -> int:
-        """全量重建索引（运维脚本 / 数据修复用）。返回成功索引数。"""
+    def reindex_all(
+        self,
+        batch_size: int = 200,
+        tenant_id: Optional[int] = None,
+        knowledge_id: Optional[int] = None,
+    ) -> int:
+        """重建索引（运维脚本 / 数据修复 / ``POST /wiki/reindex``）。
+
+        Args:
+            batch_size: 保留参数，与历史签名兼容（当前逐篇处理）。
+            tenant_id: 限定租户；``None`` 表示不过滤（运维脚本场景）。
+            knowledge_id: 限定知识库。
+
+        Returns:
+            成功索引的文章数。
+        """
         db = SessionLocal()
         ok = 0
         try:
@@ -59,6 +73,10 @@ class WikiRAGIngestor:
                 .where(WikiArticle.content.isnot(None))
                 .order_by(WikiArticle.id)
             )
+            if tenant_id is not None:
+                stmt = stmt.where(WikiArticle.tenant_id == tenant_id)
+            if knowledge_id is not None:
+                stmt = stmt.where(WikiArticle.knowledge_id == knowledge_id)
             ids = db.execute(stmt).scalars().all()
             for aid in ids:
                 try:
@@ -66,6 +84,10 @@ class WikiRAGIngestor:
                     ok += 1
                 except Exception:  # noqa: BLE001
                     continue
+            logger.info(
+                "[WikiRAGIngestor] 重建索引完成 ok=%s total=%s tenant=%s knowledge=%s",
+                ok, len(ids), tenant_id, knowledge_id,
+            )
         finally:
             db.close()
         return ok

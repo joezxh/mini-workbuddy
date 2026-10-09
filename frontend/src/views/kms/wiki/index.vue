@@ -23,8 +23,9 @@
             :tree-data="treeData"
             :field-names="{ title: 'name', key: 'treeKey', children: 'children' }"
             :selected-keys="selectedKeys"
+            :expanded-keys="expandedKeys"
             @select="handleCategorySelect"
-            default-expand-all
+            @expand="(keys: any[]) => (expandedKeys = keys)"
           >
             <template #title="{ data }">
               <a-dropdown
@@ -69,11 +70,30 @@
             :placeholder="t('kmsWiki.searchPlaceholder')"
             style="width: 260px"
             @search="handleSearch"
+            @change="onSearchInputChange"
             allow-clear
           />
           <a-space>
+            <a-select
+              v-model:value="sortField"
+              style="width: 130px"
+              @change="handleSortChange"
+            >
+              <a-select-option value="updated_at">{{ t('kmsWiki.sortUpdated') }}</a-select-option>
+              <a-select-option value="title">{{ t('kmsWiki.sortTitle') }}</a-select-option>
+              <a-select-option value="version">{{ t('kmsWiki.sortVersion') }}</a-select-option>
+              <a-select-option value="view_count">{{ t('kmsWiki.sortViews') }}</a-select-option>
+            </a-select>
+            <a-button @click="toggleSortOrder">
+              {{ sortOrder === 'desc' ? t('kmsWiki.sortDesc') : t('kmsWiki.sortAsc') }}
+            </a-button>
+            <a-tooltip :title="t('kmsWiki.reindexTip')">
+              <a-button @click="handleReindex">
+                <template #icon><ReloadOutlined /></template>
+              </a-button>
+            </a-tooltip>
             <a-tooltip :title="t('kmsWiki.ragEntry')">
-              <a-button @click="router.push('/wiki/rag')">
+              <a-button @click="openRag">
                 <template #icon><ExperimentOutlined /></template>
               </a-button>
             </a-tooltip>
@@ -86,14 +106,47 @@
               <template #icon><ImportOutlined /></template>
               {{ t('kmsWiki.okfImport') }}
             </a-button>
+            <!-- 导入的是导出物本身（zip），解包与安全限制都在服务端 -->
             <input
               ref="okfFileInput"
               type="file"
-              multiple
-              accept=".md,.markdown"
+              accept=".zip"
               style="display: none"
               @change="handleOkfImport"
             />
+            <!-- OKF 导入报告分项（§11.3 报告化）：逐源耗时 / 正文行数 -->
+            <a-modal
+              v-model:open="reportModalVisible"
+              :title="t('kmsWiki.okfImportReport')"
+              :width="680"
+            >
+              <template v-if="reportData">
+                <p class="okf-report-summary">
+                  {{ t('kmsWiki.okfImportReportSummary', {
+                    imported: reportData.imported,
+                    skipped: reportData.skipped,
+                    ms: reportData.totals?.duration_ms ?? 0,
+                    lines: reportData.totals?.body_lines ?? 0,
+                  }) }}
+                </p>
+                <a-table
+                  :columns="reportColumns"
+                  :data-source="reportData.per_file || []"
+                  size="small"
+                  :pagination="false"
+                  row-key="path"
+                >
+                  <template #bodyCell="{ column, record }">
+                    <template v-if="column.dataIndex === 'warnings'">
+                      <span v-if="!record.warnings?.length" class="okf-muted">—</span>
+                      <a-tooltip v-else :title="record.warnings.join('\n')">
+                        <a-tag color="orange">{{ record.warnings.length }}</a-tag>
+                      </a-tooltip>
+                    </template>
+                  </template>
+                </a-table>
+              </template>
+            </a-modal>
             <a-button type="primary" @click="openCreateModal">
               <template #icon><PlusOutlined /></template>
               {{ t('kmsWiki.createArticle') }}
@@ -107,6 +160,20 @@
           <a-tag closable @close.prevent="clearFilter">{{ selectedNodeName }}</a-tag>
         </div>
 
+        <!-- 批量操作条 -->
+        <div v-if="checkedIds.length" class="wiki-main__batch">
+          <span>{{ t('kmsWiki.selectedCount', { count: checkedIds.length }) }}</span>
+          <a-popconfirm
+            :title="t('kmsWiki.batchDeleteConfirm', { count: checkedIds.length })"
+            @confirm="handleBatchDelete"
+          >
+            <a-button danger size="small" :loading="deleting">
+              {{ t('common.delete') }}
+            </a-button>
+          </a-popconfirm>
+          <a-button size="small" @click="checkedIds = []">{{ t('common.cancel') }}</a-button>
+        </div>
+
         <a-list
           :data-source="articles"
           :loading="loading"
@@ -114,6 +181,12 @@
         >
           <template #renderItem="{ item }">
             <a-list-item>
+              <template #extra>
+                <a-checkbox
+                  :checked="checkedIds.includes(item.id)"
+                  @change="(e: any) => toggleSelect(item.id, e.target.checked)"
+                />
+              </template>
               <a-list-item-meta
                 :title="item.title"
                 :description="item.summary || t('kmsWiki.noSummary')"
@@ -127,6 +200,8 @@
               <div class="article-meta">
                 <a-tag v-for="tag in (item.tags || []).slice(0, 3)" :key="tag">{{ tag }}</a-tag>
                 <a-tag v-if="item.okf_type" :color="okfColor(item.okf_type)">{{ okfLabel(item.okf_type) }}</a-tag>
+                <!-- OKF §5.5：已过期的知识需要显式标记，避免被当作最新结论 -->
+                <a-tag v-if="isStale(item)" color="orange">{{ t('kmsWiki.stale') }}</a-tag>
                 <span v-if="item.sources?.length" class="meta-text">
                   {{ t('kmsWiki.sourceCount', { count: item.sources.length }) }}
                 </span>
@@ -135,6 +210,12 @@
               <template #actions>
                 <a @click="viewArticle(item.slug)">{{ t('wikiMgmt.art.view') }}</a>
                 <a @click="editArticle(item.id)">{{ t('common.edit') }}</a>
+                <a-popconfirm
+                  :title="t('kmsWiki.deleteConfirm')"
+                  @confirm="handleDelete(item.id)"
+                >
+                  <a class="wiki-main__danger">{{ t('common.delete') }}</a>
+                </a-popconfirm>
               </template>
             </a-list-item>
           </template>
@@ -145,7 +226,10 @@
           :current="page"
           :total="total"
           :page-size="pageSize"
+          :page-size-options="['10', '20', '50', '100']"
+          show-size-changer
           @change="handlePageChange"
+          @showSizeChange="handlePageSizeChange"
           style="margin-top: 16px; text-align: right"
         />
       </main>
@@ -273,14 +357,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { BookOutlined, ExperimentOutlined, PlusOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
-import { listArticles, createArticle, createCategory, updateCategory, deleteCategory, listCategories, searchArticles, listKnowledges, createKnowledge, updateKnowledge, deleteKnowledge } from '@/api/wiki'
+import { listArticles, createArticle, deleteArticle, reindexWiki, createCategory, updateCategory, deleteCategory, listCategories, listKnowledges, createKnowledge, updateKnowledge, deleteKnowledge } from '@/api/wiki'
 import DocUploadPanel from './components/DocUploadPanel.vue'
 import ArticleExtractedFields from './components/ArticleExtractedFields.vue'
+import { openDynamicTab } from '@/utils/shellTab'
 
 interface FieldDef {
   key: string
@@ -292,7 +376,6 @@ interface FieldDef {
 import { exportOkfBundle, importOkfBundle } from '@/api/kb'
 import dayjs from 'dayjs'
 
-const router = useRouter()
 const { t } = useI18n()
 withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 
@@ -301,9 +384,17 @@ const categoryTree = ref<any[]>([])
 const knowledges = ref<any[]>([])
 const loading = ref(false)
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const total = ref(0)
 const searchQuery = ref('')
+/** 已提交的搜索关键字（与输入框分离，避免边输入边请求） */
+const keyword = ref('')
+/** 排序：字段 + 方向，随列表请求一起提交 */
+const sortField = ref<'updated_at' | 'title' | 'version' | 'view_count'>('updated_at')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+/** 批量选择的文章 id（与左栏树的 selectedKeys 区分开） */
+const checkedIds = ref<number[]>([])
+const deleting = ref(false)
 
 /** 左栏树选中项：kind=category 按分类过滤；kind=knowledge 按知识库过滤 */
 const selectedKind = ref<'category' | 'knowledge' | null>(null)
@@ -404,20 +495,82 @@ onMounted(() => {
 async function loadArticles() {
   loading.value = true
   try {
-    const params: any = { page: page.value, page_size: pageSize }
+    const params: any = {
+      page: page.value,
+      page_size: pageSize.value,
+      sort: sortField.value,
+      order: sortOrder.value,
+    }
     if (selectedKind.value === 'category' && selectedId.value) {
       params.category_id = selectedId.value
     } else if (selectedKind.value === 'knowledge' && selectedId.value) {
       params.knowledge_id = selectedId.value
     }
+    // 搜索走列表接口的 keyword 参数：与分页、筛选共用一套 total，
+    // 不再出现"搜索结果覆盖列表且分页 total 不同步"的问题。
+    if (keyword.value) params.keyword = keyword.value
     const res = await listArticles(params)
     articles.value = res.items || []
     total.value = res.total || 0
+    checkedIds.value = []
   } catch (e: any) {
     message.error(t('wikiMgmt.art.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+/** 排序或每页条数变化：回到第一页并重新拉取 */
+function handleSortChange() {
+  page.value = 1
+  loadArticles()
+}
+
+function toggleSortOrder() {
+  sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  handleSortChange()
+}
+
+function handlePageSizeChange(_current: number, size: number) {
+  pageSize.value = size
+  page.value = 1
+  loadArticles()
+}
+
+async function handleDelete(id: number) {
+  try {
+    await deleteArticle(id)
+    message.success(t('common.deleteSuccess'))
+    loadArticles()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('common.deleteFailed'))
+  }
+}
+
+function toggleSelect(id: number, checked: boolean) {
+  checkedIds.value = checked
+    ? [...checkedIds.value, id]
+    : checkedIds.value.filter((k) => k !== id)
+}
+
+async function handleBatchDelete() {
+  if (!checkedIds.value.length) return
+  deleting.value = true
+  try {
+    await Promise.all(checkedIds.value.map((id) => deleteArticle(id)))
+    message.success(t('kmsWiki.batchDeleteSuccess', { count: checkedIds.value.length }))
+    page.value = 1
+    loadArticles()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('common.deleteFailed'))
+  } finally {
+    deleting.value = false
+  }
+}
+
+/** OKF §5.5：stale_after 已过期 → 列表标记 */
+function isStale(item: any): boolean {
+  return !!item?.stale_after && dayjs(item.stale_after).isBefore(dayjs())
 }
 
 async function loadCategories() {
@@ -461,21 +614,26 @@ const treeData = computed(() => {
     id: kb.id,
     kbId: kb.id,
     name: kb.name,
+    isLeaf: true,
     children: [],
   })
 
   /** 递归重建：保留服务端返回的任意深度子类别，并把该类别下的知识库挂为叶子 */
-  const buildCat = (c: any): any => ({
-    ...c,
-    kind: 'category',
-    treeKey: `cat-${c.id}`,
-    id: c.id,
-    name: c.name,
-    children: [
+  const buildCat = (c: any): any => {
+    const children = [
       ...(c.children || []).map(buildCat),
       ...kbs.filter((k: any) => k.category_id === c.id).map(buildKb),
-    ],
-  })
+    ]
+    return {
+      ...c,
+      kind: 'category',
+      treeKey: `cat-${c.id}`,
+      id: c.id,
+      name: c.name,
+      isLeaf: children.length === 0,
+      children,
+    }
+  }
 
   const roots: any[] = cats.map(buildCat)
 
@@ -492,6 +650,25 @@ const treeData = computed(() => {
   }
   return roots
 })
+
+/** 默认将含子节点的分类 / 未分类组全部展开 */
+const expandedKeys = ref<string[]>([])
+watch(
+  treeData,
+  (nodes) => {
+    const keys: string[] = []
+    const walk = (arr: any[]) =>
+      arr.forEach((n) => {
+        if (n.children && n.children.length) {
+          keys.push(n.treeKey)
+          walk(n.children)
+        }
+      })
+    walk(nodes || [])
+    expandedKeys.value = keys
+  },
+  { immediate: true },
+)
 
 // ── 分类管理（新建 / 重命名 / 删除） ──
 const categoryModal = reactive({
@@ -515,7 +692,6 @@ function openCategoryModal(mode: 'create' | 'rename', node?: any) {
     categoryModal.description = node.description || ''
     categoryModal.sort_order = node.sort_order || 0
     categoryModal.parentId = null
-    categoryModal.kbId = null
     categoryModal.parentName = ''
   } else {
     categoryModal.targetId = null
@@ -790,6 +966,18 @@ function clearFilter() {
 // ── OKF 合规层（spec §9.5）──────────────────────────────────────────────
 const okfFileInput = ref<HTMLInputElement | null>(null)
 
+// OKF 导入报告 Modal（§11.3 报告化：逐源耗时 / 正文行数）
+const reportModalVisible = ref(false)
+const reportData = ref<any>(null)
+const reportColumns = [
+  { title: t('kmsWiki.okfReportPath'), dataIndex: 'path' },
+  { title: t('kmsWiki.okfReportType'), dataIndex: 'okf_type' },
+  { title: t('kmsWiki.okfReportAction'), dataIndex: 'action' },
+  { title: t('kmsWiki.okfReportDuration'), dataIndex: 'duration_ms' },
+  { title: t('kmsWiki.okfReportBodyLines'), dataIndex: 'body_lines' },
+  { title: t('kmsWiki.okfReportWarnings'), dataIndex: 'warnings' },
+]
+
 /** 导出/导入都以左栏选中的知识库为作用域 */
 function currentKnowledgeId(): number | null {
   return selectedKind.value === 'knowledge' ? selectedId.value : null
@@ -817,31 +1005,54 @@ async function handleOkfExport() {
 async function handleOkfImport(e: Event) {
   const kid = currentKnowledgeId()
   const input = e.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  input.value = '' // 允许重复选同一批文件
+  const file = input.files?.[0]
+  input.value = '' // 允许重复选同一个文件
   if (!kid) {
     message.warning(t('kmsWiki.okfSelectFirst'))
     return
   }
-  if (!files.length) return
+  if (!file) return
+  if (!/\.zip$/i.test(file.name)) {
+    message.warning(t('kmsWiki.okfImportZipOnly'))
+    return
+  }
   try {
-    const payload: { path: string; content: string }[] = []
-    for (const f of files) {
-      payload.push({ path: f.name, content: await f.text() })
-    }
-    const report: any = await importOkfBundle(kid, payload)
+    const report: any = await importOkfBundle(kid, file)
     let msg = t('kmsWiki.okfImportSuccess', {
       imported: report.imported ?? 0,
       skipped: report.skipped ?? 0,
     })
+    // 报告分项（§11.3）：未知键 / 未知 type / 断链 / slug 冲突 / 缺推荐标题
+    const d = report.details || {}
+    const parts: string[] = []
+    if (d.unknown_type) parts.push(t('kmsWiki.okfReportUnknownType', { n: d.unknown_type }))
+    if (d.unknown_keys) parts.push(t('kmsWiki.okfReportUnknownKeys', { n: d.unknown_keys }))
+    if (d.broken_links) parts.push(t('kmsWiki.okfReportBrokenLinks', { n: d.broken_links }))
+    if (d.slug_conflicts) parts.push(t('kmsWiki.okfReportSlugConflicts', { n: d.slug_conflicts }))
+    if (d.missing_headings) parts.push(t('kmsWiki.okfReportMissingHeadings', { n: d.missing_headings }))
+    if (d.attested_missing_runtime) parts.push(t('kmsWiki.okfReportAttestedRuntime', { n: d.attested_missing_runtime }))
     if (report.warnings?.length) {
       msg += t('kmsWiki.okfImportWarnings', { warnings: report.warnings.length })
     }
+    if (parts.length) msg += `（${parts.join(' · ')}）`
     message.success(msg)
+    // §11.3 报告化：逐源细分（耗时 / 正文行数）在 Modal 中展开
+    reportData.value = report
+    reportModalVisible.value = true
     page.value = 1
     loadArticles()
   } catch (err: any) {
     message.error(err?.response?.data?.detail || t('kmsWiki.okfImportFailed'))
+  }
+}
+
+/** 重建向量索引：存量 content_vector 为 NULL 的文章的唯一修复入口 */
+async function handleReindex() {
+  try {
+    await reindexWiki(currentKnowledgeId())
+    message.success(t('kmsWiki.reindexStarted'))
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kmsWiki.reindexFailed'))
   }
 }
 
@@ -851,19 +1062,17 @@ function handlePageChange(p: number) {
 }
 
 async function handleSearch() {
-  if (!searchQuery.value.trim()) {
+  keyword.value = searchQuery.value.trim()
+  page.value = 1
+  loadArticles()
+}
+
+/** 输入框被清空（allow-clear）时回到列表态 */
+function onSearchInputChange() {
+  if (!searchQuery.value.trim() && keyword.value) {
+    keyword.value = ''
+    page.value = 1
     loadArticles()
-    return
-  }
-  loading.value = true
-  try {
-    const res = await searchArticles(searchQuery.value)
-    articles.value = res.items || []
-    total.value = res.total || 0
-  } catch (e) {
-    message.error(t('kmsWiki.searchFailed'))
-  } finally {
-    loading.value = false
   }
 }
 
@@ -903,11 +1112,24 @@ async function handleCreate() {
 }
 
 function viewArticle(slug: string) {
-  router.push(`/wiki/${slug}`)
+  openDynamicTab(
+    { key: `kg-wiki-view:${slug}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug } },
+    `/wiki/${slug}`,
+  )
 }
 
 function editArticle(id: number) {
-  router.push(`/wiki/edit/${id}`)
+  openDynamicTab(
+    { key: `kg-wiki-edit:${id}`, component: 'kg-wiki-edit', titleKey: 'common.edit', icon: 'EditOutlined', props: { id } },
+    `/wiki/edit/${id}`,
+  )
+}
+
+function openRag() {
+  openDynamicTab(
+    { key: 'kg-wiki-rag', component: 'kg-wiki-rag', titleKey: 'wikiMgmt.rag.title', icon: 'ExperimentOutlined' },
+    '/wiki/rag',
+  )
 }
 
 function formatDate(dateStr: string) {
@@ -1008,6 +1230,21 @@ function formatDate(dateStr: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.wiki-main__batch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+}
+
+.wiki-main__danger {
+  color: var(--error, #ff4d4f);
 }
 
 .wiki-main__filter-label {

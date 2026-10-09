@@ -2,14 +2,14 @@
   <div class="article-edit" v-if="article">
     <div class="edit-header">
       <a-breadcrumb>
-        <a-breadcrumb-item><a @click="$router.push('/wiki')">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
+        <a-breadcrumb-item><a @click="backToList">{{ t('kmsWiki.title') }}</a></a-breadcrumb-item>
         <a-breadcrumb-item>
-          <a @click="$router.push(`/wiki/${article.slug}`)">{{ article.title }}</a>
+          <a @click="openView">{{ article.title }}</a>
         </a-breadcrumb-item>
         <a-breadcrumb-item>{{ t('common.edit') }}</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="edit-actions">
-        <a-button @click="$router.back()">{{ t('common.cancel') }}</a-button>
+        <a-button @click="backToList">{{ t('common.cancel') }}</a-button>
         <a-button type="primary" @click="handleSave" :loading="saving">
           {{ t('common.save') }}
         </a-button>
@@ -109,6 +109,89 @@
             <a-radio :value="-1">{{ t('wikiMgmt.art.archived') }}</a-radio>
           </a-radio-group>
         </a-card>
+
+        <!-- OKF §5.2 / §5.5：验证记录与过期时间 -->
+        <a-card :title="t('kmsWiki.okfProvenance')" size="small" style="margin-top: 16px">
+          <div class="field-label">{{ t('kmsWiki.okfVerified') }}</div>
+          <div v-for="(v, i) in article.verified || []" :key="i" class="verified-row">
+            <a-input v-model:value="v.by" :placeholder="t('kmsWiki.okfVerifiedBy')" style="flex: 1" />
+            <a-input v-model:value="v.at" placeholder="2026-01-01T00:00:00Z" style="flex: 1" />
+            <a-button danger size="small" @click="removeVerified(i)">
+              {{ t('common.delete') }}
+            </a-button>
+          </div>
+          <a-button size="small" block @click="addVerified">
+            <template #icon><PlusOutlined /></template>{{ t('kmsWiki.okfAddVerified') }}
+          </a-button>
+
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfStaleAfter') }}</div>
+          <a-date-picker
+            v-model:value="staleAfterValue"
+            show-time
+            style="width: 100%"
+            :placeholder="t('kmsWiki.okfStaleAfterHint')"
+          />
+          <div class="hint-text">{{ t('kmsWiki.okfStaleAfterHint') }}</div>
+        </a-card>
+
+        <!-- OKF §10 Attested Computation：仅当 type=Attested Computation 时编辑 -->
+        <a-card
+          :title="t('kmsWiki.okfAttestedComputation')"
+          size="small"
+          style="margin-top: 16px"
+          v-if="extracted.okf_type === 'Attested Computation'"
+        >
+          <div class="field-label">{{ t('kmsWiki.okfRuntime') }} <span class="req">*</span></div>
+          <a-select
+            v-model:value="attested.runtime"
+            :placeholder="t('kmsWiki.okfRuntimeHint')"
+            style="width: 100%"
+          >
+            <a-select-option v-for="r in RUNTIMES" :key="r" :value="r">{{ r }}</a-select-option>
+          </a-select>
+
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfParameters') }}</div>
+          <div v-for="(p, i) in (attested.parameters || [])" :key="i" class="param-row">
+            <a-input v-model:value="p.name" :placeholder="t('kmsWiki.okfParamName')" style="flex: 1" />
+            <a-input v-model:value="p.type" :placeholder="t('kmsWiki.okfParamType')" style="flex: 1" />
+            <a-checkbox v-model:checked="p.required">{{ t('kmsWiki.okfParamRequired') }}</a-checkbox>
+            <a-button danger size="small" @click="removeParam(i)">
+              {{ t('common.delete') }}
+            </a-button>
+          </div>
+          <a-button size="small" block @click="addParam">
+            <template #icon><PlusOutlined /></template>{{ t('kmsWiki.okfAddParam') }}
+          </a-button>
+
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfComputation') }}</div>
+          <a-input
+            v-model:value="attested.computation"
+            :placeholder="t('kmsWiki.okfComputationHint')"
+            style="width: 100%"
+          />
+
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfExecutorResource') }}</div>
+          <a-input
+            v-model:value="attested.executor.resource"
+            :placeholder="t('kmsWiki.okfExecutorResourceHint')"
+            style="width: 100%"
+          />
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfExecutorReceipt') }}</div>
+          <a-select
+            v-model:value="attested.executor.receipt"
+            mode="tags"
+            :placeholder="t('kmsWiki.okfExecutorReceiptHint')"
+            style="width: 100%"
+          />
+
+          <div class="field-label" style="margin-top: 12px">{{ t('kmsWiki.okfAttesterResource') }}</div>
+          <a-input
+            v-model:value="attested.attester.resource"
+            :placeholder="t('kmsWiki.okfAttesterResourceHint')"
+            style="width: 100%"
+          />
+          <div class="hint-text">{{ t('kmsWiki.okfAttestedHint') }}</div>
+        </a-card>
       </a-col>
     </a-row>
   </div>
@@ -118,22 +201,31 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getArticle, updateArticle, listCategories, listKnowledges } from '@/api/wiki'
+import { PlusOutlined } from '@ant-design/icons-vue'
+import dayjs from 'dayjs'
 import DocUploadPanel from './components/DocUploadPanel.vue'
 import ArticleExtractedFields from './components/ArticleExtractedFields.vue'
+import { openDynamicTab, closeShellTab, setShellTabTitle } from '@/utils/shellTab'
 
 interface FieldDef {
   key: string
   label: string
   type: 'text' | 'textarea' | 'select' | 'tags' | 'sources'
   options?: string[]
+  optionLabels?: Record<string, string>
 }
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
+const props = defineProps<{ id?: number }>()
+const articleId = computed(() => {
+  const v = props.id ?? Number(route.params.id)
+  return Number.isFinite(v) ? v : 0
+})
+const editKey = computed(() => `kg-wiki-edit:${articleId.value}`)
 
 const article = ref<any>(null)
 const categories = ref<any[]>([])
@@ -145,17 +237,72 @@ const saving = ref(false)
 const extracted = ref<Record<string, any>>({})
 const extractedFields = ref<FieldDef[]>([])
 
-const OKF_TYPES = ['concept', 'howto', 'reference', 'decision', 'metric']
+/** OKF §10 Attested Computation 编辑态（仅 type=Attested Computation 时生效） */
+const attested = ref<any>({
+  runtime: undefined,
+  parameters: [] as { name: string; type: string; required: boolean }[],
+  computation: '',
+  executor: { resource: '', receipt: [] as string[] },
+  attester: { resource: '' },
+})
+
+function loadAttested(src: any) {
+  if (!src) {
+    return {
+      runtime: undefined,
+      parameters: [] as { name: string; type: string; required: boolean }[],
+      computation: '',
+      executor: { resource: '', receipt: [] as string[] },
+      attester: { resource: '' },
+    }
+  }
+  return {
+    runtime: src.runtime,
+    parameters: Array.isArray(src.parameters)
+      ? src.parameters.map((p: any) => ({ name: p?.name ?? '', type: p?.type ?? '', required: !!p?.required }))
+      : [],
+    computation: src.computation || '',
+    executor: { resource: src.executor?.resource || '', receipt: src.executor?.receipt || [] },
+    attester: { resource: src.attester?.resource || '' },
+  }
+}
+
+function addParam() {
+  if (!attested.value.parameters) attested.value.parameters = []
+  attested.value.parameters.push({ name: '', type: '', required: false })
+}
+
+function removeParam(index: number) {
+  attested.value.parameters?.splice(index, 1)
+}
+
+const OKF_TYPES = ['concept', 'howto', 'reference', 'decision', 'metric', 'Attested Computation']
 const OKF_LABELS: Record<string, string> = {
   concept: t('kmsWiki.okfConcept'),
   howto: t('kmsWiki.okfHowto'),
   reference: t('kmsWiki.okfReference'),
   decision: t('kmsWiki.okfDecision'),
   metric: t('kmsWiki.okfMetric'),
+  'Attested Computation': t('kmsWiki.okfAttestedComputation'),
 }
+
+/** §10 常见 runtime 选项（spec §10.2） */
+const RUNTIMES = ['bigquery', 'postgres', 'dbt', 'python', 'Looker']
 
 /** 正文为空时才显示上传入口，避免覆盖已有内容 */
 const hasContent = computed(() => !!article.value?.content?.trim())
+
+/** OKF §5.5 过期时间：a-date-picker 绑定 dayjs，保存时转 ISO 8601 UTC */
+const staleAfterValue = ref<any>(null)
+
+function addVerified() {
+  if (!article.value.verified) article.value.verified = []
+  article.value.verified.push({ by: '', at: '' })
+}
+
+function removeVerified(index: number) {
+  article.value.verified?.splice(index, 1)
+}
 
 /** 仅渲染「有值」的字段 —— 提取到什么就补什么 */
 function buildFieldDefs(src: { okf_type?: string | null; resource?: string | null; sources?: any[] }): FieldDef[] {
@@ -195,25 +342,30 @@ onMounted(async () => {
 })
 
 async function loadArticle() {
-  const articleId = Number(route.params.id)
-  if (!Number.isFinite(articleId) || articleId <= 0) {
+  if (!articleId.value || articleId.value <= 0) {
     message.error(t('kmsWiki.notFound'))
-    router.push('/wiki')
+    closeShellTab(editKey.value, '/wiki')
     return
   }
   try {
     // 直接按 ID 获取（后端 GET /wiki/articles/{id}，G4：消除 page_size=1000 列表遍历 hack）
-    article.value = await getArticle(articleId)
+    article.value = await getArticle(articleId.value)
+    setShellTabTitle(editKey.value, article.value.title || t('common.edit'))
     // 回填已保存的 OKF 字段，便于继续编辑
     extracted.value = {
       okf_type: article.value.okf_type ?? null,
       resource: article.value.resource ?? '',
       sources: article.value.sources || [],
     }
+    // OKF §5.2 / §5.5 回填
+    article.value.verified = article.value.verified || []
+    staleAfterValue.value = article.value.stale_after ? dayjs(article.value.stale_after) : null
+    // OKF §10 Attested Computation 回填（仅该 type 才渲染编辑器）
+    attested.value = loadAttested(article.value.attested_computation)
     extractedFields.value = buildFieldDefs(article.value)
   } catch (e) {
     message.error(t('wikiMgmt.art.loadFailed'))
-    router.push('/wiki')
+    closeShellTab(editKey.value, '/wiki')
   }
 }
 
@@ -233,6 +385,22 @@ async function loadKnowledges() {
   } catch (e) {
     // 知识库加载失败不阻断
   }
+}
+
+// ── 导航：保持在控制台 Tab 系统内，避免跳到外壳独立路由 ──
+function backToList() {
+  // 关闭当前编辑 Tab，回到上一页（外壳不可用时回退 /wiki）
+  closeShellTab(editKey.value, '/wiki')
+}
+
+function openView() {
+  if (!article.value?.slug) return
+  const slug = article.value.slug
+  closeShellTab(editKey.value)
+  openDynamicTab(
+    { key: `kg-wiki-view:${slug}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug } },
+    `/wiki/${slug}`,
+  )
 }
 
 async function handleSave() {
@@ -256,9 +424,23 @@ async function handleSave() {
       okf_type: extracted.value.okf_type ?? undefined,
       resource: extracted.value.resource || undefined,
       sources: extracted.value.sources?.length ? extracted.value.sources : undefined,
+      // OKF §5.2 / §5.5：验证记录与绝对过期时间
+      verified: (article.value.verified || []).filter((v: any) => v?.by),
+      stale_after: staleAfterValue.value
+        ? staleAfterValue.value.toISOString()
+        : undefined,
+      // OKF §10 Attested Computation（仅该 type 才随文保存；其余类型不写，避免误带契约字段）
+      attested_computation:
+        extracted.value.okf_type === 'Attested Computation' ? attested.value : undefined,
     })
     message.success(t('wikiMgmt.saved'))
-    router.push(`/wiki/${article.value.slug}`)
+    const slug = article.value.slug
+    // 关闭编辑 Tab，打开文章查看 Tab（保持在控制台 Tab 系统内）
+    closeShellTab(editKey.value)
+    openDynamicTab(
+      { key: `kg-wiki-view:${slug}`, component: 'kg-wiki-view', titleKey: 'kmsWiki.articleView', icon: 'ReadOutlined', props: { slug } },
+      `/wiki/${slug}`,
+    )
   } catch (e: any) {
     message.error(e.response?.data?.detail || t('wikiMgmt.saveFailed'))
   } finally {
@@ -285,5 +467,29 @@ async function handleSave() {
   font-size: 12px;
   color: var(--fg-muted);
   margin-top: 4px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+
+.verified-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.req {
+  color: #ff4d4f;
 }
 </style>

@@ -97,7 +97,8 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
 import DashboardPanel from '@/views/Dashboard.vue' // 默认门户占位（登录后首页，合并自原 dashboard/index + DashboardPanel）
-import { componentMap } from './componentMap'
+import { componentMap, dynamicComponentRegistry } from './componentMap'
+import { ADMIN_SHELL_ACTIVE } from '@/utils/shellTab'
 
 const route = useRoute()
 const router = useRouter()
@@ -129,6 +130,9 @@ function handleRefreshActiveTab() {
 
 // 组件映射表已抽到 ./componentMap，供本控制台的 Tab 使用
 function getTabComponent(key: string): Component | undefined {
+  const tab = openTabs.value.find(t => t.key === key)
+  // 动态 Tab（如 Wiki 文章查看/编辑）把组件直接挂在 tab 上，优先返回
+  if (tab?.component) return tab.component
   return componentMap[key]
 }
 
@@ -172,7 +176,7 @@ function tabLabel(tab: TabItem): string {
 /** 打开或激活一个 Tab */
 function openOrActivateTab(
   key: string,
-  options?: { name?: string; titleKey?: string; icon?: string; props?: Record<string, any> },
+  options?: { name?: string; titleKey?: string; icon?: string; props?: Record<string, any>; component?: Component },
 ) {
   const existing = openTabs.value.find(t => t.key === key)
   if (existing) {
@@ -180,6 +184,7 @@ function openOrActivateTab(
     if (options?.titleKey) existing.titleKey = options.titleKey
     if (options?.name) existing.name = options.name
     if (options?.icon) existing.icon = options.icon
+    if (options?.component) existing.component = markRaw(options.component)
     activeTab.value = key
     return
   }
@@ -187,7 +192,7 @@ function openOrActivateTab(
   const titleKey = options?.titleKey ?? menuItem?.i18nKey ?? menuItem?.titleKey
   const name = options?.name || (menuItem ? menuItem.name : '') || key
   const icon = options?.icon || menuItem?.icon || ''
-  const comp = componentMap[key]
+  const comp = options?.component ?? componentMap[key]
   if (!comp) return
   openTabs.value.push({ key, name, titleKey, icon, component: markRaw(comp), props: options?.props })
   activeTab.value = key
@@ -368,9 +373,14 @@ onMounted(async () => {
   window.addEventListener('open-async-task-manage', handleOpenAsyncTaskManage)
   // 监听顶栏“刷新当前 Tab”事件
   window.addEventListener('app:refresh-active-tab', handleRefreshActiveTab)
+  // 动态 Tab（Wiki 文章查看/编辑、RAG 测试等带参数的页面）
+  window.addEventListener('open-shell-tab', handleOpenShellTab)
+  window.addEventListener('open-dynamic-tab', handleOpenDynamicTab)
+  window.addEventListener('close-shell-tab', handleCloseShellTab)
+  window.addEventListener('set-shell-tab-title', handleSetShellTabTitle)
+  // 标记外壳在线，供子组件的 shellTab 工具判断能否以 Tab 形式打开
+  ADMIN_SHELL_ACTIVE.value = true
 })
-
-/** 处理 open-skill-tab 事件：在标签页系统中打开技能管理并定位到指定技能包 */
 function handleOpenSkillTab(e: Event) {
   const detail = (e as CustomEvent).detail as { packageId: string }
   if (!detail?.packageId) return
@@ -403,12 +413,57 @@ function handleOpenAsyncTaskManage() {
   openOrActivateTab('async-task-manage', { titleKey: 'sys.menu.async-task-manage', name: 'Async Tasks' })
 }
 
+// ── 动态 Tab（携带 slug / id 等参数，如 Wiki 文章查看/编辑、RAG 测试） ──
+// 子组件通过 src/utils/shellTab 派发事件，避免 `router.push` 跳到外壳独立路由而脱离 Tab 系统。
+function handleOpenShellTab(e: Event) {
+  const key = (e as CustomEvent).detail?.key as string | undefined
+  if (key && componentMap[key]) openOrActivateTab(key)
+}
+
+function handleOpenDynamicTab(e: Event) {
+  const detail = (e as CustomEvent).detail as {
+    key: string
+    component: string
+    name?: string
+    titleKey?: string
+    icon?: string
+    props?: Record<string, any>
+  }
+  if (!detail?.key || !detail.component) return
+  // 优先查动态注册表，回退到静态 componentMap（允许用静态 key 打开已有页面）
+  const comp = dynamicComponentRegistry[detail.component] ?? componentMap[detail.component]
+  if (!comp) return
+  openOrActivateTab(detail.key, {
+    name: detail.name,
+    titleKey: detail.titleKey,
+    icon: detail.icon,
+    props: detail.props,
+    component: comp,
+  })
+}
+
+function handleCloseShellTab(e: Event) {
+  const key = (e as CustomEvent).detail?.key as string | undefined
+  if (key) closeTab(key)
+}
+
+function handleSetShellTabTitle(e: Event) {
+  const { key, name } = (e as CustomEvent).detail as { key: string; name: string }
+  const tab = openTabs.value.find(t => t.key === key)
+  if (tab) tab.name = name
+}
+
 onUnmounted(() => {
   window.removeEventListener('open-skill-tab', handleOpenSkillTab)
   window.removeEventListener('open-agent-team-editor', handleOpenAgentTeamEditor)
   window.removeEventListener('close-agent-team-editor', handleCloseAgentTeamEditor)
   window.removeEventListener('open-async-task-manage', handleOpenAsyncTaskManage)
   window.removeEventListener('app:refresh-active-tab', handleRefreshActiveTab)
+  window.removeEventListener('open-shell-tab', handleOpenShellTab)
+  window.removeEventListener('open-dynamic-tab', handleOpenDynamicTab)
+  window.removeEventListener('close-shell-tab', handleCloseShellTab)
+  window.removeEventListener('set-shell-tab-title', handleSetShellTabTitle)
+  ADMIN_SHELL_ACTIVE.value = false
 })
 
 // 监听 URL 参数（来自左侧 rail 的点击）：打开/激活对应 Tab

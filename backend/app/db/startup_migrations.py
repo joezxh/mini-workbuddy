@@ -124,6 +124,8 @@ _COLUMN_MIGRATIONS: list[str] = [
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS sources JSONB",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS verified JSONB",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS stale_after TIMESTAMP",
+    # OKF §10 Attested Computation 契约（spec §9.6 推迟项，本次补齐）
+    "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS attested_computation JSONB",
     # 版本快照：operation_type 缺失会让建/改文章直接 TypeError，summary/owl_class_uris 供回滚还原
     "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS operation_type VARCHAR(32)",
     "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS summary VARCHAR(1000)",

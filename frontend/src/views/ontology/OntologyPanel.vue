@@ -15,10 +15,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import OntologyList from './ontology/OntologyList.vue'
-import ClassHierarchy from './ontology/ClassHierarchy.vue'
-import ModelingWorkbench from './ontology/ModelingWorkbench.vue'
-import ReviewVersion from './ontology/ReviewVersion.vue'
+import OntologyList from './OntologyList.vue'
+import ClassHierarchy from './ClassHierarchy.vue'
+import ModelingWorkbench from './ModelingWorkbench.vue'
+import ReviewVersion from './ReviewVersion.vue'
 
 const { t } = useI18n()
 const active = ref('list')
