@@ -184,6 +184,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.kb.kb", tags=["通用知识库"]),
     # --- 28.2 外部知识库检索代理（spec §10.2 proxy；SSRF 防护）---
     RouterSpec("app.routers.kb.kb_proxy", tags=["外部知识库代理"]),
+    # --- 28.3 外部知识库文档导入向导（飞书/钉钉/语雀/企微/Notion）---
+    RouterSpec("app.routers.kb.kb_external_source", tags=["外部知识库文档导入"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),

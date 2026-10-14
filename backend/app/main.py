@@ -119,6 +119,14 @@ async def lifespan(app: FastAPI):
         except Exception as _idx_err:
             logger.warning(f"性能索引创建失败(忽略): {_idx_err}")
 
+        # 向量列维度对齐：嵌入模型变更后把 kms_segment.embedding 对齐到生效配置
+        # （模型管理默认向量化模型优先、环境变量兜底）；仅空表自动 ALTER
+        try:
+            from app.db.startup_migrations import align_vector_dimensions
+            align_vector_dimensions(engine)
+        except Exception as _dim_err:
+            logger.warning(f"向量维度对齐失败(忽略): {_dim_err}")
+
     # 启动审计日志批量写入协程
     try:
         start_audit_writer()

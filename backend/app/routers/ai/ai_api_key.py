@@ -1,6 +1,7 @@
 """AI API Key and ChatModel Router."""
 import json
 import logging
+import time
 from typing import Optional
 from datetime import datetime
 
@@ -350,11 +351,11 @@ async def set_chat_model_default(
     if api_key.status != 1:
         raise HTTPException(status_code=400, detail="API Key 已禁用，无法设为默认")
 
-    # 检测模型连通性
+    # 检测模型连通性（按模型类别轻量探测，OpenAI 兼容标准路径）
     model_type = model.type or 1
-    connectivity_ok = await _check_model_connectivity(model, api_key, model_type)
-    if not connectivity_ok:
-        raise HTTPException(status_code=400, detail="模型连通性检测失败，无法设为默认")
+    ok, detail, _latency, _endpoint = await _probe_model(model, api_key, model_type)
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"模型连通性检测失败：{detail}")
 
     # 连通性正常，清除同类型其他模型的默认状态
     if model.type is not None:
@@ -371,15 +372,48 @@ async def set_chat_model_default(
     return {"id": model.id, "message": "已设为默认模型"}
 
 
-async def _check_model_connectivity(model: AiChatModel, api_key: AiApiKey, model_type: int) -> bool:
-    """检测模型连通性（发送最小请求）
+# 模型类别（数据字典 model_type）：1=文本 2=图形生成 3=视频生成 4=多模态理解
+#                                5=向量化 6=向量排序 7=语音合成 8=语音识别
+_CHAT_TYPES = {1, 4}                 # 走 /chat/completions 的最小对话请求
+_EMBEDDING_TYPE = 5                  # 走 /embeddings
+_RERANK_TYPE = 6                     # 走 /rerank
+_REACHABILITY_TYPES = {2, 3, 7, 8}   # 图形/视频/语音合成/语音识别：仅 GET /models 探可达性，避免真实生成
 
-    自动兼容 URL 是否包含 /v1 前缀：
-    - 先尝试原始 URL
-    - 若原始 URL 不以 /v1 结尾，再尝试追加 /v1
+
+def _build_probe_request(model: AiChatModel, model_type: int):
+    """按模型类别构造轻量探测请求，返回 (method, path, payload)。
+
+    - 对话/多模态(1,4)：/chat/completions，max_tokens=1 的最小请求（校验端点+鉴权+模型名）
+    - 向量化(5)：/embeddings，input=["test"]（与 _OpenAICompatibleBackend 一致，不传 dimensions）
+    - 向量排序(6)：/rerank，最小 query+documents
+    - 图形/视频/语音合成/语音识别(2,3,7,8)：GET /models 仅验证服务可达+鉴权，不产生生成费用
+    """
+    if model_type in _CHAT_TYPES:
+        return "POST", "/chat/completions", {
+            "model": model.model,
+            "messages": [{"role": "user", "content": "hi"}],
+            "max_tokens": 1,
+            "stream": False,
+        }
+    if model_type == _EMBEDDING_TYPE:
+        return "POST", "/embeddings", {"model": model.model, "input": ["test"]}
+    if model_type == _RERANK_TYPE:
+        return "POST", "/rerank", {"model": model.model, "query": "test", "documents": ["a", "b"]}
+    # 2/3/7/8：OpenAI 兼容列表端点做可达性探测
+    return "GET", "/models", None
+
+
+async def _probe_model(model: AiChatModel, api_key: AiApiKey, model_type: int):
+    """按模型类别发送一个最小请求，验证服务可达 / 鉴权 / 模型配置。
+
+    自动兼容 URL 是否包含 /v1 前缀（先试原始 URL，再试追加 /v1）。
+    返回 (ok: bool, detail: str, latency_ms: int, endpoint: str)。
     """
     raw_url = (api_key.url or "").rstrip("/")
-    # 构建候选 base_url 列表：优先原始 URL，再补充带 /v1 的变体
+    if not raw_url:
+        return False, "API Key 未配置 url", 0, ""
+
+    # 候选 base_url：优先原始 URL，若不以 /v1 结尾再补充带 /v1 的变体
     candidates = [raw_url]
     if not raw_url.endswith("/v1"):
         candidates.append(f"{raw_url}/v1")
@@ -389,36 +423,39 @@ async def _check_model_connectivity(model: AiChatModel, api_key: AiApiKey, model
         "Content-Type": "application/json",
     }
     timeout = min(model.timeout or 15, 15)
+    method, path, payload = _build_probe_request(model, model_type)
 
-    if model_type == 5:
-        payload = {"model": model.model, "input": "test", "dimensions": 1}
-        path = "/embeddings"
-    else:
-        payload = {
-            "model": model.model,
-            "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 1,
-            "stream": False,
-        }
-        path = "/chat/completions"
-
+    last_detail = ""
+    last_latency = 0
     for base_url in candidates:
+        target = f"{base_url}{path}"
+        start = time.monotonic()
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{base_url}{path}",
-                    json=payload,
-                    headers=headers,
-                    timeout=float(timeout)
-                )
+                if method == "GET":
+                    resp = await client.get(target, headers=headers, timeout=float(timeout))
+                else:
+                    resp = await client.post(target, json=payload, headers=headers, timeout=float(timeout))
+                last_latency = int((time.monotonic() - start) * 1000)
                 if resp.status_code == 200:
-                    return True
-                logger.debug(f"连通性检测 {base_url}{path} 返回 {resp.status_code}")
+                    return True, "连通正常", last_latency, target
+                # 可达但非 200：多为鉴权/模型名/路径问题，记录响应体便于定位
+                last_detail = f"HTTP {resp.status_code} @ {target}: {resp.text[:200]}"
+                logger.warning(f"连通性检测非200: {last_detail}")
         except Exception as e:
-            logger.debug(f"连通性检测 {base_url}{path} 异常: {e}")
+            last_latency = int((time.monotonic() - start) * 1000)
+            last_detail = f"请求异常 @ {target}: {e}"
+            logger.warning(f"连通性检测异常: {last_detail}")
 
-    logger.warning(f"模型连通性检测失败: 所有候选 URL均不可达")
-    return False
+    return False, last_detail or "所有候选 URL 均不可达", last_latency, ""
+
+
+async def _check_model_connectivity(model: AiChatModel, api_key: AiApiKey, model_type: int) -> bool:
+    """兼容旧调用：仅返回连通与否。"""
+    ok, detail, _latency, _endpoint = await _probe_model(model, api_key, model_type)
+    if not ok:
+        logger.warning(f"模型连通性检测失败: {detail}")
+    return ok
 
 
 # ============= 模型测试 =============
@@ -461,6 +498,39 @@ async def test_chat_model(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     )
+
+
+class ProbeRequest(BaseModel):
+    model_id: int
+
+
+@router.post("/chat-model/probe")
+async def probe_chat_model(
+    req: ProbeRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user)
+):
+    """按模型类别对单个模型做轻量连通性探测（所有类型统一支持，不产生真实生成费用）"""
+    model = db.query(AiChatModel).filter(AiChatModel.id == req.model_id).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="模型不存在")
+
+    api_key = db.query(AiApiKey).filter(AiApiKey.id == model.key_id).first()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="关联的 API Key 不存在")
+    if api_key.status != 1:
+        raise HTTPException(status_code=400, detail="API Key 已禁用")
+
+    model_type = model.type or 1
+    ok, detail, latency_ms, endpoint = await _probe_model(model, api_key, model_type)
+    return {
+        "model_id": model.id,
+        "type": model_type,
+        "ok": ok,
+        "message": detail,
+        "latency_ms": latency_ms,
+        "endpoint": endpoint,
+    }
 
 
 async def _stream_chat(model: AiChatModel, api_key: AiApiKey, req: ModelTestRequest):

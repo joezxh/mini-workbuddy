@@ -62,7 +62,7 @@
             {{ record.max_tokens !== null ? record.max_tokens : '-' }}
           </template>
           <template v-else-if="column.key === 'actions'">
-            <a-space>
+            <a-space :size="2">
               <a-button type="link" size="small" @click="handleEdit(record)">{{ t('common.edit') }}</a-button>
               <a-button
                 type="link"
@@ -163,16 +163,16 @@ const filters = reactive({
   name: ''
 })
 
-// 表格列
+// 表格列（非操作列收窄 + 操作列加宽，合计宽度贴合弹窗内宽，避免按钮溢出窗体）
 const columns = computed(() => [
-  { title: t('apiKeyMgmt.colModelName'), dataIndex: 'name', key: 'name', width: 150, ellipsis: true },
-  { title: t('apiKeyMgmt.colModelId'), dataIndex: 'model', key: 'model', width: 180, ellipsis: true },
-  { title: t('apiKeyMgmt.colType'), dataIndex: 'type', key: 'type', width: 80, align: 'center' as const },
-  { title: t('apiKeyMgmt.colDefault'), key: 'is_default', width: 70, align: 'center' as const },
-  { title: t('apiKeyMgmt.colTemperature'), dataIndex: 'temperature', key: 'temperature', width: 80, align: 'center' as const },
-  { title: t('apiKeyMgmt.colMaxTokens'), dataIndex: 'max_tokens', key: 'max_tokens', width: 100, align: 'center' as const },
-  { title: t('apiKeyMgmt.colStatus'), key: 'status', width: 80, align: 'center' as const },
-  { title: t('apiKeyMgmt.colActions'), key: 'actions', width: 240, align: 'center' as const }
+  { title: t('apiKeyMgmt.colModelName'), dataIndex: 'name', key: 'name', width: 110, ellipsis: true },
+  { title: t('apiKeyMgmt.colModelId'), dataIndex: 'model', key: 'model', width: 140, ellipsis: true },
+  { title: t('apiKeyMgmt.colType'), dataIndex: 'type', key: 'type', width: 56, align: 'center' as const },
+  { title: t('apiKeyMgmt.colDefault'), key: 'is_default', width: 48, align: 'center' as const },
+  { title: t('apiKeyMgmt.colTemperature'), dataIndex: 'temperature', key: 'temperature', width: 64, align: 'center' as const },
+  { title: t('apiKeyMgmt.colMaxTokens'), dataIndex: 'max_tokens', key: 'max_tokens', width: 72, align: 'center' as const },
+  { title: t('apiKeyMgmt.colStatus'), key: 'status', width: 60, align: 'center' as const },
+  { title: t('apiKeyMgmt.colActions'), key: 'actions', width: 292, align: 'center' as const }
 ])
 
 // 新增/编辑弹窗

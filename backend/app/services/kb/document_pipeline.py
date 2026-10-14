@@ -29,6 +29,8 @@ def _fail(db: Session, doc_id: int, step: str, exc: Exception) -> None:
     if doc is not None:
         doc.status = "failed"
         doc.error_detail = f"[{step}] {type(exc).__name__}: {exc}"
+        # 记录失败步骤：文档列表「流程」视图据此高亮失败节点
+        doc.meta = {**(doc.meta or {}), "failed_step": step, "pipeline_steps": None}
         db.commit()
     logger.error(f"[KB 管线] 文档 {doc_id} 在 {step} 步失败: {exc}")
 
@@ -38,6 +40,32 @@ def _resolve_index_mode(db: Session, collection: str) -> str:
     from app.services.kb.index_mode import resolve_index_mode
 
     return resolve_index_mode(db, collection)
+
+
+def _embed_failure(exc: Exception) -> Exception:
+    """给向量化步的异常补上嵌入端点上下文，让失败节点可自解释。
+
+    嵌入依赖外部 HTTP 服务（GPUStack / NIM / 百炼），裸 ``APIConnectionError``
+    无法看出是哪个节点、哪个端点不可达；此处补齐 provider/base_url/model/维度。
+    """
+    try:
+        from app.services.kb.embedding_config import (
+            describe_embedding_config,
+            resolve_embedding_config_with_fallback,
+        )
+
+        # 用与构建链路相同的解析（模型管理默认优先、env 兜底），
+        # 日志展示的才是真实生效端点，provider=model_mgmt:* 即来自模型管理
+        info = describe_embedding_config(resolve_embedding_config_with_fallback(None))
+        return RuntimeError(
+            f"{type(exc).__name__}: {exc}"
+            f"（向量化步：嵌入服务不可达或不可用"
+            f" provider={info['provider']} base_url={info['base_url']}"
+            f" model={info['model']} dimension={info['dimension']}"
+            f" api_key_configured={info['api_key_configured']}）"
+        )
+    except Exception:  # noqa: BLE001 - 附加上下文失败时不影响原始异常
+        return exc
 
 
 def _resolve_pipeline_config(db: Session, collection: str) -> Optional[dict]:
@@ -122,14 +150,30 @@ def run_document_ingest(
                 )
             return len(chunks)
 
-        count = asyncio.run(_insert())
+        # 4) 向量化 + 落库：单独标注步名（§10.7 单步可观测），
+        #    失败时 error_detail 形如 [vectorize] …，不再笼统落成 [pipeline]
+        try:
+            count = asyncio.run(_insert())
+        except PipelineStepError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - 标注步名后交由外层统一落库
+            db.rollback()
+            raise PipelineStepError("vectorize", _embed_failure(exc)) from exc
 
         doc.status = "completed"
         doc.segment_count = count
+        # 记录本次执行的各步摘要（parser/chunker 与产出数量），供「流程」视图展示
+        doc.meta = {
+            **(doc.meta or {}),
+            "pipeline_steps": result.steps + [
+                {"step": "vectorize", "chunks": count},
+            ],
+            "failed_step": None,
+        }
         db.commit()
         return count
     except PipelineStepError as exc:
-        # §10.7 单步可观测：error_detail 带具体步名（parse/clean/chunk）
+        # §10.7 单步可观测：error_detail 带具体步名（parse/clean/chunk/vectorize）
         db.rollback()
         _fail(db, doc_id, exc.step, exc)
         raise

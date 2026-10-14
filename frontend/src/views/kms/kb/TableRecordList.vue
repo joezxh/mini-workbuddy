@@ -18,7 +18,12 @@
       size="small"
       :data-source="rows"
       :columns="columns"
-      :pagination="{ pageSize: 10, size: 'small' }"
+      :pagination="{
+        pageSize: 5,
+        size: 'small',
+        showSizeChanger: true,
+        pageSizeOptions: ['5', '10', '20', '50'],
+      }"
       :loading="loading"
       row-key="id"
     >

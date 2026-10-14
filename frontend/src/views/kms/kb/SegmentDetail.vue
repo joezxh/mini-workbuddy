@@ -57,7 +57,7 @@
       </a-modal>
 
       <!-- 引用来源 -->
-      <a-modal v-model:open="citeOpen" :title="t('kbMgmt.citations')" :footer="null" width="640">
+      <a-modal v-model:open="citeOpen" :title="t('kbMgmt.citations')" :footer="null" width="460">
         <a-spin v-if="citeLoading" />
         <template v-else-if="citations">
           <a-descriptions size="small" :column="1" bordered>
@@ -108,15 +108,22 @@ const loading = ref(false)
 const items = ref<KbSegment[]>([])
 const total = ref(0)
 const page = ref(1)
-const page_size = 20
+const pageSize = ref(5)
 
 const pagination = computed(() => ({
   current: page.value,
-  pageSize: page_size,
+  pageSize: pageSize.value,
   total: total.value,
   size: 'small' as const,
+  showSizeChanger: true,
+  pageSizeOptions: ['5', '10', '20', '50'],
   onChange: (p: number) => {
     page.value = p
+    load()
+  },
+  onShowSizeChange: (_current: number, size: number) => {
+    page.value = 1
+    pageSize.value = size
     load()
   },
 }))
@@ -146,7 +153,7 @@ async function load() {
   try {
     const res: any = await listDocumentSegments(props.documentId, {
       page: page.value,
-      page_size,
+      page_size: pageSize.value,
     })
     items.value = res.items || []
     total.value = res.total || 0

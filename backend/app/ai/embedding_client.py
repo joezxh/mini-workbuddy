@@ -1,18 +1,22 @@
 """Embedding 客户端
 
-配置模式（显式二选一，互不降级）：
+配置模式（显式二选一）：
   A. DB 模式（按 code 精确选择）：
      调用方传入 code → 在 ai_chat_model 表按 code 精确匹配（status=1），
      关联 ai_api_key 获取 url/api_key，构建 OpenAI 兼容后端。
      字段映射：ai_api_key.url → base_url, ai_api_key.api_key → api_key,
               ai_chat_model.model → model, ai_chat_model.dimensions → dimension。
-  B. .env 模式（不传 code）：
-     依据 settings.EMBEDDING_PROVIDER 构建后端（gpustack / dashscope）。
+  B. 默认模式（不传 code）：
+     模型管理里的默认「向量化模型」（type=5 + is_default，含连通性探测）优先，
+     未配置或探测不通时回落 settings.EMBEDDING_PROVIDER 环境变量配置
+     （gpustack / nvidia / dashscope）。回落逻辑复用
+     app.services.kb.embedding_config.resolve_embedding_config_with_fallback。
 
-两种模式互不降级：DB 模式失败则抛 ValueError，不会回退到 .env。
+按 code 的 DB 模式失败不降级（抛 ValueError）；默认模式的 DB 优先级内置降级。
 
-支持的提供商（.env 模式）：
+支持的提供商（环境变量兜底）：
   - gpustack  ：本地 GPUStack 部署（OpenAI 兼容模式，httpx 调用）
+  - nvidia    ：NVIDIA NIM（OpenAI 兼容模式，httpx 调用）
   - dashscope ：阿里百炼原生 DashScope HTTP API（非 OpenAI 兼容模式，httpx 调用）
 """
 from __future__ import annotations
@@ -269,8 +273,9 @@ def _try_build_from_db_by_code(code: str) -> Optional[_BaseEmbeddingBackend]:
             api_key_obj = db.query(AiApiKey).filter(
                 AiApiKey.id == model.key_id, AiApiKey.status == 1
             ).first()
-            if not api_key_obj or not api_key_obj.url or not api_key_obj.api_key:
-                logger.warning(f"[EmbeddingClient] code={code} 关联 API Key 不可用")
+            # url 必填；api_key 允许为空（本地部署无鉴权服务用占位值）
+            if not api_key_obj or not api_key_obj.url:
+                logger.warning(f"[EmbeddingClient] code={code} 关联 API 地址不可用")
                 return None
 
             api_url = api_key_obj.url.rstrip("/")
@@ -279,7 +284,7 @@ def _try_build_from_db_by_code(code: str) -> Optional[_BaseEmbeddingBackend]:
                 api_url = api_url + "/v1"
             backend = _OpenAICompatibleBackend(
                 api_url=api_url,
-                api_key=api_key_obj.api_key,
+                api_key=api_key_obj.api_key or "not-required",
                 model=model.model,
                 dimension=model.dimensions or 768,
             )
@@ -299,54 +304,39 @@ def _try_build_from_db_by_code(code: str) -> Optional[_BaseEmbeddingBackend]:
 
 
 def _build_backend_from_env() -> _BaseEmbeddingBackend:
-    """依据 .env 配置创建 Embedding 后端（.env 模式）"""
-    provider = (settings.EMBEDDING_PROVIDER or "gpustack").lower().strip()
+    """构建默认 Embedding 后端：模型管理默认向量化模型优先，环境变量配置兜底。
 
-    if provider == "dashscope":
-        api_key = settings.ALIBABA_API_KEY
-        if not api_key:
-            raise ValueError(
-                "EMBEDDING_PROVIDER=dashscope 但 ALIBABA_API_KEY 未配置，"
-                "请在 .env 中设置 ALIBABA_API_KEY"
-            )
-        logger.info(
-            f"[EmbeddingClient] 降级 .env 百炼 DashScope API："
-            f"model={settings.DASHSCOPE_EMBEDDING_MODEL}, "
-            f"dim={settings.DASHSCOPE_EMBEDDING_DIMENSION}"
-        )
-        return _DashScopeBackend(
-            api_key=api_key,
-            model=settings.DASHSCOPE_EMBEDDING_MODEL,
-            dimension=settings.DASHSCOPE_EMBEDDING_DIMENSION,
-        )
-
-    if provider == "nvidia":
-        # NVIDIA NIM：OpenAI 兼容协议（此前 nvidia 会被误落到 GPUStack 分支）
-        logger.info(
-            f"[EmbeddingClient] 降级 .env NVIDIA NIM："
-            f"url={settings.NVIDIA_API_URL}, "
-            f"model={settings.NVIDIA_EMBEDDING_MODEL}, "
-            f"dim={settings.NVIDIA_EMBEDDING_DIMENSION}"
-        )
-        return _OpenAICompatibleBackend(
-            api_url=settings.NVIDIA_API_URL,
-            api_key=settings.NVIDIA_API_KEY,
-            model=settings.NVIDIA_EMBEDDING_MODEL,
-            dimension=settings.NVIDIA_EMBEDDING_DIMENSION,
-        )
-
-    # 默认 gpustack
-    logger.info(
-        f"[EmbeddingClient] 降级 .env GPUStack："
-        f"url={settings.GPUSTACK_API_URL}, "
-        f"model={settings.GPUSTACK_EMBEDDING_MODEL}, "
-        f"dim={settings.GPUSTACK_EMBEDDING_DIMENSION}"
+    复用 ``embedding_config.resolve_embedding_config_with_fallback``：
+      1. 模型管理默认向量化模型（type=5/is_default/status=1）配置完整
+         且连通性探测通过时使用它；
+      2. 未配置 / 不完整 / 探测不通时回落 settings.EMBEDDING_PROVIDER 映射。
+    """
+    from app.services.kb.embedding_config import (
+        PROTOCOL_DASHSCOPE,
+        resolve_embedding_config_with_fallback,
     )
+
+    cfg = resolve_embedding_config_with_fallback(None)
+    logger.info(
+        f"[EmbeddingClient] 默认后端来源={cfg.provider} protocol={cfg.protocol} "
+        f"url={cfg.base_url} model={cfg.model} dim={cfg.dimension}"
+    )
+    if cfg.protocol == PROTOCOL_DASHSCOPE:
+        if not cfg.api_key:
+            raise ValueError(
+                "当前嵌入配置为 dashscope 原生协议但未配置 API Key，"
+                "请在模型管理中配置默认向量化模型或在 .env 中设置 ALIBABA_API_KEY"
+            )
+        return _DashScopeBackend(
+            api_key=cfg.api_key,
+            model=cfg.model,
+            dimension=cfg.dimension,
+        )
     return _OpenAICompatibleBackend(
-        api_url=settings.GPUSTACK_API_URL,
-        api_key=settings.GPUSTACK_API_KEY,
-        model=settings.GPUSTACK_EMBEDDING_MODEL,
-        dimension=settings.GPUSTACK_EMBEDDING_DIMENSION,
+        api_url=cfg.base_url,
+        api_key=cfg.api_key or "not-required",
+        model=cfg.model,
+        dimension=cfg.dimension,
     )
 
 

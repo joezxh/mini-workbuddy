@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>外部知识库文档导入 · 界面预览</title>
+<style>
+  :root{
+    --primary:#3371fc; --primary-hover:#2b5fd9; --primary-active:#2450bd;
+    --bg:#f5f7fa; --card:#ffffff; --subtle:#f7f9fc;
+    --text:#1f2329; --text-2:#646a73; --text-3:#8f959e;
+    --border:#e5e6eb; --border-2:#d0d5dd;
+    --tint:#e6f0ff;
+    --success:#52c41a; --success-bg:#f6ffed; --success-br:#b7eb8f;
+    --error:#ff4d4f; --error-bg:#fff2f0; --error-br:#ffccc7;
+    --warn:#faad14; --warn-bg:#fffbe6; --warn-br:#ffe58f;
+    --info:#3371fc; --info-bg:#f0f6ff;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow:0 4px 12px rgba(16,24,40,.08);
+    --shadow-lg:0 12px 32px rgba(16,24,40,.14);
+    --r:8px; --r-sm:6px;
+    --t:0.18s cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    background:var(--bg); color:var(--text); font-size:13px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  ::selection{background:var(--tint)}
+
+  /* ── 预览页头 ─────────────────────────────── */
+  .preview-header{
+    position:sticky; top:0; z-index:60;
+    background:linear-gradient(135deg,#1b2a4a 0%,#24365e 55%,#2b4a86 100%);
+    color:#fff; padding:18px 28px;
+    box-shadow:0 2px 14px rgba(16,24,40,.18);
+  }
+  .preview-header h1{font-size:17px;font-weight:600;letter-spacing:.2px}
+  .preview-header p{font-size:12.5px;opacity:.82;margin-top:3px}
+  .preview-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+
+  /* ── 通用按钮 ─────────────────────────────── */
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;justify-content:center;
+    height:32px;padding:0 15px;border-radius:var(--r-sm);
+    border:1px solid var(--border-2);background:#fff;color:var(--text);
+    cursor:pointer;transition:all var(--t);font-weight:500;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+  .btn-text{border-color:transparent;background:transparent;color:var(--primary)}
+  .btn-text:hover{background:var(--tint);border-color:transparent}
+  .btn-lg{height:38px;padding:0 20px;font-size:14px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+  .btn:disabled:hover{border-color:var(--border-2);color:var(--text);background:#fff}
+  .btn-primary:disabled:hover{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  /* ── 布局 ─────────────────────────────────── */
+  .stage{padding:24px 28px 60px;max-width:1360px;margin:0 auto}
+  .stage-title{font-size:15px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .stage-title .tag-ver{font-size:11px;font-weight:500;color:var(--primary);background:var(--tint);padding:2px 8px;border-radius:20px}
+  .stage-desc{font-size:12.5px;color:var(--text-2);margin-bottom:14px}
+
+  /* ── 模拟工作台两栏 ───────────────────────── */
+  .workbench{
+    display:grid;grid-template-columns:264px 1fr;gap:16px;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden;height:560px;
+  }
+  .wb-side{border-right:1px solid var(--border);background:var(--subtle);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .wb-side-head{display:flex;justify-content:flex-end;gap:6px}
+  .wb-icon-btn{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--border-2);background:#fff;cursor:pointer;color:var(--text-2);transition:all var(--t);display:inline-flex;align-items:center;justify-content:center}
+  .wb-icon-btn:hover{color:var(--primary);border-color:var(--primary)}
+  .wb-tree{flex:1;background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;overflow:auto}
+  .wb-tree-h{font-size:11px;color:var(--text-3);letter-spacing:.6px;text-transform:uppercase;padding:4px 6px 8px}
+  .tnode{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--r-sm);cursor:pointer;transition:background var(--t);font-size:12.5px}
+  .tnode:hover{background:var(--tint)}
+  .tnode.active{background:var(--tint);color:var(--primary);font-weight:500}
+  .tnode .caret{width:12px;color:var(--text-3);flex-shrink:0;font-size:10px}
+  .tnode .ti{width:15px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+  .tnode .ti svg{width:13px;height:13px}
+  .ic-wiki{color:var(--primary)} .ic-gen{color:#52c41a} .ic-ext{color:#fa8c16}
+  .tnode .cnt{margin-left:auto;font-size:11px;color:var(--text-3);background:var(--bg);padding:0 6px;border-radius:10px}
+
+  .wb-main{overflow:auto;padding:16px;background:#fff}
+
+  /* ── 面板头 ───────────────────────────────── */
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .pane-head h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .pane-sub{font-size:12px;color:var(--text-2);margin-top:2px}
+
+  /* ── 统计卡 ───────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .stat{border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;background:var(--card);transition:all var(--t)}
+  .stat:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+  .stat .k{font-size:11.5px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+  .stat .v{font-size:20px;font-weight:600;line-height:1.3;margin-top:2px}
+  .stat.s .v{color:var(--success)} .stat.p .v{color:var(--primary)}
+  .stat.d .v{color:var(--text-2)} .stat.e .v{color:var(--error)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot.s{background:var(--success)} .dot.p{background:var(--primary)}
+  .dot.d{background:var(--border-2)} .dot.e{background:var(--error)}
+
+  /* ── 表格 ─────────────────────────────────── */
+  table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .tbl thead th{
+    text-align:left;padding:9px 12px;background:var(--subtle);
+    color:var(--text-2);font-weight:500;font-size:11.5px;letter-spacing:.3px;
+    border-bottom:1px solid var(--border);white-space:nowrap;
+  }
+  .tbl thead th:first-child{border-top-left-radius:var(--r-sm)}
+  .tbl thead th:last-child{border-top-right-radius:var(--r-sm)}
+  .tbl tbody td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .tbl tbody tr{transition:background var(--t)}
+  .tbl tbody tr:hover{background:var(--subtle)}
+  .tbl .doc-name{display:flex;align-items:center;gap:8px;font-weight:500}
+  .tbl .muted{color:var(--text-3);font-size:11.5px}
+
+  /* ── 标签 ─────────────────────────────────── */
+  .tag{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 8px;border-radius:4px;font-size:11px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+  .tag-feishu{background:#e8f3ff;color:#1a5fd6;border-color:#c3dcff}
+  .tag-dingtalk{background:#eaf6ff;color:#0b7ac4;border-color:#c2e6fb}
+  .tag-yuque{background:#f5f0ff;color:#6b3fd4;border-color:#ddd0fb}
+  .tag-wecom{background:#eafaf0;color:#12874a;border-color:#c4edd6}
+  .tag-notion{background:#f4f4f4;color:#333;border-color:#dcdcdc}
+  .tag-ok{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .tag-run{background:var(--info-bg);color:var(--primary);border-color:#bcd8ff}
+  .tag-err{background:var(--error-bg);color:#cf1322;border-color:var(--error-br)}
+  .tag-idle{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+
+  /* ── 空态 ─────────────────────────────────── */
+  .empty{padding:46px 20px;text-align:center;color:var(--text-3)}
+  .empty .ei{font-size:34px;opacity:.5;margin-bottom:8px}
+  .empty p{font-size:12.5px;margin-bottom:14px}
+
+  /* ── 遮罩与弹窗 ───────────────────────────── */
+  .mask{position:fixed;inset:0;background:rgba(16,24,40,.45);backdrop-filter:blur(2px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow:auto}
+  .mask.on{display:flex;animation:fade .18s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    background:#fff;border-radius:12px;box-shadow:var(--shadow-lg);
+    width:880px;max-width:100%;animation:pop .22s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(-12px) scale(.985)}to{opacity:1;transform:none}}
+  .modal-head{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .modal-head h3{font-size:15px;font-weight:600}
+  .modal-head .sub{font-size:12px;color:var(--text-2);margin-top:1px}
+  .x{border:none;background:transparent;font-size:19px;color:var(--text-3);cursor:pointer;line-height:1;padding:4px 6px;border-radius:4px;transition:all var(--t)}
+  .x:hover{background:var(--bg);color:var(--text)}
+  .modal-body{padding:20px 22px;max-height:66vh;overflow:auto}
+  .modal-foot{padding:13px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--subtle);border-radius:0 0 12px 12px}
+  .foot-right{display:flex;gap:8px}
+
+  /* ── 步骤条 ───────────────────────────────── */
+  .steps{display:flex;gap:0;margin-bottom:22px;padding:0 4px}
+  .step{flex:1;display:flex;flex-direction:column;gap:6px;position:relative;cursor:default}
+  .step .sbar{height:3px;border-radius:2px;background:var(--border);transition:background .25s}
+  .step .snum{width:24px;height:24px;border-radius:50%;background:var(--border);color:var(--text-3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;transition:all .25s}
+  .step .stx{font-size:12px;color:var(--text-3);transition:color .25s}
+  .step.done .sbar{background:var(--primary)} .step.done .snum{background:var(--primary);color:#fff}
+  .step.done .stx{color:var(--text-2)}
+  .step.cur .sbar{background:var(--primary)} .step.cur .snum{background:var(--primary);color:#fff;box-shadow:0 0 0 4px var(--tint)}
+  .step.cur .stx{color:var(--primary);font-weight:600}
+  .step.clickable{cursor:pointer}
+  .step.clickable:hover .stx{color:var(--primary)}
+
+  .sec-title{font-size:13px;font-weight:600;margin-bottom:3px}
+  .sec-desc{font-size:12px;color:var(--text-2);margin-bottom:14px}
+
+  /* ── 平台卡片 ─────────────────────────────── */
+  .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pcard{
+    border:1.5px solid var(--border);border-radius:var(--r);padding:13px;
+    cursor:pointer;transition:all var(--t);background:#fff;position:relative;
+  }
+  .pcard:hover{border-color:var(--primary);box-shadow:var(--shadow);transform:translateY(-1px)}
+  .pcard.on{border-color:var(--primary);background:var(--tint);box-shadow:0 0 0 3px rgba(51,113,252,.1)}
+  .pcard .logo{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;margin-bottom:9px}
+  .pcard .pn{font-size:13px;font-weight:600}
+  .pcard .pd{font-size:11.5px;color:var(--text-2);margin-top:2px;line-height:1.45}
+  .pcard .tick{position:absolute;top:9px;right:9px;width:17px;height:17px;border-radius:50%;background:var(--primary);color:#fff;font-size:10px;display:none;align-items:center;justify-content:center}
+  .pcard.on .tick{display:flex}
+
+  /* ── 表单 ─────────────────────────────────── */
+  .frow{margin-bottom:14px}
+  .flabel{display:block;font-size:12.5px;font-weight:500;margin-bottom:5px}
+  .flabel .req{color:var(--error);margin-left:2px}
+  .finput{
+    width:100%;height:34px;padding:0 11px;border:1px solid var(--border-2);
+    border-radius:var(--r-sm);background:#fff;outline:none;transition:all var(--t);
+  }
+  .finput:hover{border-color:var(--primary)}
+  .finput:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.12)}
+  .finput::placeholder{color:var(--text-3)}
+  select.finput{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238f959e' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");background-repeat:no-repeat;background-position:right 11px center;padding-right:28px}
+  .fwrap{position:relative}
+  .fwrap .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:11px;padding:3px 5px;border-radius:4px;transition:color var(--t)}
+  .fwrap .eye:hover{color:var(--primary)}
+  .fhint{font-size:11.5px;color:var(--text-3);margin-top:4px}
+
+  /* ── 提示条 ───────────────────────────────── */
+  .alert{display:flex;gap:8px;padding:9px 12px;border-radius:var(--r-sm);font-size:12.5px;border:1px solid;margin-bottom:12px;align-items:flex-start;line-height:1.55}
+  .alert .ai{flex-shrink:0;font-size:13px;line-height:1.4}
+  .alert.ok{background:var(--success-bg);border-color:var(--success-br);color:#237804}
+  .alert.err{background:var(--error-bg);border-color:var(--error-br);color:#a8071a}
+  .alert.info{background:var(--info-bg);border-color:#bcd8ff;color:#0958d9}
+  .alert.warn{background:var(--warn-bg);border-color:var(--warn-br);color:#874d00}
+
+  /* ── 文档浏览 ─────────────────────────────── */
+  .browse{display:grid;grid-template-columns:1fr 260px;gap:12px}
+  .btree{border:1px solid var(--border);border-radius:var(--r);padding:9px;height:270px;overflow:auto;background:#fff}
+  .btree-h{display:flex;align-items:center;justify-content:space-between;padding:3px 5px 8px;font-size:11.5px;color:var(--text-2);border-bottom:1px solid var(--border);margin-bottom:6px}
+  .dnode{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:var(--r-sm);cursor:pointer;font-size:12.5px;transition:background var(--t)}
+  .dnode:hover{background:var(--tint)}
+  .dnode .caret{width:11px;font-size:9px;color:var(--text-3);transition:transform .18s}
+  .dnode.open .caret{transform:rotate(90deg)}
+  .dnode .di{color:var(--text-3);display:inline-flex}
+  .dnode .di svg{width:13px;height:13px}
+  .dnode .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dnode .dt{font-size:10.5px;color:var(--text-3);flex-shrink:0}
+  .dnode .dmeta{font-size:10.5px;color:var(--text-3);flex-shrink:0;margin-left:6px}
+  input[type=checkbox]{width:14px;height:14px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+  .sel-list{border:1px solid var(--border);border-radius:var(--r);padding:9px;height:270px;overflow:auto;background:var(--subtle)}
+  .sel-list h4{font-size:11.5px;color:var(--text-2);font-weight:500;padding:2px 3px 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between}
+  .sel-item{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:var(--r-sm);font-size:12px;background:#fff;border:1px solid var(--border);margin-bottom:5px;transition:all var(--t)}
+  .sel-item:hover{border-color:var(--primary)}
+  .sel-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sel-item .rm{border:none;background:transparent;color:var(--text-3);cursor:pointer;font-size:13px;line-height:1;padding:1px 3px;border-radius:3px}
+  .sel-item .rm:hover{color:var(--error);background:var(--error-bg)}
+
+  /* ── 切片 ─────────────────────────────────── */
+  .chunk-box{border:1px solid var(--border);border-radius:var(--r);padding:14px;background:var(--subtle)}
+  .cparams{margin-top:12px;display:flex;flex-direction:column;gap:9px}
+  .cparam{display:flex;align-items:center;gap:11px}
+  .cparam .cl{width:148px;font-size:12px;color:var(--text-2);flex-shrink:0}
+  .cparam input[type=text],.cparam input[type=number]{height:30px;padding:0 10px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;transition:all var(--t);font-size:12px}
+  .cparam input[type=number]{width:132px}
+  .cparam input[type=text]{width:210px}
+  .cparam input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.12)}
+  .switch{width:38px;height:20px;border-radius:12px;background:var(--border-2);position:relative;cursor:pointer;transition:background var(--t);border:none;flex-shrink:0}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform var(--t);box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .switch.on{background:var(--primary)}
+  .switch.on::after{transform:translateX(18px)}
+
+  /* ── 结果 ─────────────────────────────────── */
+  .result{text-align:center;padding:8px 0 18px}
+  .result .ricon{width:52px;height:52px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:25px}
+  .result .ricon.ok{background:var(--success-bg);color:var(--success);border:1.5px solid var(--success-br)}
+  .result .rtitle{font-size:15px;font-weight:600}
+  .result .rdesc{font-size:12.5px;color:var(--text-2);margin-top:3px}
+
+  .note{font-size:11.5px;color:var(--text-3);margin-top:9px;line-height:1.6}
+  code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:11.5px;font-family:ui-monospace,Menlo,Consolas,monospace;color:#c7254e}
+</style>
+</head>
+<body>
+
+<div class="preview-header">
+  <h1>外部知识库文档导入 · 界面预览</h1>
+  <p>覆盖需求 ②外部平台文档导入向导　③随时重新选择文档（手动重导入）　④编辑锁定类型</p>
+  <div class="preview-actions">
+    <button class="btn btn-primary" onclick="openWizard(0)">打开导入向导</button>
+    <button class="btn" onclick="openPane('list')">面板：有文档</button>
+    <button class="btn" onclick="openPane('empty')">面板：空态</button>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- ══ 外部知识库面板 ══ -->
+  <div class="stage-title">外部知识库面板 <span class="tag-ver">ExternalLinkPane.vue 改版</span></div>
+  <div class="stage-desc">需求 ③：展示已导入的外部文档；顶部「重新选择文档」可随时再次从外部平台挑选文档导入 —— 已存在的覆盖，不存在的新建。</div>
+
+  <div class="workbench">
+    <!-- 左树 -->
+    <div class="wb-side">
+      <div class="wb-side-head">
+        <button class="wb-icon-btn" title="添加分类">＋</button>
+        <button class="wb-icon-btn" title="添加知识库">📘</button>
+      </div>
+      <div class="wb-tree">
+        <div class="wb-tree-h">知识库</div>
+        <div class="tnode"><span class="caret">▾</span><span class="ti" style="color:#8f959e">📁</span>产品文档</div>
+        <div class="tnode active"><span class="caret"></span><span class="ti ic-ext">🔗</span>外部知识库-研发<span class="cnt">5</span></div>
+        <div class="tnode"><span class="caret"></span><span class="ti ic-wiki">📖</span>团队 Wiki</div>
+        <div class="tnode"><span class="caret"></span><span class="ti ic-gen">📘</span>通用知识库-制度<span class="cnt">12</span></div>
+        <div class="tnode"><span class="caret">▸</span><span class="ti" style="color:#8f959e">📁</span>未分类<span class="cnt">2</span></div>
+      </div>
+    </div>
+
+    <!-- 右侧内容 -->
+    <div class="wb-main">
+      <div class="pane-head">
+        <div>
+          <h2>🔗 外部知识库</h2>
+          <div class="pane-sub">来源：飞书 · 最后同步 2026-10-13 10:24 · 共 5 篇文档</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="toast('已开始全量同步（手动触发）')">⟳ 全量同步</button>
+          <button class="btn btn-primary" onclick="openWizard(2)">＋ 重新选择文档</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat s"><div class="k"><span class="dot s"></span>已导入</div><div class="v">5</div></div>
+        <div class="stat p"><div class="k"><span class="dot p"></span>本次新增</div><div class="v">2</div></div>
+        <div class="stat d"><div class="k"><span class="dot d"></span>未变更</div><div class="v">3</div></div>
+        <div class="stat e"><div class="k"><span class="dot e"></span>失败</div><div class="v">0</div></div>
+      </div>
+
+      <!-- 列表态 -->
+      <div id="paneList">
+        <table class="tbl">
+          <thead><tr><th style="width:38%">文档标题</th><th style="width:16%">来源平台</th><th style="width:15%">外部更新时间</th><th style="width:13%">状态</th><th style="width:18%">操作</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="doc-name">📄 服务端架构设计说明</div></td>
+              <td><span class="tag tag-feishu">飞书</span></td>
+              <td class="muted">2026-10-12 18:02</td>
+              <td><span class="tag tag-ok">● 已同步</span></td>
+              <td><button class="btn btn-text" onclick="toast('已打开飞书原文')">查看原文</button> <button class="btn btn-text" onclick="toast('已标记需重新导入')">重导入</button></td>
+            </tr>
+            <tr>
+              <td><div class="doc-name">📄 接入指南（2026 Q4）</div></td>
+              <td><span class="tag tag-feishu">飞书</span></td>
+              <td class="muted">2026-10-13 09:41</td>
+              <td><span class="tag tag-ok">● 已同步</span></td>
+              <td><button class="btn btn-text" onclick="toast('已打开飞书原文')">查看原文</button> <button class="btn btn-text" onclick="toast('已标记需重新导入')">重导入</button></td>
+            </tr>
+            <tr>
+              <td><div class="doc-name">📄 语雀 · API 约定</div></td>
+              <td><span class="tag tag-yuque">语雀</span></td>
+              <td class="muted">2026-10-10 11:20</td>
+              <td><span class="tag tag-run">◐ 切片中</span></td>
+              <td><button class="btn btn-text" onclick="toast('正在处理中，暂不可重导入')">重导入</button></td>
+            </tr>
+            <tr>
+              <td><div class="doc-name">📄 钉钉 · 故障复盘记录</div></td>
+              <td><span class="tag tag-dingtalk">钉钉文档</span></td>
+              <td class="muted">2026-10-08 15:55</td>
+              <td><span class="tag tag-ok">● 已同步</span></td>
+              <td><button class="btn btn-text" onclick="toast('已打开钉钉原文')">查看原文</button> <button class="btn btn-text" onclick="toast('已标记需重新导入')">重导入</button></td>
+            </tr>
+            <tr>
+              <td><div class="doc-name">📄 企微 · 报销制度</div></td>
+              <td><span class="tag tag-wecom">企业微信</span></td>
+              <td class="muted">2026-09-30 08:12</td>
+              <td><span class="tag tag-idle">○ 待处理</span></td>
+              <td><button class="btn btn-text" onclick="toast('已标记需重新导入')">重导入</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 空态 -->
+      <div id="paneEmpty" style="display:none">
+        <div class="empty">
+          <div class="ei">🔗</div>
+          <p>该外部知识库尚未导入任何文档<br>选择一个外部平台，把它的文档拉进来</p>
+          <button class="btn btn-primary btn-lg" onclick="openWizard(0)">选择平台并导入</button>
+        </div>
+      </div>
+
+      <div class="note">
+        说明：<code>重新选择文档</code> 打开同一个向导并<b>预填平台与已选节点</b>；再次导入时按 <code>external_doc_id</code> 匹配映射表 —— <b>内容哈希未变则跳过（不重复调嵌入）</b>，变了则<b>覆盖同一文档并重新切片</b>，映射表里没有的则<b>新建文件</b>。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 五步向导 ══ -->
+<div class="mask" id="mask">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="wzTitle">导入外部知识库文档</h3>
+        <div class="sub" id="wzSub">飞书 · 研发知识库</div>
+      </div>
+      <button class="x" onclick="closeWizard()">×</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- 步骤条 -->
+      <div class="steps">
+        <div class="step cur clickable" data-s="0" onclick="go(0)"><div class="sbar"></div><div style="display:flex;align-items:center;gap:8px"><div class="snum">1</div><div class="stx">选择平台</div></div></div>
+        <div class="step" data-s="1" onclick="go(1)"><div class="sbar"></div><div style="display:flex;align-items:center;gap:8px"><div class="snum">2</div><div class="stx">配置凭据</div></div></div>
+        <div class="step" data-s="2"><div class="sbar"></div><div style="display:flex;align-items:center;gap:8px"><div class="snum">3</div><div class="stx">选择文档</div></div></div>
+        <div class="step" data-s="3" onclick="go(3)"><div class="sbar"></div><div style="display:flex;align-items:center;gap:8px"><div class="snum">4</div><div class="stx">切片方案</div></div></div>
+        <div class="step" data-s="4"><div class="sbar"></div><div style="display:flex;align-items:center;gap:8px"><div class="snum">5</div><div class="stx">导入结果</div></div></div>
+      </div>
+
+      <!-- STEP 1 选择平台 -->
+      <div class="pane" data-p="0">
+        <div class="sec-title">选择要导入的平台</div>
+        <div class="sec-desc">支持 5 个主流协作文档平台。各平台的凭据字段会按平台自动切换。</div>
+        <div class="pgrid" id="pgrid"></div>
+        <div class="alert info" style="margin-top:14px">
+          <span class="ai">ℹ</span>
+          <div>各平台接口域名在服务端<b>硬编码</b>，不接受自定义地址（防 SSRF）；令牌只写库不回传前端。</div>
+        </div>
+      </div>
+
+      <!-- STEP 2 凭据 -->
+      <div class="pane" data-p="1" style="display:none">
+        <div class="sec-title" id="crTitle">配置访问凭据</div>
+        <div class="sec-desc" id="crDesc">填写应用凭据后测试连通性，连通成功才能继续选择文档。</div>
+        <div id="credForm"></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+          <button class="btn btn-primary" id="btnTest" onclick="testConn()">测试连通</button>
+          <span style="font-size:11.5px;color:var(--text-3)">令牌有效期 2 小时，服务端自动缓存复用</span>
+        </div>
+        <div id="testResult" style="margin-top:12px"></div>
+      </div>
+
+      <!-- STEP 3 选文档 -->
+      <div class="pane" data-p="2" style="display:none">
+        <div class="sec-title">浏览并选择要导入的文档</div>
+        <div class="sec-desc" id="bdDesc">点击目录展开下级；勾选文档加入待导入清单。已导入过的文档会标注状态。</div>
+        <div class="browse">
+          <div class="btree">
+            <div class="btree-h"><span id="treePath">研发知识库</span><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" onchange="selAll(this.checked)"> 全选本层</label></div>
+            <div id="btree"></div>
+          </div>
+          <div class="sel-list">
+            <h4><span>待导入清单</span><span id="selCount" style="color:var(--primary);font-weight:600">0 篇</span></h4>
+            <div id="selItems"></div>
+          </div>
+        </div>
+        <div class="note">目录仅按需展开（懒加载），不会一次性拉全量；导入时按选中清单逐篇处理，单篇失败不影响其它文档。</div>
+      </div>
+
+      <!-- STEP 4 切片 -->
+      <div class="pane" data-p="3" style="display:none">
+        <div class="sec-title">设置切片方案</div>
+        <div class="sec-desc">导入的正文会按此方案切分并向量化。参数由后端 chunker JSON Schema 动态渲染。</div>
+        <div class="chunk-box">
+          <div class="frow" style="margin-bottom:0">
+            <label class="flabel">切片方式<span class="req">*</span></label>
+            <select class="finput" style="max-width:300px" onchange="onChunker(this.value)">
+              <option value="approx_token">近似切分（按 token 近似，通用文本）</option>
+              <option value="recursive">递归切分（按分隔符递归，尊重段落结构）</option>
+              <option value="qa">问答对切分（不适用于外部文档）</option>
+            </select>
+          </div>
+          <div class="cparams" id="cparams"></div>
+        </div>
+        <div class="alert info" style="margin-top:12px"><span class="ai">ℹ</span><div id="chunkHint">按 token 数量近似等长切分，适合结构相对均匀的说明性文档。</div></div>
+        <div class="frow" style="margin-top:4px">
+          <label class="flabel">嵌入模型</label>
+          <select class="finput" style="max-width:300px">
+            <option>text-embedding-v4（默认，768 维）</option>
+            <option>text-embedding-v4-large（高维）</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- STEP 5 结果 -->
+      <div class="pane" data-p="4" style="display:none">
+        <div class="result">
+          <div class="ricon ok">✓</div>
+          <div class="rtitle">导入完成</div>
+          <div class="rdesc">共处理 5 篇文档 · 新增 2 · 更新 1 · 未变更 2 · 失败 0</div>
+        </div>
+        <div class="stats">
+          <div class="stat s"><div class="k"><span class="dot s"></span>新增</div><div class="v">2</div></div>
+          <div class="stat p"><div class="k"><span class="dot p"></span>覆盖更新</div><div class="v">1</div></div>
+          <div class="stat d"><div class="k"><span class="dot d"></span>未变更</div><div class="v">2</div></div>
+          <div class="stat e"><div class="k"><span class="dot e"></span>失败</div><div class="v">0</div></div>
+        </div>
+        <table class="tbl">
+          <thead><tr><th style="width:44%">文档标题</th><th style="width:16%">动作</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td class="doc-name">📄 服务端架构设计说明</td><td><span class="tag tag-ok">覆盖</span></td><td class="muted">内容哈希变化，已重新切片（复用原文档 uuid，不产生重复）</td></tr>
+            <tr><td class="doc-name">📄 接入指南（2026 Q4）</td><td><span class="tag tag-idle">未变更</span></td><td class="muted">内容哈希一致，跳过嵌入</td></tr>
+            <tr><td class="doc-name">📄 语雀 · API 约定</td><td><span class="tag tag-ok">新增</span></td><td class="muted">新建文档，正在后台切片</td></tr>
+            <tr><td class="doc-name">📄 钉钉 · 故障复盘记录</td><td><span class="tag tag-idle">未变更</span></td><td class="muted">内容哈希一致，跳过嵌入</td></tr>
+            <tr><td class="doc-name">📄 企微 · 报销制度</td><td><span class="tag tag-ok">新增</span></td><td class="muted">新建文档，正在后台切片</td></tr>
+          </tbody>
+        </table>
+        <div class="note">导入在后台异步执行切片与向量化，可在右侧面板查看每篇的实时状态；随时可再次「重新选择文档」补充或更新。</div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <div class="foot-left" style="font-size:11.5px;color:var(--text-3)" id="footHint"></div>
+      <div class="foot-right">
+        <button class="btn" onclick="closeWizard()">取消</button>
+        <button class="btn" id="btnPrev" onclick="prev()" style="display:none">上一步</button>
+        <button class="btn btn-primary" id="btnNext" onclick="next()">下一步</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── 平台元数据（模拟后端 /providers 返回：凭据字段 schema） ── */
+const PROVIDERS=[
+  {id:'feishu',name:'飞书',desc:'云文档 / 知识库节点',color:'#1a5fd6',mark:'飞',
+   creds:[{k:'app_id',label:'App ID',ph:'cli_a1b2c3d4',req:true},{k:'app_secret',label:'App Secret',ph:'••••••••',secret:true,req:true},
+          {k:'space_id',label:'知识空间 ID',ph:'space_7089xxxx',hint:'留空则列出你有权限的全部空间'}]},
+  {id:'dingtalk',name:'钉钉文档',desc:'钉钉文档空间',color:'#0b7ac4',mark:'钉',
+   creds:[{k:'app_key',label:'AppKey',ph:'dingxxxxxx',req:true},{k:'app_secret',label:'AppSecret',ph:'••••••••',secret:true,req:true},
+          {k:'space_id',label:'文档空间 ID',ph:'空间 ID（可选）',hint:'留空则列出可访问空间'}]},
+  {id:'yuque',name:'语雀',desc:'仓库文档（X-Auth-Token）',color:'#6b3fd4',mark:'语',
+   creds:[{k:'token',label:'个人访问令牌',ph:'X-Auth-Token',secret:true,req:true},{k:'namespace',label:'仓库 Namespace',ph:'joezxh/handbook',req:true}]},
+  {id:'wecom',name:'企业微信文档',desc:'WeDoc 空间',color:'#12874a',mark:'企',
+   creds:[{k:'corp_id',label:'CorpID',ph:'wwxxxxxxxxxxxx',req:true},{k:'corp_secret',label:'CorpSecret',ph:'••••••••',secret:true,req:true},
+          {k:'space_id',label:'文档空间',ph:'空间名（可选）'}]},
+  {id:'notion',name:'Notion',desc:'Page / Database',color:'#333333',mark:'N',
+   creds:[{k:'secret',label:'Integration Token',ph:'ntn_xxxxxxxx',secret:true,req:true},{k:'root_page',label:'根页面 ID',ph:'可留空，从全部可访问页面搜索',hint:'填写后只在该页面子树内浏览'}]}
+];
+
+/* ── 文档树（模拟 /nodes 返回） ── */
+const TREE={
+  title:'研发知识库',
+  children:[
+    {id:'n1',name:'架构设计',type:'folder',children:[
+      {id:'d1',name:'服务端架构设计说明',type:'doc',updated:'10-12 18:02',imported:true},
+      {id:'d2',name:'数据库分库分表方案',type:'doc',updated:'10-09 09:15',imported:false},
+      {id:'f1',name:'历史归档',type:'folder',children:[
+        {id:'d3',name:'单体架构演进记录',type:'doc',updated:'08-21 11:30',imported:true}]}
+    ]},
+    {id:'n2',name:'接入指南',type:'folder',children:[
+      {id:'d4',name:'接入指南（2026 Q4）',type:'doc',updated:'10-13 09:41',imported:true},
+      {id:'d5',name:'鉴权与限流规范',type:'doc',updated:'10-02 16:20',imported:false}
+    ]},
+    {id:'f2',name:'运维手册',type:'folder',children:[
+      {id:'d6',name:'故障复盘记录',type:'doc',updated:'10-08 15:55',imported:false},
+      {id:'d7',name:'值班与告警配置',type:'doc',updated:'09-25 10:00',imported:false}
+    ]},
+    {id:'d8',name:'团队协作约定',type:'doc',updated:'10-11 14:05',imported:false}
+  ]
+};
+
+/* ── 切片参数 schema（模拟后端 chunker parameters_schema） ── */
+const CHUNKERS={
+  approx_token:{
+    params:{
+      chunk_size:{type:'integer',default:800,label:'每片长度(token)'},
+      overlap:{type:'integer',default:80,label:'重叠长度(token)'},
+      strip:{type:'boolean',default:true,label:'去除多余空白'}
+    },
+    hint:'按 token 数量近似等长切分，适合结构相对均匀的说明性文档。'
+  },
+  recursive:{
+    params:{
+      separators:{type:'string',default:'\\n\\n',label:'分隔符'},
+      chunk_size:{type:'integer',default:1000,label:'每片长度(token)'},
+      keep_title:{type:'boolean',default:true,label:'保留标题层级'}
+    },
+    hint:'递归按分隔符切分，最大限度保留段落结构。'
+  }
+};
+
+let step=0, curProvider=null, tested=false, sel=new Set(), chunker='approx_token';
+
+function openWizard(startStep){
+  document.getElementById('mask').classList.add('on');
+  if(startStep===2){ // 从「重新选择文档」进入：预填平台与已选
+    curProvider=PROVIDERS[0]; tested=true;
+    go(2);
+  }else go(startStep||0);
+}
+function closeWizard(){document.getElementById('mask').classList.remove('on')}
+
+/* 渲染平台卡片 */
+function renderProviders(){
+  document.getElementById('pgrid').innerHTML=PROVIDERS.map(p=>`
+    <div class="pcard${curProvider&&curProvider.id===p.id?' on':''}" onclick="pickProvider('${p.id}')">
+      <div class="tick">✓</div>
+      <div class="logo" style="background:${p.color}">${p.mark}</div>
+      <div class="pn">${p.name}</div><div class="pd">${p.desc}</div>
+    </div>`).join('');
+}
+function pickProvider(id){
+  curProvider=PROVIDERS.find(p=>p.id===id); tested=false;
+  renderProviders(); renderCreds();
+  document.getElementById('wzSub').textContent=curProvider.name;
+  document.getElementById('testResult').innerHTML='';
+  go(0);
+}
+function renderCreds(){
+  if(!curProvider)return;
+  document.getElementById('crTitle').textContent='配置 '+curProvider.name+' 访问凭据';
+  document.getElementById('credForm').innerHTML=curProvider.creds.map(c=>`
+    <div class="frow">
+      <label class="flabel">${c.label}${c.req?'<span class="req">*</span>':''}</label>
+      ${c.secret
+        ? `<div class="fwrap"><input class="finput" type="password" placeholder="${c.ph}"><button class="eye" onclick="tglPw(this)">显示</button></div>`
+        : `<input class="finput" type="text" placeholder="${c.ph}">`}
+      ${c.hint?`<div class="fhint">${c.hint}</div>`:''}
+    </div>`).join('');
+}
+function tglPw(btn){
+  const inp=btn.previousElementSibling;
+  const show=inp.type==='password';
+  inp.type=show?'text':'password';
+  btn.textContent=show?'隐藏':'显示';
+}
+
+/* 测试连通 */
+function testConn(){
+  const btn=document.getElementById('btnTest'); btn.disabled=true; btn.textContent='测试中…';
+  setTimeout(()=>{
+    btn.disabled=false; btn.textContent='测试连通'; tested=true;
+    document.getElementById('testResult').innerHTML=
+      `<div class="alert ok"><span class="ai">✓</span><div><b>连通成功</b>　凭据有效，探测到身份：研发文档管理员（tenant: 7089xxxx）　·　可访问空间 3 个</div></div>`;
+    go(step);
+  },700);
+}
+
+/* 文档树渲染（懒加载） */
+const openSet=new Set(['n1','n2']);
+function renderTree(){
+  const html=(nodes)=>nodes.map(n=>{
+    if(n.type==='folder'){
+      const open=openSet.has(n.id);
+      return `<div class="dnode${open?' open':''}" data-n="${n.id}" onclick="tog('${n.id}')">
+        <span class="caret">▶</span><span class="di">📁</span><span class="nm">${n.name}</span>
+        <span class="dmeta">${n.children.filter(c=>c.type==='doc').length} 篇</span></div>
+        ${open?html(n.children):''}`;
+    }
+    return `<div class="dnode" style="padding-left:22px">
+      <input type="checkbox" ${sel.has(n.id)?'checked':''} onchange="togSel('${n.id}',this.checked,this)">
+      <span class="di">📄</span><span class="nm">${n.name}</span>
+      <span class="dmeta">${n.updated}</span>
+      ${n.imported?'<span class="tag tag-ok">已同步</span>':''}</div>`;
+  }).join('');
+  document.getElementById('btree').innerHTML=html(TREE.children);
+}
+function tog(id){ openSet.has(id)?openSet.delete(id):openSet.add(id); renderTree() }
+function togSel(id,checked,el){
+  checked?sel.add(id):sel.delete(id);
+  if(el&&el.closest){ el.closest('.dnode').style.background=checked?'var(--tint)':''; }
+  renderSel();
+}
+function selAll(on){
+  TREE.children.filter(n=>n.type==='doc').forEach(n=>on?sel.add(n.id):sel.delete(n.id));
+  renderTree(); renderSel();
+}
+function findDoc(id){let r=null;(function w(ns){for(const n of ns){if(n.id===id)r=n;if(n.children)w(n.children)}})(TREE.children);return r}
+function renderSel(){
+  document.getElementById('selCount').textContent=sel.size+' 篇';
+  document.getElementById('selItems').innerHTML=sel.size?[...sel].map(id=>{
+    const d=findDoc(id);
+    return `<div class="sel-item"><span class="di">📄</span><span class="nm">${d.name}</span>
+      <button class="rm" onclick="togSel('${id}',false,null);renderTree()">×</button></div>`;
+  }).join(''):'<div style="padding:22px 8px;text-align:center;color:var(--text-3);font-size:12px">尚未选择文档<br><span style="font-size:11px">在左侧勾选要导入的文档</span></div>';
+}
+
+/* 切片参数 */
+function renderChunker(){
+  const c=CHUNKERS[chunker];
+  document.getElementById('cparams').innerHTML=Object.entries(c.params).map(([k,v])=>
+    v.type==='boolean'
+      ? `<div class="cparam"><div class="cl">${v.label}</div><button class="switch${v.default?' on':''}" onclick="this.classList.toggle('on')"></button></div>`
+      : `<div class="cparam"><div class="cl">${v.label}</div><input type="${v.type==='integer'?'number':'text'}" value="${v.default}"></div>`
+  ).join('');
+  document.getElementById('chunkHint').textContent=c.hint;
+}
+function onChunker(v){chunker=v;renderChunker()}
+
+/* 步骤流转 */
+function go(n){
+  if(n>1 && !tested) return;       // 未测连通不可跳到第 3 步
+  if(n>2 && sel.size===0) return;  // 未选文档不可跳到第 4 步
+  step=n;
+  document.querySelectorAll('.pane').forEach(p=>p.style.display=p.dataset.p==String(n)?'block':'none');
+  document.querySelectorAll('.step').forEach(s=>{
+    const i=+s.dataset.s;
+    s.className='step'+(i<step?' done':i===step?' cur':'');
+    s.querySelector('.snum').textContent=i<step?'✓':(i+1);
+    const locked=(i===2&&!tested)||(i===3&&sel.size===0);
+    s.classList.toggle('clickable',!locked);
+  });
+  if(n===0)renderProviders();
+  if(n===1)renderCreds();
+  if(n===2){renderTree();renderSel();
+    document.getElementById('bdDesc').innerHTML=curProvider?`当前平台：<b>${curProvider.name}</b>　点击目录展开下级；勾选文档加入待导入清单。`:''; }
+  if(n===3)renderChunker();
+
+  const prev=document.getElementById('btnPrev'), next=document.getElementById('btnNext');
+  prev.style.display=n>0&&n<4?'inline-flex':'none';
+  next.style.display=n===4?'none':'inline-flex';
+  next.textContent = n===3?'开始导入':'下一步';
+  document.getElementById('wzTitle').textContent = n===4?'导入结果':'导入外部知识库文档';
+  document.getElementById('footHint').textContent =
+    n===1&&!tested ? '需通过连通性测试后才能继续' :
+    n===2 ? (sel.size?`已选 ${sel.size} 篇文档`:'请至少选择 1 篇文档') :
+    n===3 ? '导入在后台异步执行，不阻塞页面' : '';
+  if(n===2&&sel.size) next.disabled=false; else if(n===2) next.disabled=true; else next.disabled=false;
+  if(n===1&&!tested) next.disabled=true; else next.disabled=false;
+}
+function next(){ if(step===3){ // 模拟导入
+    const t=document.getElementById('btnNext'); t.disabled=true; t.textContent='导入中…';
+    setTimeout(()=>{t.disabled=false; go(4)},1100); return;
+  } go(step+1) }
+function prev(){ go(step-1) }
+
+/* 面板空态切换 */
+function openPane(m){
+  document.querySelector('.workbench').scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('paneList').style.display=m==='list'?'block':'none';
+  document.getElementById('paneEmpty').style.display=m==='empty'?'block':'none';
+}
+function toast(m){alert(m)}
+
+/* 初始化 */
+renderProviders(); renderChunker(); renderSel();
+</script>
+</body>
+</html>

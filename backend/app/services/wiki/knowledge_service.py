@@ -91,15 +91,16 @@ class WikiKnowledgeService:
 
         obj = self.repo.create(data)
 
-        # type=2 联动建 collection（AgentScope 约定 kb_<uuid> 逻辑名，绑定统一容器）
+        # type=2 联动建 collection（命名约定 kb_{knowledge_id}，绑定统一容器）
+        # 注意：必须用 kb_{knowledge_id}，不能用随机名——管线 / 路由 / index_mode
+        # 均以 kb_{knowledge_id} 反查集合元数据（维度）与所属知识库，随机名会导致
+        # “collection 不存在且未指定嵌入维度”而摄取失败。
         if kb_type == 2:
-            from uuid import uuid4
-
             from app.config import settings
             from app.models.kb.kb_collection import KbCollection
 
             self.db.add(KbCollection(
-                name=f"kb_{uuid4().hex}",
+                name=f"kb_{obj.id}",
                 dimensions=settings.GPUSTACK_EMBEDDING_DIMENSION,
                 knowledge_id=obj.id,
             ))

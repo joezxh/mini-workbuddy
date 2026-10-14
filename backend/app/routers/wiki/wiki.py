@@ -152,6 +152,8 @@ class KnowledgeUpdateRequest(BaseModel):
     status: Optional[int] = Field(None, description="1=启用 0=归档")
     # 所属类别（知识库管理）
     category_id: Optional[int] = None
+    # 摄取编排（spec §10.7 / D8）：切片方案 + 嵌入模型，原生键名
+    pipeline_config: Optional[dict] = None
 
 
 class WikiSearchRequest(BaseModel):
@@ -699,6 +701,11 @@ def update_knowledge(
         kb.status = body.status
     if body.category_id is not None:
         kb.category_id = body.category_id
+    # 摄取编排：键名白名单校验后落库（D8），驱动后续摄取/重分片的切片方案
+    if "pipeline_config" in (body.model_fields_set or set()):
+        from app.services.kb.pipeline_config import normalize_pipeline_config
+
+        kb.pipeline_config = normalize_pipeline_config(body.pipeline_config)
 
     db.commit()
     db.refresh(kb)

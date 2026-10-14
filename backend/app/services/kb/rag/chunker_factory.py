@@ -9,11 +9,19 @@ from agentscope.rag import ApproxTokenChunker, ChunkerBase
 from agentscope.rag import Chunk, Section
 from agentscope.message import DataBlock, TextBlock
 
+from app.services.kb.common_chunkers import (
+    FixedSizeChunker,
+    MarkdownChunker,
+    SentenceChunker,
+)
 from app.services.kb.parent_child_chunker import ParentChildChunker
 from app.services.kb.qa_chunker import QaChunker
 
 CHUNKER_REGISTRY: dict[str, type[ChunkerBase]] = {
     ApproxTokenChunker.chunker_type: ApproxTokenChunker,
+    MarkdownChunker.chunker_type: MarkdownChunker,
+    SentenceChunker.chunker_type: SentenceChunker,
+    FixedSizeChunker.chunker_type: FixedSizeChunker,
     QaChunker.chunker_type: QaChunker,
     ParentChildChunker.chunker_type: ParentChildChunker,
 }
@@ -26,10 +34,25 @@ def build_chunker(chunker_type: str, params: dict | None = None) -> ChunkerBase:
     return cls(parameters=cls.Parameters(**(params or {})))
 
 
+# 切片方案展示名（前端下拉直接用）
+CHUNKER_LABELS: dict[str, str] = {
+    ApproxTokenChunker.chunker_type: "按 Token 近似切分（通用）",
+    MarkdownChunker.chunker_type: "按 Markdown 标题切分",
+    SentenceChunker.chunker_type: "按句子切分（可重叠）",
+    FixedSizeChunker.chunker_type: "固定长度切分（可重叠）",
+    QaChunker.chunker_type: "问答对切分（结构化数据）",
+    ParentChildChunker.chunker_type: "父子分段（小问大答）",
+}
+
+
 def chunker_schemas() -> list[dict]:
     """前端创建向导直接消费的 JSON Schema（D6）。"""
     return [
-        {"chunker_type": t, "parameters_schema": cls.Parameters.model_json_schema()}
+        {
+            "chunker_type": t,
+            "label": CHUNKER_LABELS.get(t, t),
+            "parameters_schema": cls.Parameters.model_json_schema(),
+        }
         for t, cls in CHUNKER_REGISTRY.items()
     ]
 

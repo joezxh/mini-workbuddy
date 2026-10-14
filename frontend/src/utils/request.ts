@@ -31,6 +31,11 @@ service.interceptors.request.use(
     if (token && token !== 'undefined' && config.headers) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
+    // FormData 上传：删除默认的 JSON Content-Type，让浏览器自动补上
+    // multipart/form-data; boundary=…，否则 FastAPI 收不到 file 字段（422）
+    if (config.data instanceof FormData && config.headers) {
+      delete config.headers['Content-Type']
+    }
     return config
   },
   (error: AxiosError) => {

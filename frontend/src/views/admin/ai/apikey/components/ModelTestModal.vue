@@ -28,30 +28,7 @@
             </span>
           </a-checkbox>
         </a-checkbox-group>
-      </div>
-
-      <!-- 输入区 -->
-      <div class="section">
-        <div class="section-header">
-          <span class="section-title">{{ t('apiKeyMgmt.promptLabel') }}</span>
-        </div>
-        <a-textarea
-          v-model:value="prompt"
-          :placeholder="t('apiKeyMgmt.promptPlaceholder')"
-          :rows="3"
-          :maxlength="4000"
-          show-count
-        />
-        <a-collapse :bordered="false" ghost class="advanced-collapse">
-          <a-collapse-panel key="1" :header="t('apiKeyMgmt.advancedOptions')">
-            <a-input
-              v-model:value="systemPrompt"
-              :placeholder="t('apiKeyMgmt.systemPromptPlaceholder')"
-              :rows="2"
-              style="margin-bottom: 8px"
-            />
-          </a-collapse-panel>
-        </a-collapse>
+        <div class="probe-hint">{{ t('apiKeyMgmt.probeHint') }}</div>
       </div>
 
       <!-- 操作按钮 -->
@@ -65,6 +42,13 @@
         <a-button @click="clearResults">
           <ClearOutlined /> {{ t('apiKeyMgmt.clearResults') }}
         </a-button>
+        <a-tag v-if="hasResult" color="geekgold" class="summary-tag">
+          {{ t('apiKeyMgmt.probeSummary', {
+            total: doneCount + failedCount,
+            passed: doneCount,
+            failed: failedCount,
+          }) }}
+        </a-tag>
       </div>
 
       <!-- 结果展示区 -->
@@ -77,45 +61,31 @@
             v-for="(result, modelId) in results"
             :key="modelId"
             class="result-card"
+            :class="{ 'result-card--fail': result.status === 'error' }"
           >
             <div class="result-header">
               <span class="result-model-name">{{ result.modelName }}</span>
-              <a-tag :color="result.status === 'done' ? 'success' : result.status === 'error' ? 'error' : 'processing'" size="small">
+              <a-tag :color="typeTagColor(result.type)" size="small">{{ typeName(result.type) }}</a-tag>
+              <a-tag
+                :color="result.status === 'done' ? 'success' : result.status === 'error' ? 'error' : 'processing'"
+                size="small"
+              >
                 {{ statusText(result.status) }}
               </a-tag>
-              <span v-if="result.duration" class="result-meta">{{ result.duration }}ms</span>
-              <span v-if="result.tokenCount" class="result-meta">{{ result.tokenCount }} tokens</span>
+              <span v-if="result.latencyMs" class="result-meta">
+                {{ t('apiKeyMgmt.probeLatency') }} {{ result.latencyMs }}ms
+              </span>
             </div>
 
-            <!-- 文本输出 -->
-            <div v-if="result.type === 'text'" class="result-content">
-              <div v-if="result.reasoning" class="reasoning-block">
-                <div class="reasoning-label">💭 {{ t('apiKeyMgmt.thinking') }}</div>
-                <div class="reasoning-text">{{ result.reasoning }}</div>
+            <div class="result-content">
+              <div class="probe-row">
+                <span class="probe-key">{{ t('apiKeyMgmt.probeEndpoint') }}</span>
+                <span class="probe-val probe-endpoint">{{ result.endpoint || '—' }}</span>
               </div>
-              <div class="content-text" v-html="renderMarkdown(result.content)"></div>
-              <span v-if="result.status === 'running'" class="cursor-blink">▌</span>
-            </div>
-
-            <!-- Embedding 输出 -->
-            <div v-else-if="result.type === 'embedding'" class="result-content">
-              <a-descriptions :column="2" size="small" bordered>
-                <a-descriptions-item :label="t('apiKeyMgmt.labelDimensions')">{{ result.dimensions }}</a-descriptions-item>
-                <a-descriptions-item :label="t('apiKeyMgmt.labelTokenCount')">{{ result.tokenCount || '-' }}</a-descriptions-item>
-              </a-descriptions>
-              <div class="embedding-preview">
-                <div class="embedding-label">{{ t('apiKeyMgmt.vectorPreview', { count: result.preview?.length || 0 }) }}</div>
-                <div class="embedding-values">
-                  <span v-for="(v, i) in result.preview" :key="i" class="embedding-val">
-                    [{{ i }}] {{ typeof v === 'number' ? v.toFixed(6) : v }}
-                  </span>
-                </div>
+              <div class="probe-row">
+                <span class="probe-key">{{ t('apiKeyMgmt.colModelId') }}</span>
+                <span class="probe-val">{{ result.message || (result.ok ? 'OK' : '—') }}</span>
               </div>
-            </div>
-
-            <!-- 错误输出 -->
-            <div v-else-if="result.type === 'error'" class="result-content result-error">
-              <a-alert type="error" :message="result.errorMessage" show-icon />
             </div>
           </div>
         </div>
@@ -125,25 +95,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { SendOutlined, StopOutlined, ClearOutlined } from '@ant-design/icons-vue'
-import { fetchModelTestStream, type AiChatModel } from '@/api/ai-apikey'
+import { probeModel, type AiChatModel } from '@/api/ai-apikey'
+import { useDictionary } from '@/composables/useDictionary'
 
 const { t } = useI18n()
 
-interface TestResult {
+interface ProbeResult {
   modelName: string
+  type: number
   status: 'running' | 'done' | 'error'
-  type: 'text' | 'embedding' | 'error'
-  content: string
-  reasoning: string
-  errorMessage: string
-  dimensions: number
-  preview: number[]
-  duration: number
-  tokenCount: number
+  ok: boolean
+  message: string
+  latencyMs: number
+  endpoint: string
 }
 
 const props = defineProps<{
@@ -160,22 +128,33 @@ const visible = computed({
   set: (val) => emit('update:open', val),
 })
 
+// 模型类别标签/颜色统一取自数据字典（model_type），避免硬编码错位
+const { modelTypes, loadModelTypes } = useDictionary()
+onMounted(() => {
+  loadModelTypes()
+})
+
 const availableModels = computed(() => props.models || [])
 const selectedModelIds = ref<number[]>([])
-const prompt = ref('')
-const systemPrompt = ref('')
 const isRunning = ref(false)
-const results = ref<Record<number, TestResult>>({})
-
-const abortControllers = ref<AbortController[]>([])
+const cancelled = ref(false)
+const results = ref<Record<number, ProbeResult>>({})
 
 const selectedModels = computed(() =>
   availableModels.value.filter(m => selectedModelIds.value.includes(m.id))
 )
 
 const canRun = computed(() =>
-  selectedModelIds.value.length > 0 && prompt.value.trim().length > 0 && !isRunning.value
+  selectedModelIds.value.length > 0 && !isRunning.value
 )
+
+const doneCount = computed(() =>
+  Object.values(results.value).filter(r => r.status === 'done').length
+)
+const failedCount = computed(() =>
+  Object.values(results.value).filter(r => r.status === 'error').length
+)
+const hasResult = computed(() => Object.keys(results.value).length > 0)
 
 // 打开时默认选中所有模型
 watch(
@@ -184,186 +163,93 @@ watch(
     if (val) {
       selectedModelIds.value = availableModels.value.map(m => m.id)
       results.value = {}
-      prompt.value = ''
-      systemPrompt.value = ''
+      cancelled.value = false
     }
   }
 )
 
 function typeName(type?: number): string {
-  if (type === 5) return 'Embedding'
-  if (type === 3) return t('apiKeyMgmt.typeImage')
-  if (type === 4) return t('apiKeyMgmt.typeVoice')
-  return t('apiKeyMgmt.typeChat')
+  if (type === undefined || type === null) return '-'
+  const item = modelTypes.value.find(
+    tp => Number(tp.item_value ?? tp.item_code) === Number(type)
+  )
+  return item?.item_name || String(type)
 }
 
 function typeTagColor(type?: number): string {
-  if (type === 5) return 'purple'
-  if (type === 3) return 'orange'
-  if (type === 4) return 'cyan'
-  return 'blue'
+  if (type === undefined || type === null) return 'default'
+  const item = modelTypes.value.find(
+    tp => Number(tp.item_value ?? tp.item_code) === Number(type)
+  )
+  return item?.color || 'blue'
 }
 
 function statusText(status: string): string {
-  if (status === 'running') return t('apiKeyMgmt.statusRunning')
+  if (status === 'running') return t('apiKeyMgmt.probing')
   if (status === 'done') return t('apiKeyMgmt.statusDone')
   if (status === 'error') return t('apiKeyMgmt.statusError')
   return status
 }
 
-function renderMarkdown(text: string): string {
-  // 简易 markdown 渲染：代码块 + 换行
-  if (!text) return ''
-  return text
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-    .replace(/\n/g, '<br/>')
-}
-
 async function runTest() {
   if (!canRun.value) return
   isRunning.value = true
-  abortControllers.value = []
+  cancelled.value = false
 
   const models = selectedModels.value
-  const startTime = Date.now()
-
+  // 初始化每条结果
   for (const model of models) {
-    const controller = new AbortController()
-    abortControllers.value.push(controller)
-
-    // 初始化结果
     results.value[model.id] = {
       modelName: `${model.name} (${model.model})`,
+      type: model.type ?? 1,
       status: 'running',
-      type: 'text',
-      content: '',
-      reasoning: '',
-      errorMessage: '',
-      dimensions: 0,
-      preview: [],
-      duration: 0,
-      tokenCount: 0,
-    }
-
-    // 并行启动所有模型的测试
-    processModelStream(model, controller.signal, startTime)
-  }
-}
-
-async function processModelStream(model: AiChatModel, signal: AbortSignal, startTime: number) {
-  try {
-    const res = await fetchModelTestStream(
-      {
-        model_id: model.id,
-        prompt: prompt.value,
-        system_prompt: systemPrompt.value || undefined,
-        stream: true,
-      },
-      signal
-    )
-
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error(t('apiKeyMgmt.streamError'))
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const dataStr = line.slice(6).trim()
-        if (dataStr === '[DONE]') {
-          const r = results.value[model.id]
-          if (r) {
-            r.status = 'done'
-            r.duration = Date.now() - startTime
-          }
-          continue
-        }
-        try {
-          const data = JSON.parse(dataStr)
-          const r = results.value[model.id]
-          if (!r) continue
-
-          if (data.error) {
-            r.status = 'error'
-            r.type = 'error'
-            r.errorMessage = data.message || t('apiKeyMgmt.unknownError')
-            r.duration = Date.now() - startTime
-            continue
-          }
-          if (data.content) {
-            r.content += data.content
-          }
-          if (data.reasoning) {
-            r.reasoning += data.reasoning
-          }
-          // Embedding 结果
-          if (data.type === 'embedding') {
-            r.type = 'embedding'
-            r.dimensions = data.dimensions || 0
-            r.preview = data.preview || []
-            r.tokenCount = data.usage?.total_tokens || 0
-            r.status = 'done'
-            r.duration = Date.now() - startTime
-          }
-          // Token 统计
-          if (data.usage) {
-            r.tokenCount = data.usage.total_tokens || data.usage.completion_tokens || 0
-          }
-        } catch {
-          // ignore parse errors
-        }
-      }
-    }
-
-    // 流结束但没收到 [DONE]
-    const r = results.value[model.id]
-    if (r && r.status === 'running') {
-      r.status = 'done'
-      r.duration = Date.now() - startTime
-    }
-  } catch (e: any) {
-    if (e.name === 'AbortError') {
-      const r = results.value[model.id]
-      if (r) {
-        r.status = 'done'
-        r.duration = Date.now() - startTime
-      }
-      return
-    }
-    const r = results.value[model.id]
-    if (r) {
-      r.status = 'error'
-      r.type = 'error'
-      r.errorMessage = e.message || t('apiKeyMgmt.requestFailed')
-      r.duration = Date.now() - startTime
+      ok: false,
+      message: '',
+      latencyMs: 0,
+      endpoint: '',
     }
   }
 
-  // 检查是否所有模型都完成了
-  checkAllDone()
-}
+  // 并行探测所有选中模型
+  await Promise.all(models.map(m => probeOne(m)))
 
-function checkAllDone() {
-  const allResults = Object.values(results.value)
-  if (allResults.length > 0 && allResults.every(r => r.status !== 'running')) {
+  if (!cancelled.value) {
     isRunning.value = false
   }
 }
 
+async function probeOne(model: AiChatModel) {
+  try {
+    const res = await probeModel(model.id)
+    if (cancelled.value) return
+    const r = results.value[model.id]
+    if (!r) return
+    r.ok = res.ok
+    r.status = res.ok ? 'done' : 'error'
+    r.message = res.message
+    r.latencyMs = res.latency_ms
+    r.endpoint = res.endpoint
+  } catch (e: any) {
+    if (cancelled.value) return
+    const r = results.value[model.id]
+    if (r) {
+      r.ok = false
+      r.status = 'error'
+      r.message = e?.message || t('apiKeyMgmt.requestFailed')
+    }
+  }
+}
+
 function stopTest() {
-  abortControllers.value.forEach(c => c.abort())
-  abortControllers.value = []
+  cancelled.value = true
   isRunning.value = false
+  // 将仍在进行中的结果标记为已停止
+  Object.values(results.value).forEach(r => {
+    if (r.status === 'running') {
+      r.status = 'error'
+      r.message = t('apiKeyMgmt.testStopped')
+    }
+  })
   message.info(t('apiKeyMgmt.testStopped'))
 }
 
@@ -375,10 +261,6 @@ function handleClose() {
   stopTest()
   visible.value = false
 }
-
-onBeforeUnmount(() => {
-  abortControllers.value.forEach(c => c.abort())
-})
 </script>
 
 <style lang="less" scoped>
@@ -403,11 +285,17 @@ onBeforeUnmount(() => {
   }
 }
 
+.probe-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
 .model-checkbox-group {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-height: 120px;
+  max-height: 160px;
   overflow-y: auto;
   padding: 8px;
   background: var(--bg-input);
@@ -438,20 +326,14 @@ onBeforeUnmount(() => {
   }
 }
 
-.advanced-collapse {
-  margin-top: 8px;
-
-  :deep(.ant-collapse-header) {
-    padding: 4px 0 !important;
-    font-size: 13px;
-    color: var(--fg-secondary);
-  }
-}
-
 .action-bar {
   display: flex;
   gap: 8px;
   align-items: center;
+
+  .summary-tag {
+    margin-left: auto;
+  }
 }
 
 .results-section {
@@ -477,6 +359,10 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-surface);
+
+  &--fail {
+    border-color: var(--error, #ff4d4f);
+  }
 }
 
 .result-header {
@@ -502,96 +388,36 @@ onBeforeUnmount(() => {
 
 .result-content {
   padding: 12px;
-  max-height: 400px;
-  overflow-y: auto;
   font-size: 13px;
   line-height: 1.6;
   min-height: 60px;
 
-  .content-text {
-    :deep(.code-block) {
-      background: #282c34;
-      color: #abb2bf;
-      padding: 12px;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 12px;
-      margin: 8px 0;
-    }
+  .probe-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    margin-bottom: 6px;
 
-    :deep(.inline-code) {
-      background: var(--bg-hover);
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-size: 12px;
+    &:last-child {
+      margin-bottom: 0;
     }
   }
-}
 
-.cursor-blink {
-  animation: blink 1s step-end infinite;
-  color: var(--accent);
-  font-weight: bold;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-.reasoning-block {
-  background: var(--bg-input);
-  border-left: 3px solid var(--border-strong);
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  border-radius: 0 4px 4px 0;
-  font-size: 12px;
-  color: var(--fg-muted);
-
-  .reasoning-label {
-    font-weight: 600;
-    margin-bottom: 4px;
+  .probe-key {
+    flex: 0 0 72px;
+    color: var(--fg-muted);
     font-size: 12px;
   }
 
-  .reasoning-text {
-    white-space: pre-wrap;
-    max-height: 150px;
-    overflow-y: auto;
-  }
-}
-
-.result-error {
-  padding: 12px;
-}
-
-.embedding-preview {
-  margin-top: 12px;
-
-  .embedding-label {
-    font-weight: 500;
-    margin-bottom: 8px;
-    font-size: 13px;
+  .probe-val {
+    flex: 1;
+    word-break: break-all;
   }
 
-  .embedding-values {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    max-height: 200px;
-    overflow-y: auto;
-    background: var(--bg-input);
-    padding: 8px;
-    border-radius: 4px;
-  }
-
-  .embedding-val {
+  .probe-endpoint {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--fg-secondary);
-    background: var(--bg-surface);
-    padding: 2px 6px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
   }
 }
 </style>

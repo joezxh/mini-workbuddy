@@ -8,7 +8,8 @@ from app.models.tenant_mixin import TenantMixin
 class KbCollection(Base, TenantMixin):
     """知识库集合元数据。
 
-    ``name`` 是 AgentScope RAG Service 的逻辑 collection 名（形如 ``kb_<uuid>``），
+    ``name`` 是 AgentScope RAG Service 的逻辑 collection 名，遵循约定 ``kb_{knowledge_id}``
+    （管线 / 路由 / index_mode 均据此反查知识库与维度，不可使用随机名），
     映射到底层 ``kb_segment`` 的 ``collection`` 列；不为每个 collection 单独建表。
     ``dimensions`` 是运行时向量维度真值（迁移里列的 ``Vector`` 维度只是默认值）。
     """

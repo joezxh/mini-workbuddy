@@ -1,12 +1,6 @@
 <template>
   <div class="kb-manager">
-    <a-tabs v-model:activeKey="activeType">
-      <a-tab-pane key="1" :tab="t('kmsWiki.title')" />
-      <a-tab-pane key="2" :tab="t('kbMgmt.generalKb')" />
-      <a-tab-pane key="3" :tab="t('kbMgmt.externalKb')" />
-    </a-tabs>
-
-    <a-row v-if="activeType !== '1'" class="kb-manager__body">
+    <a-row class="kb-manager__body">
       <a-col class="kb-manager__side">
         <div class="kb-manager__tree-head">
           <a-tooltip :title="t('kmsWiki.addCategory')">
@@ -28,19 +22,24 @@
             :tree-data="treeData"
             :expanded-keys="expandedKeys"
             @select="onSelectKnowledge"
-            @expand="(keys) => expandedKeys = keys"
+            @expand="(keys: any) => expandedKeys = keys"
           >
             <template #title="{ data }">
               <a-dropdown
-                v-if="data.type === 'kb' || data.type === 'category'"
+                v-if="data && (data.type === 'kb' || data.type === 'category')"
                 :trigger="['contextmenu']"
               >
                 <span class="kb-cat-node">
-                  <BookOutlined v-if="data.type === 'kb'" class="kb-icon" />
-                  {{ data.title }}
+                  <FolderOutlined v-if="data.type === 'category'" class="kb-icon kb-icon--folder" />
+                  <FolderOpenOutlined v-else-if="data.type === 'group'" class="kb-icon kb-icon--folder" />
+                  <ReadOutlined v-else-if="data.kbType === 1" class="kb-icon" />
+                  <LinkOutlined v-else-if="data.kbType === 3" class="kb-icon" />
+                  <BookOutlined v-else class="kb-icon" />
+                  <span class="kb-node-name">{{ data.title }}</span>
+                  <span v-if="data.count != null" class="kb-node-count">{{ data.count }}</span>
                 </span>
                 <template #overlay>
-                  <a-menu @click="(e) => onNodeMenu(String(e.key), data)">
+                  <a-menu @click="(e: any) => onNodeMenu(String(e.key), data)">
                     <a-menu-item key="view">{{ t('kmsWiki.viewInfo') }}</a-menu-item>
                     <a-menu-item v-if="data.type === 'kb'" key="edit">{{ t('kmsWiki.editKnowledge') }}</a-menu-item>
                     <a-menu-divider v-if="data.type === 'kb'" />
@@ -55,20 +54,33 @@
                 </template>
               </a-dropdown>
               <span v-else class="kb-cat-node">
-                <BookOutlined v-if="data.type === 'kb'" class="kb-icon" />
-                {{ data.title }}
+                <FolderOutlined v-if="data?.type === 'category'" class="kb-icon kb-icon--folder" />
+                <FolderOpenOutlined v-else-if="data?.type === 'group'" class="kb-icon kb-icon--folder" />
+                <ReadOutlined v-else-if="data?.kbType === 1" class="kb-icon" />
+                <LinkOutlined v-else-if="data?.kbType === 3" class="kb-icon" />
+                <BookOutlined v-else-if="data" class="kb-icon" />
+                <span class="kb-node-name">{{ data?.title }}</span>
+                <span v-if="data?.count != null" class="kb-node-count">{{ data?.count }}</span>
               </span>
             </template>
           </a-tree>
         </a-card>
       </a-col>
       <a-col class="kb-manager__main">
-        <KbDocumentPane v-if="activeType === '2' && selectedId" :knowledge-id="selectedId" />
-        <a-empty v-else-if="activeType === '2'" :description="t('kbMgmt.selectKbFirst')" />
-        <ExternalLinkPane v-else />
+        <WikiHome v-if="selectedKbType === 1" :wiki-id="selectedId" embedded />
+        <KbDocumentPane
+          v-else-if="selectedKbType === 2 && selectedId"
+          :knowledge-id="selectedId"
+          :kb-format="selectedKbFormat"
+        />
+        <a-empty v-else-if="selectedKbType === 2" :description="t('kbMgmt.selectKbFirst')" />
+        <ExternalLinkPane
+          v-else-if="selectedKbType === 3 && selectedId"
+          :knowledge-id="selectedId"
+        />
+        <a-empty v-else :description="t('kbMgmt.selectKbFirst')" />
       </a-col>
     </a-row>
-    <WikiHome v-else embedded />
 
     <!-- 新建知识库向导（spec §3.1 / §10.2） -->
     <a-modal
@@ -82,11 +94,19 @@
           <a-input v-model:value="form.name" :placeholder="t('kbMgmt.namePlaceholder')" />
         </a-form-item>
         <a-form-item :label="t('kbMgmt.type')">
-          <a-select v-model:value="form.type">
+          <!-- 编辑态锁定类型：后端同样不允许变更（需求 4） -->
+          <a-select v-model:value="form.type" :disabled="!!editingId">
             <a-select-option :value="1">{{ t('kbMgmt.typeWiki') }}</a-select-option>
             <a-select-option :value="2">{{ t('kbMgmt.typeGeneral') }}</a-select-option>
             <a-select-option :value="3">{{ t('kbMgmt.typeExternal') }}</a-select-option>
           </a-select>
+          <a-alert
+            v-if="editingId"
+            class="kb-manager__tip"
+            type="info"
+            :message="t('kbMgmt.typeLocked')"
+            show-icon
+          />
         </a-form-item>
         <a-form-item :label="t('kbMgmt.category')">
           <a-tree-select
@@ -110,6 +130,13 @@
             <a-select-option value="proxy">{{ t('kbMgmt.fmtProxy') }}</a-select-option>
             <a-select-option value="connector">{{ t('kbMgmt.fmtConnector') }}</a-select-option>
           </a-select>
+          <a-alert
+            v-if="form.kb_format === 'connector'"
+            class="kb-manager__tip"
+            type="info"
+            :message="t('kbMgmt.connectorHint')"
+            show-icon
+          />
         </a-form-item>
         <a-form-item v-if="form.type === 2" :label="t('kbMgmt.indexMode')">
           <a-radio-group v-model:value="form.index_mode">
@@ -141,6 +168,55 @@
             <a-select-option value="multimodal-embedding-v1">multimodal-embedding-v1（Vision）</a-select-option>
             <a-select-option value="text-embedding-v4">text-embedding-v4（纯文本）</a-select-option>
           </a-select>
+        </a-form-item>
+
+        <!-- 切片方案：按二级形态过滤（问答→仅问答对切分；文档→其它方案；表格→不切分） -->
+        <a-form-item :label="t('kbMgmt.chunkerType')">
+          <a-select
+            v-model:value="form.chunker_type"
+            class="kb-manager__tip"
+            :placeholder="t('kbMgmt.selectChunker')"
+            :loading="chunkersLoading"
+            :disabled="chunkerRule === 'none'"
+            :options="chunkerOptions"
+            @change="onChunkerChange"
+          />
+          <a-alert
+            v-if="chunkerRule === 'none'"
+            class="kb-manager__tip"
+            type="info"
+            :message="t('kbMgmt.chunkerNoneHint')"
+            show-icon
+          />
+          <a-alert
+            v-else
+            class="kb-manager__tip"
+            type="info"
+            :message="t('kbMgmt.chunkerHint')"
+            show-icon
+          />
+          <!-- 参数按后端 JSON Schema 动态渲染 -->
+          <div
+            v-for="f in chunkerFields"
+            :key="f.name"
+            class="kb-manager__chunker-param"
+          >
+            <span class="kb-manager__param-label">{{ f.name }}</span>
+            <a-switch v-if="f.type === 'boolean'" v-model:checked="form.chunker_params[f.name]" size="small" />
+            <a-input-number
+              v-else-if="f.type === 'integer'"
+              v-model:value="form.chunker_params[f.name]"
+              size="small"
+              :min="0"
+              style="width: 140px"
+            />
+            <a-input
+              v-else
+              v-model:value="form.chunker_params[f.name]"
+              size="small"
+              style="width: 240px"
+            />
+          </div>
         </a-form-item>
 
         <!-- 表格形态：字段映射（enabled / embedding 单选 / filterable） -->
@@ -202,6 +278,14 @@
       </a-form>
     </a-modal>
 
+    <!-- 外部知识库文档导入向导（type=3 / kb_format=connector 创建后打开） -->
+    <ExternalSourceWizard
+      v-if="wizardKnowledgeId"
+      v-model:open="wizardOpen"
+      :knowledge-id="wizardKnowledgeId"
+      @imported="load"
+    />
+
     <!-- 节点信息查看弹窗（只读，右键「查看信息」） -->
     <a-modal v-model:open="infoModal.open" :title="infoModal.title" :footer="null">
       <a-descriptions :column="1" size="small" bordered>
@@ -218,14 +302,14 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message, Modal } from 'ant-design-vue'
 import { createKnowledge, listKnowledges, listCategories, updateKnowledge, createCategory, updateCategory, deleteCategory, deleteKnowledge } from '@/api/wiki'
-import { createProxyEndpoint } from '@/api/kb'
-import { PlusOutlined, BookOutlined } from '@ant-design/icons-vue'
+import { createProxyEndpoint, listChunkers } from '@/api/kb'
+import { PlusOutlined, BookOutlined, ReadOutlined, LinkOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
 import KbDocumentPane from './kb/KbDocumentPane.vue'
 import ExternalLinkPane from './kb/ExternalLinkPane.vue'
+import ExternalSourceWizard from './kb/ExternalSourceWizard.vue'
 import WikiHome from '@/views/kms/wiki/index.vue'
 
 const { t } = useI18n()
-const activeType = ref('2')
 const loading = ref(false)
 const knowledges = ref<any[]>([])
 const categories = ref<any[]>([])
@@ -247,6 +331,9 @@ function toSelectTree(cats: any[]): any[] {
 
 const createOpen = ref(false)
 const creating = ref(false)
+/** 外部知识库「文档导入」向导：建完容器后打开，选择平台与文档 */
+const wizardOpen = ref(false)
+const wizardKnowledgeId = ref<number | null>(null)
 const form = reactive({
   name: '',
   description: '',
@@ -255,6 +342,8 @@ const form = reactive({
   index_mode: 'high_quality',
   multimodal_enabled: false,
   embedding_model: '' as string,
+  chunker_type: 'approx_token' as string,
+  chunker_params: {} as Record<string, any>,
   category_id: null as number | null,
   schema_config: [] as { name: string; type: string; filterable: boolean; embedding: boolean }[],
   endpoint: { endpoint_url: '', auth_key: '', index_name: '' },
@@ -262,6 +351,92 @@ const form = reactive({
 
 /** 多模态仅文搜图（D9），要求嵌入模型是 Vision 系列 */
 const isVisionModel = computed(() => /vl|vision|multimodal/.test((form.embedding_model || '').toLowerCase()))
+
+// ── 切片方案（chunker）──────────────────────────────────────────────
+const chunkers = ref<any[]>([])
+const chunkersLoading = ref(false)
+
+/** 当前所选 chunker 的参数字段（来自后端 JSON Schema） */
+const chunkerFields = computed(() => {
+  const hit = visibleChunkers.value.find((c) => c.chunker_type === form.chunker_type)
+  const props = hit?.parameters_schema?.properties || {}
+  return Object.keys(props).map((name) => ({
+    name,
+    type: props[name]?.type || 'string',
+    default: props[name]?.default,
+  }))
+})
+
+/**
+ * 切片方案按二级形态联动：
+ * - 问答（qa）→ 只能选「问答对切分」（chunker_type=qa）
+ * - 文档（document）→ 其它切分方式（排除 qa）
+ * - 表格（table）→ 不选切分（按行入库，不生成 chunker 配置）
+ * - 外部知识库（type≠2）→ 不做形态限制
+ */
+const CHUNKER_RULES: Record<string, 'qa' | 'doc' | 'none'> = {
+  qa: 'qa',
+  document: 'doc',
+  table: 'none',
+}
+
+const chunkerRule = computed<'qa' | 'doc' | 'none' | 'all'>(() =>
+  form.type === 2 ? CHUNKER_RULES[form.kb_format || ''] ?? 'all' : 'all',
+)
+
+const visibleChunkers = computed(() => {
+  if (chunkerRule.value === 'none') return []
+  if (chunkerRule.value === 'qa') return chunkers.value.filter((c) => c.chunker_type === 'qa')
+  if (chunkerRule.value === 'doc') return chunkers.value.filter((c) => c.chunker_type !== 'qa')
+  return chunkers.value
+})
+
+const chunkerOptions = computed(() =>
+  visibleChunkers.value.map((c) => ({ label: c.label || c.chunker_type, value: c.chunker_type })),
+)
+
+// 形态切换后若当前方案已被排除，回落到该形态允许的默认值
+watch([chunkerRule, chunkers], () => {
+  if (chunkerRule.value === 'none') return
+  if (visibleChunkers.value.some((c) => c.chunker_type === form.chunker_type)) return
+  form.chunker_type =
+    chunkerRule.value === 'qa' ? 'qa' : visibleChunkers.value[0]?.chunker_type || 'approx_token'
+  onChunkerChange()
+})
+
+function onChunkerChange() {
+  // 切换方案时重置为该方案默认参数，避免上一方案的字段残留
+  const next: Record<string, any> = {}
+  for (const f of chunkerFields.value) next[f.name] = f.default
+  form.chunker_params = next
+}
+
+/** 组装 pipeline_config：嵌入模型 + 切片方案（原生键名，D8）；表格形态不落 chunker */
+function buildPipelineConfig() {
+  const cfg: Record<string, any> = {}
+  if (form.embedding_model) cfg.embedding = { model: form.embedding_model }
+  if (chunkerRule.value !== 'none' && form.chunker_type) {
+    cfg.chunker = {
+      type: form.chunker_type,
+      params: { ...form.chunker_params },
+    }
+  }
+  return Object.keys(cfg).length ? cfg : undefined
+}
+
+async function loadChunkers() {
+  chunkersLoading.value = true
+  try {
+    const res: any = await listChunkers()
+    chunkers.value = res || []
+    // 首次加载时若参数为空，填入当前方案默认值
+    if (!Object.keys(form.chunker_params).length) onChunkerChange()
+  } catch {
+    chunkers.value = []
+  } finally {
+    chunkersLoading.value = false
+  }
+}
 
 function addField() {
   form.schema_config.push({
@@ -285,9 +460,22 @@ function setEmbedField(i: number) {
 
 const expandedKeys = ref<string[]>([])
 
+/** 当前选中知识库的二级形态（驱动右侧形态 tab 与切片方案联动） */
+const selectedKbFormat = computed(() => {
+  const kb = knowledges.value.find((k) => k.id === selectedId.value)
+  return kb?.kb_format || null
+})
+
+/** 当前选中知识库的类型（1=Wiki / 2=通用 / 3=外部），驱动右栏界面与左树叶子图标 */
+const selectedKbType = computed<number | null>(() => {
+  const kb = knowledges.value.find((k) => k.id === selectedId.value)
+  return kb?.type ?? null
+})
+
 /** 左侧类别树：类别为父节点，知识库作为叶子挂到所属类别下 */
 function rebuildTree() {
-  const typeKbs = knowledges.value.filter((k) => String(k.type) === activeType.value)
+  // 不再按类型过滤：三类知识库共享同一分类树，叶子仅用图标区分类型
+  const typeKbs = knowledges.value
   const nodeMap = new Map<number, any>()
   const roots: any[] = []
 
@@ -308,10 +496,26 @@ function rebuildTree() {
 
   const uncategorized: any[] = []
   typeKbs.forEach((k) => {
-    const leaf = { key: 'k-' + k.id, title: k.name, type: 'kb', rawId: k.id, isLeaf: true }
+    const leaf = {
+      key: 'k-' + k.id,
+      title: k.name,
+      type: 'kb',
+      rawId: k.id,
+      kbType: k.type,
+      isLeaf: true,
+      // 叶子徽标：文章/文档数（无该字段时不显示）
+      count: k.article_count != null ? k.article_count : undefined,
+    }
     const parent = k.category_id != null ? nodeMap.get(k.category_id) : null
     if (parent) parent.children.push(leaf)
     else uncategorized.push(leaf)
+  })
+
+  // 分类徽标：其下（含子分类）挂的知识库数量
+  const countKb = (nodes: any[]): number =>
+    nodes.reduce((sum, n) => sum + (n.type === 'kb' ? 1 : countKb(n.children || [])), 0)
+  nodeMap.forEach((n) => {
+    n.count = countKb(n.children || [])
   })
 
   const present = new Set(nodeMap.keys())
@@ -326,6 +530,7 @@ function rebuildTree() {
       type: 'group',
       isLeaf: false,
       selectable: false,
+      count: uncategorized.length,
       children: uncategorized,
     })
   }
@@ -360,11 +565,14 @@ function onSelectKnowledge(_keys: unknown, info: any) {
 function resetForm() {
   form.name = ''
   form.description = ''
-  form.type = Number(activeType.value)
+  form.type = 2
   form.kb_format = form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : null
   form.index_mode = 'high_quality'
   form.multimodal_enabled = false
   form.embedding_model = ''
+  form.chunker_type = 'approx_token'
+  form.chunker_params = {}
+  if (chunkers.value.length) onChunkerChange()
   form.schema_config = []
   form.endpoint = { endpoint_url: '', auth_key: '', index_name: '' }
 }
@@ -374,6 +582,8 @@ function openCreate() {
   resetForm()
   // 默认归属到当前选中的类别（spec 知识库管理）
   form.category_id = selectedCategoryId.value
+  // 默认类型：有选中知识库取其类型，否则默认通用(2)
+  form.type = selectedKbType.value ?? 2
   createOpen.value = true
 }
 
@@ -383,11 +593,17 @@ function openEdit() {
   editingId.value = kb.id
   form.name = kb.name
   form.description = kb.description || ''
-  form.type = Number(kb.type || activeType.value)
+  form.type = Number(kb.type || 2)
   form.kb_format = kb.kb_format || (form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : null)
   form.index_mode = kb.index_mode || 'high_quality'
   form.multimodal_enabled = !!kb.multimodal_enabled
   form.embedding_model = kb.pipeline_config?.embedding?.model || ''
+  // 切片方案回显：无配置时回落默认方案
+  form.chunker_type = kb.pipeline_config?.chunker?.type || 'approx_token'
+  form.chunker_params = kb.pipeline_config?.chunker?.params
+    ? { ...kb.pipeline_config.chunker.params }
+    : {}
+  if (!Object.keys(form.chunker_params).length) onChunkerChange()
   form.schema_config = kb.schema_config ? JSON.parse(JSON.stringify(kb.schema_config)) : []
   form.endpoint = kb.endpoint || { endpoint_url: '', auth_key: '', index_name: '' }
   // 优先用知识库已有类别，否则默认到当前选中的类别
@@ -442,10 +658,8 @@ async function submit() {
         index_mode: form.type === 2 ? form.index_mode : undefined,
         multimodal_enabled: form.type === 2 ? form.multimodal_enabled : undefined,
         category_id: form.category_id ?? undefined,
-        // 嵌入模型经 pipeline_config.embedding 下发（D8 原生键名）
-        pipeline_config: form.embedding_model
-          ? { embedding: { model: form.embedding_model } }
-          : undefined,
+        // 嵌入模型 + 切片方案经 pipeline_config 下发（D8 原生键名）
+        pipeline_config: buildPipelineConfig(),
       })
       const kid = res?.id
 
@@ -457,6 +671,11 @@ async function submit() {
           index_name: form.endpoint.index_name || undefined,
           auth_key: form.endpoint.auth_key || undefined,
         })
+      }
+      // connector 形态（文档导入）：建完容器后直接打开导入向导选文档
+      if (form.type === 3 && form.kb_format === 'connector' && kid) {
+        wizardKnowledgeId.value = kid
+        wizardOpen.value = true
       }
     }
     message.success(t('kbMgmt.created'))
@@ -660,14 +879,12 @@ async function load() {
   }
 }
 
-onMounted(load)
-
-// 切换顶部形态标签时，按当前类型重建左侧类别树
-watch(activeType, () => {
-  selectedId.value = null
-  selectedCategoryId.value = null
-  rebuildTree()
+onMounted(() => {
+  load()
+  loadChunkers()
 })
+
+// 选中知识库变化无需重建左树（树已含全部类型），类型由 selectedKbType 派生
 </script>
 
 <style scoped>
@@ -708,14 +925,36 @@ watch(activeType, () => {
   color: var(--accent);
 }
 .kb-cat-node {
-  display: inline-block;
+  display: flex;
+  align-items: center;
   width: 100%;
   user-select: none;
   white-space: nowrap;
 }
+.kb-node-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 知识库/分类数量徽标 */
+.kb-node-count {
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--fg-muted, #8f959e);
+  background: var(--bg-subtle, #f5f7fa);
+  border-radius: 10px;
+}
 .kb-icon {
   margin-right: 4px;
   color: var(--accent);
+  flex-shrink: 0;
+}
+/* 分类/分组用中性色，与知识库类型图标区分 */
+.kb-icon--folder {
+  color: var(--fg-muted, #8f959e);
 }
 .kb-manager__main {
   min-height: 0;
@@ -744,6 +983,17 @@ watch(activeType, () => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+.kb-manager__chunker-param {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.kb-manager__param-label {
+  min-width: 130px;
+  font-size: 12px;
+  color: var(--fg-secondary);
 }
 .category-parent-hint {
   font-size: 12px;

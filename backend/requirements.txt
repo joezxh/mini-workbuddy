@@ -52,7 +52,9 @@ reportlab==4.0.9
 python-docx==1.1.0
 mistune==3.0.2
 pdfplumber>=0.10.0
-openpyxl==3.1.2  # 精确版本号，避免不同环境版本不一致
+pandas==3.0.6  # AgentScope ExcelParser 解析 xlsx/xls 必需（此前缺失导致 parse 步 ImportError）
+xlrd  # 旧版 .xls 读取（pandas.read_excel 的 xls 引擎）
+openpyxl==3.1.5  # 升至 >=3.1.5 以匹配 pandas 3.0.x 的依赖下限（原为 3.1.2）
 python-pptx>=0.6.23
 playwright>=1.40.0
 markdown>=3.5.0

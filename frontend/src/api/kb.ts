@@ -42,6 +42,31 @@ export function getDocumentStatus(ids: string[]) {
   return request.get(`${BASE}/documents/status`, { params: { ids: ids.join(',') } })
 }
 
+/** 重试：用留存的原始文件重新执行 解析→清洗→切块→向量化 */
+export function retryDocument(uuid: string) {
+  return request.post(`${BASE}/documents/${uuid}/retry`)
+}
+
+/** 重新向量化：仅重嵌已有切片，不重新分段 */
+export function reprocessDocument(uuid: string) {
+  return request.post(`${BASE}/documents/${uuid}/reprocess`)
+}
+
+/** 文档处理流程：各步产出摘要 + 失败步骤 + 错误信息 */
+export function getDocumentFlow(uuid: string) {
+  return request.get(`${BASE}/documents/${uuid}/flow`)
+}
+
+/** 按知识库当前切片方案，对全部留存原文件的文档重新分段 */
+export function rechunkKnowledge(kid: number) {
+  return request.post(`${BASE}/knowledges/${kid}/rechunk`)
+}
+
+/** 已注册切片方案（含展示名与参数 Schema），供新建/编辑知识库选择 */
+export function listChunkers() {
+  return request.get(`${BASE}/chunkers`)
+}
+
 export function retrieve(collection: string, data: {
   query: string
   top_k?: number

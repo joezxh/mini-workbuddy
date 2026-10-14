@@ -27,8 +27,12 @@ class KbSegment(Base, TenantMixin):
     document_id = Column(String(128), nullable=False, comment="文档 ID")
     chunk_index = Column(Integer, nullable=False, comment="文档内切片序号")
     content = Column(Text, nullable=True, comment="切片文本")
+    # 维度按**生效配置**声明（EMBEDDING_DIMENSION 依 EMBEDDING_PROVIDER 解析），
+    # 不可硬编码某一家的默认值：否则 SQL 会渲染出 ::VECTOR(旧维度) 强制转换，
+    # 与实际的列维度不符时报 "expected N dimensions, not M"。
+    # 写入前由 fit_vector_dimension() 截断/补齐到该维度（见 vector_utils）。
     embedding = Column(
-        Vector(settings.GPUSTACK_EMBEDDING_DIMENSION), nullable=True, comment="向量"
+        Vector(settings.EMBEDDING_DIMENSION), nullable=True, comment="向量"
     )
     token_count = Column(Integer, nullable=True, comment="token 数")
     metadata_ = Column("metadata", JSONB, nullable=True, comment="切片元数据")

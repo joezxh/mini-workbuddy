@@ -16,6 +16,8 @@ from typing import Callable, Optional
 from loguru import logger
 from sqlalchemy import select
 
+from app.services.kb.vector_utils import fit_vector_dimension
+
 # 父块（父子分段）设计上 embedding 恒为 NULL：只存完整上下文，不参与检索（spec §10.2）
 _NON_EMBEDDED_CHUNK_TYPES = ("parent",)
 
@@ -129,11 +131,9 @@ def _fill_documents(
             if len(vectors) != len(rows):
                 raise ValueError(f"嵌入数量不匹配: {len(vectors)} vs 切片 {len(rows)}")
             for row, vec in zip(rows, vectors):
-                if dimensions and len(vec) != dimensions:
-                    raise ValueError(
-                        f"嵌入维度 {len(vec)} 与 collection {dimensions} 不一致（D19）"
-                    )
-                row.embedding = vec
+                # 维度不符时截断/补齐到集合维度（过长截断、过短补零），
+                # 而非直接失败——换模型重灌时维度差异属常见场景
+                row.embedding = fit_vector_dimension(vec, dimensions)
             db.commit()
             filled += len(rows)
             _set_doc_progress(db, doc.uuid_code,

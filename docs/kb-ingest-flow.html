@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KB 文档摄取流程 · 通用知识库（type=2）</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #17203a;
+    --line: #2a3554;
+    --txt: #e6ecff;
+    --muted: #8fa0c8;
+    --ok: #34d399;
+    --accent: #38bdf8;
+    --accent-2: #818cf8;
+    --err: #f87171;
+    --err-bg: #2a1620;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 700px at 20% -10%, #1a2340 0%, var(--bg) 55%);
+    color: var(--txt);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  header h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: .5px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin: 18px 0 8px; flex-wrap: wrap; }
+  button {
+    background: linear-gradient(180deg, #24304f, #1a2340);
+    color: var(--txt);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  button:hover { transform: translateY(-1px); border-color: var(--accent); }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-left: auto; flex-wrap: wrap; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+  /* ── 阶段分组 ── */
+  .phase {
+    margin-top: 22px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(23,32,58,.85), rgba(19,26,46,.85));
+    padding: 16px 18px 18px;
+  }
+  .phase > h2 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .phase > .sub { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+
+  /* ── 节点 ── */
+  .node {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .node .num {
+    flex: 0 0 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    background: #223;
+    color: var(--accent);
+    border: 1px solid var(--line);
+  }
+  .node .body { flex: 1; min-width: 0; }
+  .node .title { font-size: 14px; font-weight: 600; }
+  .node .desc { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .node code {
+    font-size: 11px;
+    color: #a5b4fc;
+    background: #0f1628;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1px 6px;
+    display: inline-block;
+    margin-top: 5px;
+  }
+  .pill {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill.ok { color: var(--ok); border-color: rgba(52,211,153,.4); }
+  .pill.act { color: var(--accent); border-color: rgba(56,189,248,.45); }
+
+  /* ── 连接线 + 流动光点 ── */
+  .connector {
+    position: relative;
+    height: 30px;
+    margin-left: 31px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--line), var(--accent-2), var(--line));
+    opacity: .8;
+  }
+  .connector::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    width: 8px; height: 8px;
+    margin-left: -4px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px 2px rgba(56,189,248,.8);
+    animation: flow 1.5s linear infinite;
+  }
+  .connector.err { background: linear-gradient(180deg, var(--line), var(--err), var(--line)); }
+  .connector.err::after { background: var(--err); box-shadow: 0 0 10px 2px rgba(248,113,113,.85); }
+  @keyframes flow {
+    0%   { top: -6px; opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+  .connector:nth-of-type(odd)::after { animation-delay: .25s; }
+
+  /* ── 失败节点 ── */
+  .node.fail {
+    border-color: rgba(248,113,113,.55);
+    border-left-color: var(--err);
+    background: var(--err-bg);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  .node.fail .num { color: var(--err); }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.0); }
+    50%      { box-shadow: 0 0 0 6px rgba(248,113,113,.10); }
+  }
+  .errcard {
+    margin-top: 12px;
+    border: 1px dashed rgba(248,113,113,.5);
+    background: #1b1220;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: #fecaca;
+  }
+  .errcard b { color: var(--err); }
+  .errcard pre {
+    margin: 8px 0 0;
+    padding: 10px;
+    background: #0d0a12;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-x: auto;
+    color: #fca5a5;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .note {
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--muted);
+    border-left: 2px solid var(--accent-2);
+    padding-left: 12px;
+    line-height: 1.7;
+  }
+  .note code { color: #a5b4fc; }
+
+  /* 重放动画：重置所有 animation */
+  .wrap.replay .connector::after,
+  .wrap.replay .node.fail { animation: none; }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <h1>知识库文档摄取流程 · 通用知识库（<code style="font-size:12px">type=2</code>）</h1>
+    <p>上传 → 解析 → 清洗 → 切块 → 装配 → <b style="color:#f87171">向量化</b> → 落库；红色节点为当前失败节点（实测定位）。</p>
+  </header>
+
+  <div class="toolbar">
+    <button onclick="document.getElementById('wrap').classList.remove('replay'); void document.getElementById('wrap').offsetWidth; document.getElementById('wrap').classList.add('replay'); setTimeout(()=>document.getElementById('wrap').classList.remove('replay'), 60);">▶ 重放动画</button>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent)"></span>正常流向</span>
+      <span><span class="dot" style="background:var(--err)"></span>失败流向</span>
+      <span><span class="dot" style="background:var(--ok)"></span>已完成</span>
+    </div>
+  </div>
+
+  <!-- 阶段 1：上传入库 -->
+  <section class="phase">
+    <h2>阶段 1 · 上传入库</h2>
+    <p class="sub">前端上传文件，后端落库 kms_document，随即交后台任务</p>
+
+    <div class="node">
+      <div class="num">1</div>
+      <div class="body">
+        <div class="title">前端上传文档</div>
+        <div class="desc">选择目标知识库（通用知识库 id=2），提交文件</div>
+        <code>POST /api/v1/kb/documents</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">2</div>
+      <div class="body">
+        <div class="title">写 kms_document（collection = <code style="margin:0">kb_2</code>）</div>
+        <div class="desc">生成 <code style="margin:0">uuid_code</code>，status=uploaded；集合名按约定 <code style="margin:0">kb_{knowledge_id}</code></div>
+        <code>app/routers/kb/kb.py:108</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">3</div>
+      <div class="body">
+        <div class="title">后台任务接管</div>
+        <div class="desc">job_runner 异步执行，不阻塞上传请求</div>
+        <code>task = kb-ingest-&lt;uuid_code&gt;</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+  </section>
+
+  <!-- 阶段 2：编排三步 -->
+  <section class="phase">
+    <h2>阶段 2 · 解析 / 清洗 / 切块</h2>
+    <p class="sub">与 dry-run 共用同一编排执行器（§10.7），失败时 error_detail 会带具体步名 parse / clean / chunk</p>
+
+    <div class="node">
+      <div class="num">4</div>
+      <div class="body">
+        <div class="title">解析 parse</div>
+        <div class="desc">按 MIME 选择解析器并读取字节</div>
+        <code>select_parser(mime) → parser.parse(bytes)</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">5</div>
+      <div class="body">
+        <div class="title">清洗 clean</div>
+        <div class="desc">由知识库 pipeline_config 驱动（去空白 / URL / 邮箱 / 空行）</div>
+        <code>pipeline_config.clean</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">6</div>
+      <div class="body">
+        <div class="title">切块 chunk</div>
+        <div class="desc">产出 chunks；父子分段父块 embedding 恒为 NULL，仅作上下文</div>
+        <code>build_chunker(...).chunk(sections)</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+  </section>
+
+  <!-- 阶段 3：装配 -->
+  <section class="phase">
+    <h2>阶段 3 · 装配 KnowledgeBase</h2>
+    <p class="sub">确定索引模式与向量维度，构造原生 KnowledgeBase（含嵌入模型）</p>
+
+    <div class="node">
+      <div class="num">7</div>
+      <div class="body">
+        <div class="title">解析索引模式</div>
+        <div class="desc">由集合名反查知识库 index_mode（economy 写 NULL 向量）</div>
+        <code>resolve_index_mode("kb_2") → high_quality</code>
+      </div>
+      <span class="pill act">当前 high_quality</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">8</div>
+      <div class="body">
+        <div class="title">解析向量维度</div>
+        <div class="desc">回落链：集合行 → 同知识库历史行 → 嵌入配置 → 全局默认维度</div>
+        <code>_resolve_dimensions("kb_2", None) → 768</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">9</div>
+      <div class="body">
+        <div class="title">构造 KnowledgeBase</div>
+        <div class="desc">PgVectorStore + 原生 EmbeddingModel（按 EMBEDDING_PROVIDER）</div>
+        <code>knowledge_base(...) → KnowledgeBase(embedding_model)</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="node">
+      <div class="num">10</div>
+      <div class="body">
+        <div class="title">确保集合存在</div>
+        <div class="desc">集合行缺失时按维度补建（kms_collection）</div>
+        <code>kb.ensure_collection() → create_collection()</code>
+      </div>
+      <span class="pill ok">✓ 正常</span>
+    </div>
+  </section>
+
+  <!-- 阶段 4：向量化落库（失败） -->
+  <section class="phase" style="border-color:rgba(248,113,113,.35)">
+    <h2 style="color:var(--err)">阶段 4 · 向量化 + 落库 ← 失败节点</h2>
+    <p class="sub">嵌入由 KnowledgeBase 内部完成（原生强制），维度与 kb_collection.dimensions 强校验（D19）</p>
+
+    <div class="connector err" style="margin-left:0;height:26px;width:100%;background:none;"></div>
+
+    <div class="node fail">
+      <div class="num">11</div>
+      <div class="body">
+        <div class="title">向量化 insert_document ✗</div>
+        <div class="desc">对每个 chunk 调用嵌入模型生成向量（HTTP），再写 kb_segment</div>
+        <code>kb.insert_document(chunks, document_id=uuid_code)</code>
+      </div>
+      <span class="pill" style="color:var(--err);border-color:rgba(248,113,113,.5)">✗ 失败</span>
+    </div>
+
+    <div class="errcard">
+      <b>失败原因（已实测）</b>：嵌入服务不可达 —— 当前配置
+      <code style="margin:0 0 0 4px">EMBEDDING_PROVIDER=nvidia</code> →
+      <code style="margin:0 0 0 4px">NVIDIA_API_URL=http://localhost:8080/v1</code>，
+      而本机该端口无任何服务监听（连接被拒），AgentScope 重试 4 次后抛出
+      <code style="margin:0">APIConnectionError</code>。
+      <pre>openai.APIConnectionError: Connection error.
+  ├─ 模型  : Qwen3-Embedding-4B (dim=768)
+  ├─ 端点  : http://localhost:8080/v1/embeddings
+  ├─ 重试  : 4 次全部失败
+  └─ 实测  : localhost:8080 → ConnectionRefused(10061)
+             192.168.40.30:80 → 超时（GPUStack 不可达）
+             百炼 → 经代理可达，但 ALIBABA_API_KEY 未配置</pre>
+      <div style="margin-top:8px">配置来源：<code style="margin:0">backend/.env:68-73</code></div>
+    </div>
+
+    <div class="connector" style="opacity:.25"></div>
+
+    <div class="node" style="opacity:.45;border-left-color:var(--muted)">
+      <div class="num">12</div>
+      <div class="body">
+        <div class="title">写 kb_segment + 文档置完成</div>
+        <div class="desc">切片落库（含 embedding），doc.status=completed、segment_count=N</div>
+        <code>kb_segment ← vectors ; doc.status = "completed"</code>
+      </div>
+      <span class="pill">未到达</span>
+    </div>
+  </section>
+
+  <div class="note">
+    <b>已做的代码修复</b>（<code>app/services/kb/document_pipeline.py</code>）：向量化步此前落入通用
+    <code>except Exception</code>，error_detail 只能记成粗糙的 <code>[pipeline]</code>，看不出节点。
+    现已单独标注为 <code>[vectorize]</code>，并由 <code>_embed_failure()</code> 自动附上
+    provider / base_url / model / dimension / api_key_configured，失败即可自解释。<br />
+    <b>仍未解决（属环境/配置，需你决策）</b>：本机与局域网当前没有任何可达的嵌入服务。请三选一：
+    ① 在 <code>localhost:8080</code> 起一个 OpenAI 兼容嵌入服务（NIM / llama.cpp / vLLM）；
+    ② 恢复 <code>192.168.40.30:80</code> 的 GPUStack 并把 <code>EMBEDDING_PROVIDER</code> 改回 <code>gpustack</code>；
+    ③ 改用百炼：<code>EMBEDDING_PROVIDER=dashscope</code> + 填 <code>ALIBABA_API_KEY</code>（本机代理 127.0.0.1:7890 可达）。
+  </div>
+</div>
+</body>
+</html>

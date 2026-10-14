@@ -27,6 +27,7 @@ from sqlalchemy import delete as sa_delete, select, text
 
 from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_segment import KbSegment
+from app.services.kb.vector_utils import fit_vector_dimension
 
 # metadata → 冗余列的投影（D14）
 _PROJECTIONS = ("chunk_type", "answer", "keywords")
@@ -59,8 +60,16 @@ class PgVectorStore(VectorStoreBase):
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         if self._session is not None:
             try:
-                self._session.close()
+                # insert / delete / create_collection 内部只 flush 不 commit。
+                # 本 store 自持独立 Session（SessionLocal 是普通 sessionmaker，
+                # 非 scoped_session），若不在退出时提交，关闭会话会回滚全部未提交
+                # 变更 —— 表现为「文档 completed、segment_count>0 但查不到切片」。
+                if exc_type is None:
+                    self._session.commit()
+                else:
+                    self._session.rollback()
             finally:
+                self._session.close()
                 self._session = None
 
     @property
@@ -116,13 +125,16 @@ class PgVectorStore(VectorStoreBase):
                     KbSegment.chunk_index == rec.chunk.chunk_index,
                 )
             )
+            # 维度适配：模型输出长度未必等于集合维度，写入前截断/补齐，
+            # 避免 pgvector 报 "expected N dimensions, not M"
+            raw_vector = None if self.index_mode == "economy" else rec.vector
             row = KbSegment(
                 tenant_id=self.tenant_id,
                 collection=collection,
                 document_id=rec.document_id,
                 chunk_index=rec.chunk.chunk_index,
                 content=content,
-                embedding=None if self.index_mode == "economy" else rec.vector,
+                embedding=fit_vector_dimension(raw_vector, self.dimensions),
                 # 列名 metadata 的 ORM 属性名是 metadata_（避免与 declarative MetaData 冲突）
                 metadata_=meta,
             )

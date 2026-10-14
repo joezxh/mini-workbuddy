@@ -210,3 +210,68 @@ def create_performance_indexes(engine: Engine) -> None:
                 conn.execute(text(sql))
             except Exception as exc:  # noqa: BLE001 - 索引失败不阻断启动
                 logger.warning(f"索引创建跳过（不影响正确性）: {exc}")
+
+
+# ── 向量列维度对齐（幂等，仅空表自动执行）────────────────────────────────────
+def align_vector_dimensions(engine: Engine) -> None:
+    """把 ``kms_segment.embedding`` 维度对齐到当前生效的嵌入配置。
+
+    pgvector 列维度在建表时即固定；当嵌入模型变更（例如改用 2048 维的
+    ``qwen3-vl-embedding-2b``）而列仍是 768 时，写入会直接报
+    ``expected 768 dimensions, not 2048``。此处按**实际生效配置**
+    （模型管理默认向量化模型优先、环境变量兜底）解析目标维度并 ALTER 列类型。
+
+    安全约束：仅当表为空时才自动 ALTER——pgvector 无法无损转换已有向量，
+    有数据时只告警并提示先重灌，绝不静默丢弃向量。
+    """
+    from app.services.kb.embedding_config import resolve_embedding_config_with_fallback
+
+    if "kms_segment" not in inspect(engine).get_table_names():
+        return
+    try:
+        target = int(resolve_embedding_config_with_fallback(None).dimension)
+    except Exception as exc:  # noqa: BLE001 - 解析失败不得阻断启动
+        logger.warning(f"向量维度对齐跳过（无法解析嵌入配置）: {exc}")
+        return
+    if not target:
+        return
+
+    with engine.begin() as conn:
+        current = conn.execute(text(
+            "SELECT a.atttypmod FROM pg_attribute a "
+            "JOIN pg_class c ON c.oid = a.attrelid "
+            "WHERE c.relname = 'kms_segment' AND a.attname = 'embedding'"
+        )).scalar()
+        if current == target:
+            return
+        rows = conn.execute(text("SELECT COUNT(*) FROM kms_segment")).scalar() or 0
+        if rows:
+            logger.warning(
+                f"kms_segment.embedding 维度为 {current}，当前嵌入配置为 {target}，"
+                f"但表内已有 {rows} 条切片，无法自动转换；"
+                "请先对存量切片执行重灌（换嵌入模型重灌）后再写入"
+            )
+            return
+        # 维度变更必须重建 HNSW 索引（向量算子索引与维度绑定）；
+        # pgvector 的 hnsw/ivfflat 索引上限 2000 维，超过则退化为无索引
+        # （顺序扫描，检索结果仍正确，只是变慢）
+        conn.execute(text("DROP INDEX IF EXISTS idx_kms_segment_embedding_hnsw"))
+        conn.execute(text(
+            f"ALTER TABLE kms_segment ALTER COLUMN embedding TYPE vector({target})"
+        ))
+        if target <= 2000:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_kms_segment_embedding_hnsw ON kms_segment "
+                "USING hnsw (embedding vector_cosine_ops) "
+                "WITH (m = 16, ef_construction = 64)"
+            ))
+            logger.info(
+                f"kms_segment.embedding 维度已对齐：{current} → {target}"
+                "（空表，HNSW 索引已重建）"
+            )
+        else:
+            logger.warning(
+                f"kms_segment.embedding 维度已对齐：{current} → {target}；"
+                f"但 {target} 超过 pgvector hnsw 索引上限 2000，已跳过向量索引"
+                "（顺序扫描，检索结果仍正确但更慢；如需索引请改用 ≤2000 维的嵌入模型）"
+            )

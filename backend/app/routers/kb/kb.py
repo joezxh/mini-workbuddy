@@ -8,6 +8,8 @@ Service 内核间调用；前端与业务一律走本路由（主应用认证 + 
 from __future__ import annotations
 
 import asyncio
+import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -30,8 +32,11 @@ from app.services.kb.kb_permissions import (
 )
 from app.services.kb.parser_selector import supported_media_types
 from app.services.kb.rag.chunker_factory import CHUNKER_REGISTRY, chunker_schemas
+from app.services.kb.upload_store import drop_upload, load_upload, save_upload
 
 router = APIRouter(prefix="/api/v1/kb", tags=["通用知识库"])
+
+logger = logging.getLogger(__name__)
 
 
 def _tenant_id(current_user: SysUser) -> int:
@@ -112,7 +117,14 @@ def upload_document(
         file_size=len(content),
         creator_id=getattr(current_user, "user_id", None),
     )
+    # 落盘原始文件：供「重试」重新执行 解析→清洗→切块→向量化（spec §10.5）
+    # 注意：uuid_code 是 Python 侧 default，必须先 flush 才会生成
     db.add(doc)
+    db.flush()
+    doc.meta = {
+        "file_path": save_upload(tenant_id, doc.uuid_code, doc.name, content),
+        "chunker_type": chunker_type,
+    }
     db.commit()
     db.refresh(doc)
 
@@ -161,6 +173,7 @@ def delete_document(
     from app.services.kb.pgvector_store import PGVectorStore
 
     PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+    drop_upload((doc.meta or {}).get("file_path"))
     db.delete(doc)
     db.commit()
     return {"deleted": uuid_code}
@@ -417,6 +430,169 @@ def reprocess_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"document_id": uuid_code, "reembedded": count}
+
+
+@router.post("/documents/{uuid_code}/retry")
+def retry_document(
+    uuid_code: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """重试：用留存的原始文件重新执行 解析 → 清洗 → 切块 → 向量化。
+
+    与 ``/reprocess`` 的区别：后者只重嵌**已有**切片（不重新分段）；
+    本端点先清理该文档旧切片，再按原 chunker 配置重跑整条管线，
+    适用于摄入失败、或调整切块策略后想重新分段的场景。
+
+    历史文档（上传早于落盘改造）没有 ``meta.file_path``，此时返回 400
+    并提示改用 ``/reprocess``。
+    """
+    from app.services.kb.pgvector_store import PGVectorStore
+
+    tenant_id = _tenant_id(current_user)
+    doc = _get_document(db, tenant_id, uuid_code)
+    meta = dict(doc.meta or {})
+    file_path = meta.get("file_path")
+
+    if not file_path:
+        raise HTTPException(
+            status_code=400,
+            detail="该文档未留存原始文件（上传早于落盘改造），无法重新分段；"
+                   "如仅需重新向量化，请改用「重新向量化」",
+        )
+    try:
+        payload = load_upload(file_path)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"原始文件已丢失：{file_path}；如仅需重新向量化，请改用「重新向量化」",
+        )
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"原始文件读取失败: {exc}")
+
+    # 清理旧切片，避免重跑后同文档出现重复分段
+    PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+
+    doc.status = "processing"
+    doc.error_detail = None
+    doc.segment_count = 0
+    doc.meta = {**meta, "retry_count": int(meta.get("retry_count") or 0) + 1}
+    db.commit()
+    db.refresh(doc)
+
+    chunker_type = meta.get("chunker_type") or "approx_token"
+
+    def _run():
+        from app.db.database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            run_document_ingest(
+                s, tenant_id, doc.id, payload, doc.name,
+                chunker_type=chunker_type,
+            )
+        finally:
+            s.close()
+
+    run_in_background(_run, name=f"kb-retry-{doc.uuid_code}")
+    return _serialize(doc)
+
+
+@router.get("/documents/{uuid_code}/flow")
+def document_flow(
+    uuid_code: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """文档处理流程：各步产出摘要 + 失败步骤 + 错误信息（文档列表「流程」视图）。
+
+    ``steps`` 来自管线落库的 ``meta.pipeline_steps``（parse/clean/chunk/vectorize
+    各步的解析器、切块器与产出数量）；失败时 ``failed_step`` 指出失败在哪一步，
+    ``error_detail`` 给出原始错误文本。
+    """
+    tenant_id = _tenant_id(current_user)
+    doc = _get_document(db, tenant_id, uuid_code)
+    meta = doc.meta or {}
+    return {
+        "document_id": doc.uuid_code,
+        "name": doc.name,
+        "status": doc.status,
+        "segment_count": doc.segment_count,
+        "steps": meta.get("pipeline_steps") or [],
+        "failed_step": meta.get("failed_step"),
+        "error_detail": doc.error_detail,
+        "retry_count": int(meta.get("retry_count") or 0),
+    }
+
+
+@router.post("/knowledges/{kid}/rechunk")
+def rechunk_knowledge(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """按知识库**当前**切片方案，对全部留存原文件的文档重新分段并向量化。
+
+    切片方案来自 ``WikiKnowledge.pipeline_config.chunker``（新建/编辑知识库时选择）；
+    管线本来就优先采用该配置，故本端点只需清理旧切片后重跑整条链路即可生效。
+    上传早于落盘改造的文档（无 ``meta.file_path``）会被跳过并返回在 ``skipped``。
+    """
+    from app.services.kb.pgvector_store import PGVectorStore
+
+    tenant_id = _tenant_id(current_user)
+    _require_knowledge(db, kid)
+    docs = db.execute(
+        select(KbDocument).where(
+            KbDocument.tenant_id == tenant_id,
+            KbDocument.knowledge_id == kid,
+        ).order_by(KbDocument.id)
+    ).scalars().all()
+
+    queued: list[tuple[int, str, str]] = []  # (doc_id, collection, file_path)
+    skipped: list[str] = []
+    for doc in docs:
+        path = (doc.meta or {}).get("file_path")
+        if path and Path(path).exists():
+            queued.append((doc.id, doc.collection, path))
+        else:
+            skipped.append(doc.uuid_code)
+
+    for doc_id, _collection, _path in queued:
+        doc = db.get(KbDocument, doc_id)
+        if doc is None:
+            continue
+        PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+        doc.status = "pending"
+        doc.error_detail = None
+        doc.segment_count = 0
+    db.commit()
+
+    def _run():
+        from app.db.database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            for doc_id, _collection, path in queued:
+                try:
+                    payload = load_upload(path)
+                except OSError:
+                    continue
+                doc = s.get(KbDocument, doc_id)
+                if doc is None:
+                    continue
+                try:
+                    run_document_ingest(s, tenant_id, doc.id, payload, doc.name)
+                except Exception as exc:  # noqa: BLE001 - 单文档失败不中断整批
+                    logger.error(f"[KB 重新分段] 文档 {doc.id} 失败: {exc}")
+        finally:
+            s.close()
+
+    if queued:
+        run_in_background(_run, name=f"kb-rechunk-{kid}")
+    return {"queued": len(queued), "skipped": skipped}
 
 
 @router.post("/collections/{collection}/table-records", status_code=201)
@@ -679,7 +855,7 @@ def supported_content_types():
 
 @router.get("/chunkers")
 def chunkers():
-    """已注册切片器（approx_token / qa / parent_child）与参数 Schema（D6）。"""
+    """已注册切片方案与各自参数 Schema（D6）：含展示名，供前端下拉。"""
     return chunker_schemas()
 
 

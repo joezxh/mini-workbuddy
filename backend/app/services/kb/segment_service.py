@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from app.models.kb.kb_document import KbDocument
 from app.models.kb.kb_segment import KbSegment
 from app.services.kb.index_mode import _embed_texts, resolve_index_mode
+from app.services.kb.vector_utils import fit_vector_dimension
 
 # D14：metadata → 冗余列的投影
 _PROJECTIONS = ("chunk_type", "answer", "keywords")
@@ -60,6 +61,16 @@ def _should_embed(db, seg: KbSegment) -> bool:
     return resolve_index_mode(db, seg.collection) != "economy"
 
 
+def _collection_dimensions(db, collection: str) -> Optional[int]:
+    """取集合配置的向量维度；集合行缺失返回 None（不限制）。"""
+    from app.models.kb.kb_collection import KbCollection
+
+    coll = db.execute(
+        select(KbCollection).where(KbCollection.name == collection)
+    ).scalar_one_or_none()
+    return coll.dimensions if coll else None
+
+
 def update_segment(
     db,
     tenant_id: int,
@@ -85,7 +96,10 @@ def update_segment(
     if content is not None:
         seg.content = content
         if _should_embed(db, seg):
-            seg.embedding = _embed_one(content, embed_fn)
+            # 向量写入前按集合维度截断/补齐，避免维度不符导致写入失败
+            seg.embedding = fit_vector_dimension(
+                _embed_one(content, embed_fn), _collection_dimensions(db, seg.collection)
+            )
 
     db.commit()
     return seg

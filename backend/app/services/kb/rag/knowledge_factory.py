@@ -16,19 +16,40 @@ from agentscope.rag import KnowledgeBase
 from sqlalchemy import select
 
 from app.models.kb.kb_collection import KbCollection
+from app.services.kb.index_mode import resolve_knowledge_id
 from app.services.kb.rag.embedding_factory import EmbeddingSettings, build_embedding_model
 from app.services.kb.rag.pg_vector_store import PgVectorStore
 
 
 def _resolve_dimensions(session, collection_name: str, cfg: EmbeddingSettings | None) -> int:
-    """维度以 kb_collection 为准；与嵌入模型不一致时由 create_collection 报错（D19）。"""
+    """解析向量维度，回落顺序：集合行 → 同知识库历史行 → 嵌入配置 → 全局默认维度。
+
+    与嵌入模型不一致时由 create_collection 报错（D19）。
+    """
     coll = session.execute(
         select(KbCollection).where(KbCollection.name == collection_name)
     ).scalar_one_or_none()
     if coll is not None:
         return coll.dimensions
+    # 兼容历史数据：早期建库曾以随机名 kb_<uuid> 落库，此处按约定 kb_{knowledge_id}
+    # 反查同一知识库的集合行取维度；随后 create_collection 会补建约定命名的行。
+    kid = resolve_knowledge_id(collection_name)
+    if kid is not None:
+        legacy = session.execute(
+            select(KbCollection).where(KbCollection.knowledge_id == kid)
+        ).scalar_one_or_none()
+        if legacy is not None:
+            return legacy.dimensions
     if cfg and cfg.dimensions:
         return cfg.dimensions
+    # 兜底：集合行从未创建（历史知识库建库时未联动建集合）时，用全局默认维度，
+    # 与 kb_segment.embedding 物理列 Vector(GPUSTACK_EMBEDDING_DIMENSION) 一致；
+    # 随后 create_collection 会据此补建集合行（维度不一致由其在 D19 处报错）。
+    from app.config import settings
+
+    dim = getattr(settings, "GPUSTACK_EMBEDDING_DIMENSION", None)
+    if dim:
+        return int(dim)
     raise ValueError(f"collection {collection_name!r} 不存在且未指定嵌入维度")
 
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="wiki-index" :class="{ 'wiki-index--embedded': embedded }">
+  <div class="wiki-index" :class="{ 'wiki-index--embedded': embedded, 'wiki-index--focus': props.wikiId != null }">
     <div class="wiki-layout">
       <!-- 左栏：侧边栏（标题 + 操作入口 + 分类树） -->
       <aside class="wiki-side">
@@ -64,6 +64,38 @@
 
       <!-- 右栏：内容主窗体（文章列表） -->
       <main class="wiki-main">
+        <!-- 面板头 + 统计卡：仅聚焦模式（知识库管理页传入 wikiId）显示 -->
+        <div v-if="focusMode" class="wiki-main__pane-head">
+          <div>
+            <h2 class="wiki-main__pane-title">
+              <BookOutlined class="wiki-main__pane-icon" />
+              {{ focusTitle || t('kmsWiki.title') }}
+            </h2>
+            <div class="wiki-main__pane-sub">
+              {{ t('kmsWiki.title') }} · {{ t('kmsWiki.articleCount') }} {{ stats.total }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="focusMode" class="wiki-stats">
+          <div class="wiki-stat">
+            <div class="wiki-stat__k">{{ t('kmsWiki.articleCount') }}</div>
+            <div class="wiki-stat__v">{{ stats.total }}</div>
+          </div>
+          <div class="wiki-stat">
+            <div class="wiki-stat__k">{{ t('kmsWiki.statusPublished') }}</div>
+            <div class="wiki-stat__v wiki-stat__v--ok">{{ stats.published }}</div>
+          </div>
+          <div class="wiki-stat">
+            <div class="wiki-stat__k">{{ t('kmsWiki.statusDraft') }}</div>
+            <div class="wiki-stat__v">{{ stats.draft }}</div>
+          </div>
+          <div class="wiki-stat">
+            <div class="wiki-stat__k">{{ t('kmsWiki.statusArchived') }}</div>
+            <div class="wiki-stat__v wiki-stat__v--muted">{{ stats.archived }}</div>
+          </div>
+        </div>
+
         <div class="wiki-main__toolbar">
           <a-input-search
             v-model:value="searchQuery"
@@ -73,6 +105,18 @@
             @change="onSearchInputChange"
             allow-clear
           />
+          <a-select
+            v-if="focusMode"
+            v-model:value="filterCategoryId"
+            style="width: 150px"
+            allow-clear
+            :placeholder="t('common.all')"
+            @change="onFilterCategoryChange"
+          >
+            <a-select-option v-for="c in flatCategories" :key="c.id" :value="c.id">
+              {{ c.name }}
+            </a-select-option>
+          </a-select>
           <a-space>
             <a-select
               v-model:value="sortField"
@@ -174,7 +218,17 @@
           <a-button size="small" @click="checkedIds = []">{{ t('common.cancel') }}</a-button>
         </div>
 
+        <a-empty
+          v-if="focusMode && !loading && !articles.length"
+          :description="t('common.noData')"
+        >
+          <a-button type="primary" @click="openCreateModal">
+            <template #icon><PlusOutlined /></template>
+            {{ t('kmsWiki.createArticle') }}
+          </a-button>
+        </a-empty>
         <a-list
+          v-else
           :data-source="articles"
           :loading="loading"
           item-layout="vertical"
@@ -377,7 +431,10 @@ import { exportOkfBundle, importOkfBundle } from '@/api/kb'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
-withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const props = withDefaults(defineProps<{ embedded?: boolean; wikiId?: number | null }>(), {
+  embedded: false,
+  wikiId: undefined,
+})
 
 const articles = ref<any[]>([])
 const categoryTree = ref<any[]>([])
@@ -394,6 +451,65 @@ const sortField = ref<'updated_at' | 'title' | 'version' | 'view_count'>('update
 const sortOrder = ref<'asc' | 'desc'>('desc')
 /** 批量选择的文章 id（与左栏树的 selectedKeys 区分开） */
 const checkedIds = ref<number[]>([])
+
+/** 聚焦模式：由知识库管理页传入 wikiId 时启用面板头 / 统计卡 / 分类筛选 */
+const focusMode = computed(() => props.wikiId != null)
+
+/** 聚焦模式面板头标题：取当前 Wiki 名称 */
+const focusTitle = computed(() => {
+  const kb = knowledges.value.find((k: any) => k.id === props.wikiId)
+  return kb?.name || ''
+})
+
+/** 聚焦模式工具栏的额外分类筛选 */
+const filterCategoryId = ref<number | undefined>(undefined)
+
+/** 扁平化分类，供分类筛选下拉使用 */
+const flatCategories = computed(() => {
+  const out: { id: number; name: string }[] = []
+  const walk = (nodes: any[]) =>
+    (nodes || []).forEach((n) => {
+      out.push({ id: n.id, name: n.name })
+      walk(n.children || [])
+    })
+  walk(categoryTree.value)
+  return out
+})
+
+/** 统计卡：文章总数 / 已发布 / 草稿 / 归档 */
+const stats = reactive({ total: 0, published: 0, draft: 0, archived: 0 })
+
+/**
+ * 统计按 status 分别取总数（page_size=1 的轻量请求），保证数字是全量而非当前页。
+ * 未传 status 时后端默认 status>=0（不含归档），与列表 total 口径一致。
+ */
+async function loadStats(base: any) {
+  const params = { ...base }
+  delete params.page
+  delete params.page_size
+  delete params.sort
+  delete params.order
+  delete params.status
+  const count = async (status: number) => {
+    const r: any = await listArticles({ ...params, page: 1, page_size: 1, status })
+    return r?.total ?? 0
+  }
+  try {
+    stats.total = total.value
+    stats.published = await count(1)
+    stats.draft = await count(0)
+    stats.archived = await count(-1)
+  } catch {
+    stats.published = 0
+    stats.draft = 0
+    stats.archived = 0
+  }
+}
+
+function onFilterCategoryChange() {
+  page.value = 1
+  loadArticles()
+}
 const deleting = ref(false)
 
 /** 左栏树选中项：kind=category 按分类过滤；kind=knowledge 按知识库过滤 */
@@ -487,10 +603,30 @@ function onConvertedCreate(res: any) {
   createExtractedFields.value = buildOkfFieldDefs(res)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 聚焦模式：传入 wikiId 时直接定位到该 Wiki 的文章/分类管理
+  if (props.wikiId != null) {
+    selectedKind.value = 'knowledge'
+    selectedId.value = props.wikiId
+  }
+  await loadTreeData()
   loadArticles()
-  loadTreeData()
 })
+
+// 外层管理页切换所选 Wiki 时，重新聚焦到新 Wiki
+watch(
+  () => props.wikiId,
+  (id) => {
+    if (id != null) {
+      selectedKind.value = 'knowledge'
+      selectedId.value = id
+      // 切换知识库时清空聚焦模式的分类筛选
+      filterCategoryId.value = undefined
+      page.value = 1
+      loadArticles()
+    }
+  },
+)
 
 async function loadArticles() {
   loading.value = true
@@ -506,6 +642,8 @@ async function loadArticles() {
     } else if (selectedKind.value === 'knowledge' && selectedId.value) {
       params.knowledge_id = selectedId.value
     }
+    // 聚焦模式工具栏的分类筛选（与知识库筛选同时生效）
+    if (filterCategoryId.value) params.category_id = filterCategoryId.value
     // 搜索走列表接口的 keyword 参数：与分页、筛选共用一套 total，
     // 不再出现"搜索结果覆盖列表且分页 total 不同步"的问题。
     if (keyword.value) params.keyword = keyword.value
@@ -513,6 +651,8 @@ async function loadArticles() {
     articles.value = res.items || []
     total.value = res.total || 0
     checkedIds.value = []
+    // 统计卡仅在聚焦模式下取数，避免给独立页面带来额外请求
+    if (focusMode.value) await loadStats(params)
   } catch (e: any) {
     message.error(t('wikiMgmt.art.loadFailed'))
   } finally {
@@ -1226,6 +1366,67 @@ function formatDate(dateStr: string) {
   flex-wrap: wrap;
 }
 
+/* 聚焦模式面板头（与知识库管理页统一视觉） */
+.wiki-main__pane-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.wiki-main__pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.wiki-main__pane-icon {
+  color: var(--accent);
+}
+.wiki-main__pane-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-secondary);
+}
+
+/* 统计卡：文章总数 / 已发布 / 草稿 / 归档 */
+.wiki-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.wiki-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #fff);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.wiki-stat:hover {
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+  transform: translateY(-1px);
+}
+.wiki-stat__k {
+  font-size: 11.5px;
+  color: var(--fg-secondary);
+}
+.wiki-stat__v {
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--accent);
+}
+.wiki-stat__v--ok {
+  color: var(--success, #52c41a);
+}
+.wiki-stat__v--muted {
+  color: var(--fg-secondary);
+}
+
 .wiki-main__filter {
   display: flex;
   align-items: center;
@@ -1300,5 +1501,13 @@ function formatDate(dateStr: string) {
 
 .wiki-index--embedded .wiki-side__head {
   justify-content: flex-end;
+}
+
+/* 聚焦模式：隐藏内部分类侧栏，避免与外层管理页左树「树中树」 */
+.wiki-index--focus .wiki-side {
+  display: none;
+}
+.wiki-index--focus .wiki-layout {
+  grid-template-columns: 1fr;
 }
 </style>

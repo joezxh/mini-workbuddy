@@ -1,21 +1,55 @@
 <template>
   <div class="kb-doc-pane">
-    <!-- 顶部：文档上传 + 形态切换 -->
-    <a-space class="kb-doc-pane__actions" wrap>
-      <a-upload :before-upload="handleUpload" :show-upload-list="false">
-        <a-button type="primary" :loading="uploading">{{ t('kbMgmt.uploadDocument') }}</a-button>
-      </a-upload>
-      <a-radio-group v-model:value="formatMode" button-style="solid" size="small">
-        <a-radio-button value="document">{{ t('kbMgmt.fmtDocument') }}</a-radio-button>
-        <a-radio-button value="table">{{ t('kbMgmt.fmtTable') }}</a-radio-button>
-        <a-radio-button value="qa">{{ t('kbMgmt.fmtQa') }}</a-radio-button>
-        <a-radio-button value="pipeline">{{ t('kbMgmt.fmtPipeline') }}</a-radio-button>
-      </a-radio-group>
-    </a-space>
+    <!-- 顶部：文档形态 tab 菜单（按所选知识库二级形态显示，管线调试作为调试入口常驻） -->
+    <a-radio-group v-model:value="formatMode" button-style="solid" size="small" class="kb-doc-pane__tabs">
+      <a-radio-button v-for="f in visibleFormats" :key="f" :value="f">
+        {{ formatLabels[f] }}
+      </a-radio-button>
+    </a-radio-group>
 
     <!-- 文档上传形态 -->
     <template v-if="formatMode === 'document'">
+      <!-- 列表标题（左） + 操作区（右）：位于 tab 菜单下、列表上方 -->
+      <div class="kb-doc-pane__header">
+        <span class="kb-doc-pane__title">{{ t('kbMgmt.docList') }}</span>
+        <a-space size="small">
+          <a-tooltip :title="t('kbMgmt.rechunkTip')">
+            <a-button size="small" :loading="rechunking" @click="runRechunk">
+              {{ t('kbMgmt.rechunk') }}
+            </a-button>
+          </a-tooltip>
+          <a-upload :before-upload="handleUpload" :show-upload-list="false">
+            <a-button type="primary" :loading="uploading">{{ t('kbMgmt.uploadDocument') }}</a-button>
+          </a-upload>
+        </a-space>
+      </div>
+      <!-- 统计卡：文档数 / 已完成 / 处理中 / 失败 -->
+      <div class="kb-doc-stats">
+        <div class="kb-doc-stat">
+          <div class="kb-doc-stat__k">{{ t('kbMgmt.docCount') }}</div>
+          <div class="kb-doc-stat__v">{{ docStats.total }}</div>
+        </div>
+        <div class="kb-doc-stat">
+          <div class="kb-doc-stat__k">{{ t('kbMgmt.statCompleted') }}</div>
+          <div class="kb-doc-stat__v kb-doc-stat__v--ok">{{ docStats.completed }}</div>
+        </div>
+        <div class="kb-doc-stat">
+          <div class="kb-doc-stat__k">{{ t('kbMgmt.statProcessing') }}</div>
+          <div class="kb-doc-stat__v">{{ docStats.processing }}</div>
+        </div>
+        <div class="kb-doc-stat">
+          <div class="kb-doc-stat__k">{{ t('kbMgmt.statFailed') }}</div>
+          <div class="kb-doc-stat__v kb-doc-stat__v--err">{{ docStats.failed }}</div>
+        </div>
+      </div>
+
+      <a-empty v-if="!documents.length" :description="t('common.noData')">
+        <a-upload :before-upload="handleUpload" :show-upload-list="false">
+          <a-button type="primary" :loading="uploading">{{ t('kbMgmt.uploadDocument') }}</a-button>
+        </a-upload>
+      </a-empty>
       <a-table
+        v-else
         class="kb-doc-pane__table"
         size="small"
         :data-source="documents"
@@ -32,6 +66,12 @@
           <template v-else-if="column.key === 'op'">
             <a-space size="small">
               <a-button size="small" @click="openSegments(record)">{{ t('kbMgmt.segments') }}</a-button>
+              <a-button size="small" @click="openFlow(record)">{{ t('kbMgmt.flow') }}</a-button>
+              <a-tooltip :title="t('kbMgmt.retryTip')">
+                <a-button size="small" :loading="retryingId === record.document_id" @click="onRetry(record)">
+                  {{ t('kbMgmt.retry') }}
+                </a-button>
+              </a-tooltip>
               <a-popconfirm :title="t('kbMgmt.confirmDeleteDoc')" @confirm="removeDoc(record)">
                 <a-button size="small" danger>{{ t('common.delete') }}</a-button>
               </a-popconfirm>
@@ -106,6 +146,13 @@
       @changed="loadDocs"
     />
 
+    <!-- 处理流程抽屉：各步状态 + 失败步骤 + 错误信息 -->
+    <DocumentFlowDrawer
+      v-model:open="flowOpen"
+      :record="flowDoc"
+      @changed="loadDocs"
+    />
+
     <!-- 检索测试（economy / high_quality 由后端自动路由） -->
     <a-card class="kb-doc-pane__tester" :title="t('kbMgmt.retrievalTest')" size="small">
       <a-input-search
@@ -130,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
@@ -141,20 +188,52 @@ import {
   listDocuments,
   pipelineDryRun,
   previewTableRecords,
+  rechunkKnowledge,
+  retryDocument,
   retrieve,
   uploadDocument,
   type KbDocument,
   type RetrieveResult,
 } from '@/api/kb'
+import DocumentFlowDrawer from './DocumentFlowDrawer.vue'
 import SegmentDetail from './SegmentDetail.vue'
 import TableRecordList from './TableRecordList.vue'
 import QaRecordList from './QaRecordList.vue'
 
-const props = defineProps<{ knowledgeId: number }>()
+const props = defineProps<{ knowledgeId: number; kbFormat?: string | null }>()
 const { t } = useI18n()
 
 const collection = computed(() => `kb_${props.knowledgeId}`)
 const formatMode = ref<'document' | 'table' | 'qa' | 'pipeline'>('document')
+
+/** 知识库二级形态 → 允许显示的形态 tab（一一对应）；管线调试（dry-run）作为调试入口对所有形态保留 */
+const FORMAT_TABS: Record<string, ('document' | 'table' | 'qa')[]> = {
+  document: ['document'],
+  table: ['table'],
+  qa: ['qa'],
+}
+
+const formatLabels = computed<Record<string, string>>(() => ({
+  document: t('kbMgmt.fmtDocument'),
+  table: t('kbMgmt.fmtTable'),
+  qa: t('kbMgmt.fmtQa'),
+  pipeline: t('kbMgmt.fmtPipeline'),
+}))
+
+/** 当前可见的形态 tab 列表（末位固定为管线调试） */
+const visibleFormats = computed(() => {
+  const fmt = String(props.kbFormat || 'document').trim() || 'document'
+  return [...(FORMAT_TABS[fmt] ?? ['document']), 'pipeline'] as ('document' | 'table' | 'qa' | 'pipeline')[]
+})
+
+// 切换知识库（形态变化）后，若当前 tab 不在允许列表内则回落到首个允许的形态
+watch(
+  visibleFormats,
+  (list) => {
+    if (!list.includes(formatMode.value)) formatMode.value = list[0]
+  },
+  { immediate: true },
+)
 
 const documents = ref<KbDocument[]>([])
 const uploading = ref(false)
@@ -168,8 +247,23 @@ const columns = [
   { title: '状态', key: 'status', width: 110 },
   { title: '切片', dataIndex: 'segment_count', width: 70 },
   { title: '大小', dataIndex: 'file_size', width: 90 },
-  { title: '操作', key: 'op', width: 80 },
+  { title: '操作', key: 'op', width: 220 },
 ]
+
+/**
+ * 统计卡：文档不分页（:pagination="false"），故这里的计数是全量而非当前页。
+ * pending 与 processing 都归入「处理中」。
+ */
+const docStats = computed(() => {
+  const list = documents.value || []
+  const inFlight = (s: string) => s === 'processing' || s === 'pending'
+  return {
+    total: list.length,
+    completed: list.filter((d: any) => d.status === 'completed').length,
+    processing: list.filter((d: any) => inFlight(d.status)).length,
+    failed: list.filter((d: any) => d.status === 'failed').length,
+  }
+})
 
 // ── 表格导入 ──
 const tableColumns = ref<string[]>([])
@@ -194,6 +288,50 @@ const segmentDocId = ref<string | null>(null)
 function openSegments(record: KbDocument) {
   segmentDocId.value = record.document_id
   segmentOpen.value = true
+}
+
+// ── 处理流程抽屉 ──
+const flowOpen = ref(false)
+const flowDoc = ref<KbDocument>({} as KbDocument)
+
+function openFlow(record: KbDocument) {
+  flowDoc.value = record
+  flowOpen.value = true
+}
+
+// ── 重试（重新执行 解析→清洗→切块→向量化）──
+const retryingId = ref<string | null>(null)
+
+async function onRetry(record: KbDocument) {
+  retryingId.value = record.document_id
+  try {
+    await retryDocument(record.document_id)
+    message.success(t('kbMgmt.retryStarted'))
+    await loadDocs()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.retryFailed'))
+  } finally {
+    retryingId.value = null
+  }
+}
+
+// ── 按当前切片方案重新分段（全库执行）──
+const rechunking = ref(false)
+
+async function runRechunk() {
+  rechunking.value = true
+  try {
+    const res: any = await rechunkKnowledge(props.knowledgeId)
+    message.success(`${t('kbMgmt.rechunkQueued')}：${res.queued ?? 0}`)
+    if (res.skipped?.length) {
+      message.warning(`${t('kbMgmt.rechunkSkipped')}：${res.skipped.length}`)
+    }
+    await loadDocs()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.rechunkFailed'))
+  } finally {
+    rechunking.value = false
+  }
 }
 
 function statusColor(status: string) {
@@ -345,8 +483,57 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.kb-doc-pane__actions {
+.kb-doc-pane__tabs {
   margin-bottom: 12px;
+}
+/* 列表标题行：标题靠左，上传文档等按钮靠右 */
+/* 统计卡：文档数 / 已完成 / 处理中 / 失败 */
+.kb-doc-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.kb-doc-stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #fff);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.kb-doc-stat:hover {
+  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+  transform: translateY(-1px);
+}
+.kb-doc-stat__k {
+  font-size: 11.5px;
+  color: var(--fg-secondary);
+}
+.kb-doc-stat__v {
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--accent);
+}
+.kb-doc-stat__v--ok {
+  color: var(--success, #52c41a);
+}
+.kb-doc-stat__v--err {
+  color: var(--error, #ff4d4f);
+}
+
+.kb-doc-pane__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.kb-doc-pane__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
 }
 .kb-doc-pane__table {
   margin-top: 4px;

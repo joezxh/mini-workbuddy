@@ -226,6 +226,8 @@ export function updateKnowledge(id: number, data: {
   description?: string
   status?: number
   category_id?: number | null
+  /** 摄取编排（spec §10.7）：切片方案 + 嵌入模型，原生键名 */
+  pipeline_config?: Record<string, unknown> | null
 }) {
   return request.put(`${API_PREFIX}/wiki/knowledges/${id}`, data)
 }

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>知识库管理 · 统一视觉风格预览</title>
+<style>
+  :root{
+    --primary:#3371fc; --primary-hover:#2b5fd9;
+    --bg:#f5f7fa; --card:#ffffff; --subtle:#f7f9fc;
+    --text:#1f2329; --text-2:#646a73; --text-3:#8f959e;
+    --border:#e5e6eb; --border-2:#d0d5dd;
+    --tint:#e6f0ff;
+    --success:#52c41a; --success-bg:#f6ffed; --success-br:#b7eb8f;
+    --error:#ff4d4f; --error-bg:#fff2f0; --error-br:#ffccc7;
+    --warn:#faad14; --warn-bg:#fffbe6; --warn-br:#ffe58f;
+    --info:#3371fc; --info-bg:#f0f6ff;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow:0 4px 12px rgba(16,24,40,.08);
+    --r:8px; --r-sm:6px;
+    --t:0.18s cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+
+  /* 预览页头 */
+  .preview-header{
+    position:sticky;top:0;z-index:60;
+    background:linear-gradient(135deg,#1b2a4a 0%,#24365e 55%,#2b4a86 100%);
+    color:#fff;padding:18px 28px;box-shadow:0 2px 14px rgba(16,24,40,.18);
+  }
+  .preview-header h1{font-size:17px;font-weight:600;letter-spacing:.2px}
+  .preview-header p{font-size:12.5px;opacity:.82;margin-top:3px}
+  .preview-actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
+  .pa{height:30px;padding:0 13px;border-radius:var(--r-sm);border:1px solid rgba(255,255,255,.28);
+      background:rgba(255,255,255,.1);color:#fff;cursor:pointer;transition:all var(--t);font-size:12.5px}
+  .pa:hover{background:rgba(255,255,255,.22)}
+  .pa.on{background:#fff;color:#24365e;font-weight:600;border-color:#fff}
+
+  .stage{padding:22px 28px 60px;max-width:1360px;margin:0 auto}
+  .stage-title{font-size:15px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .stage-title .tag-ver{font-size:11px;font-weight:500;color:var(--primary);background:var(--tint);padding:2px 8px;border-radius:20px}
+  .stage-desc{font-size:12.5px;color:var(--text-2);margin-bottom:14px}
+
+  /* 按钮 */
+  .btn{display:inline-flex;align-items:center;gap:6px;justify-content:center;height:32px;padding:0 15px;
+       border-radius:var(--r-sm);border:1px solid var(--border-2);background:#fff;color:var(--text);
+       cursor:pointer;transition:all var(--t);font-weight:500;white-space:nowrap}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+  .btn-text{border-color:transparent;background:transparent;color:var(--primary)}
+  .btn-text:hover{background:var(--tint);border-color:transparent}
+  .btn-sm{height:27px;padding:0 10px;font-size:12px}
+  .btn-danger{color:var(--error);border-color:var(--error-br)}
+  .btn-danger:hover{background:var(--error);border-color:var(--error);color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* 两栏工作台 */
+  .workbench{display:grid;grid-template-columns:264px 1fr;gap:16px;background:var(--card);
+             border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-sm);
+             overflow:hidden;height:600px}
+  .wb-side{border-right:1px solid var(--border);background:var(--subtle);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .wb-side-head{display:flex;justify-content:flex-end;gap:6px}
+  .wb-icon-btn{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--border-2);background:#fff;
+               cursor:pointer;color:var(--text-2);transition:all var(--t);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .wb-icon-btn:hover{color:var(--primary);border-color:var(--primary)}
+  .wb-tree{flex:1;background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;overflow:auto}
+  .wb-tree-h{font-size:11px;color:var(--text-3);letter-spacing:.6px;padding:4px 6px 8px}
+  .tnode{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--r-sm);cursor:pointer;
+         transition:background var(--t);font-size:12.5px;user-select:none}
+  .tnode:hover{background:var(--tint)}
+  .tnode.active{background:var(--tint);color:var(--primary);font-weight:500}
+  .tnode.folder{font-weight:500;color:var(--text)}
+  .tnode .caret{width:11px;font-size:9px;color:var(--text-3);transition:transform .18s;flex-shrink:0}
+  .tnode.open .caret{transform:rotate(90deg)}
+  .tnode .ti{width:15px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .ic-wiki{color:var(--primary)}
+  .ic-gen{color:#52c41a}
+  .ic-ext{color:#fa8c16}
+  .ic-folder{color:#8f959e}
+  .tnode .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tnode .cnt{font-size:11px;color:var(--text-3);background:var(--bg);padding:0 6px;border-radius:10px;flex-shrink:0}
+
+  .wb-main{overflow:auto;padding:16px;background:#fff;display:flex;flex-direction:column;min-width:0}
+
+  /* 面板头 */
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .pane-head h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .pane-sub{font-size:12px;color:var(--text-2);margin-top:2px}
+  .pane-ops{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* 统计卡 */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .stat{border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;background:var(--card);transition:all var(--t)}
+  .stat:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+  .stat .k{font-size:11.5px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+  .stat .v{font-size:20px;font-weight:600;line-height:1.3;margin-top:2px}
+  .stat.p .v{color:var(--primary)} .stat.s .v{color:var(--success)}
+  .stat.d .v{color:var(--text-2)} .stat.e .v{color:var(--error)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot.p{background:var(--primary)} .dot.s{background:var(--success)}
+  .dot.d{background:var(--border-2)} .dot.e{background:var(--error)}
+
+  /* 分段控件 */
+  .seg{display:inline-flex;border:1px solid var(--border-2);border-radius:var(--r-sm);overflow:hidden;margin-bottom:12px}
+  .seg button{height:28px;padding:0 14px;border:none;background:#fff;cursor:pointer;font-size:12.5px;
+              border-right:1px solid var(--border);transition:all var(--t)}
+  .seg button:last-child{border-right:none}
+  .seg button:hover{color:var(--primary)}
+  .seg button.on{background:var(--primary);color:#fff;font-weight:500}
+  .seg button.on:hover{color:#fff}
+
+  /* 工具栏 */
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .search{height:30px;padding:0 11px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;width:250px;transition:all var(--t)}
+  .search:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.12)}
+  select.sel{height:30px;padding:0 26px 0 10px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;
+    cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238f959e' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 9px center}
+
+  /* 表格 */
+  table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .tbl thead th{text-align:left;padding:9px 12px;background:var(--subtle);color:var(--text-2);font-weight:500;
+                font-size:11.5px;letter-spacing:.3px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .tbl thead th:first-child{border-top-left-radius:var(--r-sm)}
+  .tbl thead th:last-child{border-top-right-radius:var(--r-sm)}
+  .tbl tbody td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .tbl tbody tr{transition:background var(--t)}
+  .tbl tbody tr:hover{background:var(--subtle)}
+  .tbl .nm{display:flex;align-items:center;gap:8px;font-weight:500}
+  .tbl .muted{color:var(--text-3);font-size:11.5px}
+
+  /* 标签 */
+  .tag{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 8px;border-radius:4px;
+       font-size:11px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+  .tag-feishu{background:#e8f3ff;color:#1a5fd6;border-color:#c3dcff}
+  .tag-dingtalk{background:#eaf6ff;color:#0b7ac4;border-color:#c2e6fb}
+  .tag-yuque{background:#f5f0ff;color:#6b3fd4;border-color:#ddd0fb}
+  .tag-wecom{background:#eafaf0;color:#12874a;border-color:#c4edd6}
+  .tag-notion{background:#f4f4f4;color:#333;border-color:#dcdcdc}
+  .tag-ok{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .tag-run{background:var(--info-bg);color:var(--primary);border-color:#bcd8ff}
+  .tag-err{background:var(--error-bg);color:#cf1322;border-color:var(--error-br)}
+  .tag-idle{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+  .tag-warn{background:var(--warn-bg);color:#874d00;border-color:var(--warn-br)}
+  .tag-pub{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .tag-draft{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+
+  /* 空态 */
+  .empty{padding:78px 20px;text-align:center;color:var(--text-3)}
+  .empty .ei{font-size:40px;opacity:.45;margin-bottom:10px}
+  .empty .et{font-size:13.5px;color:var(--text-2);font-weight:500;margin-bottom:3px}
+  .empty p{font-size:12.5px;margin-bottom:15px}
+
+  /* 提示条 */
+  .alert{display:flex;gap:8px;padding:9px 12px;border-radius:var(--r-sm);font-size:12.5px;border:1px solid;
+         margin-bottom:12px;align-items:flex-start;line-height:1.55}
+  .alert .ai{flex-shrink:0;font-size:13px;line-height:1.4}
+  .alert.info{background:var(--info-bg);border-color:#bcd8ff;color:#0958d9}
+  .alert.ok{background:var(--success-bg);border-color:var(--success-br);color:#237804}
+
+  .note{font-size:11.5px;color:var(--text-3);margin-top:12px;line-height:1.65}
+  code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:11.5px;
+       font-family:ui-monospace,Menlo,Consolas,monospace;color:#c7254e}
+
+  /* 分页 */
+  .pager{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text-2)}
+  .pg{min-width:28px;height:28px;padding:0 7px;border:1px solid var(--border-2);border-radius:var(--r-sm);
+      background:#fff;cursor:pointer;transition:all var(--t)}
+  .pg:hover{border-color:var(--primary);color:var(--primary)}
+  .pg.on{background:var(--primary);border-color:var(--primary);color:#fff}
+</style>
+</head>
+<body>
+
+<div class="preview-header">
+  <h1>知识库管理 · 统一视觉风格预览</h1>
+  <p>左侧「类别 + 知识库」树统一为三类图标区分；右侧按知识库类型切换不同界面（Wiki / 通用 / 外部），含空态与有数据态</p>
+  <div class="preview-actions">
+    <button class="pa" data-s="none" onclick="show('none')">空态·未选择</button>
+    <button class="pa" data-s="wiki" onclick="show('wiki')">Wiki 知识库</button>
+    <button class="pa" data-s="gen" onclick="show('gen')">通用·有文档</button>
+    <button class="pa" data-s="genEmpty" onclick="show('genEmpty')">通用·空态</button>
+    <button class="pa" data-s="ext" onclick="show('ext')">外部·有文档</button>
+    <button class="pa" data-s="extEmpty" onclick="show('extEmpty')">外部·空态</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-title">知识库管理页 <span class="tag-ver">KnowledgeBaseManager.vue</span></div>
+  <div class="stage-desc">左树：分类为父节点，知识库为叶子 —— Wiki(📖) / 通用(📘) / 外部(🔗) 三类用不同图标区分；右侧内容按所选知识库类型切换。</div>
+
+  <div class="workbench">
+    <!-- ── 左树 ── -->
+    <div class="wb-side">
+      <div class="wb-side-head">
+        <button class="wb-icon-btn" title="新建分类">＋</button>
+        <button class="wb-icon-btn" title="新建知识库">📘</button>
+      </div>
+      <div class="wb-tree">
+        <div class="wb-tree-h">全部知识库</div>
+
+        <div class="tnode folder open" onclick="tg(this)"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">产品文档</span><span class="cnt">3</span></div>
+        <div style="padding-left:14px">
+          <div class="tnode" data-k="wiki" onclick="show('wiki')"><span class="caret"></span><span class="ti ic-wiki">📖</span><span class="nm">团队 Wiki</span><span class="cnt">48</span></div>
+          <div class="tnode" data-k="gen" onclick="show('gen')"><span class="caret"></span><span class="ti ic-gen">📘</span><span class="nm">通用知识库-制度</span><span class="cnt">12</span></div>
+          <div class="tnode" data-k="genEmpty" onclick="show('genEmpty')"><span class="caret"></span><span class="ti ic-gen">📘</span><span class="nm">通用知识库-草稿</span><span class="cnt">0</span></div>
+        </div>
+
+        <div class="tnode folder open" onclick="tg(this)"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">研发中心</span><span class="cnt">2</span></div>
+        <div style="padding-left:14px">
+          <div class="tnode" data-k="ext" onclick="show('ext')"><span class="caret"></span><span class="ti ic-ext">🔗</span><span class="nm">外部知识库-研发</span><span class="cnt">5</span></div>
+          <div class="tnode" data-k="extEmpty" onclick="show('extEmpty')"><span class="caret"></span><span class="ti ic-ext">🔗</span><span class="nm">外部知识库-市场</span><span class="cnt">0</span></div>
+        </div>
+
+        <div class="tnode folder" onclick="tg(this)"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">未分类</span><span class="cnt">1</span></div>
+        <div style="padding-left:14px;display:none">
+          <div class="tnode" data-k="wiki" onclick="show('wiki')"><span class="caret"></span><span class="ti ic-wiki">📖</span><span class="nm">新人手册</span><span class="cnt">7</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 右侧内容 ── -->
+    <div class="wb-main">
+
+      <!-- 空态·未选择 -->
+      <div class="pane" data-p="none">
+        <div class="empty">
+          <div class="ei">📚</div>
+          <div class="et">请选择知识库</div>
+          <p>在左侧点击一个知识库，这里会按它的类型展示对应管理界面</p>
+        </div>
+      </div>
+
+      <!-- Wiki -->
+      <div class="pane" data-p="wiki" style="display:none">
+        <div class="pane-head">
+          <div><h2>📖 团队 Wiki</h2><div class="pane-sub">Wiki 知识库 · 已聚焦该知识库的文章与分类管理 · 共 48 篇</div></div>
+          <div class="pane-ops">
+            <button class="btn btn-sm" onclick="toast('打开分类管理')">分类管理</button>
+            <button class="btn btn-sm" onclick="toast('打开 OKF 导出')">导出 OKF</button>
+            <button class="btn btn-primary btn-sm" onclick="toast('新建文章')">＋ 新建文章</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat p"><div class="k"><span class="dot p"></span>文章总数</div><div class="v">48</div></div>
+          <div class="stat s"><div class="k"><span class="dot s"></span>已发布</div><div class="v">41</div></div>
+          <div class="stat d"><div class="k"><span class="dot d"></span>草稿</div><div class="v">7</div></div>
+          <div class="stat e"><div class="k"><span class="dot e"></span>本月新增</div><div class="v">6</div></div>
+        </div>
+        <div class="toolbar">
+          <div style="display:flex;gap:8px">
+            <input class="search" placeholder="搜索文章标题 / 正文 / 标签">
+            <select class="sel"><option>分类：全部</option><option>架构设计</option><option>接入指南</option></select>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="sel"><option>排序：最近更新</option><option>标题</option><option>浏览量</option></select>
+            <button class="btn btn-sm" onclick="toast('切换升降序')">↓</button>
+          </div>
+        </div>
+        <table class="tbl">
+          <thead><tr><th style="width:36%">标题</th><th style="width:14%">分类</th><th style="width:12%">状态</th><th style="width:12%">更新时间</th><th style="width:12%">浏览</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="nm">📄 服务端架构设计说明</div><div class="muted">server-architecture · v12</div></td><td>架构设计</td><td><span class="tag tag-pub">已发布</span></td><td class="muted">10-12 18:02</td><td class="muted">1,284</td><td><button class="btn btn-text btn-sm">查看</button><button class="btn btn-text btn-sm">编辑</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 接入指南（2026 Q4）</div><div class="muted">onboarding-guide · v3</div></td><td>接入指南</td><td><span class="tag tag-pub">已发布</span></td><td class="muted">10-13 09:41</td><td class="muted">856</td><td><button class="btn btn-text btn-sm">查看</button><button class="btn btn-text btn-sm">编辑</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 数据库分库分表方案</div><div class="muted">db-sharding · v5</div></td><td>架构设计</td><td><span class="tag tag-draft">草稿</span></td><td class="muted">10-09 09:15</td><td class="muted">92</td><td><button class="btn btn-text btn-sm">查看</button><button class="btn btn-text btn-sm">编辑</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 鉴权与限流规范</div><div class="muted">auth-ratelimit · v2</div></td><td>接入指南</td><td><span class="tag tag-pub">已发布</span></td><td class="muted">10-02 16:20</td><td class="muted">431</td><td><button class="btn btn-text btn-sm">查看</button><button class="btn btn-text btn-sm">编辑</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 值班与告警配置</div><div class="muted">oncall-alert · v8</div></td><td>运维手册</td><td><span class="tag tag-pub">已发布</span></td><td class="muted">09-25 10:00</td><td class="muted">317</td><td><button class="btn btn-text btn-sm">查看</button><button class="btn btn-text btn-sm">编辑</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+          </tbody>
+        </table>
+        <div class="pager"><span>共 48 条</span><button class="pg">‹</button><button class="pg on">1</button><button class="pg">2</button><button class="pg">3</button><button class="pg">›</button></div>
+      </div>
+
+      <!-- 通用·有文档 -->
+      <div class="pane" data-p="gen" style="display:none">
+        <div class="pane-head">
+          <div><h2>📘 通用知识库-制度</h2><div class="pane-sub">通用知识库 · 文档形态 · 高质量索引 · 共 12 个文档</div></div>
+          <div class="pane-ops">
+            <button class="btn btn-sm" onclick="toast('已提交重新切片任务')">重新切片</button>
+            <button class="btn btn-primary btn-sm" onclick="toast('选择文件上传')">上传文档</button>
+          </div>
+        </div>
+        <div class="seg">
+          <button class="on" onclick="seg(this)">文档</button>
+          <button onclick="seg(this)">表格</button>
+          <button onclick="seg(this)">问答</button>
+          <button onclick="seg(this)">流水线调试</button>
+        </div>
+        <div class="stats">
+          <div class="stat p"><div class="k"><span class="dot p"></span>文档数</div><div class="v">12</div></div>
+          <div class="stat s"><div class="k"><span class="dot s"></span>已完成</div><div class="v">9</div></div>
+          <div class="stat d"><div class="k"><span class="dot d"></span>处理中</div><div class="v">2</div></div>
+          <div class="stat e"><div class="k"><span class="dot e"></span>失败</div><div class="v">1</div></div>
+        </div>
+        <table class="tbl">
+          <thead><tr><th style="width:30%">文档</th><th style="width:12%">状态</th><th style="width:10%">分段数</th><th style="width:14%">更新时间</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="nm">📄 员工手册-2026.pdf</div><div class="muted">2.4 MB · PDF</div></td><td><span class="tag tag-ok">completed</span></td><td class="muted">86</td><td class="muted">10-11 14:20</td><td><button class="btn btn-text btn-sm">分段</button><button class="btn btn-text btn-sm">流程</button><button class="btn btn-text btn-sm">重试</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 报销制度.md</div><div class="muted">18 KB · Markdown</div></td><td><span class="tag tag-ok">completed</span></td><td class="muted">24</td><td class="muted">10-10 09:05</td><td><button class="btn btn-text btn-sm">分段</button><button class="btn btn-text btn-sm">流程</button><button class="btn btn-text btn-sm">重试</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 考勤与假期.docx</div><div class="muted">640 KB · Word</div></td><td><span class="tag tag-run">processing…</span></td><td class="muted">—</td><td class="muted">10-13 10:02</td><td><button class="btn btn-text btn-sm">分段</button><button class="btn btn-text btn-sm">流程</button><button class="btn btn-text btn-sm">重试</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 信息安全规范.pdf</div><div class="muted">3.1 MB · PDF</div></td><td><span class="tag tag-err">failed</span></td><td class="muted">0</td><td class="muted">10-12 20:41</td><td><button class="btn btn-text btn-sm">分段</button><button class="btn btn-text btn-sm">流程</button><button class="btn btn-text btn-sm">重试</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+            <tr><td><div class="nm">📄 绩效考核办法.md</div><div class="muted">22 KB · Markdown</div></td><td><span class="tag tag-ok">completed</span></td><td class="muted">31</td><td class="muted">09-28 17:33</td><td><button class="btn btn-text btn-sm">分段</button><button class="btn btn-text btn-sm">流程</button><button class="btn btn-text btn-sm">重试</button><button class="btn btn-text btn-sm" style="color:var(--error)">删除</button></td></tr>
+          </tbody>
+        </table>
+        <div class="note">状态说明：<code>completed</code> 已完成切片嵌入；<code>processing</code> 处理中；<code>failed</code> 失败（可点「流程」查看失败步骤后重试）。</div>
+      </div>
+
+      <!-- 通用·空态 -->
+      <div class="pane" data-p="genEmpty" style="display:none">
+        <div class="pane-head">
+          <div><h2>📘 通用知识库-草稿</h2><div class="pane-sub">通用知识库 · 文档形态 · 暂无文档</div></div>
+          <div class="pane-ops"><button class="btn btn-primary btn-sm" onclick="toast('选择文件上传')">上传文档</button></div>
+        </div>
+        <div class="seg"><button class="on" onclick="seg(this)">文档</button><button onclick="seg(this)">表格</button><button onclick="seg(this)">问答</button></div>
+        <div class="empty">
+          <div class="ei">📄</div>
+          <div class="et">还没有任何文档</div>
+          <p>上传 PDF / Word / Markdown / TXT，系统会自动解析、切片并向量化</p>
+          <button class="btn btn-primary" onclick="toast('选择文件上传')">上传第一个文档</button>
+        </div>
+      </div>
+
+      <!-- 外部·有文档 -->
+      <div class="pane" data-p="ext" style="display:none">
+        <div class="pane-head">
+          <div><h2>🔗 外部知识库-研发</h2><div class="pane-sub">外部知识库 · 来源 飞书 / 语雀 / 钉钉 · 最后同步 10-13 10:24 · 共 5 篇</div></div>
+          <div class="pane-ops">
+            <button class="btn btn-sm" onclick="toast('已开始全量同步')">⟳ 全量同步</button>
+            <button class="btn btn-primary btn-sm" onclick="toast('打开外部文档导入向导（预填平台与已选）')">＋ 重新选择文档</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat s"><div class="k"><span class="dot s"></span>已导入</div><div class="v">5</div></div>
+          <div class="stat p"><div class="k"><span class="dot p"></span>本次新增</div><div class="v">2</div></div>
+          <div class="stat d"><div class="k"><span class="dot d"></span>未变更</div><div class="v">3</div></div>
+          <div class="stat e"><div class="k"><span class="dot e"></span>失败</div><div class="v">0</div></div>
+        </div>
+        <table class="tbl">
+          <thead><tr><th style="width:38%">文档标题</th><th style="width:16%">来源平台</th><th style="width:15%">外部更新时间</th><th style="width:13%">状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><div class="nm">📄 服务端架构设计说明</div></td><td><span class="tag tag-feishu">飞书</span></td><td class="muted">10-12 18:02</td><td><span class="tag tag-ok">● 已同步</span></td><td><button class="btn btn-text btn-sm">查看原文</button><button class="btn btn-text btn-sm">重导入</button></td></tr>
+            <tr><td><div class="nm">📄 接入指南（2026 Q4）</div></td><td><span class="tag tag-feishu">飞书</span></td><td class="muted">10-13 09:41</td><td><span class="tag tag-ok">● 已同步</span></td><td><button class="btn btn-text btn-sm">查看原文</button><button class="btn btn-text btn-sm">重导入</button></td></tr>
+            <tr><td><div class="nm">📄 API 约定</div></td><td><span class="tag tag-yuque">语雀</span></td><td class="muted">10-10 11:20</td><td><span class="tag tag-run">◐ 切片中</span></td><td><button class="btn btn-text btn-sm">重导入</button></td></tr>
+            <tr><td><div class="nm">📄 故障复盘记录</div></td><td><span class="tag tag-dingtalk">钉钉文档</span></td><td class="muted">10-08 15:55</td><td><span class="tag tag-ok">● 已同步</span></td><td><button class="btn btn-text btn-sm">查看原文</button><button class="btn btn-text btn-sm">重导入</button></td></tr>
+            <tr><td><div class="nm">📄 报销制度</div></td><td><span class="tag tag-wecom">企业微信</span></td><td class="muted">09-30 08:12</td><td><span class="tag tag-idle">○ 待处理</span></td><td><button class="btn btn-text btn-sm">重导入</button></td></tr>
+          </tbody>
+        </table>
+        <div class="note">「重新选择文档」打开同一个导入向导并预填平台与已选节点；再次导入时按 <code>external_doc_id</code> 匹配 —— 内容哈希未变则跳过（不重复嵌入），变了则覆盖同一文档重新切片，新的则新建文件。</div>
+      </div>
+
+      <!-- 外部·空态 -->
+      <div class="pane" data-p="extEmpty" style="display:none">
+        <div class="pane-head">
+          <div><h2>🔗 外部知识库-市场</h2><div class="pane-sub">外部知识库 · 尚未导入文档</div></div>
+          <div class="pane-ops"><button class="btn btn-primary btn-sm" onclick="toast('打开外部文档导入向导')">＋ 选择文档导入</button></div>
+        </div>
+        <div class="empty">
+          <div class="ei">🔗</div>
+          <div class="et">尚未导入任何外部文档</div>
+          <p>从飞书 / 钉钉文档 / 语雀 / 企业微信文档 / Notion 中选择文档导入</p>
+          <button class="btn btn-primary" onclick="toast('打开外部文档导入向导')">选择平台并导入</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function show(state){
+  document.querySelectorAll('.pane').forEach(function(p){
+    p.style.display = p.dataset.p === state ? 'block' : 'none';
+  });
+  document.querySelectorAll('.preview-actions .pa').forEach(function(b){
+    b.classList.toggle('on', b.dataset.s === state);
+  });
+  document.querySelectorAll('.tnode[data-k]').forEach(function(n){
+    n.classList.toggle('active', n.dataset.k === state);
+  });
+  var main = document.querySelector('.wb-main');
+  if (main) { main.scrollTop = 0; }
+}
+
+function tg(el){
+  el.classList.toggle('open');
+  var sib = el.nextElementSibling;
+  if (sib) { sib.style.display = sib.style.display === 'none' ? 'block' : 'none'; }
+}
+
+function seg(btn){
+  btn.parentNode.querySelectorAll('button').forEach(function(b){ b.classList.remove('on'); });
+  btn.classList.add('on');
+}
+
+function toast(m){ alert(m); }
+
+show('gen');
+</script>
+</body>
+</html>

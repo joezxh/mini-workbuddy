@@ -224,3 +224,19 @@ export async function fetchModelTestStream(
   }
   return res
 }
+
+/**
+ * 单个模型轻量连通性探测（按模型类别分派，所有类型统一支持，不产生真实生成费用）
+ */
+export interface ModelProbeResult {
+  model_id: number
+  type: number
+  ok: boolean
+  message: string
+  latency_ms: number
+  endpoint: string
+}
+
+export function probeModel(modelId: number) {
+  return request.post<ModelProbeResult>('/api/v1/admin/ai/api-key/chat-model/probe', { model_id: modelId })
+}
