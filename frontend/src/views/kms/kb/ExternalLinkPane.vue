@@ -4,7 +4,7 @@
       <div>
         <h2 class="ext-pane__title">
           <LinkOutlined class="ext-pane__icon" />
-          {{ t('kbMgmt.externalKb') }}
+          {{ props.knowledgeName || t('kbMgmt.externalKb') }}
         </h2>
         <div class="ext-pane__sub">
           {{ subtitle }}
@@ -97,7 +97,7 @@ import {
 } from '@/api/kbExternalSource'
 import ExternalSourceWizard from './ExternalSourceWizard.vue'
 
-const props = defineProps<{ knowledgeId: number }>()
+const props = defineProps<{ knowledgeId: number; knowledgeName?: string }>()
 
 const { t } = useI18n()
 

@@ -221,6 +221,9 @@ def list_articles(
     status: Optional[int] = Query(None),
     tag: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    created_after: Optional[str] = Query(
+        None, description="只看该时间之后创建的文章（ISO 日期，如 2026-10-01）"
+    ),
     sort: str = Query("updated_at", description="排序字段：updated_at | title | version | view_count"),
     order: str = Query("desc", description="排序方向：asc | desc"),
     db: Session = Depends(get_db),
@@ -247,6 +250,16 @@ def list_articles(
         pattern = f"%{keyword}%"
         stmt = stmt.where(WikiArticle.title.ilike(pattern) | WikiArticle.content.ilike(pattern))
         count_stmt = count_stmt.where(WikiArticle.title.ilike(pattern) | WikiArticle.content.ilike(pattern))
+    if created_after:
+        # 解析失败时不静默忽略：宁可报错也不返回与筛选条件不符的统计数字
+        try:
+            since = datetime.fromisoformat(created_after)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="created_after 需为 ISO 日期格式"
+            ) from exc
+        stmt = stmt.where(WikiArticle.created_at >= since)
+        count_stmt = count_stmt.where(WikiArticle.created_at >= since)
 
     # 排序：白名单映射，未知字段一律退化为 updated_at，避免把用户输入拼进 ORDER BY
     sort_col = {

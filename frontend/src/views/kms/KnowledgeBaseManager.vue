@@ -15,6 +15,7 @@
           </a-tooltip>
         </div>
         <a-card size="small" class="kb-manager__tree">
+          <div class="kb-manager__tree-title">{{ t('kbMgmt.treeTitle') }}</div>
           <a-spin v-if="loading" />
           <a-empty v-else-if="!treeData.length" />
           <a-tree
@@ -32,9 +33,9 @@
                 <span class="kb-cat-node">
                   <FolderOutlined v-if="data.type === 'category'" class="kb-icon kb-icon--folder" />
                   <FolderOpenOutlined v-else-if="data.type === 'group'" class="kb-icon kb-icon--folder" />
-                  <ReadOutlined v-else-if="data.kbType === 1" class="kb-icon" />
-                  <LinkOutlined v-else-if="data.kbType === 3" class="kb-icon" />
-                  <BookOutlined v-else class="kb-icon" />
+                  <ReadOutlined v-else-if="data.kbType === 1" class="kb-icon kb-icon--wiki" />
+                  <LinkOutlined v-else-if="data.kbType === 3" class="kb-icon kb-icon--external" />
+                  <BookOutlined v-else class="kb-icon kb-icon--general" />
                   <span class="kb-node-name">{{ data.title }}</span>
                   <span v-if="data.count != null" class="kb-node-count">{{ data.count }}</span>
                 </span>
@@ -56,9 +57,9 @@
               <span v-else class="kb-cat-node">
                 <FolderOutlined v-if="data?.type === 'category'" class="kb-icon kb-icon--folder" />
                 <FolderOpenOutlined v-else-if="data?.type === 'group'" class="kb-icon kb-icon--folder" />
-                <ReadOutlined v-else-if="data?.kbType === 1" class="kb-icon" />
-                <LinkOutlined v-else-if="data?.kbType === 3" class="kb-icon" />
-                <BookOutlined v-else-if="data" class="kb-icon" />
+                <ReadOutlined v-else-if="data?.kbType === 1" class="kb-icon kb-icon--wiki" />
+                <LinkOutlined v-else-if="data?.kbType === 3" class="kb-icon kb-icon--external" />
+                <BookOutlined v-else-if="data" class="kb-icon kb-icon--general" />
                 <span class="kb-node-name">{{ data?.title }}</span>
                 <span v-if="data?.count != null" class="kb-node-count">{{ data?.count }}</span>
               </span>
@@ -71,12 +72,14 @@
         <KbDocumentPane
           v-else-if="selectedKbType === 2 && selectedId"
           :knowledge-id="selectedId"
+          :knowledge-name="selectedKbName"
           :kb-format="selectedKbFormat"
         />
         <a-empty v-else-if="selectedKbType === 2" :description="t('kbMgmt.selectKbFirst')" />
         <ExternalLinkPane
           v-else-if="selectedKbType === 3 && selectedId"
           :knowledge-id="selectedId"
+          :knowledge-name="selectedKbName"
         />
         <a-empty v-else :description="t('kbMgmt.selectKbFirst')" />
       </a-col>
@@ -470,6 +473,12 @@ const selectedKbFormat = computed(() => {
 const selectedKbType = computed<number | null>(() => {
   const kb = knowledges.value.find((k) => k.id === selectedId.value)
   return kb?.type ?? null
+})
+
+/** 当前选中知识库名称：供各面板头展示 */
+const selectedKbName = computed(() => {
+  const kb = knowledges.value.find((k) => k.id === selectedId.value)
+  return kb?.name || ''
 })
 
 /** 左侧类别树：类别为父节点，知识库作为叶子挂到所属类别下 */
@@ -955,6 +964,23 @@ onMounted(() => {
 /* 分类/分组用中性色，与知识库类型图标区分 */
 .kb-icon--folder {
   color: var(--fg-muted, #8f959e);
+}
+/* 三类知识库用不同颜色区分：Wiki 蓝 / 通用 绿 / 外部 橙 */
+.kb-icon--wiki {
+  color: var(--accent);
+}
+.kb-icon--general {
+  color: #52c41a;
+}
+.kb-icon--external {
+  color: #fa8c16;
+}
+/* 树上部标题 */
+.kb-manager__tree-title {
+  font-size: 11px;
+  color: var(--fg-muted, #8f959e);
+  letter-spacing: 0.6px;
+  padding: 0 4px 8px;
 }
 .kb-manager__main {
   min-height: 0;

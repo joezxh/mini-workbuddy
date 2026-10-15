@@ -11,6 +11,8 @@ export function listArticles(params: {
   knowledge_id?: number
   status?: number
   keyword?: string
+  /** 只看该时间之后创建的文章（ISO 日期），用于「本月新增」统计 */
+  created_after?: string
 }) {
   return request.get(`${API_PREFIX}/wiki/articles`, { params })
 }

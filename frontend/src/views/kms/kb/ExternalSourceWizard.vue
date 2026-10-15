@@ -1,11 +1,16 @@
 <template>
   <a-modal
     :open="open"
-    :title="t('kbExt.title')"
     :width="880"
     :mask-closable="false"
     @cancel="close"
   >
+    <template #title>
+      <div>
+        <div class="extw__modal-title">{{ t('kbExt.title') }}</div>
+        <div v-if="currentProviderName" class="extw__modal-sub">{{ currentProviderName }}</div>
+      </div>
+    </template>
     <template #footer>
       <div class="extw__foot">
         <span class="extw__hint">{{ footHint }}</span>
@@ -51,7 +56,9 @@
           :class="{ 'extw__card--on': sourceType === p.source_type }"
           @click="pickProvider(p.source_type)"
         >
-          <div class="extw__card-logo">{{ p.name.slice(0, 1) }}</div>
+          <div class="extw__card-logo" :style="{ background: platformColor(p.source_type) }">
+            {{ p.name.slice(0, 1) }}
+          </div>
           <div class="extw__card-name">{{ p.name }}</div>
           <div class="extw__card-desc">{{ p.desc }}</div>
         </div>
@@ -100,6 +107,14 @@
       <div class="extw__desc">{{ t('kbExt.pickDocsDesc') }}</div>
       <div class="extw__browse">
         <div class="extw__tree-box">
+          <div class="extw__tree-head">
+            <span class="extw__tree-label">{{ t('kbExt.step3') }}</span>
+            <a-checkbox
+              :checked="allSelected"
+              :indeterminate="someSelected"
+              @change="(e: any) => selectAllLoaded(e.target.checked)"
+            >{{ t('kbExt.selectAll') }}</a-checkbox>
+          </div>
           <a-spin v-if="treeLoading" />
           <a-empty v-else-if="!treeData.length" :description="t('common.noData')" />
           <a-tree
@@ -248,6 +263,46 @@ const currentFields = computed(() => {
   const p = providers.value.find((x) => x.source_type === sourceType.value)
   return p?.credential_fields ?? []
 })
+
+const currentProviderName = computed(
+  () => providers.value.find((p) => p.source_type === sourceType.value)?.name || '',
+)
+
+/** 平台品牌色（与预览一致：飞书蓝 / 钉钉青 / 语雀紫 / 企微绿 / Notion 灰） */
+const PLATFORM_COLORS: Record<string, string> = {
+  feishu: '#1a5fd6',
+  dingtalk: '#0b7ac4',
+  yuque: '#6b3fd4',
+  wecom: '#12874a',
+  notion: '#333333',
+}
+function platformColor(sourceType: string) {
+  return PLATFORM_COLORS[sourceType] || 'var(--accent)'
+}
+
+/** 递归收集当前已加载树中的文档节点 key（用于「全选本层」） */
+function collectDocKeys(nodes: any[], out: string[] = []): string[] {
+  for (const n of nodes || []) {
+    if (n.node_type === 'doc') out.push(n.key)
+    if (n.children && n.children.length) collectDocKeys(n.children, out)
+  }
+  return out
+}
+
+const loadedDocKeys = computed(() => collectDocKeys(treeData.value))
+const allSelected = computed(
+  () => loadedDocKeys.value.length > 0 && loadedDocKeys.value.every((k) => checkedKeys.value.includes(k)),
+)
+const someSelected = computed(
+  () => !allSelected.value && loadedDocKeys.value.some((k) => checkedKeys.value.includes(k)),
+)
+
+function selectAllLoaded(checked: boolean) {
+  const keys = new Set(loadedDocKeys.value)
+  checkedKeys.value = checked
+    ? [...new Set([...checkedKeys.value, ...keys])]
+    : checkedKeys.value.filter((k) => !keys.has(k))
+}
 
 const selected = computed<ExternalNode[]>(() =>
   checkedKeys.value
@@ -462,6 +517,29 @@ watch(
 <style scoped>
 .extw__steps {
   margin-bottom: 18px;
+}
+.extw__modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.extw__modal-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-secondary);
+}
+.extw__tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.extw__tree-label {
+  font-size: 11.5px;
+  color: var(--fg-secondary);
 }
 .extw__pane {
   min-height: 260px;

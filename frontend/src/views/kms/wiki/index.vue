@@ -68,13 +68,27 @@
         <div v-if="focusMode" class="wiki-main__pane-head">
           <div>
             <h2 class="wiki-main__pane-title">
-              <BookOutlined class="wiki-main__pane-icon" />
+              <ReadOutlined class="wiki-main__pane-icon" />
               {{ focusTitle || t('kmsWiki.title') }}
             </h2>
             <div class="wiki-main__pane-sub">
               {{ t('kmsWiki.title') }} · {{ t('kmsWiki.articleCount') }} {{ stats.total }}
             </div>
           </div>
+          <!-- 面板头操作区（聚焦模式下从工具栏上移） -->
+          <a-space>
+            <a-button size="small" @click="openCategoryModal('create')">
+              {{ t('kmsWiki.manageCategories') }}
+            </a-button>
+            <a-button size="small" @click="handleOkfExport">
+              <template #icon><ExportOutlined /></template>
+              {{ t('kmsWiki.okfExport') }}
+            </a-button>
+            <a-button type="primary" size="small" @click="openCreateModal">
+              <template #icon><PlusOutlined /></template>
+              {{ t('kmsWiki.createArticle') }}
+            </a-button>
+          </a-space>
         </div>
 
         <div v-if="focusMode" class="wiki-stats">
@@ -91,8 +105,8 @@
             <div class="wiki-stat__v">{{ stats.draft }}</div>
           </div>
           <div class="wiki-stat">
-            <div class="wiki-stat__k">{{ t('kmsWiki.statusArchived') }}</div>
-            <div class="wiki-stat__v wiki-stat__v--muted">{{ stats.archived }}</div>
+            <div class="wiki-stat__k">{{ t('kmsWiki.monthlyNew') }}</div>
+            <div class="wiki-stat__v wiki-stat__v--muted">{{ stats.monthly }}</div>
           </div>
         </div>
 
@@ -141,8 +155,8 @@
                 <template #icon><ExperimentOutlined /></template>
               </a-button>
             </a-tooltip>
-            <!-- OKF 合规层入口（spec §9.5）：按左栏选中的知识库导出/导入 -->
-            <a-button @click="handleOkfExport">
+            <!-- OKF 合规层入口（spec §9.5）：聚焦模式下导出入口已上移到面板头 -->
+            <a-button v-if="!focusMode" @click="handleOkfExport">
               <template #icon><ExportOutlined /></template>
               {{ t('kmsWiki.okfExport') }}
             </a-button>
@@ -191,7 +205,7 @@
                 </a-table>
               </template>
             </a-modal>
-            <a-button type="primary" @click="openCreateModal">
+            <a-button v-if="!focusMode" type="primary" @click="openCreateModal">
               <template #icon><PlusOutlined /></template>
               {{ t('kmsWiki.createArticle') }}
             </a-button>
@@ -227,53 +241,62 @@
             {{ t('kmsWiki.createArticle') }}
           </a-button>
         </a-empty>
-        <a-list
+        <a-table
           v-else
+          class="wiki-main__table"
+          size="small"
           :data-source="articles"
+          :columns="articleColumns"
           :loading="loading"
-          item-layout="vertical"
+          :row-selection="rowSelection"
+          :pagination="false"
+          row-key="id"
         >
-          <template #renderItem="{ item }">
-            <a-list-item>
-              <template #extra>
-                <a-checkbox
-                  :checked="checkedIds.includes(item.id)"
-                  @change="(e: any) => toggleSelect(item.id, e.target.checked)"
-                />
-              </template>
-              <a-list-item-meta
-                :title="item.title"
-                :description="item.summary || t('kmsWiki.noSummary')"
-              >
-                <template #avatar>
-                  <a-avatar style="background-color: var(--accent)">
-                    {{ (item.title || '?')[0] }}
-                  </a-avatar>
-                </template>
-              </a-list-item-meta>
-              <div class="article-meta">
-                <a-tag v-for="tag in (item.tags || []).slice(0, 3)" :key="tag">{{ tag }}</a-tag>
-                <a-tag v-if="item.okf_type" :color="okfColor(item.okf_type)">{{ okfLabel(item.okf_type) }}</a-tag>
-                <!-- OKF §5.5：已过期的知识需要显式标记，避免被当作最新结论 -->
-                <a-tag v-if="isStale(item)" color="orange">{{ t('kmsWiki.stale') }}</a-tag>
-                <span v-if="item.sources?.length" class="meta-text">
-                  {{ t('kmsWiki.sourceCount', { count: item.sources.length }) }}
-                </span>
-                <span class="meta-text">v{{ item.version }} · {{ t('kmsWiki.views', { count: item.view_count }) }} · {{ formatDate(item.updated_at) }}</span>
+          <template #bodyCell="{ column, record }">
+            <!-- 标题 + slug·版本 + 关键标签（保留原列表中的元信息） -->
+            <template v-if="column.key === 'title'">
+              <div class="wiki-cell-title">{{ record.title }}</div>
+              <div class="wiki-cell-sub">{{ record.slug }} · v{{ record.version }}</div>
+              <div class="wiki-cell-tags">
+                <a-tag v-for="tag in (record.tags || []).slice(0, 3)" :key="tag">{{ tag }}</a-tag>
+                <a-tag v-if="record.okf_type" :color="okfColor(record.okf_type)">
+                  {{ okfLabel(record.okf_type) }}
+                </a-tag>
+                <a-tag v-if="isStale(record)" color="orange">{{ t('kmsWiki.stale') }}</a-tag>
               </div>
-              <template #actions>
-                <a @click="viewArticle(item.slug)">{{ t('wikiMgmt.art.view') }}</a>
-                <a @click="editArticle(item.id)">{{ t('common.edit') }}</a>
+            </template>
+            <template v-else-if="column.key === 'category'">
+              {{ categoryNameOf(record.category_id) }}
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <a-tag :color="record.status === 1 ? 'green' : 'default'">
+                {{ record.status === 1 ? t('kmsWiki.statusPublished') : t('kmsWiki.statusDraft') }}
+              </a-tag>
+            </template>
+            <template v-else-if="column.key === 'updated_at'">
+              <span class="wiki-cell-sub">{{ formatDate(record.updated_at) }}</span>
+            </template>
+            <template v-else-if="column.key === 'view_count'">
+              <span class="wiki-cell-sub">{{ t('kmsWiki.views', { count: record.view_count }) }}</span>
+            </template>
+            <template v-else-if="column.key === 'op'">
+              <a-space size="small">
+                <a-button size="small" @click="viewArticle(record.slug)">
+                  {{ t('wikiMgmt.art.view') }}
+                </a-button>
+                <a-button size="small" @click="editArticle(record.id)">
+                  {{ t('common.edit') }}
+                </a-button>
                 <a-popconfirm
                   :title="t('kmsWiki.deleteConfirm')"
-                  @confirm="handleDelete(item.id)"
+                  @confirm="handleDelete(record.id)"
                 >
-                  <a class="wiki-main__danger">{{ t('common.delete') }}</a>
+                  <a-button size="small" danger>{{ t('common.delete') }}</a-button>
                 </a-popconfirm>
-              </template>
-            </a-list-item>
+              </a-space>
+            </template>
           </template>
-        </a-list>
+        </a-table>
 
         <a-pagination
           v-if="total > pageSize"
@@ -413,7 +436,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BookOutlined, ExperimentOutlined, PlusOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons-vue'
+import { BookOutlined, ExperimentOutlined, PlusOutlined, ExportOutlined, ImportOutlined, ReadOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { listArticles, createArticle, deleteArticle, reindexWiki, createCategory, updateCategory, deleteCategory, listCategories, listKnowledges, createKnowledge, updateKnowledge, deleteKnowledge } from '@/api/wiki'
 import DocUploadPanel from './components/DocUploadPanel.vue'
@@ -476,8 +499,16 @@ const flatCategories = computed(() => {
   return out
 })
 
-/** 统计卡：文章总数 / 已发布 / 草稿 / 归档 */
-const stats = reactive({ total: 0, published: 0, draft: 0, archived: 0 })
+/** 统计卡：文章总数 / 已发布 / 草稿 / 本月新增 */
+const stats = reactive({ total: 0, published: 0, draft: 0, monthly: 0 })
+
+/** 当月 1 号（本地时区），作为「本月新增」的 created_after 下界 */
+function monthStartIso(): string {
+  const d = new Date()
+  const first = new Date(d.getFullYear(), d.getMonth(), 1)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${first.getFullYear()}-${pad(first.getMonth() + 1)}-${pad(first.getDate())}`
+}
 
 /**
  * 统计按 status 分别取总数（page_size=1 的轻量请求），保证数字是全量而非当前页。
@@ -490,20 +521,52 @@ async function loadStats(base: any) {
   delete params.sort
   delete params.order
   delete params.status
-  const count = async (status: number) => {
-    const r: any = await listArticles({ ...params, page: 1, page_size: 1, status })
+  const count = async (extra: Record<string, any> = {}) => {
+    const r: any = await listArticles({ ...params, page: 1, page_size: 1, ...extra })
     return r?.total ?? 0
   }
   try {
     stats.total = total.value
-    stats.published = await count(1)
-    stats.draft = await count(0)
-    stats.archived = await count(-1)
+    stats.published = await count({ status: 1 })
+    stats.draft = await count({ status: 0 })
+    stats.monthly = await count({ created_after: monthStartIso() })
   } catch {
     stats.published = 0
     stats.draft = 0
-    stats.archived = 0
+    stats.monthly = 0
   }
+}
+
+/** 文章表格列 */
+const articleColumns = computed(() => [
+  { title: t('kmsWiki.colTitle'), key: 'title', width: '38%' },
+  { title: t('kmsWiki.colCategory'), dataIndex: 'category_id', key: 'category', width: '13%' },
+  { title: t('kmsWiki.colStatus'), dataIndex: 'status', key: 'status', width: '11%' },
+  { title: t('kmsWiki.colUpdated'), dataIndex: 'updated_at', key: 'updated_at', width: '15%' },
+  { title: t('kmsWiki.colViews'), dataIndex: 'view_count', key: 'view_count', width: '9%' },
+  { title: t('kmsWiki.colActions'), key: 'op', width: '14%' },
+])
+
+/** 批量选择（保留原列表的批量删除能力） */
+const rowSelection = computed(() => ({
+  selectedRowKeys: checkedIds.value,
+  onChange: (keys: (string | number)[]) => {
+    checkedIds.value = keys.map(Number)
+  },
+}))
+
+/** 由分类 id 取名称（分类树来自接口，用 id 而非 treeKey 匹配） */
+function categoryNameOf(id: number | null | undefined): string {
+  if (id == null) return '-'
+  const walk = (nodes: any[]): string => {
+    for (const n of nodes || []) {
+      if (n.id === id) return n.name
+      const hit = walk(n.children || [])
+      if (hit) return hit
+    }
+    return ''
+  }
+  return walk(categoryTree.value) || String(id)
 }
 
 function onFilterCategoryChange() {
@@ -685,12 +748,6 @@ async function handleDelete(id: number) {
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('common.deleteFailed'))
   }
-}
-
-function toggleSelect(id: number, checked: boolean) {
-  checkedIds.value = checked
-    ? [...checkedIds.value, id]
-    : checkedIds.value.filter((k) => k !== id)
 }
 
 async function handleBatchDelete() {
@@ -1425,6 +1482,24 @@ function formatDate(dateStr: string) {
 }
 .wiki-stat__v--muted {
   color: var(--fg-secondary);
+}
+
+/* 文章表格单元格 */
+.wiki-main__table :deep(.ant-table-cell) {
+  vertical-align: middle;
+}
+.wiki-cell-title {
+  font-weight: 500;
+}
+.wiki-cell-sub {
+  font-size: 11.5px;
+  color: var(--fg-muted, #8f959e);
+}
+.wiki-cell-tags {
+  margin-top: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .wiki-main__filter {

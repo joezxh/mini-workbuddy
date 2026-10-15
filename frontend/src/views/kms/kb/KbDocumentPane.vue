@@ -1,5 +1,31 @@
 <template>
   <div class="kb-doc-pane">
+    <!-- 面板头：知识库名 + 副标题 + 操作区（操作从列表头部上移） -->
+    <div class="kb-doc-pane__head">
+      <div>
+        <h2 class="kb-doc-pane__pane-title">
+          <BookOutlined class="kb-doc-pane__pane-icon" />
+          {{ props.knowledgeName || t('kbMgmt.generalKb') }}
+        </h2>
+        <div class="kb-doc-pane__pane-sub">
+          {{ t('kbMgmt.generalKb') }} · {{ formatLabels[formatMode] }} ·
+          {{ t('kbMgmt.docCount') }} {{ documents.length }}
+        </div>
+      </div>
+      <a-space size="small">
+        <a-tooltip :title="t('kbMgmt.rechunkTip')">
+          <a-button size="small" :loading="rechunking" @click="runRechunk">
+            {{ t('kbMgmt.rechunk') }}
+          </a-button>
+        </a-tooltip>
+        <a-upload :before-upload="handleUpload" :show-upload-list="false">
+          <a-button type="primary" size="small" :loading="uploading">
+            {{ t('kbMgmt.uploadDocument') }}
+          </a-button>
+        </a-upload>
+      </a-space>
+    </div>
+
     <!-- 顶部：文档形态 tab 菜单（按所选知识库二级形态显示，管线调试作为调试入口常驻） -->
     <a-radio-group v-model:value="formatMode" button-style="solid" size="small" class="kb-doc-pane__tabs">
       <a-radio-button v-for="f in visibleFormats" :key="f" :value="f">
@@ -9,20 +35,6 @@
 
     <!-- 文档上传形态 -->
     <template v-if="formatMode === 'document'">
-      <!-- 列表标题（左） + 操作区（右）：位于 tab 菜单下、列表上方 -->
-      <div class="kb-doc-pane__header">
-        <span class="kb-doc-pane__title">{{ t('kbMgmt.docList') }}</span>
-        <a-space size="small">
-          <a-tooltip :title="t('kbMgmt.rechunkTip')">
-            <a-button size="small" :loading="rechunking" @click="runRechunk">
-              {{ t('kbMgmt.rechunk') }}
-            </a-button>
-          </a-tooltip>
-          <a-upload :before-upload="handleUpload" :show-upload-list="false">
-            <a-button type="primary" :loading="uploading">{{ t('kbMgmt.uploadDocument') }}</a-button>
-          </a-upload>
-        </a-space>
-      </div>
       <!-- 统计卡：文档数 / 已完成 / 处理中 / 失败 -->
       <div class="kb-doc-stats">
         <div class="kb-doc-stat">
@@ -58,7 +70,12 @@
         row-key="document_id"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
+          <!-- 文档名 + 大小·类型（预览中并入名称单元格） -->
+          <template v-if="column.key === 'name'">
+            <div class="kb-doc-name">{{ record.name }}</div>
+            <div class="kb-doc-name-sub">{{ formatSize(record.file_size) }} · {{ record.file_type || '—' }}</div>
+          </template>
+          <template v-else-if="column.key === 'status'">
             <a-tag :color="statusColor(record.status)">
               {{ record.status }}<template v-if="record.status === 'processing'">…</template>
             </a-tag>
@@ -180,6 +197,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
+import { BookOutlined } from '@ant-design/icons-vue'
 import {
   createQaRecords,
   deleteDocument,
@@ -200,7 +218,12 @@ import SegmentDetail from './SegmentDetail.vue'
 import TableRecordList from './TableRecordList.vue'
 import QaRecordList from './QaRecordList.vue'
 
-const props = defineProps<{ knowledgeId: number; kbFormat?: string | null }>()
+const props = defineProps<{
+  knowledgeId: number
+  kbFormat?: string | null
+  /** 知识库名称：用于面板头展示（由 KnowledgeBaseManager 传入） */
+  knowledgeName?: string
+}>()
 const { t } = useI18n()
 
 const collection = computed(() => `kb_${props.knowledgeId}`)
@@ -242,13 +265,13 @@ const results = ref<RetrieveResult[]>([])
 const indexMode = ref<string>('')
 let pollTimer: number | null = null
 
-const columns = [
-  { title: '文档', dataIndex: 'name', key: 'name' },
-  { title: '状态', key: 'status', width: 110 },
-  { title: '切片', dataIndex: 'segment_count', width: 70 },
-  { title: '大小', dataIndex: 'file_size', width: 90 },
-  { title: '操作', key: 'op', width: 220 },
-]
+const columns = computed(() => [
+  { title: t('kbMgmt.colDocName'), dataIndex: 'name', key: 'name' },
+  { title: t('kbMgmt.colStatus'), key: 'status', width: 110 },
+  { title: t('kbMgmt.colChunks'), dataIndex: 'segment_count', width: 70 },
+  { title: t('kbMgmt.colUpdated'), dataIndex: 'updated_at', width: 150 },
+  { title: t('kbMgmt.colActions'), key: 'op', width: 220 },
+])
 
 /**
  * 统计卡：文档不分页（:pagination="false"），故这里的计数是全量而非当前页。
@@ -264,6 +287,14 @@ const docStats = computed(() => {
     failed: list.filter((d: any) => d.status === 'failed').length,
   }
 })
+
+/** 字节数格式化（名称单元格展示「大小 · 类型」） */
+function formatSize(bytes: number | null | undefined): string {
+  if (!bytes && bytes !== 0) return '-'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
 
 // ── 表格导入 ──
 const tableColumns = ref<string[]>([])
@@ -523,7 +554,41 @@ onBeforeUnmount(() => {
   color: var(--error, #ff4d4f);
 }
 
-.kb-doc-pane__header {
+/* 面板头：知识库名 + 副标题 + 操作区 */
+.kb-doc-pane__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.kb-doc-pane__pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.kb-doc-pane__pane-icon {
+  color: #52c41a;
+}
+.kb-doc-pane__pane-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fg-secondary);
+}
+/* 文档名称单元格 */
+.kb-doc-name {
+  font-weight: 500;
+}
+.kb-doc-name-sub {
+  font-size: 11.5px;
+  color: var(--fg-muted, #8f959e);
+}
+
+.kb-doc-pane__header {</new_string>
   display: flex;
   align-items: center;
   justify-content: space-between;
