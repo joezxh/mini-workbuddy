@@ -1,0 +1,216 @@
+---
+source: https://docs.getsemantica.ai/getting-started
+title: Getting Started - Semantica
+---
+
+# Getting Started - Semantica
+
+Already installed? Jump straight to [Quickstart](/quickstart). Need setup help first? See [Installation](/installation).
+
+##  What You Can Build
+
+* **GraphRAG Systems** — Ground LLM responses in traceable, structured knowledge. Every claim links back to a source node.
+* **Accountable AI Agents** — Agents with structured decision history, causal chains, and precedent search. Every choice is recorded and auditable.
+* **Production Knowledge Graphs** — Build, validate, and maintain enterprise-grade semantic knowledge bases from multi-source data.
+* **Compliance-Ready AI** — W3C PROV-O provenance on every fact. HIPAA, SOX, GDPR, FDA 21 CFR Part 11 infrastructure built in.
+
+##  Setup in 3 Steps
+
+1
+
+Install Semantica
+
+pip (recommended)
+
+With all extras
+
+From source
+
+```
+pip install semantica
+```
+
+```
+pip install semantica[all]
+```
+
+```
+git clone https://github.com/semantica-agi/semantica.git
+cd semantica
+pip install -e . --group dev   # needs pip 25.1+ (or: uv sync)
+```
+
+Verify installation:
+
+```
+import semantica
+print(semantica.__version__)  # 0.7.0
+```
+
+2
+
+Choose your path
+
+Pick the track that matches what you’re building: each starts with a focused 5-minute example.
+
+| Track | You want to… | Start with |
+| --- | --- | --- |
+| **Knowledge Graph** | Turn documents into structured, queryable graphs | [Quickstart → Step 1](/quickstart) |
+| **Agent Context** | Give your AI agent persistent memory and decision tracking | [Context reference](/reference/context) |
+| **GraphRAG** | Ground LLM answers in structured knowledge | [Concepts → GraphRAG](/concepts#graphrag) |
+| **MCP Integration** | Use Semantica from Claude Desktop or VS Code | [MCP Server](/reference/mcp_server) |
+
+3
+
+Run the pipeline
+
+The full 6-step pipeline: ingest, parse, extract, build, visualize, export: is in the [Quickstart](/quickstart). Takes under 5 minutes with pattern-based extraction (no API key required).
+
+An LLM API key is **optional** for the quickstart. Pattern-based extraction works out of the box: upgrade to LLM extraction for higher accuracy when you’re ready.
+
+##  Choose Your Path
+
+* Knowledge Graph
+* Agent Context
+* GraphRAG
+* MCP Integration
+
+Build a structured knowledge graph from any document or data source.
+
+```
+from semantica.ingest import FileIngestor
+from semantica.parse import DocumentParser
+from semantica.semantic_extract import NERExtractor, RelationExtractor
+from semantica.kg import GraphBuilder
+
+# 1. Ingest
+sources = FileIngestor().ingest("data/report.pdf")
+
+# 2. Parse (extract_text returns a plain string for any supported format)
+text = DocumentParser().extract_text(sources[0].path)
+
+# 3. Extract (extractors take text, return Entity / Relation objects)
+ner           = NERExtractor(method="pattern")  # no API key needed
+entities      = ner.extract(text)
+relationships = RelationExtractor(method="pattern").extract(text, entities=entities)
+
+# 4. Build
+graph = GraphBuilder(merge_entities=True).build(
+    {"entities": entities, "relationships": relationships}
+)
+print(f"{len(graph['entities'])} nodes, {len(graph['relationships'])} edges")
+```
+
+**Next:** [Full pipeline walkthrough →](/quickstart)
+
+Give your agent persistent memory, decision tracking, and precedent search.
+
+```
+from semantica.context import AgentContext, ContextGraph
+from semantica.vector_store import VectorStore
+
+context = AgentContext(
+    vector_store=VectorStore(backend="faiss", dimension=768),
+    knowledge_graph=ContextGraph(advanced_analytics=True),
+    decision_tracking=True,
+)
+
+# Store a fact with provenance
+context.store("GPT-4 outperforms GPT-3.5 on reasoning by 40%")
+
+# Record a decision with full causal chain
+decision_id = context.record_decision(
+    category="model_selection",
+    scenario="Choose LLM for production pipeline",
+    reasoning="GPT-4 benchmark advantage justifies cost",
+    outcome="selected_gpt4",
+    confidence=0.91,
+)
+
+# Search past decisions before making a new one
+precedents = context.find_precedents("model selection", limit=5)
+```
+
+**Next:** [Context module reference →](/reference/context)
+
+Ground every LLM response in your knowledge graph: no floating assertions.
+
+```
+from semantica.context import AgentContext, ContextGraph
+from semantica.vector_store import VectorStore
+
+context = AgentContext(
+    vector_store=VectorStore(backend="faiss", dimension=768),
+    knowledge_graph=ContextGraph(advanced_analytics=True),
+    graph_expansion=True,       # blend graph traversal into retrieval
+    max_expansion_hops=3,       # how far to walk from the seed nodes
+)
+
+# store() runs extraction and populates both the vector index and the graph
+context.store([
+    {"content": "Steve Wozniak co-founded Apple with Steve Jobs in 1976."},
+    {"content": "Tony Fadell led the iPod team at Apple, then founded Nest."},
+])
+
+# GraphRAG retrieval: seed from vector matches, expand along graph edges
+results = context.retrieve(
+    "What companies were founded by people who worked at Apple?",
+    use_graph=True,
+    expand_graph=True,
+)
+for r in results:
+    print(f"[{r['score']:.3f}]  {r['content'][:70]}  (source: {r['source']})")
+```
+
+Each result carries `content`, `score`, `source`, and `metadata`. For a
+grounded natural-language answer plus an auditable traversal, use
+`context.query_with_reasoning(query, llm_provider=...)` — it returns
+`response`, `reasoning_path`, `sources`, and `confidence`.**Next:** [GraphRAG concepts →](/concepts#graphrag)
+
+Use Semantica from Claude Desktop, VS Code, Cursor, or any MCP client: no Python code required after setup.
+
+```
+pip install semantica
+```
+
+Add to your MCP client config:
+
+```
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "semantica-mcp"
+    }
+  }
+}
+```
+
+15 tools available instantly: extract entities, query graph, record decisions, run reasoning, export results.**Next:** [MCP Server reference →](/reference/mcp_server)
+
+##  Core Architecture
+
+Semantica uses a modular, layered architecture: import only what you need.
+
+* **[Input Layer](/reference/ingest)** — Load and prepare data from any source. Modules: `ingest`, `parse`, `split`, `normalize`
+* **[Semantic Layer](/reference/semantic_extract)** — Extract meaning from raw text. Modules: `semantic_extract`, `kg`, `ontology`, `reasoning`
+* **[Storage Layer](/reference/vector_store)** — Persist knowledge for retrieval. Modules: `embeddings`, `vector_store`, `graph_store`, `triplet_store`
+* **[Quality Layer](/reference/deduplication)** — Validate and deduplicate. Modules: `deduplication`, `conflicts`
+* **[Context Layer](/reference/context)** — Track decisions and lineage. Modules: `context`, `provenance`, `change_management`
+* **[Output Layer](/reference/export)** — Deliver results downstream. Modules: `export`, `visualization`, `pipeline`, `explorer`
+
+##  Which Module Do I Need?
+
+See the [Choose the Right Module](/choose-your-module) guide — it maps 35+ developer goals to the right starting point across all 27 modules, with working code for the most common paths.
+
+##  Next Steps
+
+* [Core Concepts](/concepts) — Knowledge graphs, ontologies, and reasoning explained in depth.
+* [Quickstart Tutorial](/quickstart) — Full 6-step pipeline walkthrough with working code.
+* [Module Reference](/modules) — Every module, class, and common chain explained.
+* [API Reference](/reference/context) — Complete module documentation for every class and method.
+
+##  Help
+
+* [Discord](https://discord.gg/sV34vps5hH) — Ask questions, share projects, get community support.
+* [GitHub Issues](https://github.com/semantica-agi/semantica/issues) — Report bugs or request features.
+* [FAQ](/faq) — Common questions answered.

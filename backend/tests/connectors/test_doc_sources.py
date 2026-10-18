@@ -21,6 +21,7 @@ from app.connectors.doc_sources import (
     supported_source_types,
 )
 from app.connectors.doc_sources.base import BaseDocSource
+from app.connectors.doc_sources.dingtalk import DingtalkDocSource
 from app.connectors.doc_sources.markdown import (
     BULLETED,
     CALLOUT,
@@ -316,6 +317,57 @@ def test_dingtalk_token_and_nodes():
     assert {n.node_type for n in nodes} == {"doc", "folder"}
     doc = run(src.fetch_doc("n1"))
     assert doc.markdown.startswith("# 文档一")
+
+
+def test_dingtalk_direct_space_mode_skips_workspace_list():
+    """知识库直连：filled space_id 时测试连通/浏览均走目录树，不碰已下线权限的列表接口。"""
+    src = get_doc_source("dingtalk", {
+        "app_key": "k", "app_secret": "s",
+        "space_id": "w9", "operator_id": "union9",
+    })
+
+    def handler(method, url, kwargs):
+        if url.endswith("/gettoken"):
+            return {"access_token": "tok"}
+        if "doc/workspaces" in url:
+            # Document.Workspace.Read 已下线，直连模式不应请求该端点
+            raise AssertionError(f"直连模式不应调用知识库列表：{url}")
+        if url.endswith("/v1.0/doc/nodes/query"):
+            assert (kwargs["params"] or {}).get("operatorId") == "union9"
+            return {"data": {"nodes": [
+                {"nodeId": "n1", "nodeType": "DOC", "name": "文档一"},
+            ]}}
+        raise AssertionError(url)
+
+    calls = patch_http(src, handler)
+    res = run(src.test_connection())
+    assert res.ok and "直连" in res.message and "1 个节点" in res.identity
+
+    nodes = run(src.list_nodes(None))
+    assert nodes[0].doc_id == "n1" and nodes[0].node_type == "doc"
+    assert all("workspaces" not in c[1] for c in calls)
+
+
+def test_dingtalk_direct_space_missing_operator_id():
+    src = get_doc_source("dingtalk", {
+        "app_key": "k", "app_secret": "s", "space_id": "w9",
+    })
+
+    def handler(method, url, kwargs):
+        assert url.endswith("/gettoken"), url
+        return {"access_token": "tok"}
+
+    patch_http(src, handler)
+    res = run(src.test_connection())
+    assert not res.ok and "操作人 UnionId" in res.message
+
+
+def test_dingtalk_workspace_read_forbidden_guidance():
+    """命中 Document.Workspace.Read 缺权限时，报错应给出直连模式指引而非死循环申请链接。"""
+    msg = DingtalkDocSource._friendly_error(
+        "凭据无效或权限不足（401/403）：应用尚未开通所需的权限：[Document.Workspace.Read]"
+    )
+    assert "已被钉钉官方下线" in msg and "知识库直连" in msg
 
 
 def test_wecom_token_and_doc_list():

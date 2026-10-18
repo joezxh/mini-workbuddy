@@ -1,20 +1,18 @@
 """外部知识库检索代理（对齐文档 D1 边界内、spec §10.2 proxy 形态）。
 
 不拉数据、无内部文档管理；仅配置 CRUD + 连通性测试 + 检索转发。
-SSRF 防护：仅 https、拒绝内网/环回地址段（spec §11 风险表）。
+SSRF 防护：仅 https、拒绝内网/环回地址段（spec §11 风险表）；复用 app.core.security。
 """
 from __future__ import annotations
 
-import ipaddress
-import socket
 from typing import Optional
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import is_safe_url
 from app.deps import get_current_user, get_db
 from app.models.connectors.external_kb_endpoint import ExternalKbEndpoint
 from app.models.sys.sys_user import SysUser
@@ -25,23 +23,7 @@ router = APIRouter(prefix="/api/v1/external-kb-endpoints", tags=["外部知识�
 
 def validate_endpoint_url(url: str) -> str:
     """SSRF 防护：仅 https 且主机不得解析到内网/环回地址。返回规整后的 URL。"""
-    parsed = urlparse(url or "")
-    if parsed.scheme != "https":
-        raise HTTPException(status_code=422, detail="外部端点必须使用 https")
-    host = parsed.hostname or ""
-    if not host:
-        raise HTTPException(status_code=422, detail="缺少主机名")
-    if host in ("localhost",) or host.endswith(".local"):
-        raise HTTPException(status_code=422, detail="禁止内网主机")
-    try:
-        infos = socket.getaddrinfo(host, None)
-    except socket.gaierror as exc:
-        raise HTTPException(status_code=422, detail=f"主机无法解析: {exc}")
-    for info in infos:
-        addr = ipaddress.ip_address(info[4][0])
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
-            raise HTTPException(status_code=422, detail=f"禁止内网地址: {addr}")
-    return url
+    return is_safe_url(url, require_https=True)
 
 
 def _tenant_id(current_user: SysUser) -> int:

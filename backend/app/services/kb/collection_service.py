@@ -22,9 +22,10 @@ import re
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.kb.kb_collection import KbCollection
 
 # slug 仅保留小写字母、数字与短横线
@@ -166,3 +167,104 @@ def resolve_or_create_collection(
         db, tenant_id, knowledge_id, slug=slug,
         schema_config=schema_config, dimensions=dimensions,
     )
+
+
+def get_collection_name_by_id(db: Session, collection_id: int) -> str:
+    """按主键取集合名（向量库命名空间）。不存在抛 ``ValueError``（路由层转 404）。
+
+    文档↔集合关联一律走 ``collection_id``，调用方不再直接传集合名；此处是
+    唯一由 id 反查 name 的单点，name 仅作为向量库存储标签。
+    """
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None:
+        raise ValueError(f"集合不存在: collection_id={collection_id}")
+    return coll.name
+
+
+def ensure_default_collection(
+    db: Session, tenant_id: Optional[int], knowledge_id: int
+) -> KbCollection:
+    """确保某知识库存在默认集合 ``kb_{knowledge_id}``（普通文档 / Q&A 库的 1:1 集合）。
+
+    表格知识库上传未指定集合时会自动新建 ``kb_{kid}_{slug}``，但「按 id 反查」要求
+    每个知识库（含历史库）都有这一默认行，否则文档 / Q&A 库的接口无法解析。
+    """
+    default_name = f"kb_{knowledge_id}"
+    existing = db.execute(
+        select(KbCollection).where(
+            KbCollection.knowledge_id == knowledge_id,
+            KbCollection.name == default_name,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    coll = KbCollection(
+        name=default_name,
+        dimensions=settings.GPUSTACK_EMBEDDING_DIMENSION,
+        knowledge_id=knowledge_id,
+        tenant_id=tenant_id,
+    )
+    db.add(coll)
+    db.flush()
+    logger.info(f"[KB][Collection] 补齐默认集合 {default_name}（knowledge_id={knowledge_id}）")
+    return coll
+
+
+def rename_collection(
+    db: Session, collection_id: int, new_slug: Optional[str]
+) -> KbCollection:
+    """重命名集合（改 slug/name）。
+
+    向量库以 ``collection`` 名作命名空间，重命名 = 对 ``kms_collection`` /
+    ``kms_document`` / ``kms_segment`` 三张表的 name 标签做一致 UPDATE（向量 embedding
+    数据不动，无数据搬运，安全）。同名冲突拒绝。
+    """
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None:
+        raise ValueError(f"集合不存在: collection_id={collection_id}")
+    kid = coll.knowledge_id
+    new_name = build_collection_name(kid, slugify(new_slug)) if new_slug else f"kb_{kid}"
+    old_name = coll.name
+    if new_name != old_name and get_collection_by_name(db, new_name) is not None:
+        raise ValueError(f"集合名已存在: {new_name!r}")
+    if new_name != old_name:
+        from app.models.kb.kb_document import KbDocument
+        from app.models.kb.kb_segment import KbSegment
+
+        db.execute(
+            update(KbDocument)
+            .where(KbDocument.collection_id == coll.id)
+            .values(collection=new_name)
+        )
+        db.execute(
+            update(KbSegment)
+            .where(KbSegment.collection == old_name)
+            .values(collection=new_name)
+        )
+    coll.name = new_name
+    db.flush()
+    logger.info(
+        f"[KB][Collection] 重命名集合 {old_name} → {new_name}（id={collection_id}）"
+    )
+    return coll
+
+
+def delete_collection_cascade(
+    db: Session, tenant_id: int, collection_id: int
+) -> None:
+    """级联删除集合：先删其下文档，再删集合（含全部切片 + 集合元数据行）。
+
+    向量数据存于 ``kms_segment.embedding`` 列，随切片行删除一并清除；文档行因
+    ``collection_id`` 外键为 ``SET NULL``，需显式删除以免残留孤儿文档。
+    """
+    from app.models.kb.kb_document import KbDocument
+    from app.services.kb.pgvector_store import PGVectorStore
+
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None:
+        raise ValueError(f"集合不存在: collection_id={collection_id}")
+    # 先删文档，再交由 PGVectorStore 删集合（清切片 + 集合行）
+    db.execute(delete(KbDocument).where(KbDocument.collection_id == coll.id))
+    PGVectorStore(db, tenant_id).delete_collection(coll.name)
+    db.flush()
+    logger.info(f"[KB][Collection] 级联删除集合 {coll.name}（id={collection_id}）")

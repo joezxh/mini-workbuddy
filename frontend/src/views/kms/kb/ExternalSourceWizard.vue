@@ -268,13 +268,14 @@ const currentProviderName = computed(
   () => providers.value.find((p) => p.source_type === sourceType.value)?.name || '',
 )
 
-/** 平台品牌色（与预览一致：飞书蓝 / 钉钉青 / 语雀紫 / 企微绿 / Notion 灰） */
+/** 平台品牌色（与预览一致：飞书蓝 / 钉钉青 / 语雀紫 / 企微绿 / Notion 灰 / web 蓝） */
 const PLATFORM_COLORS: Record<string, string> = {
   feishu: '#1a5fd6',
   dingtalk: '#0b7ac4',
   yuque: '#6b3fd4',
   wecom: '#12874a',
   notion: '#333333',
+  web: '#2f54eb',
 }
 function platformColor(sourceType: string) {
   return PLATFORM_COLORS[sourceType] || 'var(--accent)'
@@ -428,7 +429,12 @@ function toTreeNode(n: ExternalNode): any {
 async function loadNodes(parentId?: string | null) {
   treeLoading.value = true
   try {
-    const res: any = await listExternalNodes(sourceType.value, credentials.value, parentId)
+    const res: any = await listExternalNodes(
+      sourceType.value,
+      credentials.value,
+      parentId,
+      props.knowledgeId,
+    )
     return (res?.items || res || []).map(toTreeNode)
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('kbExt.loadNodesFailed'))

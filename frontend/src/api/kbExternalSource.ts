@@ -16,6 +16,7 @@ export interface CredFieldSchema {
   required: boolean
   placeholder: string
   hint: string
+  multiline?: boolean
 }
 
 export interface ExternalProvider {
@@ -78,17 +79,37 @@ export function testExternalSource(sourceType: string, credentials: Record<strin
   })
 }
 
-/** 浏览目录/文档（懒加载当前层级） */
+/** 浏览目录/文档（懒加载当前层级）。
+ * 传 knowledgeId 且 credentials 为空时，由服务端回退读取已保存（加密）凭据，
+ * 使导入向导可跳过「配置凭据」一步。 */
 export function listExternalNodes(
   sourceType: string,
   credentials: Record<string, any>,
   parentId?: string | null,
+  knowledgeId?: number | null,
 ) {
   return request.post<{ items: ExternalNode[] }>(`${BASE}/nodes`, {
     source_type: sourceType,
     credentials,
     parent_id: parentId ?? null,
+    knowledge_id: knowledgeId ?? null,
   })
+}
+
+/** 固化平台凭据到指定外部知识库（创建/编辑向导在容器建好后调用） */
+export function saveExternalCredentials(data: {
+  knowledge_id: number
+  source_type: string
+  credentials: Record<string, any>
+}) {
+  return request.post(`${BASE}/credentials`, data)
+}
+
+/** 读取外部知识库的平台类型与是否已配置凭据 */
+export function getExternalConfig(knowledgeId: number) {
+  return request.get<{ external_type: string | null; has_credentials: boolean }>(
+    `${BASE}/knowledges/${knowledgeId}/external-config`,
+  )
 }
 
 /** 导入 / 重新导入（幂等：已存在则覆盖，不存在则新建） */

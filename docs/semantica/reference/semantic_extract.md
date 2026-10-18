@@ -1,0 +1,432 @@
+---
+source: https://docs.getsemantica.ai/reference/semantic_extract
+title: Semantic Extract Module - Semantica
+---
+
+# Semantic Extract Module - Semantica
+
+`semantica.semantic_extract` extracts structured information from unstructured text: the foundation of every knowledge graph in Semantica:
+
+* `NERExtractor`: named entity recognition with confidence scores and source attribution
+* `RelationExtractor`: typed relationship extraction (`founded_by`, `located_in`, and custom types)
+* `TripletExtractor`: direct `(subject, predicate, object)` triplet generation for RDF output
+* `EventDetector`: event detection with participants, temporal context, and confidence
+* Three extraction modes on every extractor: `"pattern"` (no API key), `"huggingface"`, `"llm"`
+
+##  Getting Started
+
+###  Prerequisites & Setup
+
+**Step 1: Install Dependencies**
+
+```
+# Basic extraction (pattern methods only)
+pip install semantica
+
+# HuggingFace models for advanced NER
+pip install semantica[models-huggingface]
+
+# LLM-based extraction (highest accuracy)
+pip install semantica[llm-groq]    # or llm-openai
+```
+
+**Step 2: Set API Keys** (for LLM methods only)
+
+```
+export GROQ_API_KEY="your_groq_key_here"
+export OPENAI_API_KEY="your_openai_key_here"
+```
+
+**Step 3: First Extraction**
+
+```
+from semantica.semantic_extract import NERExtractor
+
+# Start with pattern method (no setup required)
+ner = NERExtractor(method="pattern")
+entities = ner.extract("Apple Inc. was founded by Steve Jobs.")
+print(f"Found {len(entities)} entities")
+# Output: Found 2 entities
+
+# Upgrade to LLM for better accuracy
+from semantica.llms import Groq
+import os
+
+llm = Groq(api_key=os.getenv("GROQ_API_KEY"))
+ner = NERExtractor(method="llm", llm_provider=llm)
+entities = ner.extract("Apple Inc. was founded by Steve Jobs.")
+```
+
+##  Exported Classes
+
+**`NamedEntityRecognizer`** is the high-level coordinator with confidence thresholding and overlap merging. **`NERExtractor`** is the lower-level implementation. For most use cases, start with `NERExtractor` for simplicity or `NamedEntityRecognizer` for fine-grained control.
+
+| Class | Role |
+| --- | --- |
+| `NamedEntityRecognizer` | High-level NER with confidence thresholding and overlap merging |
+| `NERExtractor` | Core NER implementation: use directly for simplicity |
+| `RelationExtractor` | Typed relationship extraction (`founded_by`, `located_in`, …) |
+| `TripletExtractor` | Direct `(subject, predicate, object)` triplet generation for RDF output |
+| `EventDetector` | Event detection with participants, temporal context, and confidence scores |
+| `CoreferenceResolver` | Resolve “Apple” and “the company” to the same canonical entity |
+| `Entity` | `{id, text, type, confidence, start, end}` |
+| `Relation` | `{subject, predicate, object, confidence}` |
+| `Event` | `{type, participants, temporal, location, confidence}` |
+
+##  Method Selection Guide
+
+* Pattern: No Setup
+* HuggingFace: Custom Models
+* LLM: Best Accuracy
+* Fallback Chain
+
+Zero dependencies, no API key required. Uses spaCy rules and regex to match standard entity types.
+
+|  |  |
+| --- | --- |
+| **Setup** | None: works out of the box |
+| **Cost** | Free |
+| **Accuracy** | Good for standard entity types |
+| **Best for** | Quick prototyping, batch processing, air-gapped systems |
+
+```
+from semantica.semantic_extract import NERExtractor, RelationExtractor
+
+ner = NERExtractor(method="pattern")
+entities = ner.extract("Apple Inc. was founded by Steve Jobs in Cupertino.")
+
+rel = RelationExtractor(method="pattern")
+relationships = rel.extract(text, entities=entities)
+```
+
+Use any pre-trained or fine-tuned transformer model. Free inference, runs locally.
+
+|  |  |
+| --- | --- |
+| **Setup** | `pip install semantica[models-huggingface]` |
+| **Cost** | Free (local compute) |
+| **Accuracy** | Excellent for domain-specific NER |
+| **Best for** | Medical NER, custom fine-tunes, no API cost |
+
+```
+from semantica.semantic_extract import NERExtractor
+
+ner = NERExtractor(method="huggingface")
+
+# Pass model per-call
+entities = ner.extract(text, model="dslim/bert-base-NER", device="cpu")
+
+# Biomedical NER
+entities = ner.extract(text, model="d4data/biomedical-ner-all")
+```
+
+Highest accuracy for complex schemas and custom entity types. Requires an LLM API key.
+
+|  |  |
+| --- | --- |
+| **Setup** | `pip install semantica[llm-groq]` + API key |
+| **Cost** | Depends on provider |
+| **Accuracy** | Highest: handles complex types and context |
+| **Best for** | Production, custom entity types, complex relation schemas |
+
+```
+import os
+from semantica.llms import Groq
+from semantica.semantic_extract import NERExtractor, RelationExtractor, TripletExtractor
+
+llm = Groq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY"))
+
+ner  = NERExtractor(method="llm",  llm_provider=llm, max_retries=3)
+rel  = RelationExtractor(method="llm", llm_provider=llm)
+trip = TripletExtractor(method="llm", llm_provider=llm)
+
+entities      = ner.extract(text)
+relationships = rel.extract(text, entities=entities)
+triplets      = trip.extract(text)
+```
+
+Try methods in priority order: guarantees non-empty results even when the preferred method is unavailable.
+
+```
+from semantica.semantic_extract import NERExtractor, RelationExtractor
+
+# Try LLM first, fall back to pattern on error
+ner = NERExtractor(method=["llm", "pattern"])
+rel = RelationExtractor(method=["llm", "pattern"])
+
+# Always returns results: safe for production pipelines
+entities      = ner.extract(text)
+relationships = rel.extract(text, entities=entities)
+```
+
+Use fallback chains in pipelines where API availability isn’t guaranteed (rate limits, network issues). The first method in the list is always tried first.
+
+###  Method Availability by Extractor
+
+| Extractor | `pattern` | `huggingface` | `llm` | Notes |
+| --- | --- | --- | --- | --- |
+| `NERExtractor` | ✅ | ✅ | ✅ | Full method support |
+| `RelationExtractor` | ✅ | ✅ | ✅ | Also supports `dependency`, `cooccurrence` |
+| `TripletExtractor` | ✅ | ✅ | ✅ | Also supports `rules` method |
+| `EventDetector` | ✅ | ❌ | ✅ | Pattern and LLM only |
+
+###  Method Fallback Chains
+
+For reliability, extractors support fallback chains that try methods in order until one succeeds:
+
+```
+# Try LLM first, fall back to pattern if it fails
+ner = NERExtractor(method=["llm", "pattern"])
+rel = RelationExtractor(method=["llm", "pattern"]) 
+trip = TripletExtractor(method=["llm", "pattern"])
+
+# Always returns results - guarantees non-empty extraction
+entities = ner.extract(text)
+```
+
+###  NER Merge Strategies
+
+`NERExtractor` uses `merge_strategy="fallback"` by default, so a method list remains an ordered fallback chain. To run several methods together, choose one of the explicit strategies below:
+
+| Strategy | Behavior |
+| --- | --- |
+| `fallback` | Return the first non-empty method result. |
+| `union` | Keep candidates from any method. Same-label boundary variants are aligned, while distinct labels remain available. |
+| `consensus` | Require cross-method support for an offset-aligned candidate. `min_votes` defaults to `2`. |
+
+```
+from semantica.semantic_extract import NERExtractor
+
+ner = NERExtractor(
+    method=["spacy", "huggingface"],
+    merge_strategy="consensus",
+    min_votes=2,
+    min_agreement=0.75,  # optional support-ratio requirement
+    method_weights={"spacy": 0.8, "huggingface": 1.0},
+)
+entities = ner.extract(text)
+
+for entity in entities:
+    print(entity.metadata["supporting_methods"])
+    print(entity.metadata["vote_count"], entity.metadata["agreement"])
+```
+
+Consensus counts support against the configured eligible methods, not only methods that emitted a candidate. An empty or failed eligible method is therefore a non-supporting vote. Use `eligible_methods=[...]` to restrict the consensus denominator when the configured methods have different coverage, or use `merge_strategy="union"` for complementary rule extractors. `method_weights` only break an otherwise eligible exact-span cross-label tie; they never turn one method into multiple votes.
+Each merged entity includes `supporting_methods`, `vote_count`, `eligible_method_count`, `agreement`, and per-method `method_scores` in its metadata. Consensus treats compatible label aliases such as `PER`/`PERSON` and `ORGANIZATION`/`ORG` as the same vote. It resolves a cross-label conflict only when the final spans are identical, using method weight, vote count, confidence, and a stable label order; nested entities at different spans remain available. `ml` and `spacy` are one backend for both voting and weights, so their weights are interchangeable (conflicting values are rejected). Boundary candidates are matched one-to-one only when their span IoU is at least 0.5 with every existing vote in that candidate; equal-confidence variants prefer the longer span. If a provider omits offsets, Semantica resolves its entity text against whole-word document matches before merging. This keeps repeated mentions with the same text distinct and prevents one broad span from acting as a vote for multiple mentions.
+`ensemble_voting=True` is deprecated and maps to `merge_strategy="union"` during migration. Use `merge_strategy="consensus"` when method agreement is required.
+Unlike `fallback`, `union` and `consensus` never inject a pattern-derived entity after the configured methods return no candidates. An empty result is therefore meaningful in those strategies.
+
+##  Quick Start
+
+```
+from semantica.semantic_extract import NERExtractor, RelationExtractor, TripletExtractor
+from semantica.llms import Groq
+import os
+
+text = "Apple Inc. was founded by Steve Jobs in Cupertino in 1976."
+llm  = Groq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY"))
+
+entities      = NERExtractor(method="llm", llm_provider=llm).extract(text)
+relationships = RelationExtractor(method="llm", llm_provider=llm).extract(text, entities=entities)
+triplets      = TripletExtractor(method="llm", llm_provider=llm).extract(text)
+```
+
+![Semantic extraction pipeline: raw text fans into NER, Relation, and Coreference extractors, then merges into a Triplet Generator](assets/images/extraction-pipeline.svg)
+
+##  Extractor Methods
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `extract(text)` | `List[Entity]` / `List[Relation]` / `List[Triplet]` / `List[Event]` | Extract from single text input |
+| `extract(texts)` | `List[List[...]]` | Process multiple texts (batch detected automatically) |
+
+##  NERExtractor
+
+```
+from semantica.semantic_extract import NERExtractor
+from semantica.llms import Groq
+import os
+
+# Pattern-based: fast, no API key, good for standard entity types
+ner = NERExtractor(method="pattern")
+entities = ner.extract("Apple Inc. was founded by Steve Jobs in Cupertino.")
+
+# HuggingFace-based: custom models, no API cost
+ner = NERExtractor(method="huggingface")
+entities = ner.extract(text, model="dslim/bert-base-NER", device="cpu")
+
+# LLM-based: best accuracy, handles complex schemas and custom types
+llm = Groq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY"))
+ner = NERExtractor(method="llm", llm_provider=llm, max_retries=3)
+entities = ner.extract(text)
+```
+
+Output format:
+
+```
+[
+    {"text": "Apple Inc.",  "type": "ORGANIZATION", "confidence": 0.98, "start": 0,  "end": 10},
+    {"text": "Steve Jobs",  "type": "PERSON",       "confidence": 0.99, "start": 27, "end": 37},
+    {"text": "Cupertino",   "type": "LOCATION",     "confidence": 0.97, "start": 41, "end": 50}
+]
+```
+
+###  Custom Entity Types
+
+```
+ner = NERExtractor(
+    method="pattern",
+    custom_entities={
+        "DRUG": ["aspirin", "ibuprofen", "metformin"],
+        "GENE": ["BRCA1", "TP53", "EGFR"]
+    }
+)
+```
+
+**v0.5.0 fix:** `NERExtractor(method="llm")` no longer silently falls back to pattern extraction on custom gateways. The `response_format=json_object` parameter is now conditionally omitted for incompatible gateways, with a plain `generate()` + JSON parsing fallback applied automatically.
+
+##  RelationExtractor
+
+```
+from semantica.semantic_extract import RelationExtractor
+
+rel = RelationExtractor(method="llm", llm_provider=llm, max_retries=3)
+relationships = rel.extract(text, entities=entities)
+```
+
+Output format:
+
+```
+[
+    {"subject": "Steve Jobs", "predicate": "founded",    "object": "Apple Inc.", "confidence": 0.92},
+    {"subject": "Apple Inc.", "predicate": "located_in", "object": "Cupertino",  "confidence": 0.89}
+]
+```
+
+Available methods:
+
+* `"pattern"`: rule-based pattern matching
+* `"dependency"`: spaCy dependency parsing
+* `"cooccurrence"`: proximity-based co-occurrence
+* `"huggingface"`: custom models
+* `"llm"`: highest accuracy, requires API key
+
+##  TripletExtractor
+
+Generate RDF-ready `(subject, predicate, object)` triplets directly from text:
+
+```
+from semantica.semantic_extract import TripletExtractor
+
+trip = TripletExtractor(method="llm", llm_provider=llm)
+triplets = trip.extract(text)
+# → [{"subject": "Steve Jobs", "predicate": "founded", "object": "Apple Inc.", ...}]
+```
+
+Triplets are suitable for loading directly into a triplet store or knowledge graph.
+
+##  EventDetector
+
+Detect events with participants and temporal context:
+
+```
+from typing import List
+from semantica.semantic_extract import EventDetector, Event
+
+extractor = EventDetector(method="llm", llm_provider=llm)
+events: List[Event] = extractor.extract(text)
+
+for event in events:
+    print(f"Event type:   {event.type}")
+    print(f"Participants: {event.participants}")
+    print(f"Temporal:     {event.temporal}")
+    print(f"Confidence:   {event.confidence:.2f}")
+```
+
+Output fields per event:
+
+* `type`: event category (e.g. `"founding"`, `"acquisition"`)
+* `participants`: list of entities with roles
+* `temporal`: date or time reference
+* `location`: location entity (when present)
+* `confidence`: extraction confidence score
+
+##  CoreferenceResolver
+
+Resolve pronoun and alias references to canonical entities before extraction:
+
+```
+from semantica.semantic_extract import CoreferenceResolver
+
+resolver = CoreferenceResolver()
+resolved_text = resolver.resolve(
+    "Apple Inc. was founded in 1976. The company is headquartered in Cupertino."
+)
+# "Apple Inc." replaces "The company" for consistent downstream extraction
+```
+
+##  Batch Processing
+
+All extractors automatically detect batch input and process multiple texts efficiently:
+
+```
+# Batch processing with list input
+texts = ["Apple Inc. was founded by Steve Jobs.", "Google was founded by Larry Page.", "Microsoft was founded by Bill Gates."]
+
+ner = NERExtractor(method="llm", llm_provider=llm)
+batch_results = ner.extract(texts)  # Returns List[List[Entity]]
+
+# Process results
+for i, doc_entities in enumerate(batch_results):
+    print(f"Document {i}: {len(doc_entities)} entities")
+    for entity in doc_entities:
+        print(f"  - {entity.text} ({entity.label})")
+```
+
+**Batch Input Options:**
+
+```
+# Option 1: List of strings
+texts = ["Text 1...", "Text 2...", "Text 3..."]
+results = ner.extract(texts)
+
+# Option 2: List of documents with IDs (adds provenance metadata)
+documents = [
+    {"id": "doc_1", "content": "Apple Inc. was founded by Steve Jobs."},
+    {"id": "doc_2", "content": "Google was founded by Larry Page."}
+]
+results = ner.extract(documents)  # Entities include document_id in metadata
+```
+
+##  Using All Extractors Together
+
+The standard extraction pipeline: entities → relationships → triplets:
+
+```
+from semantica.semantic_extract import NERExtractor, RelationExtractor, TripletExtractor
+from semantica.llms import Groq
+import os
+
+llm = Groq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY"))
+
+ner  = NERExtractor(method="llm",      llm_provider=llm, max_retries=3)
+rel  = RelationExtractor(method="llm", llm_provider=llm, max_retries=3)
+trip = TripletExtractor(method="llm",  llm_provider=llm, max_retries=3)
+
+entities      = ner.extract(text)
+relationships = rel.extract(text, entities=entities)
+triplets      = trip.extract(text)
+```
+
+##  Extraction Method Comparison
+
+| Method | Speed | Cost | Accuracy | Custom Types |
+| --- | --- | --- | --- | --- |
+| `pattern` | Very fast | Free | Medium | Yes (dictionary) |
+| `ml` | Fast | Free | High | Limited |
+| `llm` | Medium | API cost | Highest | Yes (schema) |
+
+* [LLM Providers](/reference/llms) — Configure which LLM is used for extraction.
+* [Knowledge Graph](/reference/kg) — Build graphs from extracted entities and relationships.
+* [Parse Module](/reference/parse) — Parse documents before extraction.
+* [Deduplication](/reference/deduplication) — Resolve duplicate entities after extraction.

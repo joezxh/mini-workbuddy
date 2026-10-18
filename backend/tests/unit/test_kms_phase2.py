@@ -115,14 +115,14 @@ def test_kb_router_has_expected_paths():
     paths = {getattr(r, "path", "") for r in router.routes}
     assert "/api/v1/kb/knowledges/{kid}/documents" in paths
     assert "/api/v1/kb/documents/status" in paths
-    assert "/api/v1/kb/collections/{collection}/retrieve" in paths
+    assert "/api/v1/kb/collections/{collection_id}/retrieve" in paths
     assert "/api/v1/kb/supported_content_types" in paths
     assert "/api/v1/kb/chunkers" in paths
     # spec §10.5 设置面板 / 分段详情 / 表格行 / 重处理 / 定时同步
-    assert "/api/v1/kb/collections/{collection}/settings" in paths
+    assert "/api/v1/kb/collections/{collection_id}/settings" in paths
     assert "/api/v1/kb/segments/{segment_id}" in paths
     assert "/api/v1/kb/documents/{uuid_code}/segments" in paths
-    assert "/api/v1/kb/collections/{collection}/table-records" in paths
+    assert "/api/v1/kb/collections/{collection_id}/table-records" in paths
     assert "/api/v1/kb/documents/{uuid_code}/reprocess" in paths
     assert "/api/v1/kb/documents/{uuid_code}/sync" in paths
 

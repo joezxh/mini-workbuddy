@@ -89,6 +89,7 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import {
+  getExternalConfig,
   importExternalDocuments,
   listExternalDocuments,
   listExternalProviders,
@@ -141,6 +142,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   yuque: 'purple',
   wecom: 'green',
   notion: 'default',
+  web: 'geekblue',
 }
 function platformColor(sourceType: string) {
   return PLATFORM_COLORS[sourceType] || 'default'
@@ -174,9 +176,23 @@ async function loadProviders() {
   }
 }
 
-function openWizard() {
-  // 预填平台与已选节点，使「重新选择文档」落在同一平台上
-  presetSourceType.value = items.value[0]?.source_type || undefined
+async function openWizard() {
+  // 平台由知识库自身绑定的外部类型决定（spec 知识库管理：每个外部库固定平台与凭据）
+  try {
+    const cfg: any = await getExternalConfig(props.knowledgeId)
+    if (!cfg?.external_type) {
+      message.warning(t('kbMgmt.externalTypeRequired'))
+      return
+    }
+    if (!cfg?.has_credentials) {
+      message.warning(t('kbExt.configureCredsFirst'))
+      return
+    }
+    presetSourceType.value = cfg.external_type
+  } catch {
+    // 兜底：沿用已导入文档的平台
+    presetSourceType.value = items.value[0]?.source_type || undefined
+  }
   presetNodeIds.value = items.value.map((i) => i.external_doc_id)
   wizardOpen.value = true
 }

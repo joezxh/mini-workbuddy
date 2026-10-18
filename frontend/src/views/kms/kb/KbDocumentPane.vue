@@ -121,7 +121,7 @@
     <!-- Q&A 形态：「问答条目」列表 与「问答导入」手动录入以 Tab 切换（条目在前且默认激活） -->
     <a-tabs v-else-if="formatMode === 'qa'" v-model:activeKey="qaTab" class="kb-doc-pane__qa-tabs">
       <a-tab-pane key="list" :tab="t('kbMgmt.qaRecords')" force-render>
-        <QaRecordList :collection="collection" />
+        <QaRecordList :knowledge-id="props.knowledgeId" />
       </a-tab-pane>
       <a-tab-pane key="import" :tab="t('kbMgmt.qaImport')">
         <a-alert class="kb-doc-pane__hint" type="info" :message="t('kbMgmt.qaHint')" show-icon />
@@ -242,14 +242,16 @@ import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { BookOutlined } from '@ant-design/icons-vue'
 import {
-  createQaRecords,
+  createKnowledgeQaRecords,
   deleteDocument,
   getDocumentStatus,
   listDocuments,
+  listKnowledgeCollections,
   pipelineDryRun,
   rechunkKnowledge,
   retryDocument,
   retrieve,
+  retrieveKnowledge,
   uploadDocument,
   type KbDocument,
   type RetrieveResult,
@@ -269,6 +271,22 @@ const { t } = useI18n()
 
 const collection = computed(() => `kb_${props.knowledgeId}`)
 const formatMode = ref<'document' | 'table' | 'qa' | 'pipeline'>('document')
+
+/** 默认集合（kb_{kid}）的 ID：Q&A / 检索测试 / 问答导入按 id 调用集合接口 */
+const collections = ref<any[]>([])
+const defaultCollectionId = computed<number | null>(() => {
+  const def = collections.value.find((c) => c.name === collection.value)
+  return def?.id ?? collections.value[0]?.id ?? null
+})
+
+async function loadCollections() {
+  try {
+    const res: any = await listKnowledgeCollections(props.knowledgeId)
+    collections.value = res?.items || []
+  } catch {
+    collections.value = []
+  }
+}
 
 /** 这些形态不在面板内重复渲染检索测试（已由知识库「检索」标签页 SearchTester 提供） */
 const HIDE_TESTER_FORMATS: Array<typeof formatMode.value> = ['document', 'table', 'qa']
@@ -475,7 +493,11 @@ async function removeDoc(record: KbDocument) {
 
 async function runRetrieve() {
   if (!query.value.trim()) return
-  const res: any = await retrieve(collection.value, { query: query.value })
+  // 按默认集合 id 检索；若尚未解析到集合（极少见）则退化为跨知识库检索
+  const cid = defaultCollectionId.value
+  const res: any = cid
+    ? await retrieve(cid, { query: query.value })
+    : await retrieveKnowledge(props.knowledgeId, { query: query.value })
   results.value = res.results || []
   indexMode.value = res.index_mode || ''
 }
@@ -498,7 +520,7 @@ async function runQaImport() {
   }
   qaImporting.value = true
   try {
-    const res: any = await createQaRecords(collection.value, records)
+    const res: any = await createKnowledgeQaRecords(props.knowledgeId, records)
     message.success(`${t('kbMgmt.importQa')} ✓ ${res.ingested ?? 0}`)
     qaText.value = ''
   } catch (e: any) {
@@ -524,6 +546,7 @@ async function handleDryRun(file: File) {
 
 onMounted(async () => {
   await loadDocs()
+  await loadCollections()
 })
 onBeforeUnmount(() => {
   if (pollTimer) window.clearInterval(pollTimer)

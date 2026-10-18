@@ -1,0 +1,414 @@
+---
+source: https://docs.getsemantica.ai/reference/mcp_server
+title: MCP Server - Semantica
+---
+
+# MCP Server - Semantica
+
+**`semantica.mcp_server`** exposes Semantica’s knowledge graph, decision intelligence, semantic extraction, and reasoning capabilities as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) **server over stdio**:
+
+* 15 MCP tools exposed: extract entities, query graph, record decisions, run reasoning, export results
+* No Python code required after launch: configure once, use from any MCP-aware client
+* Compatible with Claude Desktop, Windsurf, Cline, Continue, VS Code, Roo Code, Cursor
+
+##  Server Interface
+
+```
+// Configure in your MCP client (Claude Desktop, Windsurf, Cursor, VS Code, etc.)
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "semantica-mcp"
+    }
+  }
+}
+```
+
+```
+# Or run directly
+semantica-mcp
+# or
+python -m semantica.mcp_server
+```
+
+`semantica.mcp_server` is a **stdio server process**, not a Python library. It exposes no importable classes: all interaction happens through MCP tool calls from a connected AI client.
+
+**The server communicates over stdio: don’t add logging to stdout.** Any `print()` or logger output directed to stdout will corrupt the JSON-RPC message stream. All logging is written to `stderr` only. Configure log verbosity with the `SEMANTICA_LOG_LEVEL` environment variable.
+
+##  What You Get
+
+* **15 MCP Tools** — Extract entities, extract relations, record decisions, query decisions, find precedents, trace causal chains, add entities, add relationships, run analytics, summarise graph, run reasoning, export graph, query the live graph, update nodes, archive nodes.
+* **3 Readable Resources** — Live graph JSON (`semantica://graph/summary`), decision list, and schema/version info: readable by any MCP client.
+* **Zero Infrastructure** — Runs over stdio: no server, no port, no Docker required. One config block to activate in any MCP client.
+* **Persistent Graphs** — Point `SEMANTICA_KG_PATH` at a saved graph file to reload it automatically on every server startup.
+* **Decision Intelligence** — Record decisions, find precedents via hybrid similarity search, and trace causal chains across agent runs.
+* **REST Alternative** — The [Explorer](/reference/explorer) module offers a full HTTP API and browser dashboard if you prefer programmatic access.
+
+##  Installation
+
+```
+pip install semantica
+```
+
+The MCP server is included in the base install: no extras required.
+
+##  Configuration
+
+1
+
+Find your MCP client's settings file
+
+| Client | Settings file |
+| --- | --- |
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor | `.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` globally |
+| VS Code / Continue | `.vscode/mcp.json` or user settings |
+| Windsurf / Cline / Roo Code | App-specific settings → MCP Servers |
+
+2
+
+Add the Semantica MCP server config
+
+Claude Desktop Cline
+
+Cursor
+
+VS Code Roo Code
+
+With persistent graph
+
+```
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "semantica-mcp"
+    }
+  }
+}
+```
+
+```
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "semantica-mcp",
+      "env": {
+        "SEMANTICA_KG_PATH": "/path/to/my_graph.json"
+      }
+    }
+  }
+}
+```
+
+```
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "python",
+      "args": ["-m", "semantica.mcp_server"]
+    }
+  }
+}
+```
+
+```
+{
+  "mcpServers": {
+    "semantica": {
+      "command": "semantica-mcp",
+      "env": {
+        "SEMANTICA_KG_PATH": "/path/to/my_graph.json",
+        "SEMANTICA_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
+
+**Configure your MCP client’s `command` field exactly.** The `command` field must point to the exact executable path (use `which semantica-mcp` on macOS/Linux to find it). A wrong path fails silently: the server just doesn’t appear in the tools list. Test with the raw `echo | semantica-mcp` command first to confirm the binary works.
+
+3
+
+Test locally before configuring your client
+
+```
+# Run the server directly (reads from stdin, writes to stdout)
+semantica-mcp
+
+# Or via Python module
+python -m semantica.mcp_server
+
+# Send a JSON-RPC initialize message to confirm it's working
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | semantica-mcp
+```
+
+##  Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SEMANTICA_KG_PATH` | *(none: in-memory graph)* | Path to a persisted graph file to load on startup |
+| `SEMANTICA_LOG_LEVEL` | `WARNING` | Log verbosity: `DEBUG`, `INFO`, `WARNING` |
+
+**The graph starts empty unless you set `SEMANTICA_KG_PATH`.** The MCP server creates a fresh in-memory `ContextGraph` on first use. Set `SEMANTICA_KG_PATH` to a previously saved graph file to restore state across server restarts. Without it, all data is lost when the process exits.
+
+**Enable debug logging for troubleshooting.** Set `SEMANTICA_LOG_LEVEL=DEBUG` in your MCP client’s `env` block, or run `python -m semantica.mcp_server` directly and inspect stderr output.
+
+##  Tools
+
+The MCP server exposes 15 tools that any connected AI assistant can call:
+
+| Tool | Category | Description |
+| --- | --- | --- |
+| `extract_entities` | Extraction | NER: find people, places, organisations, concepts |
+| `extract_relations` | Extraction | Typed relation and triplet extraction |
+| `record_decision` | Decision Intelligence | Save a decision with reasoning and outcome |
+| `query_decisions` | Decision Intelligence | Search recorded decisions by natural language or category |
+| `find_precedents` | Decision Intelligence | Hybrid similarity search over past decisions |
+| `get_causal_chain` | Decision Intelligence | Trace upstream / downstream causal chains |
+| `add_entity` | Graph Operations | Add a node to the live graph |
+| `add_relationship` | Graph Operations | Add a directed edge between two nodes |
+| `get_graph_summary` | Graph Operations | Node count, decision count, graph status |
+| `get_graph_analytics` | Graph Operations | PageRank centrality and community detection |
+| `query_graph` | Graph Operations | Fetch a node, traverse its neighbours, or keyword-search nodes |
+| `update_node` | Graph Operations | Merge properties onto a node and persist to `SEMANTICA_KG_PATH` |
+| `delete_node` | Graph Operations | Soft-delete (archive) a node and persist to `SEMANTICA_KG_PATH` |
+| `run_reasoning` | Reasoning | Forward-chain IF/THEN rules over facts |
+| `export_graph` | Reasoning & Export | Serialise the graph (`turtle`/`ttl`: RDF Turtle aliases, `nt`, `xml`, `json-ld`, `json`) |
+
+###  Knowledge Extraction
+
+extract\_entities
+
+Extract named entities (people, places, organisations, concepts) from text using Semantica NER.**Input:**
+
+```
+{ "text": "Apple Inc. was founded by Steve Jobs in Cupertino in 1976." }
+```
+
+**Output:**
+
+```
+{
+  "entities": [
+    { "label": "Apple Inc.", "type": "ORGANIZATION", "start": 0,  "end": 10,  "confidence": 0.98 },
+    { "label": "Steve Jobs", "type": "PERSON",       "start": 26, "end": 36,  "confidence": 0.99 },
+    { "label": "Cupertino",  "type": "LOCATION",     "start": 40, "end": 49,  "confidence": 0.97 },
+    { "label": "1976",       "type": "DATE",          "start": 53, "end": 57,  "confidence": 0.95 }
+  ],
+  "count": 4
+}
+```
+
+extract\_relations
+
+Extract typed relations and `(subject, predicate, object)` triplets from text.**Input:**
+
+```
+{ "text": "Steve Jobs founded Apple Inc. and led it until 2011." }
+```
+
+**Output:**
+
+```
+{
+  "relations": [
+    { "source": "Steve Jobs", "type": "founded", "target": "Apple Inc.", "confidence": 0.96 }
+  ],
+  "triplets": [
+    { "subject": "Steve Jobs", "predicate": "founded", "object": "Apple Inc." }
+  ],
+  "relation_count": 1,
+  "triplet_count": 1
+}
+```
+
+###  Decision Intelligence
+
+record\_decision
+
+Record a decision with full context, reasoning, and metadata into the knowledge graph.**Input:**
+
+```
+{
+  "category": "model_selection",
+  "scenario": "Choose LLM for production reasoning pipeline",
+  "reasoning": "GPT-4 benchmark advantage justifies 3x cost increase",
+  "outcome": "selected_gpt4",
+  "confidence": 0.91,
+  "decision_maker": "product_team",
+  "valid_from": "2024-01-01",
+  "valid_until": "2024-12-31"
+}
+```
+
+Required fields: `category`, `scenario`, `reasoning`, `outcome`, `confidence`.
+Optional: `decision_maker` (defaults to `"mcp_client"`), `valid_from`, `valid_until`.**Output:**
+
+```
+{ "decision_id": "dec_a1b2c3", "status": "recorded" }
+```
+
+query\_decisions
+
+Query recorded decisions by natural language or category filter.**Input:**
+
+```
+{ "query": "model selection", "category": "model_selection", "limit": 5 }
+```
+
+All fields are optional. `limit` defaults to `10`. When `query` is provided, similarity search is used. When omitted, `category` filter applies.
+
+find\_precedents
+
+Find past decisions similar to a given scenario using hybrid similarity search.**Input:**
+
+```
+{ "scenario": "Choose cloud provider for HIPAA workload", "max_results": 5 }
+```
+
+`max_results` defaults to `5`, maximum `50`.
+
+**Use `find_precedents` before high-stakes decisions.** The tool performs hybrid similarity search across all recorded decisions. Call it at the start of any significant decision path: it surfaces past reasoning that may be directly applicable, reducing redundant work and improving consistency across agent runs.
+
+get\_causal\_chain
+
+Trace the causal chain upstream or downstream from a decision.**Input:**
+
+```
+{ "decision_id": "dec_a1b2c3", "direction": "downstream", "max_depth": 5 }
+```
+
+`direction` accepts `"upstream"` or `"downstream"` (default: `"downstream"`).
+`max_depth` defaults to `5`, maximum `20`.
+
+###  Graph Operations
+
+add\_entity
+
+Add a node/entity to the live knowledge graph.**Input:**
+
+```
+{
+  "id": "apple_inc",
+  "label": "Apple Inc.",
+  "type": "Organization",
+  "metadata": { "founded": 1976, "hq": "Cupertino" }
+}
+```
+
+Only `id` is required. `label` defaults to the `id` value. `type` defaults to `"Entity"`.
+
+add\_relationship
+
+Add a directed relationship (edge) between two existing entities.**Input:**
+
+```
+{
+  "source": "steve_jobs",
+  "target": "apple_inc",
+  "type": "FOUNDED",
+  "metadata": { "year": 1976 }
+}
+```
+
+`source` and `target` are required. `type` defaults to `"RELATED_TO"`.
+
+get\_graph\_summary
+
+Return a high-level summary of the current knowledge graph.**Output:**
+
+```
+{
+  "node_count": 42,
+  "decision_count": 5,
+  "graph_ready": true
+}
+```
+
+Takes no input parameters.
+
+get\_graph\_analytics
+
+Compute PageRank centrality and community detection over the current graph. Returns top nodes by PageRank, community count, and overall node/edge counts.Takes no input parameters.
+
+query\_graph
+
+Read the live graph in one of three modes, set by `mode`:
+
+* `node` — return a single node by `node_id`.
+* `neighbors` (default) — traverse outward and inward from `node_id` up to `depth` hops (clamped to 1-5, default 1). Optional `relationship_types` filters edge types; optional `limit` caps results.
+* `search` — keyword match `query` against each node’s id and content. Optional `node_type` restricts the scan; `limit` defaults to 50.
+
+**Input:**
+
+```
+{ "mode": "neighbors", "node_id": "apple_inc", "depth": 2 }
+```
+
+update\_node
+
+Merge a set of properties onto an existing node. The change is applied in memory and, when `SEMANTICA_KG_PATH` is set, written back to that file so it survives a restart. Returns `persisted: false` when no path is configured.**Input:**
+
+```
+{
+  "node_id": "task_42",
+  "properties": { "status": "done", "note": "shipped in v0.6.7" }
+}
+```
+
+`node_id` and a non-empty `properties` object are required. Updating a missing node returns an error.
+
+delete\_node
+
+Soft-delete a node: it stays in the graph for history but is marked `status: "archived"`. Persists to `SEMANTICA_KG_PATH` when configured.**Input:**
+
+```
+{ "node_id": "task_42" }
+```
+
+###  Reasoning
+
+run\_reasoning
+
+Run forward-chaining IF/THEN rules over a set of facts to derive new facts.**Input:**
+
+```
+{
+  "facts": ["Employee(John)", "Manager(John)"],
+  "rules": ["IF Manager(?x) THEN HasAuthority(?x)"]
+}
+```
+
+**Output:**
+
+```
+{ "derived_facts": ["HasAuthority(John)"] }
+```
+
+###  Export
+
+export\_graph
+
+Export the current knowledge graph to a serialisation format.**Input:**
+
+```
+{ "format": "json-ld" }
+```
+
+Supported formats: `turtle`, `ttl`, `nt`, `xml`, `json-ld`, `json`. Default is `json-ld`.
+
+##  Resources
+
+The MCP server exposes three readable resources:
+
+| URI | Description |
+| --- | --- |
+| `semantica://graph/summary` | High-level graph statistics |
+| `semantica://decisions/list` | All recorded decisions (up to 50) |
+| `semantica://schema/info` | Server version and available tools |
+
+* [Context](/reference/context) — The ContextGraph that the MCP server operates on.
+* [Semantic Extract](/reference/semantic_extract) — NER and relation extraction powering the MCP tools.
+* [Reasoning](/reference/reasoning) — Forward-chaining engine behind run\_reasoning.
+* [Agno Integration](/integrations/agno) — Use Semantica inside Agno multi-agent teams.

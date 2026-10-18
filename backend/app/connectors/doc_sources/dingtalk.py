@@ -1,9 +1,20 @@
 """钉钉文档源。
 
-认证：``GET /gettoken?appkey&appsecret`` 取 access_token，以查询参数注入
-（沿用既有 ``app/connectors/types/dingtalk.py`` 的 token_in=query 约定）。
+认证：``GET https://oapi.dingtalk.com/gettoken?appkey&appsecret`` 取 access_token。
+令牌注入：本文件调用的是**新版**文档 OpenAPI（``api.dingtalk.com`` /v1.0/*），
+要求以请求头 ``x-acs-dingtalk-access-token: <token>`` 传递（无 Bearer 前缀），
+故用 ``token_in="header_raw"``；旧版 oapi 的 ``?access_token=`` 查询参数方式不适用，
+沿用会导致 400「缺少参数：x-acs-dingtalk-access-token」。
 枚举：知识库（workspaces）→ 节点（nodes/query）逐层下钻。
 正文：按 nodeId 取内容，优先使用平台返回的 Markdown/纯文本。
+
+⚠️ 权限约束（2026-10 核实）：
+「获取知识库列表」``GET /v1.0/doc/workspaces`` 所需权限点 ``Document.Workspace.Read``
+已被钉钉官方下线，新版开发者后台不再提供该权限的申请入口（报错里的申请链接是
+死循环）。「查询目录树」``POST /v1.0/doc/nodes/query`` 只需
+``Document.WorkspaceDocument.Read``（知识库文档读权限，可正常开通）。
+因此**新应用必须走「知识库直连」模式**：凭据中填写知识库 ID + 操作人 UnionId，
+连通测试与目录浏览直接基于目录树接口，不再依赖知识库列表接口。
 
 ⚠️ 注意：钉钉文档 OpenAPI 的「列表 / 取正文」端点随版本变动较快，
 本文件已把路径抽成模块级常量（见下方 *_PATH），若线上报 404/参数错误，
@@ -34,8 +45,9 @@ NODE_CONTENT_PATH = "/v1.0/doc/nodes/{node_id}/content"
 
 class DingtalkDocSource(BaseDocSource):
     source_type = "dingtalk"
-    token_in = "query"
-    token_query_name = "access_token"
+    # 新版文档 OpenAPI 要求令牌走专用请求头（无 Bearer 前缀）
+    token_in = "header_raw"
+    token_header_name = "x-acs-dingtalk-access-token"
 
     async def _fetch_token(self) -> Optional[str]:
         app_key = self.credentials.get("app_key") or ""
@@ -52,11 +64,39 @@ class DingtalkDocSource(BaseDocSource):
             raise DocSourceError(f"获取 access_token 失败：{(data or {}).get('errmsg') or '未知错误'}")
         return token
 
+    def _operator_id(self) -> str:
+        """操作人 unionId：doc 系列接口的必传参数，来自凭据表单。"""
+        return (self.credentials.get("operator_id") or "").strip()
+
+    def _op_params(self, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """组装查询参数并附带 operatorId；doc 接口缺 operatorId 会报 400。"""
+        q = dict(base or {})
+        op = self._operator_id()
+        if op:
+            q["operatorId"] = op
+        return q
+
     async def test_connection(self) -> DocConnResult:
+        space_id = (self.credentials.get("space_id") or "").strip()
         try:
             await self._access_token()
+            if space_id:
+                # 知识库直连：只依赖「查询目录树」（Document.WorkspaceDocument.Read），
+                # 新应用开通不了 Document.Workspace.Read，列表接口不可用
+                if not self._operator_id():
+                    return DocConnResult(
+                        ok=False,
+                        message="请填写操作人 UnionId：钉钉目录树接口必须携带 operatorId，"
+                                "可在钉钉管理后台或「查询用户详情」接口获取成员 unionId",
+                    )
+                refs = await self._list_nodes(space_id, None)
+                return DocConnResult(
+                    ok=True,
+                    message="连通成功：凭据有效（知识库直连模式）",
+                    identity=f"知识库 {space_id} 可访问，根目录 {len(refs)} 个节点",
+                )
             data = await self._request_json(
-                "GET", f"{API_HOST}{WORKSPACES_PATH}", params={"maxResults": 1}
+                "GET", f"{API_HOST}{WORKSPACES_PATH}", params=self._op_params({"maxResults": 1})
             )
             payload = (data or {}).get("data") or data or {}
             items = payload.get("workspaces") or payload.get("list") or []
@@ -66,13 +106,29 @@ class DingtalkDocSource(BaseDocSource):
                 identity=f"可访问知识库 {len(items) if items else (payload.get('total') or 0)} 个",
             )
         except DocSourceError as exc:
-            return DocConnResult(ok=False, message=str(exc))
+            return DocConnResult(ok=False, message=self._friendly_error(str(exc)))
         finally:
             await self.aclose()
+
+    @staticmethod
+    def _friendly_error(message: str) -> str:
+        """对 Document.Workspace.Read 缺权限的已知死循环报错给出可操作指引。"""
+        if "Document.Workspace.Read" in message:
+            return (
+                f"{message}。该权限点已被钉钉官方下线，新版开发者后台无法申请；"
+                "请在上方「知识库 ID」填写目标知识库的 spaceId，并将「操作人 UnionId」"
+                "设为对该知识库至少有「仅可查看」权限的成员，改用知识库直连模式"
+                "（仅依赖已开通的 Document.WorkspaceDocument.Read 目录树权限）"
+            )
+        return message
 
     async def list_nodes(self, parent_id: Optional[str] = None) -> List[ExternalDocRef]:
         try:
             if not parent_id:
+                space_id = (self.credentials.get("space_id") or "").strip()
+                if space_id:
+                    # 直连模式：顶层直接展开指定知识库的根目录
+                    return await self._list_nodes(space_id, None)
                 return await self._list_workspaces()
             workspace_id, node_id = self._split_parent(parent_id)
             return await self._list_nodes(workspace_id, node_id)
@@ -81,7 +137,7 @@ class DingtalkDocSource(BaseDocSource):
 
     async def _list_workspaces(self) -> List[ExternalDocRef]:
         data = await self._request_json(
-            "GET", f"{API_HOST}{WORKSPACES_PATH}", params={"maxResults": 50}
+            "GET", f"{API_HOST}{WORKSPACES_PATH}", params=self._op_params({"maxResults": 50})
         )
         payload = (data or {}).get("data") or data or {}
         items = payload.get("workspaces") or payload.get("list") or []
@@ -102,7 +158,8 @@ class DingtalkDocSource(BaseDocSource):
         if node_id:
             body["parentNodeId"] = node_id
         data = await self._request_json(
-            "POST", f"{API_HOST}{NODES_QUERY_PATH}", json_body=body
+            "POST", f"{API_HOST}{NODES_QUERY_PATH}",
+            params=self._op_params(), json_body=body
         )
         payload = (data or {}).get("data") or data or {}
         items = payload.get("nodes") or payload.get("list") or []
@@ -135,7 +192,8 @@ class DingtalkDocSource(BaseDocSource):
     async def fetch_doc(self, doc_id: str) -> FetchDocResult:
         try:
             data = await self._request_json(
-                "GET", f"{API_HOST}{NODE_CONTENT_PATH}".format(node_id=doc_id)
+                "GET", f"{API_HOST}{NODE_CONTENT_PATH}".format(node_id=doc_id),
+                params=self._op_params()
             )
             payload = (data or {}).get("data") or data or {}
             # 不同版本返回的字段名不一致，按顺序取第一个非空值
@@ -174,8 +232,20 @@ register_doc_source(
         credential_fields=(
             CredField("app_key", "AppKey", required=True, placeholder="dingxxxxxx"),
             CredField("app_secret", "AppSecret", required=True, secret=True,
-                      placeholder="应用凭证 Secret"),
-            CredField("space_id", "知识库 ID", placeholder="留空则列出全部知识库"),
+                      placeholder="应用凭证 Secret",
+                      hint="需在钉钉开放平台为应用开通「知识库文档读权限」"
+                           "（权限点：Document.WorkspaceDocument.Read，含查询目录树）并发布应用。"
+                           "注意：「知识库读权限 Document.Workspace.Read」已被钉钉官方下线，"
+                           "新应用在权限列表中找不到、无法申请，请改用下方「知识库直连」方式。"),
+            CredField("space_id", "知识库 ID",
+                      placeholder="强烈建议填写（知识库直连模式）",
+                      hint="新应用开通不了 Document.Workspace.Read，无法枚举知识库列表；"
+                           "请填写目标知识库 URL（https://alidocs.dingtalk.com/i/spaces/<ID>/overview）"
+                           "中的 ID，直连该知识库目录树。留空则尝试列表接口（仅存量已开通该权限的应用可用）。"),
+            CredField("operator_id", "操作人 UnionId",
+                      placeholder="对目标知识库至少有「仅可查看」权限的成员 unionId",
+                      hint="钉钉目录树/正文接口必传 operatorId（unionId），"
+                           "可在开发者后台 API Studio 调试台或「查询用户详情」接口获取。"),
         ),
     ),
 )

@@ -112,6 +112,13 @@ async def lifespan(app: FastAPI):
         except Exception as _col_err:
             logger.warning(f"补齐新列失败(忽略): {_col_err}")
 
+        # 默认集合行补齐 + 历史文档归属回填（按 collection_id 关联，幂等）
+        try:
+            from app.db.startup_migrations import ensure_default_collections
+            ensure_default_collections(engine)
+        except Exception as _coll_err:
+            logger.warning(f"默认集合补齐失败(忽略): {_coll_err}")
+
         # 性能索引（HNSW / pg_trgm）：幂等，失败仅告警（Phase 3 T1）
         try:
             from app.db.startup_migrations import create_performance_indexes

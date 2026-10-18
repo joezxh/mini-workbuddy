@@ -25,6 +25,7 @@ from app.connectors.doc_sources import (  # noqa: F401
     dingtalk,
     feishu,
     notion,
+    web,
     wecom,
     yuque,
 )

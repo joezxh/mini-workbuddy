@@ -78,6 +78,8 @@ class CredField:
     required: bool = False
     placeholder: str = ""
     hint: str = ""
+    # 多行文本（前端据此渲染 textarea）：web 连接器的种子 URL 列表等场景
+    multiline: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,7 @@ class ProviderMeta:
                     "required": f.required,
                     "placeholder": f.placeholder,
                     "hint": f.hint,
+                    "multiline": f.multiline,
                 }
                 for f in self.credential_fields
             ],
@@ -118,9 +121,12 @@ class BaseDocSource(ABC):
     """
 
     source_type: str = ""
-    # 令牌注入方式：header(Bearer) | query(查询参数) | none
+    # 令牌注入方式：header(Authorization: Bearer) | header_raw(自定义头名，值即令牌，
+    # 无 Bearer 前缀，如钉钉 x-acs-dingtalk-access-token) | query(查询参数) | none
     token_in: str = "none"
     token_query_name: str = "access_token"
+    # header_raw 模式使用的请求头名（子类按需覆盖）
+    token_header_name: str = "Authorization"
     timeout: float = DEFAULT_TIMEOUT
 
     def __init__(self, credentials: Dict[str, Any]) -> None:
@@ -182,6 +188,9 @@ class BaseDocSource(ABC):
             if token:
                 if self.token_in == "header":
                     hdrs["Authorization"] = f"Bearer {token}"
+                elif self.token_in == "header_raw":
+                    # 钉钉等新版开放平台：令牌直接作为指定头的值（无 Bearer 前缀）
+                    hdrs[self.token_header_name] = token
                 else:
                     q[self.token_query_name] = token
         try:

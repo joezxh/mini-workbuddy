@@ -39,6 +39,9 @@
                 {{ record.status }}<template v-if="record.status === 'processing'">…</template>
               </a-tag>
             </template>
+            <template v-else-if="column.key === 'collection'">
+              <a-tag color="purple">{{ collectionNameOf(record) }}</a-tag>
+            </template>
             <template v-else-if="column.key === 'op'">
               <a-space size="small">
                 <a-button size="small" @click.stop="openFlow(record)">{{ t('kbMgmt.flow') }}</a-button>
@@ -89,11 +92,13 @@
         <a-empty v-if="!rows.length && !loading" :description="t('kbMgmt.noRows')" />
         <a-table
           v-else
+          class="trl__rows-table"
           size="small"
           :data-source="rows"
           :columns="columns"
           :pagination="pagination"
           :loading="loading"
+          :scroll="{ x: 'max-content' }"
           row-key="id"
           @change="onTableChange"
         >
@@ -182,6 +187,15 @@
           <a-empty v-else :description="t('kbMgmt.noHits')" />
         </a-card>
       </a-tab-pane>
+
+      <!-- ④ 集合与字段：新建/编辑（字段定义）/ 重命名 / 删除集合 -->
+      <a-tab-pane key="collections" :tab="t('kbMgmt.collectionsTab')">
+        <KbCollectionManager
+          v-if="activeTab === 'collections'"
+          :knowledge-id="props.knowledgeId"
+          @changed="loadCollections"
+        />
+      </a-tab-pane>
     </a-tabs>
 
     <!-- 新增/编辑条目 -->
@@ -260,6 +274,7 @@ import {
 } from '@/api/kb'
 import { tableImportErrorMessage } from './tableImportError'
 import DocumentFlowDrawer from './DocumentFlowDrawer.vue'
+import KbCollectionManager from './KbCollectionManager.vue'
 
 const props = defineProps<{
   knowledgeId: number
@@ -301,6 +316,7 @@ const fileColumns = [
   { title: t('kbMgmt.fileColumnType'), dataIndex: 'file_type', key: 'file_type', width: 90 },
   { title: t('kbMgmt.fileColumnCount'), dataIndex: 'segment_count', key: 'segment_count', width: 100 },
   { title: t('common.status'), dataIndex: 'status', key: 'status', width: 110 },
+  { title: t('kbMgmt.fileColumnCollection'), key: 'collection', width: 170 },
   { title: t('kbMgmt.fileColumnTime'), dataIndex: 'created_at', key: 'created_at', width: 180 },
   { title: t('kbMgmt.common.actions'), key: 'op', width: 210 },
 ]
@@ -322,12 +338,26 @@ const filePagination = computed(() => ({
   showTotal: (n: number) => t('kbMgmt.fileTotal', { count: n }),
 }))
 
-/** 选中文件所属集合（表格库可多集合，字段定义按文件关联集合取） */
-const selectedDocCollection = computed(() => {
-  if (!selectedDoc.value) return props.collection
+/** 选中文件所属集合 ID（文档↔集合关联走 collection_id，name 仅作展示标签）。
+ *  未选中文件时返回 null。 */
+const selectedDocCollection = computed<number | null>(() => {
+  if (!selectedDoc.value) return null
   const doc = docs.value.find((d: any) => d.document_id === selectedDoc.value)
-  return String(doc?.collection || '') || props.collection
+  return doc?.collection_id ?? null
 })
+
+/** 默认集合（kb_{kid}）的 ID：未选中文件时取字段定义 / 增行用，以及检索 / 预览回退 */
+const defaultCollectionId = computed<number | null>(() => {
+  const def = kbCollections.value.find((c) => c.name === props.collection)
+  return def?.id ?? kbCollections.value[0]?.id ?? null
+})
+
+/** 由 collection_id 反查集合名（文件列表「所属集合」列展示用） */
+function collectionNameOf(doc: any): string {
+  const id = doc?.collection_id
+  if (id == null) return doc?.collection || props.collection
+  return kbCollections.value.find((c) => c.id === id)?.name || doc?.collection || props.collection
+}
 
 const filterDocName = computed(() => {
   if (!selectedDoc.value) return ''
@@ -360,9 +390,8 @@ const metaFields = computed<KbSchemaField[]>(() => {
 })
 
 const columns = computed(() => [
-  { title: embedFieldLabel.value, dataIndex: 'content', key: 'content' },
   ...metaFields.value.map((f) => ({ title: f.name, key: `m_${f.name}` })),
-  { title: t('kbMgmt.common.actions'), key: 'op', width: 130 },
+  { title: t('kbMgmt.common.actions'), key: 'op', width: 130, fixed: 'right' },
 ])
 
 const pagination = computed(() => ({
@@ -375,10 +404,13 @@ const pagination = computed(() => ({
   showTotal: (n: number) => t('kbMgmt.recordTotal', { count: n }),
 }))
 
-async function loadSchema(collection?: string) {
-  const name = collection || selectedDocCollection.value || props.collection
+async function loadSchema(collectionId?: number | null) {
+  if (!collectionId) {
+    schemaFields.value = []
+    return
+  }
   try {
-    const res: any = await getCollectionSchema(name)
+    const res: any = await getCollectionSchema(collectionId)
     schemaFields.value = (res?.fields || []) as KbSchemaField[]
   } catch {
     schemaFields.value = []
@@ -396,7 +428,8 @@ async function loadDocs() {
 }
 
 async function load() {
-  await loadSchema()
+  const cid = selectedDocCollection.value ?? defaultCollectionId.value
+  await loadSchema(cid)
   loading.value = true
   try {
     const params = {
@@ -408,7 +441,7 @@ async function load() {
     }
     // 选中文件 → 按该文件所属集合取；未选中（全部文件）→ 跨该知识库全部集合聚合
     const res: any = selectedDoc.value
-      ? await listCollectionSegments(selectedDocCollection.value, params)
+      ? await listCollectionSegments(cid as number, params)
       : await listKnowledgeSegments(props.knowledgeId, params)
     rows.value = res.items || []
     total.value = res.total ?? rows.value.length
@@ -478,7 +511,7 @@ async function handleImport(file: File) {
         message.error(t('kbMgmt.importFailed'))
         return false
       }
-      res = await importTableRecords(target.name, file)
+      res = await importTableRecords(target.id as number, file)
     } else {
       res = await importTableRecordsToKnowledge(props.knowledgeId, file, {})
     }
@@ -509,10 +542,10 @@ async function handlePreview(file: File) {
   preview.value = null
   try {
     const cid = tableCollectionId.value || 0
-    const collName = cid
-      ? kbCollections.value.find((c) => c.id === cid)?.name || props.collection
-      : props.collection
-    const res: any = await previewTableRecords(collName, file, 10)
+    const collId = cid
+      ? kbCollections.value.find((c) => c.id === cid)?.id
+      : defaultCollectionId.value
+    const res: any = await previewTableRecords(collId as number, file, 10)
     preview.value = {
       columns: res.columns || [],
       embed_fields: res.embed_fields || [],
@@ -540,7 +573,7 @@ async function runRetrieve() {
   try {
     // 未选中文件 → 跨该知识库全部集合检索；选中文件 → 只检索该文件所属集合
     const res: any = selectedDoc.value
-      ? await retrieve(selectedDocCollection.value, { query: query.value })
+      ? await retrieve((selectedDocCollection.value ?? defaultCollectionId.value) as number, { query: query.value })
       : await retrieveKnowledge(props.knowledgeId, { query: query.value })
     results.value = res.results || []
     indexMode.value = res.index_mode || ''
@@ -630,6 +663,11 @@ async function submit() {
     message.warning(t('kbMgmt.contentRequired'))
     return
   }
+  // 新增行必须归属某个文件（否则 document_id 为空无法落库）
+  if (!editing.value && !selectedDoc.value) {
+    message.warning(t('kbMgmt.selectFileFirst'))
+    return
+  }
   const metadata: Record<string, unknown> = { chunk_type: 'table_row' }
   for (const f of metaFields.value) {
     const raw = form.value.meta[f.name]
@@ -641,7 +679,7 @@ async function submit() {
     if (editing.value) {
       await updateSegment(editing.value.id, { content, metadata })
     } else {
-      await createTableRecord(selectedDocCollection.value, {
+      await createTableRecord((selectedDocCollection.value ?? defaultCollectionId.value) as number, {
         document_id: selectedDoc.value || '',
         content,
         metadata,
@@ -711,5 +749,9 @@ watch(() => props.knowledgeId, async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* 表格条目：表头标题不换行（每个字段名占一行），列过多时整体横向滚动 */
+.trl__rows-table :deep(.ant-table-thead > tr > th) {
+  white-space: nowrap;
 }
 </style>

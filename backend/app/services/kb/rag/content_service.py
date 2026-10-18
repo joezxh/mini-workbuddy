@@ -192,31 +192,89 @@ def parse_table(data: bytes, filename: str, limit: int | None = None) -> tuple[l
     if lower.endswith((".xlsx", ".xls")):
         import openpyxl
 
+        def _read_workbook(wb) -> tuple[list[str], list[dict]]:
+            # 优先用含数据最多的工作表；若为封面/空页导致 0 行，再回退尝试其余工作表
+            candidate = _pick_data_sheet(wb)
+            sheets_to_try = [candidate] + [s for s in wb.worksheets if s is not candidate]
+            columns: list[str] = []
+            rows: list[dict] = []
+            for ws in sheets_to_try:
+                iterator = ws.iter_rows(values_only=True)
+                headers = [str(h).strip() if h is not None else "" for h in next(iterator, [])]
+                columns = [h for h in headers if h]
+                if not columns:
+                    continue
+                rows = []
+                for values in iterator:
+                    if all(v is None for v in values):
+                        continue
+                    row = {
+                        h: v for h, v in zip(columns, values) if h
+                    }
+                    if not any(not _cell_empty(v) for v in row.values()):
+                        continue
+                    rows.append(row)
+                    if limit and len(rows) >= limit:
+                        break
+                if rows:
+                    break
+            return columns, rows
+
+        # 先以只读模式解析（省内存、快）。已知 openpyxl 在 read_only=True 配合
+        # data_only=True 时，部分 xlsx 读不到单元格缓存值（全返回 None）而致 0 行；
+        # 此时回退用非只读模式重读，确保 data_only 能取到真实值。若仍 0 行，最后
+        # 以 data_only=False 兜底（非公式单元格值不变，仅在确为公式无缓存时退化
+        # 为公式串），避免直接报「没有数据行」。
+        columns: list[str] = []
+        rows = []
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         try:
-            ws = wb.active
-            iterator = ws.iter_rows(values_only=True)
-            headers = [str(h).strip() if h is not None else "" for h in next(iterator, [])]
-            columns = [h for h in headers if h]
-            for values in iterator:
-                if all(v is None for v in values):
-                    continue
-                row = {
-                    h: v for h, v in zip(columns, values) if h
-                }
-                if not any(not _cell_empty(v) for v in row.values()):
-                    continue
-                rows.append(row)
-                if limit and len(rows) >= limit:
-                    break
+            columns, rows = _read_workbook(wb)
         finally:
             wb.close()
+        if not rows:
+            wb2 = openpyxl.load_workbook(io.BytesIO(data), read_only=False, data_only=True)
+            try:
+                columns, rows = _read_workbook(wb2)
+            finally:
+                wb2.close()
+        if not rows:
+            wb3 = openpyxl.load_workbook(io.BytesIO(data), read_only=False, data_only=False)
+            try:
+                columns, rows = _read_workbook(wb3)
+            finally:
+                wb3.close()
         return columns, rows
     raise ValueError(f"不支持的表格文件类型: {filename!r}（仅 csv/xlsx/xls）")
 
 
 def _cell_empty(value) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
+
+
+def _pick_data_sheet(wb) -> "object":
+    """多 sheet 工作簿里挑出最可能含数据的工作表。
+
+    优先用激活页；若其行数 ≤ 1（封面 / 汇总 / 空页），改选数据行最多的工作表。
+    这样可避免「激活页非数据页」导致解析到 0 行而误报「表格文件没有数据行」。
+    """
+    sheets = list(wb.worksheets)
+    if not sheets:
+        return wb.active
+    active = wb.active
+    if active is None:
+        active = sheets[0]
+
+    def _rowcount(ws) -> int:
+        try:
+            return int(ws.max_row or 0)
+        except Exception:
+            return 0
+
+    if _rowcount(active) > 1:
+        return active
+    best = max(sheets, key=_rowcount)
+    return best if _rowcount(best) > 1 else active
 
 
 def parse_table_bytes(data: bytes, filename: str, limit: int | None = None) -> list[dict]:

@@ -80,9 +80,12 @@ def save_credentials(
         .one_or_none()
     )
     if inst is None:
+        # code 为 NOT NULL 且租户内唯一（uq_connector_instance_code），必须显式生成；
+        # 取值按 (knowledge_id, source_type) 派生，保证幂等且不与人工创建的实例混淆。
         inst = ConnectorInstance(
             tenant_id=tenant_id,
             knowledge_id=knowledge_id,
+            code=f"kb{knowledge_id}-{source_type}",
             connector_type=source_type,
             name=f"{source_type} 文档导入",
             config={"credentials": payload},

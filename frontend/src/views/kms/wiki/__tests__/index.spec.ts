@@ -10,12 +10,14 @@ import WikiHome from '../index.vue'
 // 调用 createWebHistory() 并抛 ReferenceError。用工厂式 mock 阻断该加载链。
 vi.mock('@/api/wiki', () => ({
   listArticles: vi.fn(), createArticle: vi.fn(),
-  createCategory: vi.fn(), updateCategory: vi.fn(), deleteCategory: vi.fn(),
-  listCategories: vi.fn(), searchArticles: vi.fn(),
-  listKnowledges: vi.fn(), createKnowledge: vi.fn(),
-  updateKnowledge: vi.fn(), deleteKnowledge: vi.fn(),
+  searchArticles: vi.fn(),
 }))
-vi.mock('@/api/kb', () => ({ exportOkfBundle: vi.fn(), importOkfBundle: vi.fn() }))
+vi.mock('@/api/kb', () => ({
+  exportOkfBundle: vi.fn(), importOkfBundle: vi.fn(),
+  createCategory: vi.fn(), updateCategory: vi.fn(), deleteCategory: vi.fn(),
+  listCategories: vi.fn(), listKnowledges: vi.fn(),
+  createKnowledge: vi.fn(), updateKnowledge: vi.fn(), deleteKnowledge: vi.fn(),
+}))
 
 /** 用可辨识的占位文案替换真实 i18n，避免断言依赖翻译内容 */
 const TITLE = 'WIKI_TITLE_MARKER'

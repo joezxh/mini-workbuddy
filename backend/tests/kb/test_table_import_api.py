@@ -35,10 +35,12 @@ def env(db: Session):
                        type=2, kb_format="table", index_mode="high_quality")
     db.add(kn)
     db.commit()
-    db.add(KbCollection(tenant_id=TENANT, name=f"kb_{kn.id}", dimensions=768,
-                        knowledge_id=kn.id))
+    coll = KbCollection(tenant_id=TENANT, name=f"kb_{kn.id}", dimensions=768,
+                        knowledge_id=kn.id)
+    db.add(coll)
     db.commit()
-    return kn
+    # 路由现按 collection_id 调用；暴露 id 供测试构造 URL
+    return SimpleNamespace(id=kn.id, collection_id=coll.id)
 
 
 @pytest.fixture
@@ -73,9 +75,38 @@ def inserts(monkeypatch) -> list[dict]:
 
 def _import_csv(client: TestClient, env, data: bytes, name: str = "t.csv"):
     return client.post(
-        f"/api/v1/kb/collections/kb_{env.id}/table-records/import",
+        f"/api/v1/kb/collections/{env.collection_id}/table-records/import",
         files={"file": (name, data, "text/csv")},
     )
+
+
+def test_parse_table_picks_data_sheet_when_active_is_cover():
+    """多 sheet 工作簿：激活页是封面（无数据行）时，parse_table 应取含数据的页，
+    而非误报「表格文件没有数据行」。"""
+    import io
+
+    import openpyxl
+
+    from app.services.kb.rag.content_service import parse_table
+
+    wb = openpyxl.Workbook()
+    cover = wb.active
+    cover.title = "封面"
+    cover.append(["特斯拉 Optimus 供应商总表"])  # 仅标题，无数据行
+    data = wb.create_sheet("供应商")
+    data.append(["公司", "代码", "备注"])
+    data.append(["A 公司", "600000", "电机"])
+    data.append(["B 公司", "000001", "减速器"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    raw = buf.getvalue()
+
+    columns, rows = parse_table(raw, "总表.xlsx")
+    assert columns == ["公司", "代码", "备注"]
+    assert len(rows) == 2
+    assert rows[0]["公司"] == "A 公司"
+    assert rows[1]["代码"] == "000001"
 
 
 def test_import_auto_creates_schema_and_registers_document(db, env, client, inserts):
@@ -100,7 +131,7 @@ def test_import_auto_creates_schema_and_registers_document(db, env, client, inse
     assert doc.knowledge_id == env.id and doc.name == "价格表.csv"
     assert doc.segment_count == 2 and doc.file_type == "csv"
 
-    schema = client.get(f"/api/v1/kb/collections/kb_{env.id}/schema").json()
+    schema = client.get(f"/api/v1/kb/collections/{env.collection_id}/schema").json()
     assert schema["embed_field"] == "商品"
     assert schema["embed_fields"] == ["商品", "价格"]
     assert schema["columns"] == ["商品", "价格"]
@@ -143,13 +174,13 @@ def test_import_rejects_unsupported_file_type(client, env, inserts):
 
 
 def test_preview_validates_without_persisting(db, env, client, inserts):
-    url = f"/api/v1/kb/collections/kb_{env.id}/table-records/preview"
+    url = f"/api/v1/kb/collections/{env.collection_id}/table-records/preview"
     # 尚无定义：预览只做规范化推导，不落库也不产生切片
     ok = client.post(url, files={"file": ("t.csv", CSV_OK, "text/csv")})
     assert ok.status_code == 200
     assert ok.json()["columns"] == ["商品", "价格"]
     assert ok.json()["embed_field"] == "商品"
-    assert client.get(f"/api/v1/kb/collections/kb_{env.id}/schema").json()["fields"] == []
+    assert client.get(f"/api/v1/kb/collections/{env.collection_id}/schema").json()["fields"] == []
     assert not inserts
 
     # 已有定义后，预览与导入同口径：不匹配同样 422
@@ -161,14 +192,14 @@ def test_preview_validates_without_persisting(db, env, client, inserts):
 
 def test_put_schema_requires_single_embedded_column(client, env):
     bad = client.put(
-        f"/api/v1/kb/collections/kb_{env.id}/schema",
+        f"/api/v1/kb/collections/{env.collection_id}/schema",
         json={"fields": [{"name": "a", "type": "string", "embedding": False}]},
     )
     assert bad.status_code == 422
     assert bad.json()["detail"]["code"] == "table_schema_embed_required"
 
     ok = client.put(
-        f"/api/v1/kb/collections/kb_{env.id}/schema",
+        f"/api/v1/kb/collections/{env.collection_id}/schema",
         json={"fields": [
             {"name": "a", "type": "string", "embedding": True},
             {"name": "b", "type": "number", "embedding": False},

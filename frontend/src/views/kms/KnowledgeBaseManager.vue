@@ -89,16 +89,26 @@
     <a-modal
       v-model:open="createOpen"
       :title="editingId ? t('kbMgmt.edit') : t('kbMgmt.createWizard')"
+      width="640px"
+      :body-style="{ maxHeight: '60vh', overflowY: 'auto' }"
       @ok="submit"
       :confirm-loading="creating"
     >
-      <a-form layout="vertical">
+      <!-- 水平布局：label 与输入控件同行（120px 可容纳最长标签「多模态（文搜图）」不折行），
+           显著降低弹窗高度；内容超出时弹窗内部滚动而非撑高页面 -->
+      <a-form
+        class="kb-manager__form"
+        layout="horizontal"
+        label-align="right"
+        :label-col="{ style: { width: '120px' } }"
+        :wrapper-col="{ style: { flex: 1, minWidth: 0 } }"
+      >
         <a-form-item :label="t('kbMgmt.name')" required>
           <a-input v-model:value="form.name" :placeholder="t('kbMgmt.namePlaceholder')" />
         </a-form-item>
         <a-form-item :label="t('kbMgmt.type')">
           <!-- 编辑态锁定类型：后端同样不允许变更（需求 4） -->
-          <a-select v-model:value="form.type" :disabled="!!editingId">
+          <a-select v-model:value="form.type" :disabled="!!editingId" @change="onTypeChange">
             <a-select-option :value="1">{{ t('kbMgmt.typeWiki') }}</a-select-option>
             <a-select-option :value="2">{{ t('kbMgmt.typeGeneral') }}</a-select-option>
             <a-select-option :value="3">{{ t('kbMgmt.typeExternal') }}</a-select-option>
@@ -128,19 +138,80 @@
             <a-select-option value="qa">{{ t('kbMgmt.fmtQa') }}</a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item v-if="form.type === 3" :label="t('kbMgmt.kbFormat')">
-          <a-select v-model:value="form.kb_format">
-            <a-select-option value="proxy">{{ t('kbMgmt.fmtProxy') }}</a-select-option>
-            <a-select-option value="connector">{{ t('kbMgmt.fmtConnector') }}</a-select-option>
-          </a-select>
-          <a-alert
-            v-if="form.kb_format === 'connector'"
-            class="kb-manager__tip"
-            type="info"
-            :message="t('kbMgmt.connectorHint')"
-            show-icon
-          />
-        </a-form-item>
+        <!-- 外部知识库：以 Tab 切换两种接入方式（spec 知识库管理） -->
+        <a-tabs v-if="form.type === 3" v-model:activeKey="externalTab">
+          <!-- Tab 1：外部类型（连接器拉取）：平台类型 + 访问凭据 -->
+          <a-tab-pane key="connector" :tab="t('kbMgmt.fmtConnector')">
+            <a-alert
+              class="kb-manager__tip"
+              type="info"
+              :message="t('kbMgmt.connectorHint')"
+              show-icon
+            />
+            <!-- 编辑态且已存凭据：明文不回显，此处明确告知，避免误判为「未保存」 -->
+            <a-alert
+              v-if="editingId && existingHasCredentials"
+              class="kb-manager__tip"
+              type="success"
+              :message="t('kbExt.credSaved')"
+              show-icon
+            />
+            <a-form-item :label="t('kbMgmt.externalType')" required>
+              <a-select
+                v-model:value="form.external_type"
+                :placeholder="t('kbMgmt.externalTypePlaceholder')"
+                :options="externalTypeOptions"
+                @change="onExternalTypeChange"
+              />
+            </a-form-item>
+            <a-form-item
+              v-for="f in currentCredFields"
+              :key="f.name"
+              :label="f.label"
+              :required="f.required"
+            >
+              <a-textarea
+                v-if="f.multiline"
+                v-model:value="form.credentials[f.name]"
+                :placeholder="f.placeholder"
+                :rows="4"
+              />
+              <a-input-password
+                v-else-if="f.secret"
+                v-model:value="form.credentials[f.name]"
+                :placeholder="f.placeholder"
+              />
+              <a-input v-else v-model:value="form.credentials[f.name]" :placeholder="f.placeholder" />
+              <div v-if="f.hint" class="kb-manager__tip">{{ f.hint }}</div>
+            </a-form-item>
+            <a-form-item v-if="form.external_type">
+              <a-space>
+                <a-button :loading="externalTesting" @click="testExternal">{{ t('kbExt.testConnection') }}</a-button>
+                <span class="kb-manager__tip">{{ t('kbExt.tokenTip') }}</span>
+              </a-space>
+              <a-alert
+                v-if="externalTestResult"
+                class="kb-manager__tip"
+                :type="externalTestResult.ok ? 'success' : 'error'"
+                :message="externalTestResult.ok ? t('kbExt.testOk') : t('kbExt.testFail')"
+                :description="externalTestResult.ok ? externalTestResult.identity : externalTestResult.message"
+                show-icon
+              />
+            </a-form-item>
+          </a-tab-pane>
+          <!-- Tab 2：链接配置（检索代理）：外部端点 -->
+          <a-tab-pane key="proxy" :tab="t('kbMgmt.fmtProxy')">
+            <a-form-item :label="t('kbMgmt.endpointUrl')" required>
+              <a-input v-model:value="form.endpoint.endpoint_url" placeholder="https://..." />
+            </a-form-item>
+            <a-form-item :label="t('kbMgmt.authKey')">
+              <a-input-password v-model:value="form.endpoint.auth_key" />
+            </a-form-item>
+            <a-form-item :label="t('kbMgmt.indexName')">
+              <a-input v-model:value="form.endpoint.index_name" />
+            </a-form-item>
+          </a-tab-pane>
+        </a-tabs>
         <a-form-item v-if="form.type === 2" :label="t('kbMgmt.indexMode')">
           <a-radio-group v-model:value="form.index_mode">
             <a-radio value="high_quality">{{ t('kbMgmt.highQuality') }}</a-radio>
@@ -246,19 +317,6 @@
           <a-button size="small" @click="addField">{{ t('kbMgmt.addField') }}</a-button>
         </a-form-item>
 
-        <!-- 外部代理形态：端点配置 -->
-        <template v-if="form.type === 3 && form.kb_format === 'proxy'">
-          <a-form-item :label="t('kbMgmt.endpointUrl')" required>
-            <a-input v-model:value="form.endpoint.endpoint_url" placeholder="https://..." />
-          </a-form-item>
-          <a-form-item :label="t('kbMgmt.authKey')">
-            <a-input-password v-model:value="form.endpoint.auth_key" />
-          </a-form-item>
-          <a-form-item :label="t('kbMgmt.indexName')">
-            <a-input v-model:value="form.endpoint.index_name" />
-          </a-form-item>
-        </template>
-
         <a-form-item :label="t('kbMgmt.description')">
           <a-textarea v-model:value="form.description" :rows="2" />
         </a-form-item>
@@ -288,11 +346,12 @@
       </a-form>
     </a-modal>
 
-    <!-- 外部知识库文档导入向导（type=3 / kb_format=connector 创建后打开） -->
+    <!-- 外部知识库文档导入向导（type=3 / kb_format=connector 创建后打开，跳过平台/凭据两步） -->
     <ExternalSourceWizard
       v-if="wizardKnowledgeId"
       v-model:open="wizardOpen"
       :knowledge-id="wizardKnowledgeId"
+      :preset-source-type="wizardPresetType"
       @imported="load"
     />
 
@@ -311,8 +370,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message, Modal } from 'ant-design-vue'
-import { createKnowledge, listKnowledges, listCategories, updateKnowledge, createCategory, updateCategory, deleteCategory, deleteKnowledge } from '@/api/wiki'
+import { createKnowledge, listKnowledges, listCategories, updateKnowledge, createCategory, updateCategory, deleteCategory, deleteKnowledge } from '@/api/kb'
 import { createProxyEndpoint, listChunkers } from '@/api/kb'
+import {
+  getExternalConfig,
+  listExternalProviders,
+  saveExternalCredentials,
+  testExternalSource,
+  type ExternalProvider,
+} from '@/api/kbExternalSource'
 import { PlusOutlined, BookOutlined, ReadOutlined, LinkOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
 import KbDocumentPane from './kb/KbDocumentPane.vue'
 import ExternalLinkPane from './kb/ExternalLinkPane.vue'
@@ -349,6 +415,10 @@ const form = reactive({
   description: '',
   type: 2,
   kb_format: 'document' as string | null,
+  // 外部类型（仅 type=3 / connector）：平台类型（飞书/语雀/钉钉/企业微信/notion/web）
+  external_type: null as string | null,
+  // 访问凭据（按平台 schema 动态填充；仅入不出，不回显明文）
+  credentials: {} as Record<string, any>,
   index_mode: 'high_quality',
   multimodal_enabled: false,
   embedding_model: '' as string,
@@ -357,6 +427,27 @@ const form = reactive({
   category_id: null as number | null,
   schema_config: [] as { name: string; type: string; filterable: boolean; embedding: boolean }[],
   endpoint: { endpoint_url: '', auth_key: '', index_name: '' },
+})
+
+// 外部平台列表（驱动 external_type 下拉与凭据表单）
+const providers = ref<ExternalProvider[]>([])
+const externalTesting = ref(false)
+const externalTested = ref(false)
+const externalTestResult = ref<{ ok: boolean; message: string; identity: string } | null>(null)
+// 编辑态：知识库是否已存有凭据（用于免重复填凭据）
+const existingHasCredentials = ref(false)
+// 导入向导预设平台（创建后跳过平台/凭据两步）
+const wizardPresetType = ref<string | undefined>(undefined)
+// 外部知识库接入方式 Tab：connector=外部类型，proxy=链接配置（与 form.kb_format 双向同步）
+const externalTab = ref<'connector' | 'proxy'>('connector')
+
+const externalTypeOptions = computed(() =>
+  providers.value.map((p) => ({ label: p.name, value: p.source_type })),
+)
+
+const currentCredFields = computed(() => {
+  const p = providers.value.find((x) => x.source_type === form.external_type)
+  return p?.credential_fields ?? []
 })
 
 /** 多模态仅文搜图（D9），要求嵌入模型是 Vision 系列 */
@@ -445,6 +536,15 @@ async function loadChunkers() {
     chunkers.value = []
   } finally {
     chunkersLoading.value = false
+  }
+}
+
+async function loadExternalProviders() {
+  try {
+    const res: any = await listExternalProviders()
+    providers.value = res?.items || res || []
+  } catch {
+    providers.value = []
   }
 }
 
@@ -573,6 +673,58 @@ function onSelectKnowledge(_keys: unknown, info: any) {
   }
 }
 
+function resetExternalForm() {
+  form.external_type = null
+  form.credentials = {}
+  externalTested.value = false
+  externalTestResult.value = null
+  existingHasCredentials.value = false
+}
+
+/**
+ * type → 允许的 kb_format 合法性矩阵（spec §10.2，与后端 VALID_KB_FORMATS 一致）；
+ * null 表示该类型不使用 kb_format（llm-wiki）。
+ */
+const VALID_KB_FORMATS: Record<number, readonly string[] | null> = {
+  1: null,
+  2: ['document', 'table', 'qa'],
+  3: ['connector', 'proxy'],
+}
+
+/**
+ * 按当前「知识库类型」校验并规整二级形态，并同步外部接入 Tab。
+ *
+ * 仅在取值对该类型**非法**时才回落默认值，合法的已有值（table / qa / connector / proxy）
+ * 一律保留，避免编辑态被强制改写。
+ *
+ * 关键修复：历史数据存在 type=3 却 kb_format='document' 的非法行（创建时类型与形态未联动）。
+ * 该值会让 submit() 判定 form.kb_format !== 'connector' 而把 external_type 置为 undefined，
+ * 字段被 JSON 序列化丢弃、后端 model_fields_set 不含它 → external_type 永远不落库，
+ * 重新打开编辑时全部为空。此处统一规整为 connector，使外部类型与凭据得以保存。
+ */
+function syncFormatForType() {
+  const allowed = VALID_KB_FORMATS[form.type]
+  if (allowed === null) {
+    form.kb_format = null
+  } else if (allowed) {
+    if (!form.kb_format || !allowed.includes(form.kb_format)) {
+      form.kb_format = form.type === 3 ? 'connector' : 'document'
+    }
+  }
+  externalTab.value = form.kb_format === 'proxy' ? 'proxy' : 'connector'
+}
+
+/** 类型下拉变更：重置二级形态与外部 Tab（避免上一个类型的残留） */
+function onTypeChange() {
+  syncFormatForType()
+  resetExternalForm()
+}
+
+// 接入方式 Tab 与 form.kb_format 双向同步：切 Tab 即决定当前接入形态
+watch(externalTab, (v) => {
+  form.kb_format = v
+})
+
 function resetForm() {
   form.name = ''
   form.description = ''
@@ -586,6 +738,7 @@ function resetForm() {
   if (chunkers.value.length) onChunkerChange()
   form.schema_config = []
   form.endpoint = { endpoint_url: '', auth_key: '', index_name: '' }
+  resetExternalForm()
 }
 
 function openCreate() {
@@ -595,10 +748,12 @@ function openCreate() {
   form.category_id = selectedCategoryId.value
   // 默认类型：有选中知识库取其类型，否则默认通用(2)
   form.type = selectedKbType.value ?? 2
+  // 类型确定后对齐二级形态与外部 Tab（根因修复：避免 kb_format 残留 document）
+  syncFormatForType()
   createOpen.value = true
 }
 
-function openEdit() {
+async function openEdit() {
   const kb = knowledges.value.find((k) => k.id === selectedId.value)
   if (!kb) return
   editingId.value = kb.id
@@ -606,6 +761,9 @@ function openEdit() {
   form.description = kb.description || ''
   form.type = Number(kb.type || 2)
   form.kb_format = kb.kb_format || (form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : null)
+  // 规整二级形态并同步外部 Tab：历史 type=3 行可能是非法的 document，
+  // 需归一到 connector，否则 external_type 不会提交、编辑后不落库
+  syncFormatForType()
   form.index_mode = kb.index_mode || 'high_quality'
   form.multimodal_enabled = !!kb.multimodal_enabled
   form.embedding_model = kb.pipeline_config?.embedding?.model || ''
@@ -617,9 +775,63 @@ function openEdit() {
   if (!Object.keys(form.chunker_params).length) onChunkerChange()
   form.schema_config = kb.schema_config ? JSON.parse(JSON.stringify(kb.schema_config)) : []
   form.endpoint = kb.endpoint || { endpoint_url: '', auth_key: '', index_name: '' }
+  // 外部类型回显（明文凭据不回显；编辑时按是否已存凭据决定是否需要重填）
+  resetExternalForm()
+  form.external_type = kb.external_type || null
+  if (kb.type === 3 && form.kb_format === 'connector' && kb.external_type) {
+    try {
+      const cfg: any = await getExternalConfig(kb.id)
+      existingHasCredentials.value = !!cfg?.has_credentials
+      // 已有凭据：免重复测试；用户重新填凭据时需再测试
+      externalTested.value = !!cfg?.has_credentials
+    } catch {
+      existingHasCredentials.value = false
+    }
+  }
   // 优先用知识库已有类别，否则默认到当前选中的类别
   form.category_id = kb.category_id ?? selectedCategoryId.value
   createOpen.value = true
+}
+
+function onExternalTypeChange() {
+  // 切换平台清空已填凭据与测试结果（避免错配）
+  form.credentials = {}
+  externalTested.value = false
+  externalTestResult.value = null
+}
+
+async function testExternal() {
+  if (!form.external_type) {
+    message.warning(t('kbMgmt.externalTypeRequired'))
+    return
+  }
+  const missing = currentCredFields.value.filter(
+    (f) => f.required && !form.credentials[f.name],
+  )
+  if (missing.length) {
+    message.warning(t('kbExt.missingCred', { name: missing[0].label }))
+    return
+  }
+  externalTesting.value = true
+  try {
+    const res: any = await testExternalSource(form.external_type, form.credentials)
+    externalTestResult.value = res
+    externalTested.value = !!res?.ok
+  } catch (e: any) {
+    externalTested.value = false
+    externalTestResult.value = {
+      ok: false,
+      message: e?.response?.data?.detail || t('kbExt.testFail'),
+      identity: '',
+    }
+  } finally {
+    externalTesting.value = false
+  }
+}
+
+/** 凭据是否已填写（至少有一个非空字段） */
+function hasEnteredCredentials() {
+  return Object.values(form.credentials).some((v) => v !== '' && v != null)
 }
 
 async function submit() {
@@ -650,6 +862,30 @@ async function submit() {
         return
       }
     }
+    // 外部 connector：必须选择平台；新建时凭据必填且需先测试连接
+    if (form.type === 3 && form.kb_format === 'connector') {
+      if (!form.external_type) {
+        message.warning(t('kbMgmt.externalTypeRequired'))
+        return
+      }
+      if (!hasEnteredCredentials()) {
+        message.warning(t('kbMgmt.externalCredRequired'))
+        return
+      }
+      if (!externalTested.value) {
+        message.warning(t('kbExt.needTest'))
+        return
+      }
+    }
+  } else {
+    // 编辑态：若切换了平台或新填了凭据，要求先测试连接（未改动且有历史凭据可免填）
+    if (
+      form.type === 3 && form.kb_format === 'connector' && form.external_type
+      && hasEnteredCredentials() && !externalTested.value
+    ) {
+      message.warning(t('kbExt.needTest'))
+      return
+    }
   }
 
   creating.value = true
@@ -659,13 +895,33 @@ async function submit() {
         name: form.name.trim(),
         description: form.description || undefined,
         category_id: form.category_id ?? undefined,
+        // 外部 connector：允许编辑平台类型（改后需重新配置凭据）
+        external_type:
+          form.type === 3 && form.kb_format === 'connector'
+            ? form.external_type
+            : undefined,
       })
+      // 编辑且填写了新凭据：固化到该知识库
+      if (
+        form.type === 3 && form.kb_format === 'connector' && form.external_type
+        && hasEnteredCredentials()
+      ) {
+        await saveExternalCredentials({
+          knowledge_id: editingId.value,
+          source_type: form.external_type,
+          credentials: form.credentials,
+        })
+      }
     } else {
       const res: any = await createKnowledge({
         name: form.name.trim(),
         description: form.description || undefined,
         type: form.type,
         kb_format: form.kb_format,
+        external_type:
+          form.type === 3 && form.kb_format === 'connector'
+            ? form.external_type
+            : undefined,
         index_mode: form.type === 2 ? form.index_mode : undefined,
         multimodal_enabled: form.type === 2 ? form.multimodal_enabled : undefined,
         category_id: form.category_id ?? undefined,
@@ -683,9 +939,17 @@ async function submit() {
           auth_key: form.endpoint.auth_key || undefined,
         })
       }
-      // connector 形态（文档导入）：建完容器后直接打开导入向导选文档
-      if (form.type === 3 && form.kb_format === 'connector' && kid) {
+      // connector 形态（文档导入）：固化凭据并打开导入向导（跳过平台/凭据两步）
+      if (form.type === 3 && form.kb_format === 'connector' && kid && form.external_type) {
+        if (hasEnteredCredentials()) {
+          await saveExternalCredentials({
+            knowledge_id: kid,
+            source_type: form.external_type,
+            credentials: form.credentials,
+          })
+        }
         wizardKnowledgeId.value = kid
+        wizardPresetType.value = form.external_type
         wizardOpen.value = true
       }
     }
@@ -893,6 +1157,7 @@ async function load() {
 onMounted(() => {
   load()
   loadChunkers()
+  loadExternalProviders()
 })
 
 // 选中知识库变化无需重建左树（树已含全部类型），类型由 selectedKbType 派生
@@ -1011,6 +1276,13 @@ onMounted(() => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+/* 新建/编辑弹窗：水平布局下压缩表单项间距（默认 24px → 12px）以减小高度 */
+.kb-manager__form :deep(.ant-form-item) {
+  margin-bottom: 12px;
+}
+.kb-manager__form :deep(.ant-form-item:last-child) {
+  margin-bottom: 0;
 }
 .kb-manager__chunker-param {
   display: flex;

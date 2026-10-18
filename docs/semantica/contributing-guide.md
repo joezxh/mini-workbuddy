@@ -1,0 +1,86 @@
+---
+source: https://docs.getsemantica.ai/contributing-guide
+title: Contributing - Semantica
+---
+
+# Contributing - Semantica
+
+Contributions of all kinds are welcome (code, documentation, tests, and community support). Every contribution is recognized in release notes and the GitHub contributors list.
+
+##  Quick Start
+
+```
+# Fork the repo on GitHub, then:
+git clone https://github.com/your-username/semantica.git
+cd semantica
+pip install -e . --group dev   # needs pip 25.1+ (or: uv sync)
+pytest
+```
+
+First-time contributors can start with [`good-first-issue`](https://github.com/semantica-agi/semantica/labels/good-first-issue) labeled tickets, which are scoped to be completable in a few hours without deep codebase knowledge.
+
+##  Ways to Contribute
+
+* **Code**: fix bugs, implement features, optimize performance, or add new ingestors, parsers, and exporters using the plugin registry.
+* **Documentation**: fix typos, improve clarity, add missing examples, write tutorials, or keep the API reference accurate as modules evolve.
+* **Testing**: add test coverage for untested modules or edge cases, reproduce reported bugs with minimal repros, or improve cross-platform reliability.
+* **Community**: answer questions in GitHub Issues and Discussions, review pull requests with constructive feedback, or share Semantica in blog posts and talks.
+
+##  Development Setup
+
+```
+git clone https://github.com/your-username/semantica.git
+cd semantica
+pip install -e . --group dev   # needs pip 25.1+ (or: uv sync)
+```
+
+**Code style tools:**
+
+```
+pytest                      # full test suite
+black semantica/ tests/     # auto-format
+isort semantica/ tests/     # sort imports
+flake8 semantica/           # lint
+```
+
+Style conventions: **Black** for formatting, **isort** for imports, **flake8** for linting. All three run in CI.
+
+##  Reporting Issues
+
+**Bug reports** should include:
+
+* What happened vs. what you expected
+* Minimal steps to reproduce
+* Your environment: Python version, OS, Semantica version (`python -c "import semantica; print(semantica.__version__)"`)
+
+**Feature requests** should include:
+
+* Your concrete use case
+* What you’d like Semantica to do
+* Why it benefits a broad set of users, not just your specific workflow
+
+##  Pull Request Checklist
+
+Before submitting a PR, confirm:
+
+Tests pass locally: `pytest`
+
+New features include documentation with working code examples
+
+Code follows project style: Black, isort, flake8
+
+Commit messages are clear and describe the *why*, not just the *what*
+
+No unresolved merge conflicts
+
+##  Code of Conduct
+
+All contributors are expected to follow the [Contributor Covenant Code of Conduct](https://github.com/semantica-agi/semantica/blob/main/CODE_OF_CONDUCT.md). Be respectful, patient, and constructive, especially toward newcomers. Report violations by opening an issue with the `[CoC]` prefix.
+
+##  Help
+
+* [GitHub Issues](https://github.com/semantica-agi/semantica/issues)
+* [GitHub Discussions](https://github.com/semantica-agi/semantica/discussions)
+* [Discord](https://discord.gg/sV34vps5hH)
+* [Community](/community): community guidelines and values.
+* [Governance](/governance): how decisions are made and the project is run.

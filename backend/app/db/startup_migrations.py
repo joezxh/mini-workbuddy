@@ -102,6 +102,11 @@ _COLUMN_MIGRATIONS: list[str] = [
     # 知识库所属类别（知识库管理）：引用 kms_category 树节点
     "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS category_id BIGINT",
     "CREATE INDEX IF NOT EXISTS idx_kms_knowledge_category ON kms_knowledge (category_id)",
+    # 外部知识库平台绑定（spec 知识库管理）：仅 type=3/connector 时有值，
+    # 与迁移 2026_10_18_0002_add_external_type 同义，此处用幂等 SQL 兜底
+    # （AUTO_CREATE_TABLES 路径下 alembic 重放会因表已存在而失败，故在此补齐）
+    "ALTER TABLE kms_knowledge ADD COLUMN IF NOT EXISTS external_type VARCHAR(32)",
+    "CREATE INDEX IF NOT EXISTS ix_kms_knowledge_external_type ON kms_knowledge (external_type)",
     # 旧关系清理（2026-10-08）：分类不再归属知识库，移除 knowledge_id / kb_type
     "ALTER TABLE kms_category DROP COLUMN IF EXISTS knowledge_id",
     "ALTER TABLE kms_category DROP COLUMN IF EXISTS kb_type",
@@ -118,6 +123,12 @@ _COLUMN_MIGRATIONS: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_kms_segment_parent ON kms_segment (parent_id)",
     "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS answer TEXT",
     "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS keywords JSONB",
+    # 表格知识库多集合归属（spec §10.2）：kms_document 显式记录所属集合 ID
+    # （按 ID 精确归属，替代仅按名称字符串 collection 推断）；普通文档库维持
+    # kb_{knowledge_id} 1:1，该列可空以保证历史数据兼容。FK 由 alembic 迁移覆盖
+    # 全新库，此处仅保证运行库（不走 alembic）补齐列/索引并回填历史文档。
+    "ALTER TABLE kms_document ADD COLUMN IF NOT EXISTS collection_id BIGINT",
+    "CREATE INDEX IF NOT EXISTS ix_kms_document_collection_id ON kms_document (collection_id)",
     # OKF 合规层（spec §9.2）：文章溯源/验证/过期字段
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS okf_type VARCHAR(64)",
     "ALTER TABLE kms_article ADD COLUMN IF NOT EXISTS resource VARCHAR(500)",
@@ -138,6 +149,34 @@ def add_new_columns(engine: Engine) -> None:
     with engine.begin() as conn:
         for sql in _COLUMN_MIGRATIONS:
             conn.execute(text(sql))
+
+
+# ── 默认集合行补齐 + 历史文档归属回填（幂等）──────────────────────────────
+# 每个知识库都需存在默认集合 ``kb_{knowledge_id}``（普通文档 / Q&A 库的 1:1 集合），
+# 否则「按 collection_id 反查」的接口无法解析。表格库上传未指定集合时自动新建
+# ``kb_{kid}_{slug}``，但历史库 / 文档 / Q&A 库未必有该默认行，故在此兜底补齐；
+# 随后把 ``kms_document.collection_id`` 按集合名回填，使文档↔集合关联走 id。
+def ensure_default_collections(engine: Engine) -> None:
+    """为缺失默认集合行的知识库补建 ``kb_{kid}``，并回填历史文档的 collection_id。"""
+    from app.config import settings
+
+    dim = int(getattr(settings, "GPUSTACK_EMBEDDING_DIMENSION", 768))
+    with engine.begin() as conn:
+        # 1) 为每个知识库补默认集合行（名称唯一，NOT EXISTS 防重复）
+        conn.execute(text(
+            "INSERT INTO kms_collection (tenant_id, name, dimensions, knowledge_id, created_at) "
+            "SELECT k.tenant_id, 'kb_' || k.id::text, :dim, k.id, now() "
+            "FROM kms_knowledge k "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM kms_collection c WHERE c.name = 'kb_' || k.id::text"
+            ")"
+        ), {"dim": dim})
+        # 2) 回填：按 collection 名（kms_collection.name）反查 id（仅更新未归属行）
+        conn.execute(text(
+            "UPDATE kms_document AS d SET collection_id = c.id "
+            "FROM kms_collection AS c "
+            "WHERE d.collection_id IS NULL AND d.collection = c.name"
+        ))
 
 
 # ── 字典数据播种（幂等）──────────────────────────────────────────────────────

@@ -1,0 +1,95 @@
+---
+source: https://docs.getsemantica.ai/governance
+title: Governance - Semantica
+---
+
+# Governance - Semantica
+
+> Semantica is maintained by the Semantica team with community contributions under an open governance model.
+
+##  Roles
+
+* **Maintainers**: Semantica team. Review and merge PRs, manage releases and code quality, set project direction and community standards.
+* **Contributors**: submit code, documentation, and bug reports. Help with issues and reviews. Recognized in [CONTRIBUTORS.md](https://github.com/semantica-agi/semantica/blob/main/CONTRIBUTORS.md).
+* **Community Members**: use Semantica, provide feedback, share use cases, and participate in GitHub Discussions and Discord.
+
+##  Decision Process
+
+###  Code Changes
+
+1
+
+Proposal
+
+Open a GitHub Issue describing the change.
+
+2
+
+Discussion
+
+Community discussion on approach and scope.
+
+3
+
+Implementation
+
+Submit a pull request with the change.
+
+4
+
+Review
+
+At least one maintainer reviews the PR.
+
+5
+
+Merge
+
+Merged after CI passes and maintainer approval.
+
+###  Major Decisions
+
+* RFC posted in GitHub Issues
+* Minimum 1-week community discussion period
+* Maintainers decide based on community feedback and technical feasibility
+
+##  Releases
+
+Semantica follows **Semantic Versioning** (`MAJOR.MINOR.PATCH`):
+
+| Level | Trigger | Cadence |
+| --- | --- | --- |
+| MAJOR | Breaking changes | Quarterly or as needed |
+| MINOR | New features (backward compatible) | Monthly or when ready |
+| PATCH | Bug fixes (backward compatible) | As bugs are fixed |
+
+##  Code Review
+
+**Review criteria:** functionality, code quality, tests, documentation, performance, security.
+**Timeline:** initial review within 48 hours; follow-up within 7 days.
+**Guidelines for reviewers:** be constructive, explain reasoning, suggest alternatives.
+**Guidelines for contributors:** address comments promptly, ask questions when unclear, be open to feedback.
+
+##  Communication
+
+* **GitHub Issues**: bug reports, feature requests, questions
+* **GitHub PRs**: code contributions
+* **GitHub Discussions**: community conversation
+* **Security Advisories**: [report security issues privately](https://github.com/semantica-agi/semantica/security/advisories/new)
+
+##  Project Goals
+
+* **Usability**: easy to use and understand with sensible defaults, clear documentation, and minimal ceremony.
+* **Reliability**: production-ready quality tested across Python versions, platforms, and real-world workloads.
+* **Performance**: efficient and scalable from single-machine notebooks to enterprise graph databases.
+* **Extensibility**: easy to extend with plugins and custom modules via the `PluginRegistry` pattern.
+* **Community**: welcoming and inclusive. All backgrounds and experience levels contribute and are recognized.
+
+##  License
+
+MIT License: see [LICENSE](https://github.com/semantica-agi/semantica/blob/main/LICENSE) and the [License page](/project-license).
+
+##  See Also
+
+* [Contributing](/contributing-guide): how to submit changes.
+* [Community](/community): community guidelines and channels.

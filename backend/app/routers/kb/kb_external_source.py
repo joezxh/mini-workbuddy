@@ -22,6 +22,7 @@ from app.connectors.doc_sources import (
 )
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.services.kb.external_import_service import (
     ImportSummary,
     import_documents,
@@ -67,6 +68,9 @@ class CredentialsBody(BaseModel):
 
 class NodesBody(CredentialsBody):
     parent_id: Optional[str] = None
+    # 传入 knowledge_id 且 credentials 为空时，由服务端按 (tenant, knowledge_id, source_type)
+    # 回退读取已保存（加密）凭据，使导入向导无需前端持有明文凭据即可浏览目录
+    knowledge_id: Optional[int] = None
 
 
 class DocRef(BaseModel):
@@ -83,6 +87,13 @@ class ImportBody(BaseModel):
     chunker_type: str = "approx_token"
     chunker_params: Optional[Dict[str, Any]] = None
     save_credentials: bool = True
+
+
+class CredentialsSaveBody(BaseModel):
+    """新建/编辑知识库时固化平台凭据（spec 知识库管理：平台+凭据在 KB 创建时完成）。"""
+    knowledge_id: int
+    source_type: str
+    credentials: Dict[str, Any]
 
 
 @router.get("/providers")
@@ -117,11 +128,20 @@ async def browse_nodes(
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_UPLOAD)),
 ):
-    """浏览目录/文档（懒加载，只取当前层级）。"""
-    _tenant_id(current_user)
+    """浏览目录/文档（懒加载，只取当前层级）。
+
+    凭据回退：``credentials`` 为空且提供 ``knowledge_id`` 时，由服务端按
+    (tenant, knowledge_id, source_type) 读取已保存（加密）凭据（spec 知识库管理：
+    导入时跳过「配置凭据」一步）。"""
+    tenant_id = _tenant_id(current_user)
     _require_type(body.source_type)
+    credentials = body.credentials or {}
+    if not credentials and body.knowledge_id:
+        credentials = load_credentials(
+            db, tenant_id, body.knowledge_id, body.source_type
+        ) or {}
     try:
-        refs = await list_nodes(body.source_type, body.credentials or {}, body.parent_id)
+        refs = await list_nodes(body.source_type, credentials, body.parent_id)
     except DocSourceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
@@ -193,3 +213,52 @@ def external_documents(
     tenant_id = _tenant_id(current_user)
     _require_knowledge(db, kid)
     return {"items": list_external_documents(db, tenant_id, kid)}
+
+
+@router.post("/credentials")
+def save_kb_credentials(
+    body: CredentialsSaveBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """把平台凭据（Fernet 加密）固化到指定外部知识库（type=3 / connector）。
+
+    供「新建/编辑知识库」向导在创建容器后立即调用；凭据只入不出，列表接口不回传明文。
+    """
+    tenant_id = _tenant_id(current_user)
+    kb = db.get(WikiKnowledge, body.knowledge_id)
+    if kb is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    if kb.type != 3 or kb.kb_format != "connector":
+        raise HTTPException(
+            status_code=422, detail="仅 type=3 / connector 形态的外部知识库可保存平台凭据"
+        )
+    if kb.external_type != body.source_type:
+        raise HTTPException(
+            status_code=422,
+            detail=f"凭据平台({body.source_type})与知识库外部类型({kb.external_type})不一致",
+        )
+    save_credentials(
+        db, tenant_id, body.knowledge_id, body.source_type, body.credentials
+    )
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/knowledges/{kid}/external-config")
+def external_config(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """返回该外部知识库的平台类型与是否已配置凭据，供导入向导判定是否跳过凭据步。"""
+    tenant_id = _tenant_id(current_user)
+    kb = db.get(WikiKnowledge, kid)
+    if kb is None:
+        raise HTTPException(status_code=404, detail="知识库不存在")
+    has_credentials = False
+    if kb.external_type:
+        has_credentials = load_credentials(db, tenant_id, kid, kb.external_type) is not None
+    return {"external_type": kb.external_type, "has_credentials": has_credentials}

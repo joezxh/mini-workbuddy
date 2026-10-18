@@ -116,8 +116,6 @@ export const DictType = {
   EMOTION_STAGE: 'emotion_stage',
   /** 金句话术类型 (知识增强): 释法/共情/引导 */
   SPEECH_TYPE: 'speech_type',
-  /** 本体关系类型（继承/实现/关联/聚合/组合/依赖） */
-  ONTOLOGY_REL_TYPE: 'ontology_rel_type',
   /** 知识图谱推理执行模式（Skill/Tool/P1-P6 推理范式） */
   KG_REASONING_EXEC_MODE: 'kg_reasoning_exec_mode',
   /** AI 联网搜索平台（博查/Anspire/Google/Bing/自定义等） */

@@ -173,70 +173,7 @@ export function convertDocument(file: File) {
   })
 }
 
-// ── 分类 ──
 
-export function listCategories() {
-  return request.get(`${API_PREFIX}/wiki/categories`)
-}
-
-export function createCategory(data: {
-  name: string
-  slug?: string
-  description?: string
-  parent_id?: number
-  knowledge_id?: number
-  owl_class_uri?: string
-  sort_order?: number
-}) {
-  return request.post(`${API_PREFIX}/wiki/categories`, data)
-}
-
-export function updateCategory(id: number, data: {
-  name?: string
-  description?: string
-  parent_id?: number
-  sort_order?: number
-}) {
-  return request.put(`${API_PREFIX}/wiki/categories/${id}`, data)
-}
-
-export function deleteCategory(id: number) {
-  return request.delete(`${API_PREFIX}/wiki/categories/${id}`)
-}
-
-// ── 知识库（仅 wiki 类型） ──
-
-export function listKnowledges() {
-  return request.get(`${API_PREFIX}/wiki/knowledges`)
-}
-
-export function createKnowledge(data: {
-  name: string
-  description?: string
-  type?: number
-  kb_format?: string | null
-  index_mode?: string
-  multimodal_enabled?: boolean
-  pipeline_config?: Record<string, unknown> | null
-  category_id?: number | null
-}) {
-  return request.post(`${API_PREFIX}/wiki/knowledges`, data)
-}
-
-export function updateKnowledge(id: number, data: {
-  name?: string
-  description?: string
-  status?: number
-  category_id?: number | null
-  /** 摄取编排（spec §10.7）：切片方案 + 嵌入模型，原生键名 */
-  pipeline_config?: Record<string, unknown> | null
-}) {
-  return request.put(`${API_PREFIX}/wiki/knowledges/${id}`, data)
-}
-
-export function deleteKnowledge(id: number) {
-  return request.delete(`${API_PREFIX}/wiki/knowledges/${id}`)
-}
 
 // ── OWL ──
 

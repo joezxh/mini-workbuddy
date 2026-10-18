@@ -43,9 +43,14 @@
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { exportQaRecords, importQaFile, listQaRecords, updateSegment } from '@/api/kb'
+import {
+  exportKnowledgeQaRecords,
+  importKnowledgeQaFile,
+  listKnowledgeQaRecords,
+  updateSegment,
+} from '@/api/kb'
 
-const props = defineProps<{ collection: string }>()
+const props = defineProps<{ knowledgeId: number }>()
 const { t } = useI18n()
 
 interface QaRow {
@@ -73,7 +78,7 @@ const columns = [
 async function load() {
   loading.value = true
   try {
-    const res: any = await listQaRecords(props.collection)
+    const res: any = await listKnowledgeQaRecords(props.knowledgeId)
     rows.value = (res.records || res.items || res || []).map((r: any) => ({ ...r, __busy: false }))
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('kbMgmt.loadFailed'))
@@ -85,7 +90,7 @@ async function load() {
 async function handleFile(file: File) {
   importing.value = true
   try {
-    const res: any = await importQaFile(props.collection, file)
+    const res: any = await importKnowledgeQaFile(props.knowledgeId, file)
     message.success(`${t('kbMgmt.qaBatchImport')} ✓ ${res.imported ?? 0}`)
     await load()
   } catch (e: any) {
@@ -98,11 +103,11 @@ async function handleFile(file: File) {
 
 async function handleExport() {
   try {
-    const res: any = await exportQaRecords(props.collection)
+    const res: any = await exportKnowledgeQaRecords(props.knowledgeId)
     const url = URL.createObjectURL(new Blob([res.data ?? res]))
     const a = document.createElement('a')
     a.href = url
-    a.download = `qa-${props.collection}.csv`
+    a.download = `qa-${props.knowledgeId}.csv`
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {
@@ -128,7 +133,7 @@ async function toggle(row: QaRow, enabled: boolean) {
 }
 
 onMounted(load)
-watch(() => props.collection, load)
+watch(() => props.knowledgeId, load)
 </script>
 
 <style scoped>

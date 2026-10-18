@@ -38,10 +38,23 @@ def env(db: Session):
                        type=2, kb_format="qa", index_mode="high_quality")
     db.add(kn)
     db.commit()
-    db.add(KbCollection(tenant_id=TENANT, name=f"kb_{kn.id}", dimensions=768,
-                        knowledge_id=kn.id))
+    coll = KbCollection(tenant_id=TENANT, name=f"kb_{kn.id}", dimensions=768,
+                         knowledge_id=kn.id)
+    db.add(coll)
     db.commit()
-    return kn
+    # 路由现按 collection_id 调用；暴露 id 供测试构造 URL（DB 查询仍按 name）
+    return SimpleNamespace(id=kn.id, collection_id=coll.id)
+
+
+@pytest.fixture
+def env_no_collection(db: Session):
+    """问答库但不创建任何 kms_collection 行（验证知识库级 Q&A 不依赖集合）。"""
+    Base.metadata.create_all(db.bind, tables=[KbDocument.__table__])
+    kn = WikiKnowledge(tenant_id=TENANT, name="qa-kb-nc", slug="qa-kb-nc-api",
+                       type=2, kb_format="qa", index_mode="high_quality")
+    db.add(kn)
+    db.commit()
+    return SimpleNamespace(id=kn.id)
 
 
 @pytest.fixture
@@ -88,7 +101,7 @@ def fake_insert(monkeypatch):
 
 def _import_csv(client: TestClient, env, data: bytes, name: str = "qa.csv"):
     return client.post(
-        f"/api/v1/kb/collections/kb_{env.id}/qa-records/import",
+        f"/api/v1/kb/collections/{env.collection_id}/qa-records/import",
         files={"file": (name, data, "text/csv")},
     )
 
@@ -116,7 +129,7 @@ def test_qa_csv_import_and_readback(db, env, client, fake_insert):
     assert doc.status == "completed"
 
     # 列表读回，逐条校验 question/answer/tags 透传正确
-    recs = client.get(f"/api/v1/kb/collections/kb_{env.id}/qa-records").json()
+    recs = client.get(f"/api/v1/kb/collections/{env.collection_id}/qa-records").json()
     assert len(recs) == expected_rows
     by_q = {x["question"]: x for x in recs}
     assert "如何创建一个问答类型的知识库？" in by_q
@@ -223,3 +236,34 @@ def test_ingest_qa_within_running_event_loop(db, env):
     assert len(chunks) == 2
     assert chunks[0].content.text == "q1"
     assert chunks[0].metadata["answer"] == "a1"
+
+
+def test_knowledge_level_qa_without_collection(db, env_no_collection, client, fake_insert):
+    """问答库无 kms_collection 行时，知识库级 Q&A 端点仍可导入/读回/导出（不 404）。"""
+    kid = env_no_collection.id
+    data = CSV_PATH.read_bytes()
+
+    r = client.post(
+        f"/api/v1/kb/knowledges/{kid}/qa-records/import",
+        files={"file": ("qa_sample.csv", data, "text/csv")},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["imported"] > 0
+
+    recs = client.get(f"/api/v1/kb/knowledges/{kid}/qa-records").json()
+    assert len(recs) == r.json()["imported"]
+    assert recs[0]["question"]
+
+    c = client.post(
+        f"/api/v1/kb/knowledges/{kid}/qa-records",
+        json={"records": [{"question": "q", "answer": "a"}]},
+    )
+    assert c.status_code == 201, c.text
+    assert c.json()["ingested"] == 1
+
+    ex = client.get(f"/api/v1/kb/knowledges/{kid}/qa-records/export")
+    assert ex.status_code == 200
+    assert ex.headers["content-type"].startswith("text/csv")
+
+    # 反向确认：集合级路由在无对应集合行时仍 404（解耦意图）
+    assert client.get("/api/v1/kb/collections/999999/qa-records").status_code == 404

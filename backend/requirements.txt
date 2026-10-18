@@ -35,10 +35,13 @@ httpx>=0.26.0
 # langsmith
 
 # Embedding & NLP（embedding 走 HTTP API：OpenAI 兼容 / DashScope，见 app/ai/embedding_client.py）
-numpy>=1.24.0,<2.0.0
+numpy>=2.0.2,<3.0.0  # 2026-10 升级：semantica>=0.7 要求 numpy>=2（已验证 agentscope 2.0.9 / pandas 3.0.6 兼容）
 # PyTorch 系/sentence-transformers/onnxruntime 已移除：原为 local 语音管线（funasr/cosyvoice/Silero）
 # 与本地 embedding 专用，该管线已被 AgentScope RealtimeAgent 内核取代（2026-09 duplex/voice 重构）；
 # embedding 现走 HTTP API，无需本地推理栈
+
+# 语义组件 Semantica（本体 / 语义抽取 / 图谱构建 / 向量混合检索，进程内 import；rdflib 为其传递依赖，保留）
+semantica[vectorstore-pgvector]==0.7.0
 jieba>=0.42.0
 scikit-learn>=1.3.0,<2.0.0
 
@@ -51,6 +54,7 @@ kombu==5.3.5
 reportlab==4.0.9
 python-docx==1.1.0
 mistune==3.0.2
+markdownify>=0.13.1  # web 站点连接器：HTML → Markdown（依赖 bs4）
 pdfplumber>=0.10.0
 pandas==3.0.6  # AgentScope ExcelParser 解析 xlsx/xls 必需（此前缺失导致 parse 步 ImportError）
 xlrd  # 旧版 .xls 读取（pandas.read_excel 的 xls 引擎）

@@ -85,8 +85,43 @@ def _serialize(doc: KbDocument) -> dict:
         "file_size": doc.file_size,
         "segment_count": doc.segment_count,
         "error_detail": doc.error_detail,
+        # 文档↔集合关联走 collection_id（单一事实来源）；collection 名仅作展示/兼容，
+        # 向量库命名空间由前端用 collection_id 反查 name 后传入。
+        "collection_id": doc.collection_id,
+        "collection": doc.collection,
         "created_at": str(doc.created_at) if doc.created_at else None,
     }
+
+
+def _doc_collection_name(db: Session, doc: KbDocument) -> Optional[str]:
+    """由文档的 collection_id 反查集合名（向量库命名空间）；缺失时回退 doc.collection。
+
+    文档↔集合关联以 collection_id 为单一事实来源，name 仅作存储标签。
+    """
+    if doc.collection_id:
+        from app.services.kb.collection_service import get_collection_name_by_id
+
+        try:
+            return get_collection_name_by_id(db, doc.collection_id)
+        except ValueError:
+            pass
+    return doc.collection
+
+
+def _resolve_collection_name(db: Session, collection_id: int) -> str:
+    """路由层单点：由 collection_id 反查集合名（向量库命名空间）。
+
+    文档↔集合关联以 id 为唯一事实来源，调用方不再直接传集合名；此处反查后
+    下游逻辑仍按 name 操作（与历史等价）。集合不存在转 404。
+    """
+    from app.services.kb.collection_service import get_collection_name_by_id
+
+    try:
+        return get_collection_name_by_id(db, collection_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=404, detail=f"集合不存在: collection_id={collection_id}"
+        )
 
 
 @router.post("/knowledges/{kid}/documents", status_code=201)
@@ -172,7 +207,7 @@ def delete_document(
     doc = _get_document(db, tenant_id, uuid_code)
     from app.services.kb.pgvector_store import PGVectorStore
 
-    PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+    PGVectorStore(db, tenant_id).delete_document(_doc_collection_name(db, doc), doc.uuid_code)
     drop_upload((doc.meta or {}).get("file_path"))
     db.delete(doc)
     db.commit()
@@ -255,9 +290,9 @@ def _retrieve_collection(
     }
 
 
-@router.post("/collections/{collection}/retrieve")
+@router.post("/collections/{collection_id}/retrieve")
 def retrieve(
-    collection: str,
+    collection_id: int,
     body: RetrieveBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -269,6 +304,7 @@ def retrieve(
     * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）；
     * ``index_mode=economy`` 时绕开向量链路，走独立关键词检索（D11 / AC7）。
     """
+    collection = _resolve_collection_name(db, collection_id)
     return _retrieve_collection(db, _tenant_id(current_user), collection, body)
 
 
@@ -310,9 +346,9 @@ class IndexModeBody(BaseModel):
     mode: str  # high_quality | economy
 
 
-@router.post("/collections/{collection}/index-mode")
+@router.post("/collections/{collection_id}/index-mode")
 def set_index_mode(
-    collection: str,
+    collection_id: int,
     body: IndexModeBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -337,6 +373,7 @@ def set_index_mode(
     from app.models.wiki.wiki_knowledge import WikiKnowledge
 
     tenant_id = _tenant_id(current_user)
+    collection = _resolve_collection_name(db, collection_id)
     kid = resolve_knowledge_id(collection)
     if kid is None:
         raise HTTPException(status_code=400, detail=f"无法从 collection 解析知识库: {collection}")
@@ -465,7 +502,8 @@ def reprocess_document(
     tenant_id = _tenant_id(current_user)
     doc = _get_document(db, tenant_id, uuid_code)
     try:
-        count = reembed_document_segments(db, tenant_id, doc.collection, doc.uuid_code)
+        count = reembed_document_segments(
+            db, tenant_id, _doc_collection_name(db, doc), doc.uuid_code)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"document_id": uuid_code, "reembedded": count}
@@ -515,7 +553,7 @@ def retry_document(
         return _retry_table_document(db, tenant_id, doc, meta, payload)
 
     # 清理旧切片，避免重跑后同文档出现重复分段
-    PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+    PGVectorStore(db, tenant_id).delete_document(_doc_collection_name(db, doc), doc.uuid_code)
 
     doc.status = "processing"
     doc.error_detail = None
@@ -553,7 +591,8 @@ def _retry_table_document(db, tenant_id: int, doc, meta: dict, payload: bytes):
     from app.services.kb.rag.content_service import import_table_file
 
     # 清理旧切片，避免重导后同文档出现重复分段（uq_kms_segment 唯一约束）
-    PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+    coll_name = _doc_collection_name(db, doc)
+    PGVectorStore(db, tenant_id).delete_document(coll_name, doc.uuid_code)
     doc.status = "processing"
     doc.error_detail = None
     doc.segment_count = 0
@@ -567,7 +606,7 @@ def _retry_table_document(db, tenant_id: int, doc, meta: dict, payload: bytes):
         s = SessionLocal()
         try:
             res = import_table_file(
-                s, tenant_id, doc.collection, payload, doc.name,
+                s, tenant_id, coll_name, payload, doc.name,
                 knowledge_id=doc.knowledge_id,
                 session_factory=SessionLocal,
                 document_id=doc.uuid_code,
@@ -650,7 +689,7 @@ def rechunk_knowledge(
     for doc in docs:
         path = (doc.meta or {}).get("file_path")
         if path and Path(path).exists():
-            queued.append((doc.id, doc.collection, path))
+            queued.append((doc.id, _doc_collection_name(db, doc), path))
         else:
             skipped.append(doc.uuid_code)
 
@@ -689,9 +728,9 @@ def rechunk_knowledge(
     return {"queued": len(queued), "skipped": skipped}
 
 
-@router.post("/collections/{collection}/table-records", status_code=201)
+@router.post("/collections/{collection_id}/table-records", status_code=201)
 def create_table_record(
-    collection: str,
+    collection_id: int,
     body: TableRowBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -700,6 +739,7 @@ def create_table_record(
     """新增表格行（spec §10.5 行级新增）：content 为被嵌入列，其余列进 metadata。"""
     from app.services.kb.segment_service import create_segment, serialize_segment
 
+    collection = _resolve_collection_name(db, collection_id)
     seg = create_segment(
         db, _tenant_id(current_user), collection, body.document_id, body.content,
         {**(body.metadata or {}), "chunk_type": "table_row"},
@@ -796,24 +836,25 @@ def segment_citations(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
-@router.get("/collections/{collection}/settings")
+@router.get("/collections/{collection_id}/settings")
 def get_collection_settings(
-    collection: str,
+    collection_id: int,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
     """设置面板当前值（spec §10.5）：检索设置 + 索引模式。"""
     from app.services.kb.collection_settings import get_retrieval_settings
 
+    collection = _resolve_collection_name(db, collection_id)
     return {
         "retrieval_settings": get_retrieval_settings(db, collection),
         "index_mode": _index_mode_for_collection(db, collection),
     }
 
 
-@router.put("/collections/{collection}/settings")
+@router.put("/collections/{collection_id}/settings")
 def update_collection_settings(
-    collection: str,
+    collection_id: int,
     body: CollectionSettingsBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -832,6 +873,7 @@ def update_collection_settings(
     )
 
     tenant_id = _tenant_id(current_user)
+    collection = _resolve_collection_name(db, collection_id)
     kid = resolve_knowledge_id(collection)
     if kid is None:
         raise HTTPException(status_code=400, detail=f"无法从 collection 解析知识库: {collection}")
@@ -882,9 +924,9 @@ def list_document_segments(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
-@router.get("/collections/{collection}/segments")
+@router.get("/collections/{collection_id}/segments")
 def list_collection_segments_api(
-    collection: str,
+    collection_id: int,
     document_id: Optional[str] = Query(None, description="收窄到某个文件；不传=该集合全部条目"),
     chunk_type: Optional[str] = Query(None, description="按形态过滤: text|qa|table_row|image|parent|child"),
     q: Optional[str] = Query(None, description="对被嵌入内容做包含匹配"),
@@ -897,6 +939,7 @@ def list_collection_segments_api(
     """集合内条目列表：表格知识库「表格条目」tab（单文件过滤用）。"""
     from app.services.kb.segment_service import list_collection_segments
 
+    collection = _resolve_collection_name(db, collection_id)
     return list_collection_segments(
         db, _tenant_id(current_user), collection,
         document_id=document_id, chunk_type=chunk_type, q=q,
@@ -931,9 +974,9 @@ def list_knowledge_segments_api(
     )
 
 
-@router.post("/collections/{collection}/qa-records/import", status_code=201)
+@router.post("/collections/{collection_id}/qa-records/import", status_code=201)
 async def import_qa_records(
-    collection: str,
+    collection_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -942,6 +985,7 @@ async def import_qa_records(
     """Q&A 批量导入（spec §10.5）：CSV/xlsx，列名 question/answer/tags。"""
     from app.services.kb.rag.content_service import ingest_qa_records, parse_table_bytes
 
+    collection = _resolve_collection_name(db, collection_id)
     data = await file.read()
     filename = file.filename or "qa.csv"
     try:
@@ -962,9 +1006,9 @@ async def import_qa_records(
     return {"imported": count}
 
 
-@router.get("/collections/{collection}/qa-records/export")
+@router.get("/collections/{collection_id}/qa-records/export")
 def export_qa_records(
-    collection: str,
+    collection_id: int,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_VIEW)),
@@ -977,6 +1021,7 @@ def export_qa_records(
 
     from app.services.kb.rag.content_service import list_qa_records
 
+    collection = _resolve_collection_name(db, collection_id)
     rows = list_qa_records(db, _tenant_id(current_user), collection, limit=100000)
     buf = io.StringIO()
     writer = _csv.writer(buf)
@@ -1086,9 +1131,9 @@ class QaRecordsBody(BaseModel):
     records: list[dict]  # [{question, answer, tags?}]
 
 
-@router.post("/collections/{collection}/qa-records", status_code=201)
+@router.post("/collections/{collection_id}/qa-records", status_code=201)
 def create_qa_records(
-    collection: str,
+    collection_id: int,
     body: QaRecordsBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -1097,6 +1142,7 @@ def create_qa_records(
     """Q&A 直构 Chunk（D15）：仅问题被嵌入，答案随 metadata 返回。"""
     from app.services.kb.rag.content_service import ingest_qa_records
 
+    collection = _resolve_collection_name(db, collection_id)
     count = ingest_qa_records(
         db, _tenant_id(current_user), collection, body.records,
         session_factory=SessionLocal,
@@ -1104,16 +1150,118 @@ def create_qa_records(
     return {"ingested": count}
 
 
-@router.get("/collections/{collection}/qa-records")
+@router.get("/collections/{collection_id}/qa-records")
 def get_qa_records(
-    collection: str,
+    collection_id: int,
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
     from app.services.kb.rag.content_service import list_qa_records
 
+    collection = _resolve_collection_name(db, collection_id)
     return list_qa_records(db, _tenant_id(current_user), collection, limit)
+
+
+# ── 知识库级 Q&A（问答 / 文档型知识库不依赖 kms_collection，按 kb_{kid} 标签作用域）──
+def _kb_default_collection(kid: int) -> str:
+    return f"kb_{kid}"
+
+
+@router.get("/knowledges/{kid}/qa-records")
+def list_knowledge_qa_records(
+    kid: int,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """知识库级 Q&A 列表：问答 / 文档型知识库无需 kms_collection 行，按 kb_{kid} 标签作用域。"""
+    _require_knowledge(db, kid)
+    from app.services.kb.rag.content_service import list_qa_records
+
+    return list_qa_records(db, _tenant_id(current_user), _kb_default_collection(kid), limit)
+
+
+@router.post("/knowledges/{kid}/qa-records", status_code=201)
+def create_knowledge_qa_records(
+    kid: int,
+    body: QaRecordsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """知识库级 Q&A 直构 Chunk（D15）：仅问题被嵌入，答案随 metadata 返回。"""
+    _require_knowledge(db, kid)
+    from app.services.kb.rag.content_service import ingest_qa_records
+
+    count = ingest_qa_records(
+        db, _tenant_id(current_user), _kb_default_collection(kid), body.records,
+        session_factory=SessionLocal,
+    )
+    return {"ingested": count}
+
+
+@router.post("/knowledges/{kid}/qa-records/import", status_code=201)
+async def import_knowledge_qa_records(
+    kid: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """知识库级 Q&A 批量导入（spec §10.5）：CSV/xlsx，列名 question/answer/tags。"""
+    _require_knowledge(db, kid)
+    from app.services.kb.rag.content_service import ingest_qa_records, parse_table_bytes
+
+    data = await file.read()
+    filename = file.filename or "qa.csv"
+    try:
+        rows = parse_table_bytes(data, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    records = [
+        {"question": str(r.get("question", "")).strip(),
+         "answer": str(r.get("answer", "")).strip(),
+         "tags": [t.strip() for t in str(r.get("tags") or "").split(";") if t.strip()]}
+        for r in rows if r.get("question")
+    ]
+    if not records:
+        raise HTTPException(status_code=422, detail="未解析到任何 question 列数据")
+
+    count = ingest_qa_records(db, _tenant_id(current_user), _kb_default_collection(kid), records)
+    return {"imported": count}
+
+
+@router.get("/knowledges/{kid}/qa-records/export")
+def export_knowledge_qa_records(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """知识库级 Q&A 导出 CSV（spec §10.5），UTF-8 BOM 兼容 Excel。"""
+    import csv as _csv
+    import io
+
+    from fastapi.responses import StreamingResponse
+
+    from app.services.kb.rag.content_service import list_qa_records
+
+    _require_knowledge(db, kid)
+    collection = _kb_default_collection(kid)
+    rows = list_qa_records(db, _tenant_id(current_user), collection, limit=100000)
+    buf = io.StringIO()
+    writer = _csv.writer(buf)
+    writer.writerow(["question", "answer", "tags"])
+    for r in rows:
+        writer.writerow([r["question"] or "", r["answer"] or "", ";".join(r["tags"])])
+    buf.seek(0)
+    return StreamingResponse(
+        io.BytesIO(("\ufeff" + buf.getvalue()).encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="qa-{collection}.csv"'},
+    )
 
 
 def _parse_embed_fields(raw: str) -> list[str]:
@@ -1121,9 +1269,9 @@ def _parse_embed_fields(raw: str) -> list[str]:
     return [part.strip() for part in (raw or "").split(",") if part.strip()]
 
 
-@router.post("/collections/{collection}/table-records/import", status_code=201)
+@router.post("/collections/{collection_id}/table-records/import", status_code=201)
 def import_table_records(
-    collection: str,
+    collection_id: int,
     file: UploadFile = File(...),
     embed_field: str = Form("", description="兼容旧参数：单个被嵌入列"),
     embed_fields: str = Form("", description="向量化字段组合（逗号分隔，1~N 个）；缺省取字段定义里的被嵌入字段"),
@@ -1140,16 +1288,21 @@ def import_table_records(
     * 尚未定义 → 按文件表头**自动定义**并落库（**默认全部字段**为向量化字段）；
     * 已有定义 → 缺列/多列/取值类型不符一律 422 且**不导入任何数据**。
     """
-    from app.services.kb.index_mode import resolve_knowledge_id
+    from app.services.kb.collection_service import get_collection_by_id
     from app.services.kb.rag.content_service import import_table_file
     from app.services.kb.table_schema import TableSchemaMismatch
 
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None:
+        raise HTTPException(status_code=404, detail=f"集合不存在: collection_id={collection_id}")
+    collection = coll.name
+    kid = coll.knowledge_id
     data = file.file.read()
     try:
         return import_table_file(
             db, _tenant_id(current_user), collection, data,
             file.filename or "table.csv",
-            knowledge_id=resolve_knowledge_id(collection),
+            knowledge_id=kid,
             embed_field=embed_field or None,
             embed_fields=_parse_embed_fields(embed_fields) or None,
             session_factory=SessionLocal,
@@ -1220,13 +1373,124 @@ def list_knowledge_collections(
             "dimensions": coll.dimensions,
             "field_count": len(fields),
             "embed_fields": embedding_fields(fields),
+            "schema_config": fields,
         })
     return {"items": items}
 
 
-@router.post("/collections/{collection}/table-records/preview")
+class CollectionCreateBody(BaseModel):
+    slug: Optional[str] = None
+    schema_config: Optional[list] = None
+    dimensions: Optional[int] = None
+
+
+class CollectionUpdateBody(BaseModel):
+    slug: Optional[str] = None
+    schema_config: Optional[list] = None
+    dimensions: Optional[int] = None
+
+
+@router.post("/knowledges/{kid}/collections", status_code=201)
+def create_knowledge_collection_api(
+    kid: int,
+    body: CollectionCreateBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """在知识库下新建集合（可选 slug 与字段定义）；slug 缺省自动命名。"""
+    from app.services.kb.collection_service import create_knowledge_collection
+
+    tenant_id = _tenant_id(current_user)
+    _require_knowledge(db, kid)
+    try:
+        coll = create_knowledge_collection(
+            db, tenant_id, kid,
+            slug=body.slug, schema_config=body.schema_config,
+            dimensions=body.dimensions,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return {
+        "id": coll.id, "name": coll.name, "dimensions": coll.dimensions,
+        "knowledge_id": coll.knowledge_id, "schema_config": coll.schema_config,
+    }
+
+
+@router.put("/knowledges/{kid}/collections/{collection_id}")
+def update_knowledge_collection_api(
+    kid: int,
+    collection_id: int,
+    body: CollectionUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """编辑集合：重命名（slug）与/或更新字段定义（schema_config）/ 维度。
+
+    重命名级联同步 kms_document / kms_segment 的 name 标签（向量数据不动）；
+    字段定义经 ``set_schema_fields`` 校验（至少 1 个向量化字段）。
+    """
+    from app.services.kb.collection_service import (
+        get_collection_by_id,
+        rename_collection,
+    )
+    from app.services.kb.table_schema import set_schema_fields
+
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None or coll.knowledge_id != kid:
+        raise HTTPException(status_code=404, detail=f"集合不存在: collection_id={collection_id}")
+    if body.slug is not None and body.slug != "":
+        try:
+            rename_collection(db, collection_id, body.slug)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+    if body.schema_config is not None:
+        try:
+            set_schema_fields(db, coll.name, body.schema_config)
+        except Exception as exc:  # noqa: BLE001 - TableSchemaMismatch 等
+            raise HTTPException(status_code=422, detail=str(exc))
+    if body.dimensions is not None:
+        coll.dimensions = body.dimensions
+    db.commit()
+    refreshed = get_collection_by_id(db, collection_id)
+    return {
+        "id": refreshed.id, "name": refreshed.name,
+        "dimensions": refreshed.dimensions,
+        "knowledge_id": refreshed.knowledge_id,
+        "schema_config": refreshed.schema_config,
+    }
+
+
+@router.delete("/knowledges/{kid}/collections/{collection_id}")
+def delete_knowledge_collection_api(
+    kid: int,
+    collection_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """删除集合（级联删其下全部文档与切片；不可恢复，前端二次确认）。"""
+    from app.services.kb.collection_service import (
+        delete_collection_cascade,
+        get_collection_by_id,
+    )
+
+    coll = get_collection_by_id(db, collection_id)
+    if coll is None or coll.knowledge_id != kid:
+        raise HTTPException(status_code=404, detail=f"集合不存在: collection_id={collection_id}")
+    try:
+        delete_collection_cascade(db, _tenant_id(current_user), collection_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    db.commit()
+    return {"deleted": collection_id}
+
+
+@router.post("/collections/{collection_id}/table-records/preview")
 def preview_table_records(
-    collection: str,
+    collection_id: int,
     file: UploadFile = File(...),
     limit: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -1244,6 +1508,7 @@ def preview_table_records(
         columns, rows = parse_table(data, file.filename or "t.csv", limit=limit)
         if not columns:
             raise ValueError("表格文件没有可用表头（首行需为列名）")
+        collection = _resolve_collection_name(db, collection_id)
         schema = resolve_import_schema(
             db, collection, columns, rows,
             tenant_id=_tenant_id(current_user), persist=False,
@@ -1263,9 +1528,9 @@ def preview_table_records(
 
 # ── 表格列定义（kms_collection.schema_config）────────────────────────────
 
-@router.get("/collections/{collection}/schema")
+@router.get("/collections/{collection_id}/schema")
 def get_collection_schema(
-    collection: str,
+    collection_id: int,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_VIEW)),
@@ -1276,6 +1541,7 @@ def get_collection_schema(
     """
     from app.services.kb.table_schema import embedding_fields, get_schema_fields
 
+    collection = _resolve_collection_name(db, collection_id)
     fields = get_schema_fields(db, collection)
     embed = embedding_fields(fields)
     return {
@@ -1290,9 +1556,9 @@ class TableSchemaBody(BaseModel):
     fields: list[dict] = Field(default_factory=list, description="[{name,type,enabled,embedding,filterable}]")
 
 
-@router.put("/collections/{collection}/schema")
+@router.put("/collections/{collection_id}/schema")
 def update_collection_schema(
-    collection: str,
+    collection_id: int,
     body: TableSchemaBody,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
@@ -1305,6 +1571,7 @@ def update_collection_schema(
         set_schema_fields,
     )
 
+    collection = _resolve_collection_name(db, collection_id)
     try:
         fields = set_schema_fields(db, collection, body.fields)
     except TableSchemaMismatch as exc:
@@ -1320,9 +1587,9 @@ def update_collection_schema(
     }
 
 
-@router.post("/collections/{collection}/assets", status_code=201)
+@router.post("/collections/{collection_id}/assets", status_code=201)
 def upload_asset(
-    collection: str,
+    collection_id: int,
     file: UploadFile = File(...),
     caption: str = Form("", description="图片描述/OCR 文本（被嵌入，供文搜图）"),
     db: Session = Depends(get_db),
@@ -1335,6 +1602,7 @@ def upload_asset(
     from app.config import settings
     from app.services.kb.rag.content_service import save_image_asset
 
+    collection = _resolve_collection_name(db, collection_id)
     data = file.file.read()
     mime = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "image/png"
     try:
@@ -1349,14 +1617,15 @@ def upload_asset(
     return {"id": asset.id, "file_path": asset.file_path, "size": asset.size}
 
 
-@router.get("/collections/{collection}/assets")
+@router.get("/collections/{collection_id}/assets")
 def list_assets_endpoint(
-    collection: str,
+    collection_id: int,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
     from app.services.kb.rag.content_service import list_assets
 
+    collection = _resolve_collection_name(db, collection_id)
     return list_assets(db, _tenant_id(current_user), collection)
 
 

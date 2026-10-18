@@ -159,8 +159,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     # 2026-09-27 统一化：此前未注册（启用即 import 崩溃），现补齐实例/日志模型后上线
     RouterSpec("app.routers.connectors.connector", tags=["外部知识库连接器"]),
 
-    # --- 26.2 本体治理（自带完整 prefix /api/v1/ontology）---
-    RouterSpec("app.routers.ontology.ontology", tags=["本体治理"]),
+    # --- 26.2.1 Semantica 语义层（自带完整 prefix /api/v1/semantic，替代原本体治理）---
+    RouterSpec("app.routers.semantica.semantica", tags=["语义/Semantica"]),
 
     # --- 26.3 Wiki 管理后台（自带 /wiki/admin，叠加 /api/v1）---
     RouterSpec("app.routers.wiki.wiki_admin", prefix=API_V1_PREFIX, tags=["Wiki 管理后台"]),
@@ -174,11 +174,7 @@ ROUTER_SPECS: List[RouterSpec] = [
         prefix=API_V1_PREFIX,
         tags=["LLM-wiki"],
     ),
-    RouterSpec(
-        "app.routers.wiki.wiki_owl",
-        prefix=API_V1_PREFIX,
-        tags=["Wiki OWL 本体"],
-    ),
+
 
     # --- 28.1 通用知识库认证路由（spec §10.5；子应用仅内核间调用）---
     RouterSpec("app.routers.kb.kb", tags=["通用知识库"]),
@@ -186,6 +182,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.kb.kb_proxy", tags=["外部知识库代理"]),
     # --- 28.3 外部知识库文档导入向导（飞书/钉钉/语雀/企微/Notion）---
     RouterSpec("app.routers.kb.kb_external_source", tags=["外部知识库文档导入"]),
+    # --- 28.4 通用知识库管理（知识库/分类 CRUD；2026-10 由 wiki.py 迁移，前缀 /api/v1/kb）---
+    RouterSpec("app.routers.kb.knowledge_mgnt", tags=["知识库管理"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),

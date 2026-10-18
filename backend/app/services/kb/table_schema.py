@@ -184,7 +184,7 @@ def normalize_fields(raw: Any) -> list[dict]:
         return []
     fields: list[dict] = []
     seen: set[str] = set()
-    for item in raw:
+    for idx, item in enumerate(raw):
         if not isinstance(item, dict):
             continue
         name = str(item.get("name") or "").strip()
@@ -194,6 +194,11 @@ def normalize_fields(raw: Any) -> list[dict]:
         ftype = str(item.get("type") or "string").strip().lower()
         if ftype not in FIELD_TYPES:
             ftype = "string"
+        # order 排序序号：缺失时按出现顺序（索引）兜底，保证任何写入路径都可控
+        try:
+            order = int(item.get("order", idx))
+        except (TypeError, ValueError):
+            order = idx
         fields.append(
             {
                 "name": name,
@@ -201,9 +206,12 @@ def normalize_fields(raw: Any) -> list[dict]:
                 "enabled": bool(item.get("enabled", True)),
                 "embedding": bool(item.get("embedding", False)),
                 "filterable": bool(item.get("filterable", True)),
+                "order": order,
             }
         )
-    # 向量化字段允许多选（1~N 个组合成向量化内容），不再截断为单个
+    # 向量化字段允许多选（1~N 个组合成向量化内容），不再截断为单个；
+    # 按 order 稳定排序，使向量化内容拼接、表格条目列序与字段定义序号一致
+    fields.sort(key=lambda f: (f["order"], f["name"]))
     return fields
 
 

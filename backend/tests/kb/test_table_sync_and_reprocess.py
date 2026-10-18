@@ -29,7 +29,9 @@ from app.services.kb.table_sync_service import (
 )
 
 TENANT = 100
-DIM = settings.GPUSTACK_EMBEDDING_DIMENSION
+# 物理列为 vector(settings.EMBEDDING_DIMENSION)（按 EMBEDDING_PROVIDER 解析），
+# 重嵌时会按该物理维度对齐（截断/补齐），假向量必须同维，否则断言长度不符。
+DIM = settings.EMBEDDING_DIMENSION
 
 
 def _vec(seed: float) -> list[float]:

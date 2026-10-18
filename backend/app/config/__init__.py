@@ -30,6 +30,7 @@ from ._otel import OTelSettings
 from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
 from ._mem0 import Mem0Settings
+from ._semantica import SemanticaSettings
 from ._cross_mode_recorder import CrossModeRecorderSettings
 
 
@@ -44,6 +45,7 @@ class Settings(
     AuditSettings,
     AsyncTaskSettings,
     Mem0Settings,
+    SemanticaSettings,
     CrossModeRecorderSettings,
     BaseSettings,
 ):

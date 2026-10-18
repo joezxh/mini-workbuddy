@@ -54,14 +54,6 @@ from app.models.wiki.wiki_article_version import WikiArticleVersion             
 from app.models.wiki.wiki_knowledge import WikiKnowledge, KnowledgeType         # noqa: F401
 from app.models.wiki.wiki_search_log import WikiSearchLog                       # noqa: F401
 
-# --- 本体 (ontology_) ---
-from app.models.ontology.ontology import (                                     # noqa: F401
-    Ontology, OntologyClass, OntologyAnnotation,
-)
-from app.models.ontology.model import (                                        # noqa: F401
-    OntologyObjectType, OntologyProperty, OntologyLinkType,
-    OntologyMapping, OntologyCq, OntologyVersion,
-)
 # --- 知识库 (kb_) ---
 from app.models.kb.kb_collection import KbCollection                           # noqa: F401
 from app.models.kb.kb_segment import KbSegment                                # noqa: F401

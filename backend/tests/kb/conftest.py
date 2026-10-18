@@ -21,6 +21,7 @@ from app.db.database import Base
 # 测试 schema 建表时必须一并创建被引用表，否则 create_all 抛 NoReferencedTableError
 from app.models.wiki.wiki_knowledge import WikiKnowledge  # noqa: F401
 from app.models.kb.kb_collection import KbCollection
+from app.models.kb.kb_document import KbDocument  # noqa: F401
 from app.models.kb.kb_segment import KbSegment
 from app.models.kb.kb_ref import KbRef
 
@@ -48,7 +49,8 @@ TEST_DB_URL = _test_db_url()
 IS_POSTGRES = make_url(TEST_DB_URL).get_backend_name() == "postgresql"
 
 KB_TABLES = [
-    WikiKnowledge.__table__, KbCollection.__table__, KbSegment.__table__, KbRef.__table__
+    WikiKnowledge.__table__, KbCollection.__table__, KbDocument.__table__,
+    KbSegment.__table__, KbRef.__table__,
 ]
 
 
@@ -140,6 +142,13 @@ def db_target(schema_name: str, _test_database: None) -> Iterator[str]:
 
 
 def _bind_schema(eng: Engine, schema: str) -> None:
+    # 双保险：
+    # 1) schema_translate_map 把 Core/ORM 未限定 schema 的表（kms_*/kb_*）显式路由到
+    #    测试模式，避免依赖 search_path 在「模式不存在/被 public 残留表干扰」时回退到
+    #    public 而漏建（这正是先前 UndefinedTable 的根因）；
+    # 2) connect 事件仍设 search_path，供原始 text() SQL（如建 GIN 索引）正确解析表位置。
+    eng.update_execution_options(schema_translate_map={None: schema})
+
     @event.listens_for(eng, "connect")
     def _set_search_path(dbapi_conn, _record):  # noqa: ANN001, ANN202
         with dbapi_conn.cursor() as cursor:

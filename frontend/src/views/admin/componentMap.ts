@@ -27,7 +27,6 @@ import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 import DataSourcePanel from '@/views/kms/DataSourcePanel.vue'
 import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
 import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
-import OntologyPanel from '@/views/ontology/OntologyPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）
 import WikiIndex from '@/views/kms/wiki/index.vue'
 // 统一知识库工作台（spec 知识库统一化 §6）
@@ -68,7 +67,6 @@ export const componentMap: Record<string, Component> = {
   'kg-data-source': markRaw(DataSourcePanel),
   'kg-kb': markRaw(KnowledgeBasePanel),
   'kg-external-kb': markRaw(ExternalKbPanel),
-  'kg-ontology': markRaw(OntologyPanel),
   'kg-private-kb': markRaw(WikiIndex),
   'kg-knowledge-manager': markRaw(KnowledgeBaseManager),
   // 调解语音 RTC（迁移自 risk_control）
