@@ -18,7 +18,12 @@
             {{ t('kbMgmt.rechunk') }}
           </a-button>
         </a-tooltip>
-        <a-upload :before-upload="handleUpload" :show-upload-list="false">
+        <!-- 表格形态的上传入口 + 「所属集合」下拉已收进 TableRecordList 的「已上传文件」tab，此处不重复 -->
+        <a-upload
+          v-if="formatMode !== 'table'"
+          :before-upload="handleUpload"
+          :show-upload-list="false"
+        >
           <a-button type="primary" size="small" :loading="uploading">
             {{ t('kbMgmt.uploadDocument') }}
           </a-button>
@@ -26,8 +31,15 @@
       </a-space>
     </div>
 
-    <!-- 顶部：文档形态 tab 菜单（按所选知识库二级形态显示，管线调试作为调试入口常驻） -->
-    <a-radio-group v-model:value="formatMode" button-style="solid" size="small" class="kb-doc-pane__tabs">
+    <!-- 顶部：文档形态 tab 菜单（按所选知识库二级形态显示，管线调试作为调试入口常驻）
+         问答库的形态切换已合并进下方 3 个 Tab（问答条目/问答导入/测试），此处不再显示 -->
+    <a-radio-group
+      v-if="!isQaKb"
+      v-model:value="formatMode"
+      button-style="solid"
+      size="small"
+      class="kb-doc-pane__tabs"
+    >
       <a-radio-button v-for="f in visibleFormats" :key="f" :value="f">
         {{ formatLabels[f] }}
       </a-radio-button>
@@ -98,26 +110,7 @@
       </a-table>
     </template>
 
-    <!-- 表格导入形态：字段映射面板（Dify 对齐）+ 行级条目列表 -->
-    <a-card v-else-if="formatMode === 'table'" class="kb-doc-pane__panel" :title="t('kbMgmt.tableImport')" size="small">
-      <a-upload :before-upload="handleTableFile" :show-upload-list="false" accept=".csv,.xlsx,.xls">
-        <a-button :loading="tableParsing">{{ t('kbMgmt.selectTableFile') }}</a-button>
-      </a-upload>
-      <template v-if="tableColumns.length">
-        <a-alert class="kb-doc-pane__hint" type="info" :message="t('kbMgmt.embedFieldHint')" show-icon />
-        <a-form layout="vertical" class="kb-doc-pane__form">
-          <a-form-item :label="t('kbMgmt.embedField')">
-            <a-select v-model:value="embedField" :options="tableColumns.map((c) => ({ label: c, value: c }))" />
-          </a-form-item>
-          <a-form-item>
-            <a-button type="primary" :loading="tableImporting" @click="runTableImport">
-              {{ t('kbMgmt.importTable') }}
-            </a-button>
-          </a-form-item>
-        </a-form>
-        <a-table size="small" :data-source="tablePreview" :columns="tableColumns.map((c) => ({ title: c, dataIndex: c, key: c }))" :pagination="{ pageSize: 5 }" row-key="__i" />
-      </template>
-    </a-card>
+    <!-- 表格形态：上传 / 条目 / 测试三个 tab 由 TableRecordList 内部承载 -->
     <TableRecordList
       v-if="formatMode === 'table'"
       class="kb-doc-pane__panel"
@@ -125,19 +118,62 @@
       :collection="collection"
     />
 
-    <!-- Q&A 导入形态 -->
-    <a-card v-else-if="formatMode === 'qa'" class="kb-doc-pane__panel" :title="t('kbMgmt.qaImport')" size="small">
-      <a-alert class="kb-doc-pane__hint" type="info" :message="t('kbMgmt.qaHint')" show-icon />
-      <a-textarea v-model:value="qaText" :rows="8" :placeholder="t('kbMgmt.qaPlaceholder')" />
-      <a-button class="kb-doc-pane__form" type="primary" :loading="qaImporting" @click="runQaImport">
-        {{ t('kbMgmt.importQa') }}
-      </a-button>
-    </a-card>
-    <QaRecordList
-      v-if="formatMode === 'qa'"
-      class="kb-doc-pane__panel"
-      :collection="collection"
-    />
+    <!-- Q&A 形态：「问答条目」列表 与「问答导入」手动录入以 Tab 切换（条目在前且默认激活） -->
+    <a-tabs v-else-if="formatMode === 'qa'" v-model:activeKey="qaTab" class="kb-doc-pane__qa-tabs">
+      <a-tab-pane key="list" :tab="t('kbMgmt.qaRecords')" force-render>
+        <QaRecordList :collection="collection" />
+      </a-tab-pane>
+      <a-tab-pane key="import" :tab="t('kbMgmt.qaImport')">
+        <a-alert class="kb-doc-pane__hint" type="info" :message="t('kbMgmt.qaHint')" show-icon />
+        <a-textarea
+          v-model:value="qaText"
+          :rows="14"
+          :auto-size="{ minRows: 14, maxRows: 24 }"
+          :placeholder="t('kbMgmt.qaPlaceholder')"
+        />
+        <a-button class="kb-doc-pane__form" type="primary" :loading="qaImporting" @click="runQaImport">
+          {{ t('kbMgmt.importQa') }}
+        </a-button>
+      </a-tab-pane>
+      <!-- 测试：管线 dry-run + 检索测试（问答库形态下统一收在此 Tab） -->
+      <a-tab-pane key="pipeline" :tab="formatLabels.pipeline">
+        <a-card class="kb-doc-pane__test-card" :title="t('kbMgmt.pipelineDryRun')" size="small">
+          <a-upload :before-upload="handleDryRun" :show-upload-list="false">
+            <a-button :loading="dryRunning">{{ t('kbMgmt.selectSampleFile') }}</a-button>
+          </a-upload>
+          <a-collapse v-if="dryResult" class="kb-doc-pane__form">
+            <a-collapse-panel :header="`${t('kbMgmt.sections')} (${dryResult.sections.length})`">
+              <div v-for="(s, i) in dryResult.sections.slice(0, 5)" :key="i" class="kb-doc-pane__preview">{{ s.preview }}</div>
+            </a-collapse-panel>
+            <a-collapse-panel :header="`${t('kbMgmt.chunks')} (${dryResult.chunks.length})`">
+              <div v-for="(c, i) in dryResult.chunks.slice(0, 5)" :key="i" class="kb-doc-pane__preview">
+                #{{ c.chunk_index }}/{{ c.total_chunks }} — {{ c.preview }}
+              </div>
+            </a-collapse-panel>
+          </a-collapse>
+        </a-card>
+
+        <a-card class="kb-doc-pane__test-card" :title="t('kbMgmt.retrievalTest')" size="small">
+          <a-input-search
+            v-model:value="query"
+            :placeholder="t('kbMgmt.searchPlaceholder')"
+            enter-button
+            @search="runRetrieve"
+          />
+          <a-tag v-if="indexMode" class="kb-doc-pane__mode">{{ indexMode }}</a-tag>
+          <a-list v-if="results.length" size="small" :data-source="results">
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <div class="kb-doc-pane__hit">
+                  <span class="kb-doc-pane__score">{{ item.score.toFixed(4) }}</span>
+                  <span class="kb-doc-pane__content">{{ item.content }}</span>
+                </div>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-card>
+      </a-tab-pane>
+    </a-tabs>
 
     <!-- 管线调试形态：dry-run -->
     <a-card v-else-if="formatMode === 'pipeline'" class="kb-doc-pane__panel" :title="t('kbMgmt.pipelineDryRun')" size="small">
@@ -170,8 +206,15 @@
       @changed="loadDocs"
     />
 
-    <!-- 检索测试（economy / high_quality 由后端自动路由） -->
-    <a-card class="kb-doc-pane__tester" :title="t('kbMgmt.retrievalTest')" size="small">
+    <!-- 检索测试（economy / high_quality 由后端自动路由）
+         文档 / 表格 / 问答形态均不在此渲染（见 HIDE_TESTER_FORMATS），
+         检索能力统一由知识库「检索」标签页 SearchTester 提供 -->
+    <a-card
+      v-if="!HIDE_TESTER_FORMATS.includes(formatMode)"
+      class="kb-doc-pane__tester"
+      :title="t('kbMgmt.retrievalTest')"
+      size="small"
+    >
       <a-input-search
         v-model:value="query"
         :placeholder="t('kbMgmt.searchPlaceholder')"
@@ -202,10 +245,8 @@ import {
   createQaRecords,
   deleteDocument,
   getDocumentStatus,
-  importTableRecords,
   listDocuments,
   pipelineDryRun,
-  previewTableRecords,
   rechunkKnowledge,
   retryDocument,
   retrieve,
@@ -229,6 +270,9 @@ const { t } = useI18n()
 const collection = computed(() => `kb_${props.knowledgeId}`)
 const formatMode = ref<'document' | 'table' | 'qa' | 'pipeline'>('document')
 
+/** 这些形态不在面板内重复渲染检索测试（已由知识库「检索」标签页 SearchTester 提供） */
+const HIDE_TESTER_FORMATS: Array<typeof formatMode.value> = ['document', 'table', 'qa']
+
 /** 知识库二级形态 → 允许显示的形态 tab（一一对应）；管线调试（dry-run）作为调试入口对所有形态保留 */
 const FORMAT_TABS: Record<string, ('document' | 'table' | 'qa')[]> = {
   document: ['document'],
@@ -242,6 +286,9 @@ const formatLabels = computed<Record<string, string>>(() => ({
   qa: t('kbMgmt.fmtQa'),
   pipeline: t('kbMgmt.fmtPipeline'),
 }))
+
+/** 问答库：形态切换已合并进下方 3 个 Tab（问答条目 / 问答导入 / 测试），顶部形态栏不再显示 */
+const isQaKb = computed(() => String(props.kbFormat || '').trim() === 'qa')
 
 /** 当前可见的形态 tab 列表（末位固定为管线调试） */
 const visibleFormats = computed(() => {
@@ -296,16 +343,18 @@ function formatSize(bytes: number | null | undefined): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-// ── 表格导入 ──
-const tableColumns = ref<string[]>([])
-const tablePreview = ref<any[]>([])
-const tableFile = ref<File | null>(null)
-const embedField = ref<string>('')
-const tableParsing = ref(false)
-const tableImporting = ref(false)
-
 // ── Q&A 导入 ──
-const qaText = ref('')
+/** 默认范例：开箱即可点「导入问答」，或清空后按 问题|答案|标签 格式自行录入 */
+const QA_SAMPLE = [
+  '退款政策?|支持 7 天无理由退款，商品需保持完好并附带原包装',
+  '如何查询物流?|在「我的订单」中点击「查看物流」即可实时跟踪|物流,售后',
+  '发票怎么开?|订单完成后在订单详情页申请电子发票，1 个工作日内发送到预留邮箱|发票,财务',
+  '会员有哪些权益?|会员可享全场包邮、专属折扣与优先客服响应|会员,权益',
+].join('\n')
+
+/** 默认激活「问答条目」：进入先看已有问答资产与批量导入入口 */
+const qaTab = ref('list')
+const qaText = ref(QA_SAMPLE)
 const qaImporting = ref(false)
 
 // ── dry-run ──
@@ -431,40 +480,6 @@ async function runRetrieve() {
   indexMode.value = res.index_mode || ''
 }
 
-// ── 表格字段映射 ──
-async function handleTableFile(file: File) {
-  tableFile.value = file
-  tableParsing.value = true
-  try {
-    const res: any = await previewTableRecords(collection.value, file, 20)
-    tableColumns.value = res.columns || []
-    tablePreview.value = (res.rows || []).map((r: any, i: number) => ({ __i: i, ...r }))
-    embedField.value = tableColumns.value[0] || ''
-  } catch (e: any) {
-    message.error(e?.response?.data?.detail || t('kbMgmt.parseFailed'))
-  } finally {
-    tableParsing.value = false
-  }
-  return false
-}
-
-async function runTableImport() {
-  if (!tableFile.value) return
-  if (!embedField.value) {
-    message.warning(t('kbMgmt.embedFieldRequired'))
-    return
-  }
-  tableImporting.value = true
-  try {
-    const res: any = await importTableRecords(collection.value, tableFile.value, embedField.value)
-    message.success(`${t('kbMgmt.importTable')} ✓ ${res.ingested ?? 0}`)
-  } catch (e: any) {
-    message.error(e?.response?.data?.detail || t('kbMgmt.importFailed'))
-  } finally {
-    tableImporting.value = false
-  }
-}
-
 // ── Q&A 导入（每行 "问题|答案"，可带 tags 用 "问题|答案|tag1,tag2"）──
 async function runQaImport() {
   const records: { question: string; answer: string; tags: string[] }[] = []
@@ -507,7 +522,9 @@ async function handleDryRun(file: File) {
   return false
 }
 
-onMounted(loadDocs)
+onMounted(async () => {
+  await loadDocs()
+})
 onBeforeUnmount(() => {
   if (pollTimer) window.clearInterval(pollTimer)
 })
@@ -588,7 +605,7 @@ onBeforeUnmount(() => {
   color: var(--fg-muted, #8f959e);
 }
 
-.kb-doc-pane__header {</new_string>
+.kb-doc-pane__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -604,6 +621,17 @@ onBeforeUnmount(() => {
   margin-top: 4px;
 }
 .kb-doc-pane__panel {
+  margin-top: 12px;
+}
+/* 问答形态：Tab 容器替代原上下两栏，条目 Tab 内表格不再重复加外边距 */
+.kb-doc-pane__qa-tabs {
+  margin-top: 12px;
+}
+.kb-doc-pane__qa-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+/* 测试 Tab 内两张卡片（管线 dry-run / 检索测试）间距 */
+.kb-doc-pane__test-card {
   margin-top: 12px;
 }
 .kb-doc-pane__hint {

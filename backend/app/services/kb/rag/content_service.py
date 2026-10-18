@@ -42,12 +42,19 @@ def _insert_via_kb(
     """经 KnowledgeBase.insert_document 落库（嵌入内部完成）。
 
     economy 模式写 NULL 向量（D11）；检索走独立关键词服务（AC7）。
+
+    本函数是同步函数，但内部要跑异步 KB 写入。调用方既有后台线程（无运行中的
+    事件循环），也有 async 路由（已在事件循环中）。``asyncio.run()`` 不能在已运行
+    的事件循环里调用，故：有运行循环时，把协程丢到独立线程里用 ``asyncio.run``
+    跑（新线程自有事件循环）；否则直接跑。``db`` 的读取（resolve_index_mode）
+    留在调用线程，避免跨线程使用 SQLAlchemy Session。
     """
+    from app.services.kb.index_mode import resolve_index_mode
+
+    # 在调用线程先解析索引模式（仅一次 DB 读，避免跨线程用 Session）
+    index_mode = resolve_index_mode(db, collection)
 
     async def _run() -> None:
-        from app.services.kb.index_mode import resolve_index_mode
-
-        index_mode = resolve_index_mode(db, collection)
         if kb_factory is not None:
             async with kb_factory(index_mode=index_mode) as kb:
                 await kb.ensure_collection()
@@ -65,16 +72,50 @@ def _insert_via_kb(
             await kb.insert_document(chunks, document_id=document_id,
                                      document_metadata=document_metadata)
 
-    asyncio.run(_run())
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # 无运行中的事件循环（如后台线程）：直接跑
+        asyncio.run(_run())
+        return
+
+    # 已在事件循环中（如 async 路由）：独立线程里跑 asyncio.run
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(asyncio.run, _run()).result()
 
 
 def _track_document(
     db: Session, tenant_id: int, collection: str, name: str,
     source_type: str, count: int,
+    *,
+    uuid_code: Optional[str] = None,
+    knowledge_id: Optional[int] = None,
+    file_type: Optional[str] = None,
+    file_size: Optional[int] = None,
+    meta: Optional[dict] = None,
+    collection_id: Optional[int] = None,
 ) -> KbDocument:
+    """登记一条文档行。
+
+    ``uuid_code`` 必须与切片里的 ``document_id`` 一致（``kb_segment.document_id``
+    的值即本表 ``uuid_code``），否则文档列表里的条目点开看不到任何切片。
+    ``collection_id`` 显式记录所属集合（表格知识库多集合场景下文档必选集合）。
+    """
     doc = KbDocument(
-        tenant_id=tenant_id, knowledge_id=0, collection=collection,
-        name=name, source_type=source_type, status="completed", segment_count=count,
+        tenant_id=tenant_id,
+        uuid_code=uuid_code or new_document_uuid(),
+        knowledge_id=knowledge_id if knowledge_id is not None else 0,
+        collection=collection,
+        collection_id=collection_id,
+        name=name,
+        source_type=source_type,
+        status="completed",
+        segment_count=count,
+        file_type=file_type,
+        file_size=file_size,
+        meta=meta,
     )
     db.add(doc)
     db.commit()
@@ -127,62 +168,224 @@ def list_qa_records(db: Session, tenant_id: int, collection: str,
 
 # ── 表格行（D15）─────────────────────────────────────────────────────────
 
-def parse_table_bytes(data: bytes, filename: str, limit: int | None = None) -> list[dict]:
-    """CSV / xlsx → [{列名: 值}]。"""
+def parse_table(data: bytes, filename: str, limit: int | None = None) -> tuple[list[str], list[dict]]:
+    """CSV / xlsx → ``(表头列名, [{列名: 值}])``。
+
+    列名去首尾空白并丢弃空列名；``limit`` 限制返回的**数据行**数（表头恒返回）。
+    xlsx 读出的 ``datetime`` 等对象原样交给上层按列定义规范化。
+    """
     rows: list[dict] = []
     lower = filename.lower()
     if lower.endswith(".csv"):
         reader = csv.DictReader(io.StringIO(data.decode("utf-8-sig")))
-        for row in reader:
-            rows.append({k: v for k, v in row.items() if k})
+        headers = [(h or "").strip() for h in (reader.fieldnames or [])]
+        columns = [h for h in headers if h]
+        for raw in reader:
+            row = {
+                str(k).strip(): v for k, v in raw.items()
+                if k and str(k).strip() and str(k).strip() in columns
+            }
+            rows.append(row)
             if limit and len(rows) >= limit:
                 break
-        return rows
+        return columns, rows
     if lower.endswith((".xlsx", ".xls")):
         import openpyxl
 
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-        ws = wb.active
-        iterator = ws.iter_rows(values_only=True)
-        headers = [str(h) for h in next(iterator, [])]
-        for values in iterator:
-            if all(v is None for v in values):
-                continue
-            rows.append({h: v for h, v in zip(headers, values) if h})
-            if limit and len(rows) >= limit:
-                break
-        wb.close()
-        return rows
+        try:
+            ws = wb.active
+            iterator = ws.iter_rows(values_only=True)
+            headers = [str(h).strip() if h is not None else "" for h in next(iterator, [])]
+            columns = [h for h in headers if h]
+            for values in iterator:
+                if all(v is None for v in values):
+                    continue
+                row = {
+                    h: v for h, v in zip(columns, values) if h
+                }
+                if not any(not _cell_empty(v) for v in row.values()):
+                    continue
+                rows.append(row)
+                if limit and len(rows) >= limit:
+                    break
+        finally:
+            wb.close()
+        return columns, rows
     raise ValueError(f"不支持的表格文件类型: {filename!r}（仅 csv/xlsx/xls）")
+
+
+def _cell_empty(value) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
+def parse_table_bytes(data: bytes, filename: str, limit: int | None = None) -> list[dict]:
+    """CSV / xlsx → [{列名: 值}]（仅取数据行，表头经 :func:`parse_table` 获取）。"""
+    return parse_table(data, filename, limit=limit)[1]
+
+
+def normalize_embed_fields(value) -> list[str]:
+    """把「向量化字段组合」入参收敛为字段名列表（兼容旧的单个字段名 ``str``）。"""
+    if isinstance(value, str):
+        return [value] if value else []
+    return [str(v) for v in (value or []) if v]
 
 
 def ingest_table_rows(
     db: Session, tenant_id: int, collection: str, rows: list[dict],
-    embed_field: str,
+    embed_fields,
     session_factory: Optional[Callable] = None,
     kb_factory: Optional[Callable] = None,
     document_id: Optional[str] = None,
+    *,
+    create_document: bool = True,
+    knowledge_id: Optional[int] = None,
+    doc_name: Optional[str] = None,
+    file_type: Optional[str] = None,
+    file_size: Optional[int] = None,
+    file_path: Optional[str] = None,
+    collection_id: Optional[int] = None,
 ) -> int:
-    """表格行直构 Chunk：embed_field 列被嵌入，其余列进 metadata（可过滤）。
+    """表格行直构 Chunk：**一行一段**，内容为向量化字段组合拼成的 CSV 行。
 
-    ``document_id`` 供定时同步覆盖同一文档（spec §10.8）；缺省新建文档 ID。
+    ``embed_fields`` 是集合配置的向量化字段组合（1~N 个字段名；传单个 ``str`` 时
+    按单字段处理以兼容旧调用）。每段：
+    * ``content`` = 这些字段值拼成的 CSV 行（逗号间隔，RFC4180 转义）——即向量化内容；
+    * ``metadata`` = 该行全部字段，供按集合字段定义回显记录与过滤。
+
+    ``document_id`` 指定切片用的文档 ID（缺省现生成）；``create_document=False`` 时
+    不新建文档行——定时同步覆盖同一文档（spec §10.8）用它避免重复文档行。
+    新建文档行时 ``uuid_code`` 与切片的 ``document_id`` 取同一值，否则「表格条目」
+    按文档取切片会取不到（``kb_segment.document_id`` 的值即 ``kms_document.uuid_code``）。
+    ``file_path`` 为落盘的原始文件路径（重试重导用），仅新建文档行时写入 meta。
+    ``collection_id`` 显式记录文档所属集合（表格库多集合场景必选）。
     """
     if not rows:
         return 0
-    if embed_field not in rows[0]:
-        raise ValueError(f"embedding 字段 {embed_field!r} 不在表头中")
+    names = normalize_embed_fields(embed_fields)
+    if not names:
+        raise ValueError("未指定向量化字段组合（embed_fields）")
+    missing = [name for name in names if name not in rows[0]]
+    if missing:
+        raise ValueError(f"embedding 字段 {missing} 不在表头中")
     doc_id = document_id or new_document_uuid()
-    chunks = build_table_row_chunks(rows, embed_field=embed_field, source="table-import")
+    chunks = build_table_row_chunks(rows, embed_fields=names, source="table-import")
     _insert_via_kb(
         session_factory, db=db, collection=collection, tenant_id=tenant_id,
         document_id=doc_id, chunks=chunks, kb_factory=kb_factory,
-        document_metadata={"source": "table-import", "embed_field": embed_field},
+        document_metadata={"source": "table-import", "embed_fields": names},
     )
-    # 定时同步传入已有 document_id 时不新建文档（避免重复文档行）
-    if document_id is None:
-        _track_document(db, tenant_id, collection, f"table-{doc_id[:8]}",
-                        "db_table", len(chunks))
+    if create_document:
+        doc_meta = {"source": "table-import", "embed_fields": names}
+        if file_path:
+            doc_meta["file_path"] = file_path
+        _track_document(
+            db, tenant_id, collection, doc_name or f"table-{doc_id[:8]}",
+            "db_table", len(chunks),
+            uuid_code=doc_id, knowledge_id=knowledge_id,
+            file_type=file_type, file_size=file_size,
+            meta=doc_meta, collection_id=collection_id,
+        )
     return len(chunks)
+
+
+def import_table_file(
+    db: Session,
+    tenant_id: int,
+    collection: str,
+    data: bytes,
+    filename: str,
+    *,
+    knowledge_id: Optional[int] = None,
+    embed_field: Optional[str] = None,
+    embed_fields: Optional[list[str]] = None,
+    session_factory: Optional[Callable] = None,
+    kb_factory: Optional[Callable] = None,
+    document_id: Optional[str] = None,
+    create_document: bool = True,
+    collection_id: Optional[int] = None,
+    auto_create_collection: bool = False,
+) -> dict:
+    """表格文件导入：解析 → **列定义自动生成/校验** → 行级入库 + 文档登记。
+
+    * 知识库没有列定义 → 按文件表头自动定义并落库（**默认全部字段**为向量化字段）；
+    * 已有列定义 → 缺列/多列/取值类型不符抛
+      :class:`~app.services.kb.table_schema.TableSchemaMismatch`，**不落任何数据**。
+
+    集合归属（表格知识库支持一个知识库多个集合）：
+    * ``collection_id`` 指定 → 取该集合并校验其属于 ``knowledge_id``；
+    * 未指定集合且 ``auto_create_collection`` → 在该知识库下**自动新建**集合
+      （名称 ``kb_{kid}_{slug}``，slug 取文件名），承载本次推断出的字段定义；
+    * 仅给 ``collection`` 名 → 沿用既有集合行（缺失时补建），行为不变。
+
+    ``document_id`` / ``create_document=False`` 用于「重试重导」：复用同一文档行
+    （``uuid_code`` 不变），不新建 ``kms_document``。导入时把原始文件落盘到
+    ``kb_document.meta['file_path']``，使后续「重试」能读回字节重跑。
+
+    返回 ``{ingested, rows, document_id, embed_fields, embed_field, columns, schema,
+    schema_created, collection, collection_id}``。
+    """
+    from app.services.kb.collection_service import (
+        create_knowledge_collection,
+        get_collection_by_id,
+        validate_collection_ownership,
+    )
+    from app.services.kb.table_schema import ensure_collection_row, resolve_import_schema
+    from app.services.kb.upload_store import save_upload
+
+    columns, rows = parse_table(data, filename)
+    if not columns:
+        raise ValueError("表格文件没有可用表头（首行需为列名）")
+    if not rows:
+        raise ValueError("表格文件没有数据行")
+
+    # ── 解析目标集合（保证文档必有所属集合，并拿到 collection_id）──
+    coll = None
+    if collection_id:
+        coll = get_collection_by_id(db, collection_id)
+        if coll is None:
+            raise ValueError(f"集合不存在: collection_id={collection_id}")
+    elif auto_create_collection and not collection:
+        if knowledge_id is None:
+            raise ValueError("自动新建集合需要 knowledge_id")
+        coll = create_knowledge_collection(db, tenant_id, knowledge_id, slug=filename)
+    else:
+        # 既有路径：按名取集合行，缺失则补建（HTTP 建库不建集合行的兜底）
+        coll = ensure_collection_row(db, collection, tenant_id=tenant_id)
+    validate_collection_ownership(db, coll, knowledge_id)
+    collection = coll.name
+    collection_id = coll.id
+
+    schema = resolve_import_schema(
+        db, collection, columns, rows,
+        embed_field=embed_field, embed_fields=embed_fields, tenant_id=tenant_id,
+    )
+    targets = schema["embed_fields"]
+    doc_id = document_id or new_document_uuid()
+    # 落盘原始文件（失败不阻塞导入，仅告警；此时重试会回退到「重新向量化」提示）
+    file_path = save_upload(tenant_id, doc_id, filename, data)
+    ingested = ingest_table_rows(
+        db, tenant_id, collection, schema["rows"], targets,
+        session_factory=session_factory, kb_factory=kb_factory,
+        document_id=doc_id, create_document=create_document,
+        knowledge_id=knowledge_id, doc_name=filename,
+        file_type=(filename or "").rsplit(".", 1)[-1].lower() or None,
+        file_size=len(data), file_path=file_path,
+        collection_id=collection_id,
+    )
+    return {
+        "ingested": ingested,
+        "rows": len(rows),
+        "document_id": doc_id,
+        # 向量化字段组合（1~N 个）；embed_field 为其中首个，兼容旧调用方
+        "embed_fields": targets,
+        "embed_field": targets[0] if targets else None,
+        "collection": collection,
+        "collection_id": collection_id,
+        "columns": columns,
+        "schema": schema["fields"],
+        "schema_created": schema["created"],
+    }
 
 
 # ── 多模态资产（D9：仅文搜图）────────────────────────────────────────────

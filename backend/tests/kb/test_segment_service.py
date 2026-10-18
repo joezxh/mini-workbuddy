@@ -30,7 +30,8 @@ from app.services.kb.segment_service import (
 
 TENANT = 100
 OTHER_TENANT = 200
-DIM = settings.GPUSTACK_EMBEDDING_DIMENSION
+# 物理列为 vector(settings.EMBEDDING_DIMENSION)，假向量必须与之一致（避免跨 provider 维度分歧）
+DIM = settings.EMBEDDING_DIMENSION
 
 
 def _vec(seed: float) -> list[float]:

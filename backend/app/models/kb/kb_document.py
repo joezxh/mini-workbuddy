@@ -5,7 +5,7 @@ pending → processing → completed | failed（后台摄取管线回写）。
 """
 import uuid
 
-from sqlalchemy import BigInteger, Column, Integer, String, Text, TIMESTAMP, func
+from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String, Text, TIMESTAMP, func
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.db.database import Base
@@ -25,6 +25,15 @@ class KbDocument(Base, TenantMixin):
                        default=new_document_uuid, comment="对外文档 ID（=kb_segment.document_id）")
     knowledge_id = Column(BigInteger, nullable=False, index=True, comment="所属统一容器")
     collection = Column(String(128), nullable=False, comment="落库集合名 → kb_collection.name")
+    # 表格知识库启用多集合后，文档必选所属知识库下的一个集合（按 ID 精确归属）；
+    # 普通文档知识库维持 kb_{knowledge_id} 1:1，该列可空以保证历史数据兼容。
+    collection_id = Column(
+        BigInteger,
+        ForeignKey("kms_collection.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="所属集合 ID（表格库文档必选，须与 knowledge_id 同库）",
+    )
     name = Column(String(500), nullable=False, comment="文档显示名/来源名")
     source_type = Column(String(16), nullable=False, server_default="upload",
                          comment="来源: upload|db_table|api|qa_import|connector")

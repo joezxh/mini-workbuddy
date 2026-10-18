@@ -14,7 +14,7 @@
       :data-source="rows"
       :columns="columns"
       :pagination="{
-        pageSize: 5,
+        pageSize: 10,
         size: 'small',
         showSizeChanger: true,
         pageSizeOptions: ['5', '10', '20', '50'],
@@ -135,7 +135,8 @@ watch(() => props.collection, load)
 .qrl__bar {
   margin-bottom: 12px;
 }
+/* 提示框下移，避免与上方按钮行 / Tab 标题贴边相叠 */
 .qrl__hint {
-  margin-bottom: 12px;
+  margin: 20px 0 12px;
 }
 </style>

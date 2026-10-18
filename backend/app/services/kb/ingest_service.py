@@ -58,11 +58,9 @@ class KbIngestService:
         :param segments: 已切好的切片；``content`` 必填，``embedding`` 可留空（自动生成）。
         :return: upsert 的切片数
         """
-        # 维度校验：集合已存在时，生成的向量维度必须与集合声明的维度一致
-        # （保障后续 768/1024 维度混用验收项在接口层尽早失败）
-        coll = self.store.get_collection(collection)
-        expected_dim = coll.dimensions if coll is not None else None
-
+        # 向量维度不在接口层强校验：生成的向量维度若与数据表物理列维度不符，
+        # 由 PGVectorStore.insert 自动补齐/截断（对齐 kms_segment.embedding 物理列），
+        # 避免换模型后维度差异导致写入失败。
         pending = [s for s in segments if s.embedding is None and s.content]
         if pending:
             vectors = self._embed_fn([s.content for s in pending])
@@ -71,10 +69,6 @@ class KbIngestService:
                     f"embed_fn 返回向量数 {len(vectors)} 与待生成切片数 {len(pending)} 不一致"
                 )
             for seg, vec in zip(pending, vectors):
-                if expected_dim is not None and len(vec) != expected_dim:
-                    raise ValueError(
-                        f"向量维度 {len(vec)} 与集合 {collection!r} 声明维度 {expected_dim} 不一致"
-                    )
                 seg.embedding = vec
 
         return self.store.insert(collection, document_id, segments)

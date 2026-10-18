@@ -8,6 +8,9 @@
 """
 from __future__ import annotations
 
+from sqlalchemy import select
+
+from app.models.kb.kb_segment import KbSegment
 from app.services.kb.ingest_service import KbIngestService
 from app.services.kb.pgvector_store import PGVectorStore, SegmentInput
 
@@ -63,17 +66,22 @@ def test_ingest_keeps_provided_embedding(db):
     assert calls == [["b"]]
 
 
-def test_ingest_dimension_mismatch_raises(db):
+def test_ingest_dimension_mismatch_aligned(db):
+    """维度不符不再在接口层硬失败，由存储层按数据表物理维度补齐/截断。"""
     svc = KbIngestService(_store(db, 100), lambda texts: [[0.1, 0.2, 0.3, 0.4] for _ in texts])
     svc.store.create_collection("kb_dim", DIM)
 
-    try:
-        svc.ingest_document(
-            "kb_dim", "d1", [SegmentInput(chunk_index=0, content="x")]
+    # 4 维向量 vs 集合声明 768：不再抛错，落库时对齐到物理列维度
+    n = svc.ingest_document("kb_dim", "d1", [SegmentInput(chunk_index=0, content="x")])
+    assert n == 1
+    row = db.execute(
+        select(KbSegment).where(
+            KbSegment.collection == "kb_dim", KbSegment.document_id == "d1"
         )
-        assert False, "维度不一致应抛 ValueError"
-    except ValueError as e:
-        assert "维度" in str(e)
+    ).scalar_one()
+    # 落库向量长度 == 物理列维度（与集合声明维度无关）
+    assert len(row.embedding) == svc.store.vector_dim
+    assert len(row.embedding) >= 4
 
 
 def test_ingest_embed_count_mismatch_raises(db):

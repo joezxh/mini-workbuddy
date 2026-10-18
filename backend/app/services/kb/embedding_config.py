@@ -180,10 +180,11 @@ def resolve_default_embedding_from_db(session) -> Optional[EmbeddingConfig]:
         )
         return None
     key = session.get(AiApiKey, row.key_id)
-    if key is None or not (key.url or "").strip():
+    # 密钥本身被禁用（status=0）也跳过：避免被禁用的 API Key 仍被向量化链路使用
+    if key is None or key.status != 1 or not (key.url or "").strip():
         logger.warning(
-            f"[Embedding] 模型管理默认向量化模型 {row.code or row.id} 缺少可用 API 地址，"
-            "忽略并回落环境变量"
+            f"[Embedding] 模型管理默认向量化模型 {row.code or row.id} 关联的 API 密钥"
+            f"（id={row.key_id}）缺失/已禁用/无可用地址，忽略并回落环境变量"
         )
         return None
     protocol = (
@@ -204,11 +205,14 @@ def resolve_default_embedding_from_db(session) -> Optional[EmbeddingConfig]:
 
 
 def resolve_embedding_config_with_fallback(provider: Optional[str] = None) -> EmbeddingConfig:
-    """向量化模型解析：**模型管理默认模型优先，未配置或探测不通则回落环境变量配置**。
+    """向量化模型解析：**模型管理默认模型优先，未配置则回落环境变量配置**。
 
     * 显式传入 ``provider`` → 维持原语义，直接走环境变量映射（调用方明确指定）；
-    * 未传 → 先查模型管理里的默认向量化模型；未配置 / 不完整 / 查库异常 /
-      连通性探测不通时，回落 ``settings.EMBEDDING_PROVIDER`` 等环境变量配置。
+    * 未传 → 先查模型管理里的默认向量化模型；该配置完整（type=5 + is_default +
+      status=1 + 关联密钥可用 + 维度非空 + url 非空）即采用，**即便连通性探测不通
+      也优先使用**（仅记 warning），不再回落环境变量；只有确实未在模型管理配置
+      （``cfg is None``，例如未配置 / 不完整 / 查库异常）时才回落
+      ``settings.EMBEDDING_PROVIDER`` 等环境变量配置。
     """
     if provider:
         return resolve_embedding_config(provider)
@@ -221,12 +225,14 @@ def resolve_embedding_config_with_fallback(provider: Optional[str] = None) -> Em
         finally:
             db.close()
         if cfg is not None:
-            if probe_embedding_config(cfg):
-                return cfg
-            logger.warning(
-                f"[Embedding] 模型管理默认向量化模型 {cfg.provider} 连通性探测不通，"
-                "回落环境变量配置"
-            )
+            # 放宽探测：模型管理默认配置完整即优先采用，连通性探测只用于告警日志，
+            # 不再作为回落环境变量的开关（避免 lm-studio 等效配置被静默跳过）。
+            if not probe_embedding_config(cfg):
+                logger.warning(
+                    f"[Embedding] 模型管理默认向量化模型 {cfg.provider} 连通性探测不通，"
+                    "仍优先使用该配置（请确认对应向量化服务可用）"
+                )
+            return cfg
     except Exception as exc:  # noqa: BLE001 - 查库失败不得阻断，回落环境变量
         logger.warning(f"[Embedding] 读取模型管理默认向量化模型失败，回落环境变量配置: {exc}")
     return resolve_embedding_config(None)

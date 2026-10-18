@@ -76,6 +76,16 @@ export function retrieve(collection: string, data: {
   return request.post(`${BASE}/collections/${collection}/retrieve`, data)
 }
 
+/** 知识库检索：跨该知识库全部集合合并取 Top-K（表格库多集合场景） */
+export function retrieveKnowledge(kid: number, data: {
+  query: string
+  top_k?: number
+  hybrid?: boolean
+  metadata_filters?: Record<string, unknown>
+}) {
+  return request.post(`${BASE}/knowledges/${kid}/retrieve`, data)
+}
+
 export function getSupportedContentTypes() {
   return request.get(`${BASE}/supported_content_types`)
 }
@@ -89,7 +99,7 @@ export function getPipelineSchema() {
   return request.get(`${BASE}/pipelines/schema`)
 }
 
-/** 表格导入前预览：解析前 N 行，返回列名（用于字段映射面板） */
+/** 表格导入前预览：解析前 N 行并按列定义校验（不落库、不嵌入） */
 export function previewTableRecords(collection: string, file: File, limit = 20) {
   const fd = new FormData()
   fd.append('file', file)
@@ -98,12 +108,49 @@ export function previewTableRecords(collection: string, file: File, limit = 20) 
   })
 }
 
-/** 表格行导入（Dify 对齐）：embed_field 列被嵌入，其余列进可过滤 metadata */
-export function importTableRecords(collection: string, file: File, embedField: string) {
+/** 表格文件导入：无列定义则自动定义（默认全字段为向量化字段），有列定义则校验（不符 422 不落数据） */
+export function importTableRecords(
+  collection: string,
+  file: File,
+  embedFields?: string | string[],
+) {
   const fd = new FormData()
   fd.append('file', file)
-  fd.append('embed_field', embedField)
+  const fields = Array.isArray(embedFields)
+    ? embedFields
+    : embedFields
+      ? [embedFields]
+      : []
+  if (fields.length) fd.append('embed_fields', fields.join(','))
   return request.post(`${BASE}/collections/${collection}/table-records/import`, fd)
+}
+
+/** 表格文件导入（**可不指定集合**）：未指定时后端按文件表头自动新建该知识库下的集合 */
+export function importTableRecordsToKnowledge(
+  kid: number,
+  file: File,
+  opts: { collectionId?: number; embedFields?: string[] } = {},
+) {
+  const fd = new FormData()
+  fd.append('file', file)
+  // 0 = 不指定集合（后端自动新建并自动生成字段定义）
+  fd.append('collection_id', String(opts.collectionId || 0))
+  if (opts.embedFields?.length) fd.append('embed_fields', opts.embedFields.join(','))
+  return request.post(`${BASE}/knowledges/${kid}/table-records/import`, fd)
+}
+
+/** 集合（kms_collection）简要信息 */
+export interface KbCollectionItem {
+  id: number
+  name: string
+  dimensions: number
+  field_count: number
+  embed_fields: string[]
+}
+
+/** 某知识库下的集合列表（表格知识库上传时选择「所属集合」用） */
+export function listKnowledgeCollections(kid: number) {
+  return request.get(`${BASE}/knowledges/${kid}/collections`)
 }
 
 /** Q&A 直构 Chunk：仅问题被嵌入，答案随 metadata 返回 */
@@ -150,9 +197,56 @@ export interface KbSegment {
 
 export function listDocumentSegments(
   uuid: string,
-  params: { chunk_type?: string; page?: number; page_size?: number } = {},
+  params: { chunk_type?: string; q?: string; page?: number; page_size?: number } = {},
 ) {
   return request.get(`${BASE}/documents/${uuid}/segments`, { params })
+}
+
+/** 集合内条目列表：表格知识库「表格条目」（不传 document_id = 全部文件） */
+export function listCollectionSegments(
+  collection: string,
+  params: {
+    document_id?: string
+    chunk_type?: string
+    q?: string
+    page?: number
+    page_size?: number
+  } = {},
+) {
+  return request.get(`${BASE}/collections/${collection}/segments`, { params })
+}
+
+/** 知识库条目列表（跨该知识库全部集合）：表格知识库「表格条目 → 全部文件」用 */
+export function listKnowledgeSegments(
+  kid: number,
+  params: {
+    document_id?: string
+    chunk_type?: string
+    q?: string
+    page?: number
+    page_size?: number
+  } = {},
+) {
+  return request.get(`${BASE}/knowledges/${kid}/segments`, { params })
+}
+
+// ── 表格列定义（kms_collection.schema_config）───────────────────────────
+
+/** 列定义：[{name, type, enabled, embedding(可为多个，组合成向量化内容), filterable}] */
+export interface KbSchemaField {
+  name: string
+  type: 'string' | 'number' | 'boolean'
+  enabled: boolean
+  embedding: boolean
+  filterable: boolean
+}
+
+export function getCollectionSchema(collection: string) {
+  return request.get(`${BASE}/collections/${collection}/schema`)
+}
+
+export function updateCollectionSchema(collection: string, fields: KbSchemaField[]) {
+  return request.put(`${BASE}/collections/${collection}/schema`, { fields })
 }
 
 export function getSegment(id: number) {

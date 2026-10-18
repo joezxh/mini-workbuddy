@@ -1,6 +1,7 @@
 """PGVectorStore 骨架 + collection 管理测试（P1 Task 2）。"""
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import select
 
 from app.models.kb.kb_segment import KbSegment
@@ -129,3 +130,84 @@ def test_search_returns_empty_for_no_embeddings(db):
     # 切片存在但 embedding 为 None：被 isnot(None) 过滤，仍为空
     s.insert("kb_s", "d1", [SegmentInput(chunk_index=0, content="x", embedding=None)])
     assert s.search("kb_s", _vec(1)) == []
+
+
+def test_insert_aligns_to_physical_dimension(db):
+    """写入侧：模型输出维度与物理列维度不符时自动补齐/截断（真实列维度驱动）。
+
+    复现 768→2048 这类对齐场景：列是 vector(2048) 时，768 维切片被补齐到 2048 再写入。
+    """
+    s = PGVectorStore(db, 100)
+    phys = s.vector_dim
+    if not phys:
+        pytest.skip("无法读取 kms_segment.embedding 物理维度，跳过对齐断言")
+    s.create_collection("kb_align_pad", phys)
+    # 取值须在 float32（pgvector 底层 real）下精确，避免回读出现精度误差
+    short = [0.5] * max(1, phys - 100)  # 短于物理列维度 → 补齐
+    s.insert("kb_align_pad", "d1", [SegmentInput(chunk_index=0, content="x", embedding=short)])
+
+    row = db.execute(
+        select(KbSegment).where(
+            KbSegment.tenant_id == 100,
+            KbSegment.collection == "kb_align_pad",
+            KbSegment.document_id == "d1",
+        )
+    ).scalar_one()
+    # pgvector 回读为 numpy 数组：先转 list 再比较，避免逐元素比较的歧义
+    stored = list(row.embedding)
+    assert len(stored) == phys
+    assert stored[: len(short)] == short
+    assert stored[len(short):] == [0.0] * (phys - len(short))
+
+
+def test_insert_truncates_overlong_embedding(db):
+    """写入侧：长于物理列维度的向量被截断（例如换用更高维模型）。"""
+    s = PGVectorStore(db, 100)
+    phys = s.vector_dim
+    if not phys or phys < 2:
+        pytest.skip("物理维度过小，跳过截断断言")
+    s.create_collection("kb_align_trunc", phys)
+    overlong = [0.25] * (phys + 50)  # 长于物理列维度 → 截断（float32 精确值）
+    head = overlong[:phys]
+    s.insert("kb_align_trunc", "d1", [SegmentInput(chunk_index=0, content="x", embedding=overlong)])
+
+    row = db.execute(
+        select(KbSegment).where(
+            KbSegment.tenant_id == 100,
+            KbSegment.collection == "kb_align_trunc",
+            KbSegment.document_id == "d1",
+        )
+    ).scalar_one()
+    assert len(row.embedding) == phys
+    assert list(row.embedding) == head
+
+
+def test_insert_keeps_null_embedding(db):
+    """写入侧：embedding 为 None 时保持 NULL（不写入空向量）。"""
+    s = _store(db, 100)
+    s.create_collection("kb_null", DIM)
+    s.insert("kb_null", "d1", [SegmentInput(chunk_index=0, content="x", embedding=None)])
+    row = db.execute(
+        select(KbSegment).where(
+            KbSegment.tenant_id == 100,
+            KbSegment.collection == "kb_null",
+            KbSegment.document_id == "d1",
+        )
+    ).scalar_one()
+    assert row.embedding is None
+
+
+def test_search_aligns_query_to_physical_dimension(db):
+    """检索侧：查询向量维度与物理列维度不符时先补齐再检索，不报错且能命中。"""
+    s = PGVectorStore(db, 100)
+    phys = s.vector_dim
+    if not phys or phys < 2:
+        pytest.skip("物理维度过小，跳过检索对齐断言")
+    s.create_collection("kb_align_q", phys)
+    full = [0.2] * phys
+    s.insert("kb_align_q", "d1", [SegmentInput(chunk_index=0, content="x", embedding=full)])
+
+    # 查询给短向量，应被补齐到物理列维度后再参与余弦运算
+    results = s.search("kb_align_q", [0.2] * max(1, phys - 100))
+    assert len(results) == 1
+    assert results[0].document_id == "d1"

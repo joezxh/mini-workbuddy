@@ -15,10 +15,11 @@ from typing import Callable, Optional
 
 from sqlalchemy import func, select
 
+from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_document import KbDocument
 from app.models.kb.kb_segment import KbSegment
 from app.services.kb.index_mode import _embed_texts, resolve_index_mode
-from app.services.kb.vector_utils import fit_vector_dimension
+from app.services.kb.vector_utils import fit_vector_dimension, segment_vector_dimension
 
 # D14：metadata → 冗余列的投影
 _PROJECTIONS = ("chunk_type", "answer", "keywords")
@@ -61,16 +62,6 @@ def _should_embed(db, seg: KbSegment) -> bool:
     return resolve_index_mode(db, seg.collection) != "economy"
 
 
-def _collection_dimensions(db, collection: str) -> Optional[int]:
-    """取集合配置的向量维度；集合行缺失返回 None（不限制）。"""
-    from app.models.kb.kb_collection import KbCollection
-
-    coll = db.execute(
-        select(KbCollection).where(KbCollection.name == collection)
-    ).scalar_one_or_none()
-    return coll.dimensions if coll else None
-
-
 def update_segment(
     db,
     tenant_id: int,
@@ -96,9 +87,11 @@ def update_segment(
     if content is not None:
         seg.content = content
         if _should_embed(db, seg):
-            # 向量写入前按集合维度截断/补齐，避免维度不符导致写入失败
-            seg.embedding = fit_vector_dimension(
-                _embed_one(content, embed_fn), _collection_dimensions(db, seg.collection)
+            # 向量写入前按数据表物理维度截断/补齐，避免维度不符导致写入失败
+            emb = _embed_one(content, embed_fn)
+            seg.embedding = (
+                fit_vector_dimension(emb, segment_vector_dimension(db))
+                if emb is not None else None
             )
 
     db.commit()
@@ -111,12 +104,14 @@ def list_document_segments(
     document_id: str,
     *,
     chunk_type: Optional[str] = None,
+    q: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
-    """文档内分段列表（spec §10.5），分页 + 按形态过滤。
+    """文档内分段列表（spec §10.5），分页 + 按形态过滤 + 关键词过滤。
 
     分段详情抽屉 / 表格条目列表 / Q&A 列表共用此入口。
+    ``q`` 对被嵌入内容做包含匹配（表格条目区的「查」）。
     """
     stmt = select(KbSegment).where(
         KbSegment.document_id == document_id,
@@ -124,12 +119,123 @@ def list_document_segments(
     )
     if chunk_type:
         stmt = stmt.where(KbSegment.chunk_type == chunk_type)
+    keyword = (q or "").strip()
+    if keyword:
+        stmt = stmt.where(KbSegment.content.ilike(f"%{keyword}%"))
 
     total = db.execute(
         select(func.count()).select_from(stmt.subquery())
     ).scalar_one()
     rows = db.execute(
         stmt.order_by(KbSegment.chunk_index)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).scalars().all()
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [serialize_segment(s) for s in rows],
+    }
+
+
+def list_collection_segments(
+    db,
+    tenant_id: int,
+    collection: str,
+    *,
+    document_id: Optional[str] = None,
+    chunk_type: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """集合内分段列表（表格知识库「表格条目」的**全部文件**视图）。
+
+    与 :func:`list_document_segments` 同构，但按集合过滤；``document_id`` 可进一步
+    收窄到某个文件。表格知识库支持一个知识库多个集合，故按集合（而非知识库）过滤
+    才能保证条目与所属集合的字段定义一致。
+    """
+    stmt = select(KbSegment).where(
+        KbSegment.collection == collection,
+        KbSegment.tenant_id == tenant_id,
+    )
+    if document_id:
+        stmt = stmt.where(KbSegment.document_id == document_id)
+    if chunk_type:
+        stmt = stmt.where(KbSegment.chunk_type == chunk_type)
+    keyword = (q or "").strip()
+    if keyword:
+        stmt = stmt.where(KbSegment.content.ilike(f"%{keyword}%"))
+
+    total = db.execute(
+        select(func.count()).select_from(stmt.subquery())
+    ).scalar_one()
+    rows = db.execute(
+        stmt.order_by(KbSegment.document_id, KbSegment.chunk_index)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).scalars().all()
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": [serialize_segment(s) for s in rows],
+    }
+
+
+def knowledge_collection_names(db, tenant_id: int, knowledge_id: int) -> list[str]:
+    """知识库下全部集合名（表格库支持一个知识库多个集合）。
+
+    以 ``kms_collection.knowledge_id`` 为准；没有任何集合行时回落默认集合名
+    ``kb_{kid}``（历史库与文档形态库都是 1:1，集合行可能尚未补建）。
+    """
+    names = db.execute(
+        select(KbCollection.name).where(
+            KbCollection.tenant_id == tenant_id,
+            KbCollection.knowledge_id == knowledge_id,
+        )
+    ).scalars().all()
+    default = f"kb_{knowledge_id}"
+    if default not in names:
+        names = [*names, default]
+    return list(names)
+
+
+def list_knowledge_segments(
+    db,
+    tenant_id: int,
+    knowledge_id: int,
+    *,
+    document_id: Optional[str] = None,
+    chunk_type: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """知识库内分段列表（跨该知识库的**全部集合**）。
+
+    表格知识库「表格条目 → 全部文件」视图用：一个知识库可有多个集合，
+    每个文件归属其中一个，故按集合名集合过滤才能真正拿到全部条目。
+    """
+    names = knowledge_collection_names(db, tenant_id, knowledge_id)
+    stmt = select(KbSegment).where(
+        KbSegment.collection.in_(names),
+        KbSegment.tenant_id == tenant_id,
+    )
+    if document_id:
+        stmt = stmt.where(KbSegment.document_id == document_id)
+    if chunk_type:
+        stmt = stmt.where(KbSegment.chunk_type == chunk_type)
+    keyword = (q or "").strip()
+    if keyword:
+        stmt = stmt.where(KbSegment.content.ilike(f"%{keyword}%"))
+
+    total = db.execute(
+        select(func.count()).select_from(stmt.subquery())
+    ).scalar_one()
+    rows = db.execute(
+        stmt.order_by(KbSegment.collection, KbSegment.document_id, KbSegment.chunk_index)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).scalars().all()
@@ -171,7 +277,8 @@ def reembed_document_segments(db, tenant_id: int, collection: str,
     if len(vectors) != len(rows):
         raise ValueError(f"嵌入数量不匹配: {len(vectors)} vs 切片 {len(rows)}")
     for row, vec in zip(rows, vectors):
-        row.embedding = vec
+        # 维度对齐到数据表物理维度（截断/补齐），换模型重灌不致写入失败
+        row.embedding = fit_vector_dimension(vec, segment_vector_dimension(db))
     db.commit()
     return len(rows)
 
@@ -205,7 +312,11 @@ def create_segment(
     db.add(seg)
     db.flush()
     if _should_embed(db, seg):
-        seg.embedding = _embed_one(content, embed_fn)
+        emb = _embed_one(content, embed_fn)
+        seg.embedding = (
+            fit_vector_dimension(emb, segment_vector_dimension(db))
+            if emb is not None else None
+        )
     db.commit()
     return seg
 

@@ -1,6 +1,7 @@
 """知识库索引模式解析与升降级（spec §10.2 / §11 / 验收 7）。
 
-collection 命名约定为 ``kb_{knowledge_id}``；据此反查 ``WikiKnowledge.index_mode``。
+collection 命名约定为 ``kb_{knowledge_id}``（表格知识库启用多集合后可为
+``kb_{knowledge_id}_{slug}``）；据此反查 ``WikiKnowledge.index_mode``。
 economy 模式摄取写 NULL 向量、检索走独立关键词服务（D11 / AC7）。
 
 **升级（economy → high_quality）** 触发全量 embedding 回填：按 ``kb_document``
@@ -11,12 +12,13 @@ economy 模式摄取写 NULL 向量、检索走独立关键词服务（D11 / AC7
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Callable, Optional
 
 from loguru import logger
 from sqlalchemy import select
 
-from app.services.kb.vector_utils import fit_vector_dimension
+from app.services.kb.vector_utils import fit_vector_dimension, segment_vector_dimension
 
 # 父块（父子分段）设计上 embedding 恒为 NULL：只存完整上下文，不参与检索（spec §10.2）
 _NON_EMBEDDED_CHUNK_TYPES = ("parent",)
@@ -25,14 +27,27 @@ HIGH_QUALITY = "high_quality"
 ECONOMY = "economy"
 
 
+# 集合名：``kb_{knowledge_id}`` 或（表格库多集合）``kb_{knowledge_id}_{slug}``
+_KB_COLLECTION_RE = re.compile(r"^kb_(\d+)(?:_(.+))?$")
+
+
 def resolve_knowledge_id(collection: str) -> Optional[int]:
-    """``kb_{knowledge_id}`` → knowledge_id；非约定命名返回 None。"""
-    if collection and collection.startswith("kb_"):
-        try:
-            return int(collection[3:])
-        except ValueError:
-            return None
-    return None
+    """``kb_{kid}`` / ``kb_{kid}_{slug}`` → knowledge_id；非约定命名返回 None。
+
+    表格知识库启用「一个知识库多个集合」后，集合名在 ``kb_{kid}`` 后追加 slug
+    后缀；因仍保留 ``kb_`` 前缀与知识库 ID，既有「按集合名反查知识库 / 维度 /
+    索引模式」的链路（路由、pipeline、agent_factory、table_schema、knowledge_factory）
+    无需改动即可继续工作。
+    """
+    if not collection:
+        return None
+    match = _KB_COLLECTION_RE.match(collection)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:  # pragma: no cover - 正则已保证分组为纯数字
+        return None
 
 
 def resolve_index_mode(db, collection: str) -> str:
@@ -94,14 +109,11 @@ def _fill_documents(
     ``only_null=True`` 只回填 NULL 向量（升级）；``False`` 覆盖全部（换嵌入模型重灌）。
     单文档失败不中断整批：回滚该文档并记录 ``kb_document.meta[progress_key]``。
     """
-    from app.models.kb.kb_collection import KbCollection
     from app.models.kb.kb_document import KbDocument
     from app.models.kb.kb_segment import KbSegment
 
-    coll = db.execute(
-        select(KbCollection).where(KbCollection.name == collection)
-    ).scalar_one_or_none()
-    dimensions = coll.dimensions if coll else None
+    # 目标维度取数据表物理列维度（而非集合配置维度），换模型重灌时自动补齐/截断
+    target_dim = segment_vector_dimension(db)
 
     docs = db.execute(
         select(KbDocument).where(
@@ -131,9 +143,9 @@ def _fill_documents(
             if len(vectors) != len(rows):
                 raise ValueError(f"嵌入数量不匹配: {len(vectors)} vs 切片 {len(rows)}")
             for row, vec in zip(rows, vectors):
-                # 维度不符时截断/补齐到集合维度（过长截断、过短补零），
+                # 维度不符时截断/补齐到数据表物理维度（过长截断、过短补零），
                 # 而非直接失败——换模型重灌时维度差异属常见场景
-                row.embedding = fit_vector_dimension(vec, dimensions)
+                row.embedding = fit_vector_dimension(vec, target_dim)
             db.commit()
             filled += len(rows)
             _set_doc_progress(db, doc.uuid_code,

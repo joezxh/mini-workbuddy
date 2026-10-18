@@ -25,7 +25,9 @@ from app.services.kb.collection_settings import (
 from app.services.kb.index_mode import reembed_collection, resolve_index_mode
 
 TENANT = 100
-DIM = settings.GPUSTACK_EMBEDDING_DIMENSION
+# 物理列为 vector(settings.EMBEDDING_DIMENSION)（按 EMBEDDING_PROVIDER 解析），
+# 假向量必须与之同维，否则写库时会被自动补齐导致断言长度不符。
+DIM = settings.EMBEDDING_DIMENSION
 
 
 def _vec(seed: float) -> list[float]:

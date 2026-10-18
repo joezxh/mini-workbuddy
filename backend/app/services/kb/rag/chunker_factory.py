@@ -5,6 +5,10 @@ chunk_index 连续、total_chunks 一致。
 """
 from __future__ import annotations
 
+import csv
+import io
+from typing import Optional
+
 from agentscope.rag import ApproxTokenChunker, ChunkerBase
 from agentscope.rag import Chunk, Section
 from agentscope.message import DataBlock, TextBlock
@@ -76,12 +80,45 @@ def build_qa_chunks(pairs: list[dict], source: str = "qa-import") -> list[Chunk]
     return chunks
 
 
-def build_table_row_chunks(rows: list[dict], embed_field: str, source: str = "table-import") -> list[Chunk]:
-    """表格行形态：embed_field 列作为被嵌入内容，其余列进 metadata（D15）。"""
+def csv_row_line(values: list) -> str:
+    """把一行取值拼成 **CSV 行**（RFC4180：逗号间隔，含逗号/引号/换行自动转义）。
+
+    用于表格知识库「每段一行、遵守 CSV 格式、逗号间隔」的切分内容。
+    """
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow(
+        ["" if v is None else v for v in values]
+    )
+    return buf.getvalue()
+
+
+def build_table_row_chunks(
+    rows: list[dict],
+    embed_fields=None,
+    source: str = "table-import",
+    *,
+    embed_field: Optional[str] = None,
+) -> list[Chunk]:
+    """表格行形态：**一行一段**，内容为向量化字段组合拼成的 CSV 行（D15）。
+
+    ``embed_fields`` 是集合配置的「向量化字段组合」（1~N 个字段名，顺序即 CSV 列序）：
+    * ``content`` = 这些字段值拼成的 CSV 行 —— 与向量化文本一致（向量检索依赖它）；
+    * ``metadata`` 存该行全部字段（便于按集合字段定义回显记录、按未选中字段过滤）。
+
+    兼容旧调用：``embed_fields`` 传单个字段名（``str``），或用旧关键字
+    ``embed_field="列名"``（单字段组合）。
+    """
+    names: list[str] = []
+    if isinstance(embed_fields, str):
+        names = [embed_fields] if embed_fields else []
+    else:
+        names = [str(name) for name in (embed_fields or []) if name]
+    if not names and embed_field:
+        names = [embed_field]
     chunks: list[Chunk] = []
     for i, row in enumerate(rows):
-        content = str(row.get(embed_field, ""))
-        meta = {k: v for k, v in row.items() if k != embed_field}
+        content = csv_row_line([row.get(name, "") for name in names])
+        meta = dict(row)
         meta["chunk_type"] = "table_row"
         chunks.append(Chunk(
             content=TextBlock(text=content),

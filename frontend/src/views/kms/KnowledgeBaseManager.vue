@@ -222,9 +222,16 @@
           </div>
         </a-form-item>
 
-        <!-- 表格形态：字段映射（enabled / embedding 单选 / filterable） -->
+        <!-- 表格形态：字段定义（可留空；embedding 可多选，组合成向量化内容） -->
         <a-form-item v-if="form.type === 2 && form.kb_format === 'table'" :label="t('kbMgmt.schemaConfig')">
           <a-alert class="kb-manager__tip" type="info" :message="t('kbMgmt.schemaConfigHint')" show-icon />
+          <a-alert
+            v-if="!form.schema_config.length"
+            class="kb-manager__tip"
+            type="warning"
+            :message="t('kbMgmt.schemaConfigEmptyHint')"
+            show-icon
+          />
           <div v-for="(f, i) in form.schema_config" :key="i" class="kb-manager__field">
             <a-input v-model:value="f.name" :placeholder="t('kbMgmt.fieldName')" style="width: 40%" />
             <a-select v-model:value="f.type" style="width: 25%">
@@ -233,7 +240,7 @@
               <a-select-option value="boolean">{{ t('kbMgmt.typeBoolean') }}</a-select-option>
             </a-select>
             <a-checkbox v-model:checked="f.filterable">{{ t('kbMgmt.filterable') }}</a-checkbox>
-            <a-radio :checked="f.embedding" @change="setEmbedField(i)">{{ t('kbMgmt.embedField') }}</a-radio>
+            <a-checkbox v-model:checked="f.embedding">{{ t('kbMgmt.embedField') }}</a-checkbox>
             <a-button size="small" danger @click="removeField(i)">{{ t('common.delete') }}</a-button>
           </div>
           <a-button size="small" @click="addField">{{ t('kbMgmt.addField') }}</a-button>
@@ -454,12 +461,7 @@ function removeField(i: number) {
   form.schema_config.splice(i, 1)
 }
 
-/** 被嵌入字段单选 */
-function setEmbedField(i: number) {
-  form.schema_config.forEach((f, idx) => {
-    f.embedding = idx === i
-  })
-}
+/** 向量化字段改为**多选**（模板用 v-model:checked 直接切换），无需单选辅助函数 */
 
 const expandedKeys = ref<string[]>([])
 
@@ -639,11 +641,11 @@ async function submit() {
         return
       }
     }
-    // 表格：被嵌入字段必须唯一且已命名
+    // 表格：字段定义**可留空**（留空则上传文件时按表头自动生成，默认全字段为向量化内容）；
+    // 已定义字段时，至少需要一个向量化字段（可多个）。
     if (form.type === 2 && form.kb_format === 'table') {
       const fields = form.schema_config.filter((f) => f.name.trim())
-      const embeddeds = fields.filter((f) => f.embedding)
-      if (!fields.length || embeddeds.length !== 1) {
+      if (fields.length && !fields.some((f) => f.embedding)) {
         message.warning(t('kbMgmt.embedFieldRequired'))
         return
       }

@@ -93,6 +93,22 @@ def _test_database() -> Iterator[None]:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             # pg_trgm：Task 5 中文混合检索（similarity + gin_trgm_ops）依赖
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            # 清理历史遗留：public 下的 kms_*/kb_* 表（早期/异常运行把表建到了 public）
+            # 与未回收的 t_* 模式。否则 create_all(checkfirst=True) 会误判表已存在而
+            # 跳建到 per-test 模式，导致用例查询报 UndefinedTable。
+            public_tabs = conn.execute(
+                text(
+                    "SELECT tablename FROM pg_tables WHERE schemaname='public' "
+                    "AND (tablename LIKE 'kms_%' OR tablename LIKE 'kb_%')"
+                )
+            ).fetchall()
+            for (tn,) in public_tabs:
+                conn.execute(text(f'DROP TABLE IF EXISTS public."{tn}" CASCADE'))
+            leftover = conn.execute(
+                text("SELECT nspname FROM pg_namespace WHERE nspname LIKE 't_%'")
+            ).fetchall()
+            for (sn,) in leftover:
+                conn.execute(text(f'DROP SCHEMA IF EXISTS "{sn}" CASCADE'))
     finally:
         bootstrap.dispose()
     yield
@@ -137,11 +153,12 @@ def engine(db_target: str) -> Iterator[Engine]:
     _ENGINES.append(eng)
     Base.metadata.create_all(eng, tables=KB_TABLES)
     # 镜像迁移 006：为 content 列建 GIN trigram 索引（Task 5 中文混合检索）
+    # 物理表名是统一化后的 kms_*（__tablename__），不是模型模块名 kb_*
     with eng.begin() as conn:
         conn.execute(
             text(
-                "CREATE INDEX IF NOT EXISTS ix_kb_segment_content_trgm "
-                "ON kb_segment USING gin (content gin_trgm_ops)"
+                "CREATE INDEX IF NOT EXISTS ix_kms_segment_content_trgm "
+                "ON kms_segment USING gin (content gin_trgm_ops)"
             )
         )
     try:

@@ -107,6 +107,7 @@ def sync_table_document(db, tenant_id: int, doc_uuid: str) -> dict:
         count = ingest_table_rows(
             db, tenant_id, doc.collection, rows, cfg["embed_field"],
             document_id=doc.uuid_code,
+            create_document=False,  # 覆盖同一文档，不新建文档行
         )
         meta = dict(doc.meta or {})
         meta[SYNC_META_KEY] = {**cfg, "last_sync_at": _now_iso()}

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -208,22 +208,10 @@ class RetrieveBody(BaseModel):
     metadata_filters: Optional[dict] = None
 
 
-@router.post("/collections/{collection}/retrieve")
-def retrieve(
-    collection: str,
-    body: RetrieveBody,
-    db: Session = Depends(get_db),
-    current_user: SysUser = Depends(get_current_user),
-):
-    """统一检索（对齐文档 §8.2 / D3/D10）：底层只调 KnowledgeBase.search。
-
-    * 原生 ``search(queries, top_k, score_threshold)`` 无 metadata_filters 参数，
-      故临时筛选在构造期以 ``metadata_filter`` 固化；
-    * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）；
-    * ``index_mode=economy`` 时绕开向量链路，走独立关键词检索（D11 / AC7）。
-    """
-    tenant_id = _tenant_id(current_user)
-
+def _retrieve_collection(
+    db: Session, tenant_id: int, collection: str, body: RetrieveBody
+) -> dict:
+    """单集合检索：economy 走关键词链路，high_quality 走向量链路。"""
     # economy 库：独立关键词检索，零 embedding（D11 / AC7）
     if _index_mode_for_collection(db, collection) == "economy":
         from app.services.kb.rag.economy_search import economy_search
@@ -264,6 +252,57 @@ def retrieve(
             for h in hits
         ],
         "index_mode": "high_quality",
+    }
+
+
+@router.post("/collections/{collection}/retrieve")
+def retrieve(
+    collection: str,
+    body: RetrieveBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """统一检索（对齐文档 §8.2 / D3/D10）：底层只调 KnowledgeBase.search。
+
+    * 原生 ``search(queries, top_k, score_threshold)`` 无 metadata_filters 参数，
+      故临时筛选在构造期以 ``metadata_filter`` 固化；
+    * ``score`` 越大越相关（D12）；父子段落由 ``metadata.parent_content`` 携带（D13）；
+    * ``index_mode=economy`` 时绕开向量链路，走独立关键词检索（D11 / AC7）。
+    """
+    return _retrieve_collection(db, _tenant_id(current_user), collection, body)
+
+
+@router.post("/knowledges/{kid}/retrieve")
+def retrieve_knowledge(
+    kid: int,
+    body: RetrieveBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """知识库检索：跨该知识库**全部集合**检索并合并取 Top-K。
+
+    表格知识库可有多个集合（每文件归属其一），单集合检索会漏掉自动新建集合
+    里的条目，故「全部文件」视角的检索测试走知识库维度。
+    """
+    tenant_id = _tenant_id(current_user)
+    _require_knowledge(db, kid)
+    from app.services.kb.segment_service import knowledge_collection_names
+
+    merged: list[dict] = []
+    modes: set[str] = set()
+    for name in knowledge_collection_names(db, tenant_id, kid):
+        try:
+            res = _retrieve_collection(db, tenant_id, name, body)
+        except Exception:  # 单个集合无索引/未就绪不影响其它集合
+            continue
+        if res.get("index_mode"):
+            modes.add(res["index_mode"])
+        merged.extend(res.get("results") or [])
+
+    merged.sort(key=lambda h: h.get("score") or 0, reverse=True)
+    return {
+        "results": merged[: body.top_k],
+        "index_mode": modes.pop() if len(modes) == 1 else (next(iter(modes), "")),
     }
 
 
@@ -471,6 +510,10 @@ def retry_document(
     except OSError as exc:
         raise HTTPException(status_code=400, detail=f"原始文件读取失败: {exc}")
 
+    # 表格导入：用原文件重导同一文档行（不新建 kms_document），分支处理
+    if meta.get("source") == "table-import":
+        return _retry_table_document(db, tenant_id, doc, meta, payload)
+
     # 清理旧切片，避免重跑后同文档出现重复分段
     PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
 
@@ -496,6 +539,57 @@ def retry_document(
             s.close()
 
     run_in_background(_run, name=f"kb-retry-{doc.uuid_code}")
+    return _serialize(doc)
+
+
+def _retry_table_document(db, tenant_id: int, doc, meta: dict, payload: bytes):
+    """表格导入文档的重试：删旧切片 → 用原文件重导同一文档行（document_id 不变）。
+
+    与文档管线重试不同，表格导入不经过 parser/chunker，直接复用 ``import_table_file``
+    （``create_document=False`` 避免新增 ``kms_document`` 行，``uuid_code`` 保持不变），
+    列定义沿用已存的 ``kms_collection.schema_config``（``embed_field`` 不传即沿用）。
+    """
+    from app.services.kb.pgvector_store import PGVectorStore
+    from app.services.kb.rag.content_service import import_table_file
+
+    # 清理旧切片，避免重导后同文档出现重复分段（uq_kms_segment 唯一约束）
+    PGVectorStore(db, tenant_id).delete_document(doc.collection, doc.uuid_code)
+    doc.status = "processing"
+    doc.error_detail = None
+    doc.segment_count = 0
+    doc.meta = {**meta, "retry_count": int(meta.get("retry_count") or 0) + 1}
+    db.commit()
+    db.refresh(doc)
+
+    def _run():
+        from app.db.database import SessionLocal
+
+        s = SessionLocal()
+        try:
+            res = import_table_file(
+                s, tenant_id, doc.collection, payload, doc.name,
+                knowledge_id=doc.knowledge_id,
+                session_factory=SessionLocal,
+                document_id=doc.uuid_code,
+                create_document=False,
+            )
+            refreshed = s.get(KbDocument, doc.id)
+            if refreshed is not None:
+                refreshed.status = "completed"
+                refreshed.error_detail = None
+                refreshed.segment_count = res["ingested"]
+                s.commit()
+        except Exception as exc:  # noqa: BLE001 - 重导失败落库可观测
+            s.rollback()
+            refreshed = s.get(KbDocument, doc.id)
+            if refreshed is not None:
+                refreshed.status = "failed"
+                refreshed.error_detail = str(exc)[:2000]
+                s.commit()
+        finally:
+            s.close()
+
+    run_in_background(_run, name=f"kb-table-retry-{doc.uuid_code}")
     return _serialize(doc)
 
 
@@ -771,6 +865,7 @@ def update_collection_settings(
 def list_document_segments(
     uuid_code: str,
     chunk_type: Optional[str] = Query(None, description="按形态过滤: text|qa|table_row|image|parent|child"),
+    q: Optional[str] = Query(None, description="对被嵌入内容做包含匹配（表格条目区的查）"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -782,9 +877,58 @@ def list_document_segments(
 
     try:
         return _list(db, _tenant_id(current_user), uuid_code,
-                     chunk_type=chunk_type, page=page, page_size=page_size)
+                     chunk_type=chunk_type, q=q, page=page, page_size=page_size)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/collections/{collection}/segments")
+def list_collection_segments_api(
+    collection: str,
+    document_id: Optional[str] = Query(None, description="收窄到某个文件；不传=该集合全部条目"),
+    chunk_type: Optional[str] = Query(None, description="按形态过滤: text|qa|table_row|image|parent|child"),
+    q: Optional[str] = Query(None, description="对被嵌入内容做包含匹配"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """集合内条目列表：表格知识库「表格条目」tab（单文件过滤用）。"""
+    from app.services.kb.segment_service import list_collection_segments
+
+    return list_collection_segments(
+        db, _tenant_id(current_user), collection,
+        document_id=document_id, chunk_type=chunk_type, q=q,
+        page=page, page_size=page_size,
+    )
+
+
+@router.get("/knowledges/{kid}/segments")
+def list_knowledge_segments_api(
+    kid: int,
+    document_id: Optional[str] = Query(None, description="收窄到某个文件；不传=该知识库全部条目"),
+    chunk_type: Optional[str] = Query(None, description="按形态过滤: text|qa|table_row|image|parent|child"),
+    q: Optional[str] = Query(None, description="对被嵌入内容做包含匹配"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """知识库条目列表（跨该知识库全部集合）：表格知识库「表格条目 → 全部文件」用。
+
+    表格知识库支持一个知识库多个集合（每文件归属其一），按单集合过滤会漏掉
+    自动新建集合里的条目，故「全部文件」视图走知识库维度聚合。
+    """
+    from app.services.kb.segment_service import list_knowledge_segments
+
+    _require_knowledge(db, kid)
+    return list_knowledge_segments(
+        db, _tenant_id(current_user), kid,
+        document_id=document_id, chunk_type=chunk_type, q=q,
+        page=page, page_size=page_size,
+    )
 
 
 @router.post("/collections/{collection}/qa-records/import", status_code=201)
@@ -972,25 +1116,112 @@ def get_qa_records(
     return list_qa_records(db, _tenant_id(current_user), collection, limit)
 
 
+def _parse_embed_fields(raw: str) -> list[str]:
+    """Form 里的「向量化字段组合」（逗号分隔）→ 字段名列表。"""
+    return [part.strip() for part in (raw or "").split(",") if part.strip()]
+
+
 @router.post("/collections/{collection}/table-records/import", status_code=201)
 def import_table_records(
     collection: str,
     file: UploadFile = File(...),
-    embed_field: str = Form(..., description="作为 embedding 的列（单选）"),
+    embed_field: str = Form("", description="兼容旧参数：单个被嵌入列"),
+    embed_fields: str = Form("", description="向量化字段组合（逗号分隔，1~N 个）；缺省取字段定义里的被嵌入字段"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_UPLOAD)),
 ):
-    """表格导入（D15）：embed_field 列被嵌入，其余列作可过滤元数据。"""
-    from app.services.kb.rag.content_service import ingest_table_rows, parse_table_bytes
+    """表格文件导入（D15）：按列定义校验 → 一行一段（向量化字段组合拼成 CSV 行）。
+
+    切分：每行一段，``content`` 即被嵌入内容 —— 由集合配置的**向量化字段组合**
+    （1~N 个字段）按逗号拼成 CSV 行；其余字段进 ``metadata`` 供过滤。
+
+    列定义（``kms_collection.schema_config``）语义：
+    * 尚未定义 → 按文件表头**自动定义**并落库（**默认全部字段**为向量化字段）；
+    * 已有定义 → 缺列/多列/取值类型不符一律 422 且**不导入任何数据**。
+    """
+    from app.services.kb.index_mode import resolve_knowledge_id
+    from app.services.kb.rag.content_service import import_table_file
+    from app.services.kb.table_schema import TableSchemaMismatch
 
     data = file.file.read()
-    rows = parse_table_bytes(data, file.filename or "table.csv")
-    count = ingest_table_rows(
-        db, _tenant_id(current_user), collection, rows, embed_field,
-        session_factory=SessionLocal,
-    )
-    return {"ingested": count, "rows": len(rows)}
+    try:
+        return import_table_file(
+            db, _tenant_id(current_user), collection, data,
+            file.filename or "table.csv",
+            knowledge_id=resolve_knowledge_id(collection),
+            embed_field=embed_field or None,
+            embed_fields=_parse_embed_fields(embed_fields) or None,
+            session_factory=SessionLocal,
+        )
+    except TableSchemaMismatch as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/knowledges/{kid}/table-records/import", status_code=201)
+def import_table_records_to_knowledge(
+    kid: int,
+    file: UploadFile = File(...),
+    collection_id: int = Form(0, description="所属集合 ID；0/不传 = 不指定，后端按文件自动新建集合"),
+    embed_fields: str = Form("", description="向量化字段组合（逗号分隔，1~N 个）"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_UPLOAD)),
+):
+    """表格文件导入（**可不指定集合**）：未指定时按文件格式自动新建该知识库下的集合。
+
+    表格知识库支持一个知识库配置多个集合。上传时：
+    * 指定了 ``collection_id`` → 按该集合的字段定义校验文件列名与类型；
+    * 未指定 → 后端自动新建集合（``kb_{kid}_{slug}``），并按文件表头生成字段定义
+      （**默认所有字段组合为向量化内容**）。
+
+    两种情况下文档都必有所属集合（``kms_document.collection_id``）。
+    """
+    from app.services.kb.rag.content_service import import_table_file
+    from app.services.kb.table_schema import TableSchemaMismatch
+
+    data = file.file.read()
+    try:
+        return import_table_file(
+            db, _tenant_id(current_user), "", data,
+            file.filename or "table.csv",
+            knowledge_id=kid,
+            embed_fields=_parse_embed_fields(embed_fields) or None,
+            session_factory=SessionLocal,
+            collection_id=collection_id or None,
+            auto_create_collection=not collection_id,
+        )
+    except TableSchemaMismatch as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.get("/knowledges/{kid}/collections")
+def list_knowledge_collections(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """列出某知识库下的全部集合（表格知识库上传时选择「所属集合」用）。"""
+    from app.services.kb.collection_service import list_knowledge_collections
+    from app.services.kb.table_schema import embedding_fields, get_schema_fields
+
+    colls = list_knowledge_collections(db, _tenant_id(current_user), kid)
+    items = []
+    for coll in colls:
+        fields = get_schema_fields(db, coll.name)
+        items.append({
+            "id": coll.id,
+            "name": coll.name,
+            "dimensions": coll.dimensions,
+            "field_count": len(fields),
+            "embed_fields": embedding_fields(fields),
+        })
+    return {"items": items}
 
 
 @router.post("/collections/{collection}/table-records/preview")
@@ -998,17 +1229,95 @@ def preview_table_records(
     collection: str,
     file: UploadFile = File(...),
     limit: int = Query(20, ge=1, le=200),
+    db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """导入前预览：解析前 N 行，校验字段识别（不落库、不嵌入）。"""
-    from app.services.kb.rag.content_service import parse_table_bytes
+    """导入前预览：解析前 N 行并按列定义校验（**不落库、不嵌入**）。
+
+    与导入同一套校验口径：列不匹配同样 422，保证「预览能过 = 导入能过」。
+    """
+    from app.services.kb.rag.content_service import parse_table
+    from app.services.kb.table_schema import TableSchemaMismatch, resolve_import_schema
 
     data = file.file.read()
     try:
-        rows = parse_table_bytes(data, file.filename or "t.csv", limit=limit)
+        columns, rows = parse_table(data, file.filename or "t.csv", limit=limit)
+        if not columns:
+            raise ValueError("表格文件没有可用表头（首行需为列名）")
+        schema = resolve_import_schema(
+            db, collection, columns, rows,
+            tenant_id=_tenant_id(current_user), persist=False,
+        )
+    except TableSchemaMismatch as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    return {"columns": sorted({k for r in rows for k in r}), "rows": rows}
+    return {
+        "columns": columns,
+        "rows": schema["rows"][:limit],
+        "embed_fields": schema["embed_fields"],
+        "embed_field": schema["embed_field"],
+        "schema": schema["fields"],
+    }
+
+
+# ── 表格列定义（kms_collection.schema_config）────────────────────────────
+
+@router.get("/collections/{collection}/schema")
+def get_collection_schema(
+    collection: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """表格列定义；未定义时 ``fields`` 为空（下次导入文件会自动按表头生成）。
+
+    ``embed_fields`` 是向量化字段组合（1~N 个，决定每段 CSV 行的列序与向量化内容）。
+    """
+    from app.services.kb.table_schema import embedding_fields, get_schema_fields
+
+    fields = get_schema_fields(db, collection)
+    embed = embedding_fields(fields)
+    return {
+        "fields": fields,
+        "columns": [f["name"] for f in fields],
+        "embed_fields": embed,
+        "embed_field": embed[0] if embed else None,
+    }
+
+
+class TableSchemaBody(BaseModel):
+    fields: list[dict] = Field(default_factory=list, description="[{name,type,enabled,embedding,filterable}]")
+
+
+@router.put("/collections/{collection}/schema")
+def update_collection_schema(
+    collection: str,
+    body: TableSchemaBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """手工维护表格列定义；**至少**一个向量化字段（可多个，与 Dify 字段定义对齐）。"""
+    from app.services.kb.table_schema import (
+        TableSchemaMismatch,
+        embedding_fields,
+        set_schema_fields,
+    )
+
+    try:
+        fields = set_schema_fields(db, collection, body.fields)
+    except TableSchemaMismatch as exc:
+        raise HTTPException(status_code=422, detail=exc.as_detail())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    embed = embedding_fields(fields)
+    return {
+        "fields": fields,
+        "columns": [f["name"] for f in fields],
+        "embed_fields": embed,
+        "embed_field": embed[0] if embed else None,
+    }
 
 
 @router.post("/collections/{collection}/assets", status_code=201)

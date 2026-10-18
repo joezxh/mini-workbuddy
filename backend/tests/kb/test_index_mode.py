@@ -4,7 +4,7 @@
 1. economy → high_quality 回填 NULL 向量并切换 index_mode；
 2. 父块（chunk_type='parent'）设计上无向量，不参与回填；
 3. 单文档失败不中断整批：失败文档保留 economy 且进报告，修复后可重试；
-4. 维度与 collection 不一致按 D19 拒绝（落为文档失败）；
+4. 维度与集合声明不一致时不再拒绝，重灌按数据表物理列维度自动补齐/截断；
 5. 降级仅置标志并保留向量 → 再次升级无需重嵌。
 """
 from __future__ import annotations
@@ -25,6 +25,7 @@ from app.services.kb.index_mode import (
     resolve_knowledge_id,
     upgrade_to_high_quality,
 )
+from app.services.kb.vector_utils import segment_vector_dimension
 
 TENANT = 100
 # 物理列为 vector(settings.GPUSTACK_EMBEDDING_DIMENSION)，假向量必须同维
@@ -123,15 +124,22 @@ def test_upgrade_keeps_economy_when_doc_fails(db: Session, env):
     assert retry["changed"] is True and retry["index_mode"] == "high_quality"
 
 
-def test_upgrade_rejects_dimension_mismatch_per_d19(db: Session, env):
+def test_upgrade_aligns_dimension_mismatch(db: Session, env):
+    """维度与集合声明不符不再按 D19 拒绝；重灌时按数据表物理列维度自动补齐/截断。"""
     coll = _coll(env)
     _add_doc(db, coll, "d1", [(0, "aaaa", "text")])
     report = upgrade_to_high_quality(
         db, TENANT, env.id, coll,
         embed_fn=lambda texts: [[0.0] * (DIM + 1) for _ in texts],
     )
-    assert report["changed"] is False
-    assert "维度" in report["failed"][0]["error"]
+    # 不再拒绝：所有切片成功重嵌
+    assert report["changed"] is True
+    assert report["failed"] == []
+    # 落库向量已对齐到物理列维度（过长截断 / 过短补零）
+    phys = segment_vector_dimension(db)
+    rows = db.execute(select(KbSegment)).scalars().all()
+    assert len(rows) > 0
+    assert all(len(r.embedding) == phys for r in rows)
 
 
 def test_downgrade_keeps_vectors_and_upgrade_is_instant(db: Session, env):

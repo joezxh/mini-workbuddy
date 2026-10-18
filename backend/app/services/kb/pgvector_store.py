@@ -27,8 +27,14 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_segment import KbSegment
+from app.services.kb.vector_utils import (
+    fit_vector_dimension,
+    get_segment_vector_dimension,
+    resolve_engine,
+)
 
 
 def _class_uris_any(class_uris):
@@ -80,6 +86,10 @@ class PGVectorStore:
             raise ValueError("PGVectorStore 要求 tenant_id，禁止无租户操作")
         self.db = db
         self.tenant_id = tenant_id
+        # 物理列维度（kms_segment.embedding）作为写入/查询归一化的唯一目标维度；
+        # 读不到时回落全局配置维度（与 startup_migrations 同源），保证零迁移风险。
+        self.physical_dim = get_segment_vector_dimension(resolve_engine(db))
+        self.vector_dim = self.physical_dim or settings.EMBEDDING_DIMENSION
 
     # ------------------------------------------------------------------ #
     # collection 管理
@@ -153,7 +163,12 @@ class PGVectorStore:
                     "document_id": document_id,
                     "chunk_index": s.chunk_index,
                     "content": s.content,
-                    "embedding": s.embedding,
+                    # 维度对齐：按物理列维度补齐/截断；None 保持 NULL（economy/无向量）
+                    "embedding": (
+                        fit_vector_dimension(s.embedding, self.vector_dim)
+                        if s.embedding is not None
+                        else None
+                    ),
                     "token_count": s.token_count,
                     "metadata_": s.metadata,
                     "class_uris": s.class_uris,
@@ -238,6 +253,9 @@ class PGVectorStore:
         if not query_embedding:
             return []
 
+        # 维度对齐：查询向量先按物理列维度补齐/截断，避免与存储向量维度不符报错
+        query_embedding = fit_vector_dimension(query_embedding, self.vector_dim)
+
         dist = KbSegment.embedding.cosine_distance(query_embedding)
         stmt = (
             select(
@@ -315,6 +333,8 @@ class PGVectorStore:
         # 向量候选（按余弦距离升序取前 v_top）
         vector_hits: dict = {}
         if query_embedding:
+            # 维度对齐：查询向量先按物理列维度补齐/截断
+            query_embedding = fit_vector_dimension(query_embedding, self.vector_dim)
             dist = KbSegment.embedding.cosine_distance(query_embedding)
             v_stmt = (
                 select(

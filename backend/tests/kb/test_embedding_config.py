@@ -14,6 +14,8 @@ from app.services.kb.embedding_config import (
     PROTOCOL_OPENAI,
     describe_embedding_config,
     resolve_embedding_config,
+    resolve_embedding_config_with_fallback,
+    EmbeddingConfig,
 )
 
 
@@ -82,3 +84,37 @@ def test_embedding_models_endpoint():
         body = r.json()
         assert body["current"]["provider"] in ("gpustack", "nvidia", "dashscope")
         assert set(body["supported"]) == {"gpustack", "nvidia", "dashscope"}
+
+
+def test_fallback_prefers_db_default_even_if_probe_fails(monkeypatch):
+    """放宽探测：模型管理默认配置存在且完整时，即便探测不通也优先采用。
+
+    验证 lm-studio 等默认向量化配置不会被静默回落到环境变量配置。
+    """
+    from app.services.kb import embedding_config as ec
+
+    fake_cfg = EmbeddingConfig(
+        provider="model_mgmt:lm-studio",
+        protocol=PROTOCOL_OPENAI,
+        base_url="http://127.0.0.1:1234/v1",
+        api_key="",
+        model="text-embedding-embeddinggemma-2",
+        dimension=768,
+    )
+    monkeypatch.setattr(ec, "resolve_default_embedding_from_db", lambda session: fake_cfg)
+    monkeypatch.setattr(ec, "probe_embedding_config", lambda cfg: False)
+
+    result = resolve_embedding_config_with_fallback(None)
+    assert result.provider == "model_mgmt:lm-studio"
+    assert result.dimension == 768
+
+
+def test_fallback_uses_env_when_no_db_default(monkeypatch):
+    """模型管理未配置默认向量化模型时，回落环境变量配置。"""
+    from app.services.kb import embedding_config as ec
+
+    monkeypatch.setattr(ec, "resolve_default_embedding_from_db", lambda session: None)
+    monkeypatch.setattr(settings, "EMBEDDING_PROVIDER", "gpustack")
+
+    result = resolve_embedding_config_with_fallback(None)
+    assert result.provider == "gpustack"

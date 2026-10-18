@@ -27,7 +27,11 @@ from sqlalchemy import delete as sa_delete, select, text
 
 from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_segment import KbSegment
-from app.services.kb.vector_utils import fit_vector_dimension
+from app.services.kb.vector_utils import (
+    fit_vector_dimension,
+    get_segment_vector_dimension,
+    resolve_engine,
+)
 
 # metadata → 冗余列的投影（D14）
 _PROJECTIONS = ("chunk_type", "answer", "keywords")
@@ -51,6 +55,12 @@ class PgVectorStore(VectorStoreBase):
         self.index_mode = index_mode
         self.hybrid = hybrid
         self._session = None
+        from app.config import settings
+
+        # 物理列维度作为写入/查询归一化目标（覆盖集合配置维度，避免表定义维度
+        # 与模型输出维度分歧时的写入/检索报错）；读不到时回落全局配置维度。
+        self.physical_dim = get_segment_vector_dimension(resolve_engine(session_factory))
+        self.vector_dim = self.physical_dim or settings.EMBEDDING_DIMENSION
 
     # ── 生命周期（原生契约）─────────────────────────────────────────────
     async def __aenter__(self) -> "PgVectorStore":
@@ -134,7 +144,11 @@ class PgVectorStore(VectorStoreBase):
                 document_id=rec.document_id,
                 chunk_index=rec.chunk.chunk_index,
                 content=content,
-                embedding=fit_vector_dimension(raw_vector, self.dimensions),
+                embedding=(
+                    fit_vector_dimension(raw_vector, self.vector_dim)
+                    if raw_vector is not None
+                    else None
+                ),
                 # 列名 metadata 的 ORM 属性名是 metadata_（避免与 declarative MetaData 冲突）
                 metadata_=meta,
             )
@@ -164,6 +178,10 @@ class PgVectorStore(VectorStoreBase):
         """向量（+可选关键词 RRF）检索；score 统一越大越相关（D12）。"""
         if self.index_mode == "economy":
             return []  # economy 不经 KnowledgeBase（D11），向量分支关闭
+        if query_vector is None:
+            return []
+        # 维度对齐：查询向量先按物理列维度补齐/截断，避免与存储向量维度不符报错
+        query_vector = fit_vector_dimension(query_vector, self.vector_dim)
         params: dict[str, Any] = {
             "c": collection, "t": self.tenant_id, "k": top_k, "v": str(query_vector),
         }
