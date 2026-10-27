@@ -16,99 +16,54 @@
         <span class="extw__hint">{{ footHint }}</span>
         <a-space>
           <a-button @click="close">{{ t('common.cancel') }}</a-button>
-          <a-button v-if="step > 0 && step < 4" @click="prev">{{ t('kbExt.prev') }}</a-button>
+          <a-button v-if="step === 1" @click="prev">{{ t('kbExt.prev') }}</a-button>
           <a-button
-            v-if="step < 3"
+            v-if="step === 0"
             type="primary"
             :disabled="!canNext"
             @click="next"
           >{{ t('kbExt.next') }}</a-button>
           <a-button
-            v-if="step === 3"
+            v-if="step === 1"
             type="primary"
             :loading="importing"
             :disabled="!selected.length"
             @click="doImport"
           >{{ t('kbExt.startImport') }}</a-button>
-          <a-button v-if="step === 4" type="primary" @click="close">{{ t('kbExt.done') }}</a-button>
+          <a-button v-if="step === 2" type="primary" @click="close">{{ t('kbExt.done') }}</a-button>
         </a-space>
       </div>
     </template>
 
     <a-steps :current="step" size="small" class="extw__steps">
-      <a-step :title="t('kbExt.step1')" :disabled="false" @click="go(0)" />
-      <a-step :title="t('kbExt.step2')" :disabled="!sourceType" @click="go(1)" />
-      <a-step :title="t('kbExt.step3')" :disabled="!tested" @click="go(2)" />
-      <a-step :title="t('kbExt.step4')" :disabled="!selected.length" @click="go(3)" />
-      <a-step :title="t('kbExt.step5')" :disabled="step < 4" />
+      <a-step :title="t('kbExt.step1')" @click="go(0)" />
+      <a-step :title="t('kbExt.step2')" :disabled="!selected.length" @click="go(1)" />
+      <a-step :title="t('kbExt.step3')" :disabled="step < 2" />
     </a-steps>
 
-    <!-- 步骤 1：选择平台 -->
+    <!-- 步骤 1：选择文档（平台/凭据在知识库新建·编辑时已固化，服务端按已保存凭据浏览） -->
     <div v-if="step === 0" class="extw__pane">
-      <div class="extw__sec-title">{{ t('kbExt.pickPlatform') }}</div>
-      <div class="extw__desc">{{ t('kbExt.pickPlatformDesc') }}</div>
-      <a-spin v-if="providersLoading" />
-      <div v-else class="extw__grid">
-        <div
-          v-for="p in providers"
-          :key="p.source_type"
-          class="extw__card"
-          :class="{ 'extw__card--on': sourceType === p.source_type }"
-          @click="pickProvider(p.source_type)"
-        >
-          <div class="extw__card-logo" :style="{ background: platformColor(p.source_type) }">
-            {{ p.name.slice(0, 1) }}
-          </div>
-          <div class="extw__card-name">{{ p.name }}</div>
-          <div class="extw__card-desc">{{ p.desc }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 步骤 2：配置凭据 + 测试连通 -->
-    <div v-else-if="step === 1" class="extw__pane">
-      <div class="extw__sec-title">{{ t('kbExt.credentials') }}</div>
-      <div class="extw__desc">{{ t('kbExt.credentialsDesc') }}</div>
-      <a-form layout="vertical">
-        <a-form-item
-          v-for="f in currentFields"
-          :key="f.name"
-          :label="f.label"
-          :required="f.required"
-        >
-          <a-input-password
-            v-if="f.secret"
-            v-model:value="credentials[f.name]"
-            :placeholder="f.placeholder"
-          />
-          <a-input v-else v-model:value="credentials[f.name]" :placeholder="f.placeholder" />
-          <div v-if="f.hint" class="extw__hint-block">{{ f.hint }}</div>
-        </a-form-item>
-      </a-form>
-      <a-space>
-        <a-button type="primary" :loading="testing" @click="doTest">
-          {{ t('kbExt.testConnection') }}
-        </a-button>
-        <span class="extw__tip">{{ t('kbExt.tokenTip') }}</span>
-      </a-space>
-      <a-alert
-        v-if="testResult"
-        class="extw__mt"
-        :type="testResult.ok ? 'success' : 'error'"
-        :message="testResult.ok ? t('kbExt.testOk') : t('kbExt.testFail')"
-        :description="testResult.ok ? testResult.identity : testResult.message"
-        show-icon
-      />
-    </div>
-
-    <!-- 步骤 3：选择文档 -->
-    <div v-else-if="step === 2" class="extw__pane">
       <div class="extw__sec-title">{{ t('kbExt.pickDocs') }}</div>
       <div class="extw__desc">{{ t('kbExt.pickDocsDesc') }}</div>
-      <div class="extw__browse">
+      <a-alert
+        v-if="configError"
+        class="extw__mt"
+        type="warning"
+        :message="configError"
+        show-icon
+      />
+      <a-alert
+        v-else-if="treeError"
+        class="extw__mt"
+        type="error"
+        :message="t('kbExt.loadNodesFailed')"
+        :description="treeError"
+        show-icon
+      />
+      <div v-else class="extw__browse">
         <div class="extw__tree-box">
           <div class="extw__tree-head">
-            <span class="extw__tree-label">{{ t('kbExt.step3') }}</span>
+            <span class="extw__tree-label">{{ t('kbExt.step1') }}</span>
             <a-checkbox
               :checked="allSelected"
               :indeterminate="someSelected"
@@ -116,15 +71,17 @@
             >{{ t('kbExt.selectAll') }}</a-checkbox>
           </div>
           <a-spin v-if="treeLoading" />
-          <a-empty v-else-if="!treeData.length" :description="t('common.noData')" />
+          <a-empty v-else-if="!treeData.length" :description="t('kbExt.nodesEmpty')" />
           <a-tree
             v-else
-            v-model:checkedKeys="checkedKeys"
+            :checked-keys="checkedKeys"
+            v-model:expandedKeys="expandedKeys"
             :tree-data="treeData"
             :load-data="onLoadData"
             checkable
             check-strictly
             :selectable="false"
+            @check="onTreeCheck"
           />
         </div>
         <div class="extw__sel-box">
@@ -143,8 +100,8 @@
       </div>
     </div>
 
-    <!-- 步骤 4：切片方案 -->
-    <div v-else-if="step === 3" class="extw__pane">
+    <!-- 步骤 2：切片方案 -->
+    <div v-else-if="step === 1" class="extw__pane">
       <div class="extw__sec-title">{{ t('kbExt.chunker') }}</div>
       <div class="extw__desc">{{ t('kbExt.chunkerDesc') }}</div>
       <a-form-item :label="t('kbMgmt.chunkerType')">
@@ -171,7 +128,7 @@
       <a-alert class="extw__mt" type="info" :message="t('kbMgmt.chunkerHint')" show-icon />
     </div>
 
-    <!-- 步骤 5：导入结果 -->
+    <!-- 步骤 3：导入结果 -->
     <div v-else class="extw__pane">
       <a-result
         :status="summary && summary.failed ? 'warning' : 'success'"
@@ -217,10 +174,10 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
+  getExternalConfig,
   importExternalDocuments,
   listExternalNodes,
   listExternalProviders,
-  testExternalSource,
   type ExternalNode,
   type ExternalProvider,
   type ImportSummary,
@@ -240,14 +197,14 @@ const { t } = useI18n()
 const step = ref(0)
 const providers = ref<ExternalProvider[]>([])
 const providersLoading = ref(false)
+/** 平台由知识库自身绑定（新建/编辑时已固化），不再在向导内选择 */
 const sourceType = ref<string>('')
-const credentials = ref<Record<string, any>>({})
-const testing = ref(false)
-const tested = ref(false)
-const testResult = ref<{ ok: boolean; message: string; identity: string } | null>(null)
+const configError = ref('')
 
 const treeData = ref<any[]>([])
 const treeLoading = ref(false)
+const treeError = ref('')
+const expandedKeys = ref<string[]>([])
 const checkedKeys = ref<string[]>([])
 const nodeMap = new Map<string, ExternalNode>()
 
@@ -259,27 +216,9 @@ const chunkerParams = ref<Record<string, any>>({})
 const importing = ref(false)
 const summary = ref<ImportSummary | null>(null)
 
-const currentFields = computed(() => {
-  const p = providers.value.find((x) => x.source_type === sourceType.value)
-  return p?.credential_fields ?? []
-})
-
 const currentProviderName = computed(
   () => providers.value.find((p) => p.source_type === sourceType.value)?.name || '',
 )
-
-/** 平台品牌色（与预览一致：飞书蓝 / 钉钉青 / 语雀紫 / 企微绿 / Notion 灰 / web 蓝） */
-const PLATFORM_COLORS: Record<string, string> = {
-  feishu: '#1a5fd6',
-  dingtalk: '#0b7ac4',
-  yuque: '#6b3fd4',
-  wecom: '#12874a',
-  notion: '#333333',
-  web: '#2f54eb',
-}
-function platformColor(sourceType: string) {
-  return PLATFORM_COLORS[sourceType] || 'var(--accent)'
-}
 
 /** 递归收集当前已加载树中的文档节点 key（用于「全选本层」） */
 function collectDocKeys(nodes: any[], out: string[] = []): string[] {
@@ -305,6 +244,15 @@ function selectAllLoaded(checked: boolean) {
     : checkedKeys.value.filter((k) => !keys.has(k))
 }
 
+/** 勾选回调归一化。
+ *
+ *  ``check-strictly`` 下 vc-tree 给的不是 key 数组，而是 ``{ checked, halfChecked }``
+ *  对象；若用 ``v-model:checkedKeys`` 直接接收，``checkedKeys`` 会变成对象，
+ *  下游的 ``.map()/.includes()`` 立即抛 TypeError。故统一收敛为 key 数组。 */
+function onTreeCheck(payload: any) {
+  checkedKeys.value = Array.isArray(payload) ? payload : payload?.checked || []
+}
+
 const selected = computed<ExternalNode[]>(() =>
   checkedKeys.value
     .map((k) => nodeMap.get(k))
@@ -312,15 +260,12 @@ const selected = computed<ExternalNode[]>(() =>
 )
 
 const canNext = computed(() => {
-  if (step.value === 0) return !!sourceType.value
-  if (step.value === 1) return tested.value
-  if (step.value === 2) return selected.value.length > 0
+  if (step.value === 0) return selected.value.length > 0
   return true
 })
 
 const footHint = computed(() => {
-  if (step.value === 1 && !tested.value) return t('kbExt.needTest')
-  if (step.value === 2 && !selected.value.length) return t('kbExt.needSelect')
+  if (step.value === 0 && !selected.value.length) return t('kbExt.needSelect')
   return ''
 })
 
@@ -381,40 +326,6 @@ function onChunkerChange() {
   chunkerParams.value = next
 }
 
-function pickProvider(st: string) {
-  if (sourceType.value === st) return
-  sourceType.value = st
-  credentials.value = {}
-  tested.value = false
-  testResult.value = null
-  treeData.value = []
-  checkedKeys.value = []
-  nodeMap.clear()
-}
-
-async function doTest() {
-  const missing = currentFields.value.filter((f) => f.required && !credentials.value[f.name])
-  if (missing.length) {
-    message.warning(t('kbExt.missingCred', { name: missing[0].label }))
-    return
-  }
-  testing.value = true
-  try {
-    const res: any = await testExternalSource(sourceType.value, credentials.value)
-    testResult.value = res
-    tested.value = !!res?.ok
-  } catch (e: any) {
-    tested.value = false
-    testResult.value = {
-      ok: false,
-      message: e?.response?.data?.detail || t('kbExt.testFail'),
-      identity: '',
-    }
-  } finally {
-    testing.value = false
-  }
-}
-
 function toTreeNode(n: ExternalNode): any {
   nodeMap.set(n.doc_id, n)
   return {
@@ -426,27 +337,49 @@ function toTreeNode(n: ExternalNode): any {
   }
 }
 
-async function loadNodes(parentId?: string | null) {
-  treeLoading.value = true
+/** 凭据不在前端持有：留空由服务端按 (tenant, knowledge_id, source_type) 读取已加密凭据。
+ *
+ *  ``silent=true`` 表示这是懒加载的下一层：只用节点自身的 switcher 转圈。
+ *  若此时置 ``treeLoading``，模板会整块切到全局 spinner，Tree 被卸载重建、
+ *  展开状态丢失——表现为「点开目录后下面什么都没有」。 */
+async function loadNodes(parentId?: string | null, silent = false) {
+  if (!silent) treeLoading.value = true
   try {
     const res: any = await listExternalNodes(
       sourceType.value,
-      credentials.value,
+      {},
       parentId,
       props.knowledgeId,
     )
     return (res?.items || res || []).map(toTreeNode)
   } catch (e: any) {
-    message.error(e?.response?.data?.detail || t('kbExt.loadNodesFailed'))
+    // 目录拉取失败要在面板里说清楚（平台权限/凭据不足等），不能只留一个空列表；
+    // 子层失败时保留已加载的树，只做提示，避免整棵树被错误面板顶掉
+    const detail = e?.response?.data?.detail || t('kbExt.loadNodesFailed')
+    if (silent) message.error(detail)
+    else treeError.value = detail
     return []
   } finally {
-    treeLoading.value = false
+    if (!silent) treeLoading.value = false
   }
 }
 
+/** 懒加载子层级。
+ *
+ *  ant-design-vue 4 的 ``load-data`` 回调参数是包装节点，真正的数据在 ``dataRef`` 上；
+ *  直接给它塞 ``children`` 不会进入 ``treeData``，前端就永远看不到子节点。 */
 async function onLoadData(treeNode: any) {
-  const children = await loadNodes(treeNode.key)
-  treeNode.children = children
+  const dataNode: any = treeNode?.dataRef || treeNode
+  if (!dataNode) return
+  if (dataNode.children?.length) return
+  const children = await loadNodes(dataNode.key, true)
+  if (children.length) {
+    dataNode.children = children
+  } else {
+    // 空目录置为叶子，避免反复展开却始终加载不出内容
+    dataNode.children = []
+    dataNode.isLeaf = true
+  }
   treeData.value = [...treeData.value]
 }
 
@@ -466,13 +399,11 @@ async function doImport() {
       knowledge_id: props.knowledgeId,
       source_type: sourceType.value,
       doc_refs: selected.value.map((s) => ({ doc_id: s.doc_id, title: s.title })),
-      credentials: Object.keys(credentials.value).length ? credentials.value : null,
       chunker_type: chunkerType.value,
       chunker_params: chunkerParams.value,
-      save_credentials: true,
     })
     summary.value = res
-    step.value = 4
+    step.value = 2
     emit('imported')
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('kbExt.importFailed'))
@@ -482,41 +413,65 @@ async function doImport() {
 }
 
 function go(n: number) {
-  if (n > 1 && !tested.value) return
-  if (n > 2 && !selected.value.length) return
+  if (n === 1 && !selected.value.length) return
+  if (n === 2 && step.value < 2) return
   step.value = n
 }
 function next() {
-  if (step.value === 2) {
-    step.value = 3
+  if (step.value === 0) {
+    step.value = 1
     if (!chunkers.value.length) loadChunkers()
-    return
   }
-  step.value += 1
 }
 function prev() {
-  step.value -= 1
+  if (step.value === 1) step.value = 0
 }
 function close() {
   emit('update:open', false)
 }
 
+/** 解析平台：优先用调用方预置值，否则回读知识库的外部配置 */
+async function resolveSourceType() {
+  if (props.presetSourceType) {
+    sourceType.value = props.presetSourceType
+    return
+  }
+  try {
+    const cfg: any = await getExternalConfig(props.knowledgeId)
+    sourceType.value = cfg?.external_type || ''
+  } catch {
+    sourceType.value = ''
+  }
+}
+
+function resetState() {
+  step.value = 0
+  summary.value = null
+  configError.value = ''
+  treeError.value = ''
+  treeData.value = []
+  expandedKeys.value = []
+  checkedKeys.value = []
+  nodeMap.clear()
+}
+
+/** 每次打开都重新初始化：组件可能挂载即处于 open 状态（知识库创建后立即打开），
+ *  非 immediate 的 watch 不会触发回调，故此处必须 immediate。 */
 watch(
   () => props.open,
   async (open) => {
     if (!open) return
-    step.value = 0
-    summary.value = null
+    resetState()
     if (!providers.value.length) await loadProviders()
-    // 从「重新选择文档」进入：预填平台并直接进入文档浏览步骤
-    if (props.presetSourceType) {
-      sourceType.value = props.presetSourceType
-      tested.value = true
-      step.value = 2
-      await ensureTree()
-      if (props.presetNodeIds?.length) checkedKeys.value = [...props.presetNodeIds]
+    await resolveSourceType()
+    if (!sourceType.value) {
+      configError.value = t('kbExt.configureCredsFirst')
+      return
     }
+    await ensureTree()
+    if (props.presetNodeIds?.length) checkedKeys.value = [...props.presetNodeIds]
   },
+  { immediate: true },
 )
 </script>
 
@@ -560,48 +515,6 @@ watch(
   color: var(--fg-secondary);
   margin-bottom: 12px;
 }
-.extw__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.extw__card {
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-.extw__card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
-  transform: translateY(-1px);
-}
-.extw__card--on {
-  border-color: var(--accent);
-  background: var(--bg-subtle, #e6f0ff);
-}
-.extw__card-logo {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.extw__card-name {
-  font-size: 13px;
-  font-weight: 600;
-}
-.extw__card-desc {
-  font-size: 11.5px;
-  color: var(--fg-secondary);
-  margin-top: 2px;
-}
 .extw__browse {
   display: grid;
   grid-template-columns: 1fr 240px;
@@ -616,7 +529,8 @@ watch(
   overflow: auto;
 }
 .extw__sel-box {
-  background: var(--bg-subtle, #f5f7fa);
+  /* 与左侧树面板保持对称：透明底 + 边框，卡片色由皮肤令牌提供，避免硬编码浅色底 */
+  background: transparent;
 }
 .extw__sel-head {
   display: flex;
@@ -635,13 +549,15 @@ watch(
   padding: 40px 8px;
   text-align: center;
   font-size: 12px;
-  color: var(--fg-muted, #8f959e);
+  color: var(--fg-muted);
 }
 .extw__sel-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #fff;
+  /* 用皮肤令牌而非 #fff：深色皮肤下 --fg 是近白色，白底会变成“白底白字” */
+  background: var(--bg-subtle);
+  color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 7px;
@@ -655,11 +571,11 @@ watch(
   white-space: nowrap;
 }
 .extw__sel-rm {
-  color: var(--fg-muted, #8f959e);
+  color: var(--fg-muted);
   cursor: pointer;
 }
 .extw__sel-rm:hover {
-  color: var(--error, #ff4d4f);
+  color: var(--err);
 }
 .extw__param {
   display: flex;
@@ -672,15 +588,6 @@ watch(
   font-size: 12px;
   color: var(--fg-secondary);
 }
-.extw__hint-block {
-  font-size: 11.5px;
-  color: var(--fg-muted, #8f959e);
-  margin-top: 4px;
-}
-.extw__tip {
-  font-size: 11.5px;
-  color: var(--fg-muted, #8f959e);
-}
 .extw__mt {
   margin-top: 12px;
 }
@@ -692,6 +599,6 @@ watch(
 }
 .extw__hint {
   font-size: 11.5px;
-  color: var(--fg-muted, #8f959e);
+  color: var(--fg-muted);
 }
 </style>

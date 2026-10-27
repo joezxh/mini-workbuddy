@@ -34,6 +34,7 @@ from app.connectors.doc_sources.base import (
     ProviderMeta,
     register_doc_source,
 )
+from app.connectors.doc_sources.binary import bytes_to_markdown, is_supported
 
 TOKEN_HOST = "https://oapi.dingtalk.com"
 API_HOST = "https://api.dingtalk.com"
@@ -41,6 +42,21 @@ TOKEN_PATH = "/gettoken"
 WORKSPACES_PATH = "/v1.0/doc/workspaces"
 NODES_QUERY_PATH = "/v1.0/doc/nodes/query"
 NODE_CONTENT_PATH = "/v1.0/doc/nodes/{node_id}/content"
+# 钉盘上传文件（docx / pptx / xlsx / pdf）的下载签名 URL；需 Storage.File.Read 权限。
+# 该端点随版本变动较快，若线上报 404 只需按最新官方文档校正常量。
+DENTRY_DOWNLOAD_PATH = "/v1.0/storage/spaces/{space_id}/dentries/{dentry_id}/downloadInfos"
+
+# 上传型文件标识前缀（与在线文档 nodeId 区分）
+FILE_PREFIX = "file:"
+
+
+def _as_bool(value: Any, *, default: bool = False) -> bool:
+    """凭据里的开关字段可能是布尔 / 字符串，统一解析（未填用默认）。"""
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("true", "1", "yes", "on")
 
 
 class DingtalkDocSource(BaseDocSource):
@@ -48,6 +64,8 @@ class DingtalkDocSource(BaseDocSource):
     # 新版文档 OpenAPI 要求令牌走专用请求头（无 Bearer 前缀）
     token_in = "header_raw"
     token_header_name = "x-acs-dingtalk-access-token"
+    # /gettoken 等旧版端点用 errcode/errmsg 表达业务成败（HTTP 仍为 200）
+    error_code_field = "errcode"
 
     async def _fetch_token(self) -> Optional[str]:
         app_key = self.credentials.get("app_key") or ""
@@ -67,6 +85,25 @@ class DingtalkDocSource(BaseDocSource):
     def _operator_id(self) -> str:
         """操作人 unionId：doc 系列接口的必传参数，来自凭据表单。"""
         return (self.credentials.get("operator_id") or "").strip()
+
+    # ── 可选能力开关（对齐 WeKnora 文档 §3.5 的 settings）────────
+    def _include_uploaded_files(self) -> bool:
+        """是否导入钉盘上传的附件（docx / pptx / xlsx / pdf）。
+
+        默认关闭：附件下载会产生额外存储与 embedding 成本，且需要额外申请
+        ``Storage.File.Read`` 权限。
+        """
+        return _as_bool(self.credentials.get("include_uploaded_files"), default=False)
+
+    def _preserve_folder_structure(self) -> bool:
+        """是否把目录结构编码进文件名（``<工作区名>/<子目录>/…/<标题>``）。
+
+        默认关闭，保证存量数据源升级后导入结果逐字节不变。
+        """
+        return _as_bool(self.credentials.get("preserve_folder_structure"), default=False)
+
+    def _space_name(self) -> str:
+        return (self.credentials.get("space_name") or "").strip()
 
     def _op_params(self, base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """组装查询参数并附带 operatorId；doc 接口缺 operatorId 会报 400。"""
@@ -89,7 +126,7 @@ class DingtalkDocSource(BaseDocSource):
                         message="请填写操作人 UnionId：钉钉目录树接口必须携带 operatorId，"
                                 "可在钉钉管理后台或「查询用户详情」接口获取成员 unionId",
                     )
-                refs = await self._list_nodes(space_id, None)
+                refs = await self._list_nodes(space_id, None, "")
                 return DocConnResult(
                     ok=True,
                     message="连通成功：凭据有效（知识库直连模式）",
@@ -128,10 +165,11 @@ class DingtalkDocSource(BaseDocSource):
                 space_id = (self.credentials.get("space_id") or "").strip()
                 if space_id:
                     # 直连模式：顶层直接展开指定知识库的根目录
-                    return await self._list_nodes(space_id, None)
+                    root = self._space_name() or space_id if self._preserve_folder_structure() else ""
+                    return await self._list_nodes(space_id, None, root)
                 return await self._list_workspaces()
-            workspace_id, node_id = self._split_parent(parent_id)
-            return await self._list_nodes(workspace_id, node_id)
+            workspace_id, node_id, parent_path = self._split_parent(parent_id)
+            return await self._list_nodes(workspace_id, node_id, parent_path)
         finally:
             await self.aclose()
 
@@ -152,7 +190,7 @@ class DingtalkDocSource(BaseDocSource):
         ]
 
     async def _list_nodes(
-        self, workspace_id: str, node_id: Optional[str]
+        self, workspace_id: str, node_id: Optional[str], parent_path: str = ""
     ) -> List[ExternalDocRef]:
         body: Dict[str, Any] = {"workspaceId": workspace_id, "maxResults": 50}
         if node_id:
@@ -163,6 +201,7 @@ class DingtalkDocSource(BaseDocSource):
         )
         payload = (data or {}).get("data") or data or {}
         items = payload.get("nodes") or payload.get("list") or []
+        preserve = self._preserve_folder_structure()
         refs: List[ExternalDocRef] = []
         for n in items:
             nid = n.get("nodeId") or n.get("id")
@@ -170,19 +209,48 @@ class DingtalkDocSource(BaseDocSource):
                 continue
             node_type = n.get("nodeType") or ""
             has_child = bool(n.get("hasChild"))
+            name = n.get("name") or n.get("title") or "未命名"
             if has_child or node_type == "FOLDER":
-                kind = "folder"
-                doc_id = f"{workspace_id}::{nid}"
-            elif node_type in ("DOC", "DOCX", "FILE", ""):
-                kind = "doc"
-                doc_id = str(nid)
-            else:
+                # 开启目录结构保留时把路径编进 doc_id：下钻请求是独立实例，
+                # 进程内缓存会丢失，只能随 ID 传递
+                child_path = f"{parent_path}/{name}" if preserve and parent_path else (
+                    name if preserve else ""
+                )
+                refs.append(
+                    ExternalDocRef(
+                        doc_id=f"{workspace_id}::{nid}" + (f"::{child_path}" if preserve else ""),
+                        title=name,
+                        node_type="folder",
+                        parent_id=node_id or workspace_id,
+                        updated_at=n.get("updateTime") or n.get("gmtModified"),
+                    )
+                )
+                continue
+            if node_type == "SHEET":
+                # 钉钉表格无公开正文导出接口，跳过
+                continue
+            if node_type == "FILE":
+                # 钉盘上传的附件：默认不导入（需 Storage.File.Read + 下载成本）
+                if not self._include_uploaded_files():
+                    continue
+                refs.append(
+                    ExternalDocRef(
+                        # 文件名随 ID 传递：下载签名接口只认 dentryId，拿不到可读名称
+                        doc_id=f"{FILE_PREFIX}{workspace_id}::{nid}::{name}",
+                        title=name,
+                        node_type="doc",
+                        parent_id=node_id or workspace_id,
+                        updated_at=n.get("updateTime") or n.get("gmtModified"),
+                    )
+                )
+                continue
+            if node_type not in ("DOC", "DOCX", ""):
                 continue
             refs.append(
                 ExternalDocRef(
-                    doc_id=doc_id,
-                    title=n.get("name") or n.get("title") or "未命名",
-                    node_type=kind,
+                    doc_id=str(nid),
+                    title=f"{parent_path}/{name}" if preserve and parent_path else name,
+                    node_type="doc",
                     parent_id=node_id or workspace_id,
                     updated_at=n.get("updateTime") or n.get("gmtModified"),
                 )
@@ -191,6 +259,8 @@ class DingtalkDocSource(BaseDocSource):
 
     async def fetch_doc(self, doc_id: str) -> FetchDocResult:
         try:
+            if doc_id.startswith(FILE_PREFIX):
+                return await self._fetch_uploaded(doc_id[len(FILE_PREFIX):])
             data = await self._request_json(
                 "GET", f"{API_HOST}{NODE_CONTENT_PATH}".format(node_id=doc_id),
                 params=self._op_params()
@@ -213,12 +283,52 @@ class DingtalkDocSource(BaseDocSource):
         finally:
             await self.aclose()
 
+    async def _fetch_uploaded(self, ref: str) -> FetchDocResult:
+        """钉盘上传附件：申请签名下载 URL → 下载字节流 → 转 Markdown。"""
+        parts = (ref or "").split("::", 2)
+        workspace_id = parts[0] if parts else ""
+        dentry_id = parts[1] if len(parts) > 1 else ref
+        # 名称可能含 "::"，故第三段整体取用，缺失时用 dentryId 兜底
+        name = parts[2].strip() if len(parts) > 2 and parts[2].strip() else dentry_id
+        data = await self._request_json(
+            "GET",
+            f"{API_HOST}{DENTRY_DOWNLOAD_PATH}".format(
+                space_id=workspace_id, dentry_id=dentry_id,
+            ),
+            params=self._op_params(),
+        )
+        payload = (data or {}).get("data") or data or {}
+        url = (payload.get("downloadUrl") or payload.get("url")
+               or (payload.get("downloadInfo") or {}).get("resourceUrl") or "")
+        if not url:
+            raise DocSourceError(
+                f"未能获取附件下载链接（dentry={dentry_id}）：请确认已开通 "
+                "Storage.File.Read 权限"
+            )
+        resp = await self._request("GET", url, with_token=False)
+        if resp.status_code >= 400:
+            raise DocSourceError(self._http_error_message(resp))
+        # 部分响应会在 header 里回显文件名；拿不到就用 dentryId 兜底
+        hinted = resp.headers.get("Content-Disposition") or ""
+        if "filename=" in hinted:
+            name = hinted.split("filename=", 1)[1].strip().strip('"')
+        if not is_supported(name):
+            raise DocSourceError(
+                f"附件 {name} 不是可转换的文档格式（仅支持 PDF / Word / Excel / PPT / 文本）"
+            )
+        return FetchDocResult(
+            title=name, markdown=bytes_to_markdown(name, resp.content), updated_at=None,
+        )
+
     @staticmethod
     def _split_parent(parent_id: str) -> tuple:
-        if "::" in parent_id:
-            workspace_id, node_id = parent_id.split("::", 1)
-            return workspace_id, node_id
-        return parent_id, None
+        """还原 ``workspace::node`` 或带目录路径的 ``workspace::node::path``。"""
+        parts = (parent_id or "").split("::")
+        if len(parts) >= 3:
+            return parts[0], parts[1], parts[2]
+        if len(parts) == 2:
+            return parts[0], parts[1], ""
+        return parent_id, None, ""
 
 
 register_doc_source(
@@ -246,6 +356,15 @@ register_doc_source(
                       placeholder="对目标知识库至少有「仅可查看」权限的成员 unionId",
                       hint="钉钉目录树/正文接口必传 operatorId（unionId），"
                            "可在开发者后台 API Studio 调试台或「查询用户详情」接口获取。"),
+            CredField("include_uploaded_files", "导入钉盘上传附件", placeholder="false",
+                      hint="默认关闭。开启后会把知识库里的 docx / pptx / xlsx / pdf "
+                           "附件一并导入（需额外开通 Storage.File.Read 权限，"
+                           "并产生额外存储与向量化成本）"),
+            CredField("preserve_folder_structure", "保留目录结构", placeholder="false",
+                      hint="默认关闭。开启后文件名编码为「工作区名/子目录/…/标题」，"
+                           "需重新导入一次才会给已入库文档归位"),
+            CredField("space_name", "工作区名称", placeholder="留空则使用知识库 ID",
+                      hint="仅在开启「保留目录结构」时用作路径首段，提升可读性"),
         ),
     ),
 )

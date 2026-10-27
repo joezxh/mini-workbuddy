@@ -1,8 +1,9 @@
 """add kms_knowledge.external_type (外部知识库平台绑定)
 
-外部知识库（type=3 / connector）需要在知识库容器上固化其平台类型（飞书/语雀/
-钉钉/企业微信/notion/web），以便文档导入时跳过「选择平台 / 配置凭据」两步，
-直接按已配置的外部类型读取凭据并浏览文档。
+外部知识库（type=3 / connector）需要在知识库容器上固化其平台类型（飞书 / Lark /
+飞书云盘 / Lark 云盘 / 语雀 / 钉钉 / 企业微信 / Notion / GitLab / 腾讯 IMA / RSS /
+Confluence / Seafile / GitHub / Google Drive / OneDrive / Web Crawler / Slack / IMAP），
+以便文档导入时跳过「选择平台 / 配置凭据」两步，直接按已配置的外部类型读取凭据并浏览文档。
 
 - external_type: 可空 String(32)，type=3/connector 时必填，取值见
   app.connectors.doc_sources.supported_source_types()；proxy 与 type≠3 必须为 NULL。

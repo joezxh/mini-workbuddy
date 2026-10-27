@@ -51,6 +51,7 @@
       :data-source="items"
       :columns="columns"
       :pagination="false"
+      :scroll="{ x: 1280 }"
       row-key="external_doc_id"
     >
       <template #bodyCell="{ column, record }">
@@ -59,19 +60,52 @@
             {{ platformName(record.source_type) }}
           </a-tag>
         </template>
+        <template v-else-if="column.key === 'segments'">
+          <span v-if="record.segment_count != null">{{ record.segment_count }}</span>
+          <span v-else class="ext-pane__muted">—</span>
+        </template>
+        <template v-else-if="column.key === 'size'">
+          <span class="ext-pane__muted">{{ formatSize(record.file_size) }}</span>
+        </template>
+        <template v-else-if="column.key === 'created'">
+          <span class="ext-pane__muted">{{ formatTime(record.created_at) }}</span>
+        </template>
+        <template v-else-if="column.key === 'updated'">
+          <span class="ext-pane__muted">{{ formatTime(record.external_updated_at) }}</span>
+        </template>
         <template v-else-if="column.key === 'status'">
           <a-tag :color="statusColor(record.status)">{{ record.status || '-' }}</a-tag>
         </template>
         <template v-else-if="column.key === 'op'">
           <a-space size="small">
-            <a-button size="small" :disabled="!record.url" @click="openSource(record)">
-              {{ t('kbExt.viewSource') }}
+            <!-- 全文回源需落地文档 uuid：未落地的记录无从校验归属，故置灰 -->
+            <a-button size="small" :disabled="!record.document_uuid" @click="openContent(record)">
+              {{ t('kbExt.viewContent') }}
+            </a-button>
+            <a-button size="small" :disabled="!record.document_uuid" @click="openSegments(record)">
+              {{ t('kbMgmt.segments') }}
             </a-button>
             <a-button size="small" @click="reimportOne(record)">{{ t('kbExt.reimport') }}</a-button>
+            <a-popconfirm :title="t('kbMgmt.confirmDeleteDoc')" @confirm="removeOne(record)">
+              <a-button size="small" danger :loading="removingId === record.document_uuid">
+                {{ t('common.delete') }}
+              </a-button>
+            </a-popconfirm>
           </a-space>
         </template>
       </template>
     </a-table>
+
+    <!-- 文档全文预览（服务端回源拉取，见 ExternalDocumentViewer） -->
+    <ExternalDocumentViewer
+      v-model:open="viewerOpen"
+      :document-uuid="viewerDocUuid"
+      :fallback-title="viewerTitle"
+      :platform-label="viewerPlatform"
+    />
+
+    <!-- 分段详情（复用文档知识库的分段抽屉） -->
+    <SegmentDetail v-model:open="segmentsOpen" :document-id="segmentsDocId" @changed="load" />
 
     <ExternalSourceWizard
       v-model:open="wizardOpen"
@@ -96,7 +130,10 @@ import {
   type ExternalDocumentItem,
   type ExternalProvider,
 } from '@/api/kbExternalSource'
+import { deleteDocument } from '@/api/kb'
+import ExternalDocumentViewer from './ExternalDocumentViewer.vue'
 import ExternalSourceWizard from './ExternalSourceWizard.vue'
+import SegmentDetail from './SegmentDetail.vue'
 
 const props = defineProps<{ knowledgeId: number; knowledgeName?: string }>()
 
@@ -110,13 +147,22 @@ const wizardOpen = ref(false)
 const presetSourceType = ref<string | undefined>(undefined)
 const presetNodeIds = ref<string[] | undefined>(undefined)
 
-const columns = [
-  { title: t('kbExt.colTitle'), dataIndex: 'title', key: 'title', width: '38%' },
-  { title: t('kbExt.colPlatform'), key: 'platform', width: '16%' },
-  { title: t('kbExt.colUpdated'), dataIndex: 'external_updated_at', key: 'updated', width: '15%' },
-  { title: t('kbExt.colStatus'), key: 'status', width: '13%' },
-  { title: '', key: 'op' },
-]
+// ── 全文预览抽屉 ──
+const viewerOpen = ref(false)
+const viewerDocUuid = ref<string | null>(null)
+const viewerTitle = ref('')
+const viewerPlatform = ref('')
+
+const columns = computed(() => [
+  { title: t('kbExt.colTitle'), dataIndex: 'title', key: 'title', width: 260, ellipsis: true },
+  { title: t('kbExt.colPlatform'), key: 'platform', width: 110 },
+  { title: t('kbExt.colSegments'), dataIndex: 'segment_count', key: 'segments', width: 80, align: 'right' },
+  { title: t('kbExt.colSize'), dataIndex: 'file_size', key: 'size', width: 100 },
+  { title: t('kbExt.colImported'), dataIndex: 'created_at', key: 'created', width: 160 },
+  { title: t('kbExt.colUpdated'), dataIndex: 'external_updated_at', key: 'updated', width: 160 },
+  { title: t('kbExt.colStatus'), key: 'status', width: 110 },
+  { title: t('kbMgmt.colActions'), key: 'op', width: 300, fixed: 'right' as const },
+])
 
 const stats = computed(() => ({
   total: items.value.length,
@@ -138,11 +184,24 @@ function platformName(sourceType: string) {
 
 const PLATFORM_COLORS: Record<string, string> = {
   feishu: 'blue',
-  dingtalk: 'cyan',
+  lark: 'blue',
+  feishu_drive: 'cyan',
+  lark_drive: 'cyan',
+  dingtalk: 'geekblue',
   yuque: 'purple',
   wecom: 'green',
   notion: 'default',
-  web: 'geekblue',
+  gitlab: 'orange',
+  github: 'default',
+  ima: 'magenta',
+  rss: 'gold',
+  confluence: 'blue',
+  seafile: 'volcano',
+  google_drive: 'lime',
+  onedrive: 'blue',
+  web_crawler: 'geekblue',
+  slack: 'purple',
+  imap: 'gold',
 }
 function platformColor(sourceType: string) {
   return PLATFORM_COLORS[sourceType] || 'default'
@@ -153,6 +212,26 @@ function statusColor(status: string | null) {
   if (status === 'failed') return 'red'
   if (status === 'processing' || status === 'pending') return 'blue'
   return 'default'
+}
+
+/** 字节数格式化（与文档知识库列表保持一致的口径） */
+function formatSize(bytes: number | null | undefined): string {
+  if (!bytes && bytes !== 0) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+/**
+ * 时间列统一格式：
+ * - 本地时间戳形如 ``2026-10-27 10:00:00.123456``（后端 str(datetime)）
+ * - 外部平台给的是各自原始格式（多为 ISO 8601）
+ * 统一裁剪到「日期 + 时分」，避免列宽被毫秒与时区撑爆。
+ */
+function formatTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  const s = String(value).replace('T', ' ').replace(/Z$/, '')
+  return s.length >= 16 ? s.slice(0, 16) : s
 }
 
 async function load() {
@@ -197,10 +276,39 @@ async function openWizard() {
   wizardOpen.value = true
 }
 
-function openSource(record: ExternalDocumentItem) {
-  const node = items.value.find((i) => i.external_doc_id === record.external_doc_id)
-  void node
-  message.info(t('kbExt.viewSource'))
+function openContent(record: ExternalDocumentItem) {
+  if (!record.document_uuid) return
+  viewerDocUuid.value = record.document_uuid
+  viewerTitle.value = record.title
+  viewerPlatform.value = platformName(record.source_type)
+  viewerOpen.value = true
+}
+
+// ── 分段详情抽屉 ──
+const segmentsOpen = ref(false)
+const segmentsDocId = ref<string | null>(null)
+
+function openSegments(record: ExternalDocumentItem) {
+  if (!record.document_uuid) return
+  segmentsDocId.value = record.document_uuid
+  segmentsOpen.value = true
+}
+
+// ── 删除（连带切片与向量，映射由后端列表过滤隐藏）──
+const removingId = ref<string | null>(null)
+
+async function removeOne(record: ExternalDocumentItem) {
+  if (!record.document_uuid) return
+  removingId.value = record.document_uuid
+  try {
+    await deleteDocument(record.document_uuid)
+    message.success(t('kbExt.deleteOk'))
+    await load()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbExt.deleteFailed'))
+  } finally {
+    removingId.value = null
+  }
 }
 
 /** 单篇重导入：沿用已保存凭据（不传 credentials），后端按映射覆盖 */
@@ -294,7 +402,9 @@ watch(() => props.knowledgeId, () => {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  background: var(--bg-secondary, #fff);
+  /* 用皮肤令牌而非 #fff：--bg-secondary 并未在 tokens.css 中定义，
+     深色皮肤下会回落成白底，与整体深色面板割裂 */
+  background: var(--bg-subtle);
   transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 .ext-stat:hover {
@@ -316,6 +426,9 @@ watch(() => props.knowledgeId, () => {
   color: var(--fg-secondary);
 }
 .ext-stat__v--err {
-  color: var(--error, #ff4d4f);
+  color: var(--err);
+}
+.ext-pane__muted {
+  color: var(--fg-muted);
 }
 </style>

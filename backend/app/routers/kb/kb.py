@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.job_runner import run_in_background
 from app.deps import get_current_user, get_db
 from app.db.database import SessionLocal
+from app.models.connectors.external_doc_map import KbExternalDocMap
 from app.models.kb.kb_document import KbDocument
 from app.models.sys.sys_user import SysUser
 from app.services.kb.document_pipeline import run_document_ingest
@@ -209,6 +210,12 @@ def delete_document(
 
     PGVectorStore(db, tenant_id).delete_document(_doc_collection_name(db, doc), doc.uuid_code)
     drop_upload((doc.meta or {}).get("file_path"))
+    # 外部导入文档：连带清掉映射。若只靠外键 SET NULL 留孤儿映射，
+    # 重新导入会因 content_hash 命中而误判「未变更」并跳过，文档再也拉不回来。
+    db.query(KbExternalDocMap).filter(
+        KbExternalDocMap.tenant_id == tenant_id,
+        KbExternalDocMap.document_id == doc.id,
+    ).delete(synchronize_session=False)
     db.delete(doc)
     db.commit()
     return {"deleted": uuid_code}

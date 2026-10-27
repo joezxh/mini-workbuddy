@@ -22,10 +22,23 @@ from app.connectors.doc_sources.base import (
 )
 # 导入即注册各平台实现（顺序无关）
 from app.connectors.doc_sources import (  # noqa: F401
+    confluence,
     dingtalk,
     feishu,
+    feishu_drive,
+    github,
+    gitlab,
+    google_drive,
+    ima,
+    imap,
+    lark,
+    lark_drive,
     notion,
-    web,
+    onedrive,
+    rss,
+    seafile,
+    slack,
+    web_crawler,
     wecom,
     yuque,
 )

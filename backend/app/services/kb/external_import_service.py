@@ -146,6 +146,21 @@ async def list_nodes(
         await src.aclose()
 
 
+async def fetch_document(
+    source_type: str, credentials: Dict[str, Any], doc_id: str
+) -> FetchDocResult:
+    """按外部文档 id 实时拉取正文（供「查看全文」按需回源，不落库）。
+
+    外部导入只保留切片，原文不落盘；按需回源既避免本地冗余存储，
+    也避免展示与平台当前内容不一致的快照。
+    """
+    src = get_doc_source(source_type, credentials)
+    try:
+        return await src.fetch_doc(doc_id)
+    finally:
+        await src.aclose()
+
+
 # ── 导入主流程 ────────────────────────────────────────────────────
 async def import_documents(
     db: Session,
@@ -356,7 +371,7 @@ def _dispatch_ingest(
 def list_external_documents(
     db: Session, tenant_id: int, knowledge_id: int
 ) -> List[Dict[str, Any]]:
-    """已导入文档列表（映射 join 文档，含状态与更新时间）。"""
+    """已导入文档列表（映射 join 文档，含状态、正文大小与时间）。"""
     rows = (
         db.query(KbExternalDocMap, KbDocument)
         .outerjoin(KbDocument, KbExternalDocMap.document_id == KbDocument.id)
@@ -369,18 +384,27 @@ def list_external_documents(
     )
     out: List[Dict[str, Any]] = []
     for mapping, doc in rows:
+        if doc is None:
+            # 本地文档已被删除、映射仍残留（FK ondelete=SET NULL）：不对外展示，
+            # 否则列表会出现状态为空的「幽灵行」，且分段/删除按钮无处可用。
+            # 重新导入时会命中「映射存在但文档不在」分支，复用该映射重建文档。
+            continue
         out.append(
             {
                 "external_doc_id": mapping.external_doc_id,
                 "source_type": mapping.source_type,
-                "title": mapping.external_title or (doc.name if doc else ""),
+                "title": mapping.external_title or doc.name,
                 "external_updated_at": mapping.external_updated_at,
                 "document_id": mapping.document_id,
-                "document_uuid": doc.uuid_code if doc else None,
-                "status": doc.status if doc else None,
-                "segment_count": doc.segment_count if doc else None,
-                "error_detail": doc.error_detail if doc else None,
-                "updated_at": str(doc.updated_at) if doc and doc.updated_at else None,
+                "document_uuid": doc.uuid_code,
+                "status": doc.status,
+                "segment_count": doc.segment_count,
+                "error_detail": doc.error_detail,
+                "file_size": doc.file_size,
+                "file_type": doc.file_type,
+                "chunker_type": (doc.meta or {}).get("chunker_type"),
+                "created_at": str(doc.created_at) if doc.created_at else None,
+                "updated_at": str(doc.updated_at) if doc.updated_at else None,
                 "deleted": mapping.deleted,
             }
         )

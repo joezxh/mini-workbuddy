@@ -12,6 +12,7 @@ import pytest
 
 from app.connectors.doc_sources import (
     DocConnResult,
+    DocSourceError,
     ExternalDocRef,
     FetchDocResult,
     MdBlock,
@@ -53,8 +54,8 @@ class _FakeClient:
         self._calls = calls
         self.is_closed = False
 
-    async def request(self, method, url, headers=None, params=None, json=None):
-        self._calls.append((method, url, {"headers": headers, "params": params, "json": json}))
+    async def request(self, method, url, headers=None, params=None, json=None, data=None):
+        self._calls.append((method, url, {"headers": headers, "params": params, "json": json, "data": data}))
         payload = self._handler(method, url, {"headers": headers, "params": params, "json": json})
         return httpx.Response(200, json=payload)
 
@@ -115,15 +116,31 @@ def test_markdown_table_escapes_pipe():
 
 
 # ── 注册表 / 平台元数据 ────────────────────────────────────────────
-def test_all_five_providers_registered():
-    assert set(supported_source_types()) == {
-        "feishu", "dingtalk", "yuque", "wecom", "notion",
-    }
+# 全部已注册来源（第 3 章 12 项 + 第 4 章 6 项 + 文档外的 wecom）。
+# 与 app.services.kb.kb_format.validate_external_type 的允许清单保持一致，
+# 新增平台必须同步更新本断言。
+EXPECTED_SOURCE_TYPES = {
+    # 第 3 章：飞书系
+    "feishu", "lark", "feishu_drive", "lark_drive",
+    # 第 3 章：其余已接入平台
+    "notion", "yuque", "dingtalk", "gitlab", "ima", "rss", "confluence", "seafile",
+    # 第 4 章：原占位连接器
+    "github", "google_drive", "onedrive", "web_crawler", "slack", "imap",
+    # 文档清单外、工程自有的企业微信文档
+    "wecom",
+}
+
+
+def test_all_providers_registered():
+    assert set(supported_source_types()) == EXPECTED_SOURCE_TYPES
 
 
 def test_provider_metadata_has_credential_schema():
     for p in list_providers():
-        assert p["name"] and p["host"].startswith("https://")
+        assert p["name"], f"{p['source_type']} 缺少平台名"
+        # 私有化平台（imap / 自建部署）的主机由用户填写，元数据里是说明性文案，
+        # 因此只要求 host 非空；公共 SaaS 平台必须是 https 常量域名。
+        assert p["host"], f"{p['source_type']} 缺少 host 元数据"
         fields = p["credential_fields"]
         assert fields, f"{p['source_type']} 缺少凭据字段定义"
         assert any(f["required"] for f in fields)
@@ -198,6 +215,63 @@ def test_feishu_test_connection_bad_credential_message():
     src = get_doc_source("feishu", {"app_id": "", "app_secret": ""})
     res = run(src.test_connection())
     assert not res.ok and "App ID" in res.message
+
+
+def test_feishu_platform_error_code_is_not_swallowed():
+    """HTTP 200 + code!=0（权限不足/未加入空间）必须报错，不能静默成空列表。"""
+    src = get_doc_source("feishu", {"app_id": "id", "app_secret": "sec"})
+
+    def handler(method, url, kwargs):
+        if "tenant_access_token" in url:
+            return {"tenant_access_token": "tok"}
+        return {"code": 23098, "msg": "permission denied: app not in wiki space"}
+
+    patch_http(src, handler)
+    with pytest.raises(DocSourceError) as exc:
+        run(src.list_nodes(None))
+    assert "23098" in str(exc.value) and "permission denied" in str(exc.value)
+
+    # 连通测试同样不能被吞成「成功」
+    res = run(src.test_connection())
+    assert not res.ok and "23098" in res.message
+
+
+def test_feishu_zero_space_gives_actionable_guidance():
+    """凭据有效但看不到任何空间：应判定为不通过并给出权限/直连指引。"""
+    src = get_doc_source("feishu", {"app_id": "id", "app_secret": "sec"})
+
+    def handler(method, url, kwargs):
+        if "tenant_access_token" in url:
+            return {"tenant_access_token": "tok"}
+        return {"data": {"items": [], "total": 0}}
+
+    patch_http(src, handler)
+    res = run(src.test_connection())
+    assert not res.ok and "知识空间" in res.message
+
+
+def test_feishu_space_id_direct_mode_skips_space_list():
+    """填写知识空间 ID 后直连列节点，不再调用（常无权限的）空间列表接口。"""
+    src = get_doc_source("feishu", {
+        "app_id": "id", "app_secret": "sec", "space_id": "s9",
+    })
+
+    def handler(method, url, kwargs):
+        if "tenant_access_token" in url:
+            return {"tenant_access_token": "tok"}
+        if url.endswith("/wiki/v2/spaces"):
+            raise AssertionError(f"直连模式不应调用空间列表：{url}")
+        if "/wiki/v2/spaces/s9/nodes" in url:
+            return {"data": {"items": [
+                {"node_token": "n1", "obj_token": "d1", "obj_type": "docx",
+                 "title": "架构说明", "has_child": False},
+            ], "has_more": False}}
+        raise AssertionError(url)
+
+    calls = patch_http(src, handler)
+    nodes = run(src.list_nodes(None))
+    assert [n.doc_id for n in nodes] == ["d1"]
+    assert all("/spaces/s9/nodes" in c[1] for c in calls if "spaces" in c[1])
 
 
 # ── 语雀 ──────────────────────────────────────────────────────────

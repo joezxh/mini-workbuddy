@@ -40,7 +40,10 @@ def validate_external_type(
     - type≠3                       → 必须为 NULL
     - type=3 / kb_format=proxy     → 必须为 NULL（proxy 仅配置检索端点，无平台）
     - type=3 / kb_format=connector → 必填，且必须命中已注册的文档源平台
-                                     （feishu|yuque|dingtalk|wecom|notion|web）
+                                     （feishu|lark|feishu_drive|lark_drive|yuque|
+                                      dingtalk|wecom|notion|gitlab|ima|rss|confluence|
+                                      seafile|github|google_drive|onedrive|web_crawler|
+                                      slack|imap）
 
     返回规整后的 external_type（connector 路径）或 None。
     """

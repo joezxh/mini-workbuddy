@@ -31,14 +31,23 @@ from app.connectors.doc_sources.markdown import (
     NUMBERED,
     PARAGRAPH,
     QUOTE,
+    TABLE,
     TODO,
     blocks_to_markdown,
 )
 
 HOST = "https://api.notion.com"
+# 固定 API 版本：本实现基于 2022-06-28（search / blocks / databases.query 均稳定可用）。
 NOTION_VERSION = "2022-06-28"
 SEARCH_PATH = "/v1/search"
 BLOCKS_PATH = "/v1/blocks/{id}/children"
+DATABASE_QUERY_PATH = "/v1/databases/{id}/query"
+
+# 数据库节点标识前缀（与页面 ID 区分）
+DB_PREFIX = "db:"
+# 单个数据库最多拉取的记录数（Notion 单次 query 上限 100 条，分页累加到此为止）
+MAX_DB_ROWS = 1000
+DB_PAGE_SIZE = 100
 
 _KINDS: Dict[str, tuple] = {
     "paragraph": (PARAGRAPH, 0),
@@ -54,6 +63,37 @@ _KINDS: Dict[str, tuple] = {
     "divider": (DIVIDER, 0),
     "toggle": (PARAGRAPH, 0),
 }
+
+
+def property_to_text(prop: Any) -> str:
+    """把 Notion 属性值渲染成纯文本（覆盖常见属性类型，未知类型降级为字符串）。
+
+    表格单元格里只需要可读文本，富文本的花哨样式（颜色 / 公式）一律丢弃。
+    """
+    if not isinstance(prop, dict):
+        return "" if prop is None else str(prop)
+    ptype = prop.get("type") or ""
+    data = prop.get(ptype)
+    if isinstance(data, list):
+        if all(isinstance(x, dict) and "plain_text" in x for x in data):
+            return "".join(x.get("plain_text") or "" for x in data)
+        if all(isinstance(x, dict) and "name" in x for x in data):
+            return "，".join(str(x.get("name") or "") for x in data)
+        return "，".join(str(x) for x in data)
+    if isinstance(data, dict):
+        if "name" in data:
+            return str(data.get("name") or "")
+        if "start" in data:
+            end = data.get("end")
+            return f"{data.get('start') or ''} → {end}" if end else str(data.get("start") or "")
+        # formula / rollup 等嵌套结构按类型递归一层
+        nested = data.get("type")
+        if nested:
+            return property_to_text({"type": nested, nested: data.get(nested)})
+        return ""
+    if isinstance(data, bool):
+        return "是" if data else "否"
+    return "" if data is None else str(data)
 
 
 def _rich_text(block: Dict[str, Any], btype: str) -> str:
@@ -81,6 +121,15 @@ class NotionDocSource(BaseDocSource):
     def _root_page(self) -> str:
         return (self.credentials.get("root_page") or "").strip()
 
+    def _include_databases(self) -> bool:
+        """是否把 Notion 数据库作为可导入节点（默认开启）。"""
+        raw = self.credentials.get("include_databases")
+        if raw is None or raw == "":
+            return True
+        if isinstance(raw, bool):
+            return raw
+        return str(raw).strip().lower() in ("true", "1", "yes", "on")
+
     async def test_connection(self) -> DocConnResult:
         try:
             data = await self._request_json(
@@ -102,21 +151,34 @@ class NotionDocSource(BaseDocSource):
             headers = self._auth_headers()
             refs: List[ExternalDocRef] = []
             cursor: Optional[str] = None
+            want_dbs = self._include_databases()
             for _ in range(10):
-                body: Dict[str, Any] = {
-                    "page_size": 50,
-                    "filter": {"property": "object", "value": "page"},
-                }
+                body: Dict[str, Any] = {"page_size": 50}
                 if cursor:
                     body["start_cursor"] = cursor
                 data = await self._request_json(
                     "POST", f"{HOST}{SEARCH_PATH}", headers=headers, json_body=body
                 )
                 for r in (data or {}).get("results") or []:
-                    if r.get("object") != "page":
-                        continue
+                    obj = r.get("object")
                     pid = r.get("id")
                     if not pid:
+                        continue
+                    if obj == "database":
+                        if not want_dbs:
+                            continue
+                        # 数据库作为一个整体导入：整表渲染成 Markdown 表格
+                        refs.append(
+                            ExternalDocRef(
+                                doc_id=f"{DB_PREFIX}{pid}",
+                                title=self._database_title(r) or "未命名数据库",
+                                node_type="doc",
+                                updated_at=r.get("last_edited_time"),
+                                url=r.get("url"),
+                            )
+                        )
+                        continue
+                    if obj != "page":
                         continue
                     refs.append(
                         ExternalDocRef(
@@ -139,6 +201,52 @@ class NotionDocSource(BaseDocSource):
         finally:
             await self.aclose()
 
+    async def _fetch_database(self, database_id: str) -> FetchDocResult:
+        """查询数据库全部记录，渲染成 Markdown 表格。
+
+        数据库任一记录变更即整表重建，故 ``updated_at`` 取最近编辑时间（用于面板展示）。
+        """
+        rows: List[List[str]] = []
+        headers: List[str] = []
+        latest = ""
+        cursor: Optional[str] = None
+        title = "Notion 数据库"
+        for _ in range(MAX_DB_ROWS // DB_PAGE_SIZE + 1):
+            body: Dict[str, Any] = {"page_size": DB_PAGE_SIZE}
+            if cursor:
+                body["start_cursor"] = cursor
+            data = await self._request_json(
+                "POST", f"{HOST}{DATABASE_QUERY_PATH}".format(id=database_id),
+                headers=self._auth_headers(), json_body=body,
+            )
+            for r in (data or {}).get("results") or []:
+                props = r.get("properties") or {}
+                if not headers:
+                    headers = list(props.keys()) or ["标题"]
+                rows.append([property_to_text(v) for v in props.values()])
+                edited = r.get("last_edited_time") or ""
+                if edited > latest:
+                    latest = edited
+            if len(rows) >= MAX_DB_ROWS or not (data or {}).get("has_more"):
+                break
+            cursor = (data or {}).get("next_cursor")
+            if not cursor:
+                break
+        if not rows:
+            raise DocSourceError("该数据库没有可导入的记录（请确认已 Share 给 Integration）")
+        return FetchDocResult(
+            title=title,
+            markdown=blocks_to_markdown([MdBlock(kind=TABLE, rows=[headers] + rows)]),
+            updated_at=latest or None,
+        )
+
+    @staticmethod
+    def _database_title(db: Dict[str, Any]) -> str:
+        raw = db.get("title")
+        if isinstance(raw, list):
+            return "".join(p.get("plain_text") or "" for p in raw)
+        return ""
+
     @staticmethod
     def _page_title(page: Dict[str, Any]) -> str:
         props = page.get("properties") or {}
@@ -150,6 +258,8 @@ class NotionDocSource(BaseDocSource):
 
     async def fetch_doc(self, doc_id: str) -> FetchDocResult:
         try:
+            if doc_id.startswith(DB_PREFIX):
+                return await self._fetch_database(doc_id[len(DB_PREFIX):])
             blocks = await self._fetch_blocks(doc_id)
             return FetchDocResult(
                 title=self._block_title(blocks) or "Notion 页面",
@@ -241,6 +351,9 @@ register_doc_source(
             CredField("root_page", "根页面 ID",
                       placeholder="可留空，从全部可访问页面搜索",
                       hint="填写后建议只在该页面内挑选文档"),
+            CredField("include_databases", "导入数据库", placeholder="true",
+                      hint="默认开启：Notion 数据库会整表渲染成 Markdown 表格导入；"
+                           "任一记录变更即整表重建。填 false 则只列页面"),
         ),
     ),
 )

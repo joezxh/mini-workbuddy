@@ -468,7 +468,9 @@ export function createKnowledge(data: {
   description?: string
   type?: number
   kb_format?: string | null
-  /** 外部知识库平台类型（type=3/connector）：feishu/yuque/dingtalk/wecom/notion/web */
+  /** 外部知识库平台类型（type=3/connector）：feishu|lark|feishu_drive|lark_drive|yuque|
+   * dingtalk|wecom|notion|gitlab|ima|rss|confluence|seafile|github|google_drive|onedrive|
+   * web_crawler|slack|imap */
   external_type?: string | null
   index_mode?: string
   multimodal_enabled?: boolean

@@ -31,7 +31,7 @@ class KbExternalDocMap(Base, TenantMixin):
     knowledge_id = Column(BigInteger, nullable=False, index=True,
                           comment="所属知识库（type=3 容器）")
     source_type = Column(String(32), nullable=False,
-                         comment="外部平台: feishu|dingtalk|yuque|wecom|notion")
+                         comment="外部平台: feishu|lark|feishu_drive|lark_drive|yuque|dingtalk|wecom|notion|gitlab|ima|rss|confluence|seafile|github|google_drive|onedrive|web_crawler|slack|imap")
     external_doc_id = Column(String(500), nullable=False,
                              comment="平台内稳定唯一标识（覆盖判定的外部键）")
     external_title = Column(String(500), nullable=True, comment="外部文档标题快照")

@@ -134,6 +134,17 @@ class AppSettings(BaseModel):
     # DataOps 数据源凭据加密密钥（Fernet，32 字节 url-safe base64）
     DATAOPS_ENCRYPTION_KEY: str = ""
 
+    # SSRF 白名单：逗号分隔的域名 / IP（大小写不敏感）。
+    # 外部知识库连接器（GitLab / Confluence / Seafile / IMAP 等私有化部署）的地址默认
+    # 必须过 is_safe_url（拒绝内网 / 环回 / 保留网段）；命中本白名单的地址直接放行，
+    # 用于接入内网自托管平台。留空表示不放行任何内网地址。
+    SSRF_WHITELIST: str = ""
+
+    @property
+    def ssrf_whitelist_hosts(self) -> List[str]:
+        """SSRF_WHITELIST 解析后的小写主机列表。"""
+        return [h.strip().lower() for h in self.SSRF_WHITELIST.split(",") if h.strip()]
+
     # RAG Service 上传文件的本地 blob 存储根目录
     KB_BLOB_DIR: str = ""
 

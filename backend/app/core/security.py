@@ -1,6 +1,7 @@
 """共享安全工具：SSRF 防护等。
 
-抽出供外部知识库检索代理（kb_proxy）与 web 站点连接器（doc_sources.web）复用，
+抽出供外部知识库检索代理（kb_proxy）与站点爬虫连接器
+（doc_sources.web_crawler，经 doc_sources._host 转发）复用，
 避免内网/环回地址拦截逻辑在多处分叉漂移。
 """
 from __future__ import annotations

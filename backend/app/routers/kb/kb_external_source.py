@@ -22,9 +22,11 @@ from app.connectors.doc_sources import (
 )
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.models.kb.kb_document import KbDocument
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.services.kb.external_import_service import (
     ImportSummary,
+    fetch_document,
     import_documents,
     list_external_documents,
     list_nodes,
@@ -213,6 +215,58 @@ def external_documents(
     tenant_id = _tenant_id(current_user)
     _require_knowledge(db, kid)
     return {"items": list_external_documents(db, tenant_id, kid)}
+
+
+@router.get("/documents/{document_uuid}/content")
+async def external_document_content(
+    document_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """查看已导入外部文档的全文（按需回源拉取，不落库）。
+
+    外部导入只保留切片，原文不落盘；全文按需从平台重新拉取，既不占本地
+    存储，也能看到平台侧最新内容。凭据仍取已保存（加密）记录，前端不持明文。
+    """
+    tenant_id = _tenant_id(current_user)
+    doc = (
+        db.query(KbDocument)
+        .filter(
+            KbDocument.tenant_id == tenant_id,
+            KbDocument.uuid_code == document_uuid,
+        )
+        .one_or_none()
+    )
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+
+    external = (doc.meta or {}).get("external") or {}
+    source_type = external.get("source_type")
+    external_doc_id = external.get("external_doc_id")
+    if not source_type or not external_doc_id:
+        raise HTTPException(
+            status_code=422, detail="该文档不是外部导入文档，无外部全文可读取"
+        )
+    _require_type(source_type)
+
+    credentials = load_credentials(db, tenant_id, doc.knowledge_id, source_type) or {}
+    if not credentials:
+        raise HTTPException(
+            status_code=422, detail="缺少该平台的访问凭据，无法读取原文"
+        )
+    try:
+        result = await fetch_document(source_type, credentials, external_doc_id)
+    except DocSourceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "document_uuid": document_uuid,
+        "title": result.title or doc.name,
+        "markdown": result.markdown,
+        "external_updated_at": result.updated_at,
+        "source_type": source_type,
+    }
 
 
 @router.post("/credentials")

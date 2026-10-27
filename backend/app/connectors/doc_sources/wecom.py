@@ -34,6 +34,8 @@ class WecomDocSource(BaseDocSource):
     source_type = "wecom"
     token_in = "query"
     token_query_name = "access_token"
+    # 企微接口以 errcode/errmsg 表达业务成败（HTTP 仍为 200）
+    error_code_field = "errcode"
 
     async def _fetch_token(self) -> Optional[str]:
         corp_id = self.credentials.get("corp_id") or ""

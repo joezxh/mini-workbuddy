@@ -47,11 +47,13 @@ class WikiKnowledge(Base, TenantMixin):
     # 二级形态（spec §10.2，Dify 对齐）：type=2 → document|table|qa；type=3 → connector|proxy；type=1 为 NULL
     kb_format = Column(String(16), nullable=True, comment='二级形态: document|table|qa|connector|proxy')
     # 外部类型（外部知识库平台绑定，spec 知识库管理）：仅 type=3/connector 时有值，
-    # 取值见 doc_sources.supported_source_types（feishu|yuque|dingtalk|wecom|notion|web）；
+    # 取值为 doc_sources.supported_source_types() 的运行时结果（feishu|lark|feishu_drive|
+    # lark_drive|yuque|dingtalk|wecom|notion|gitlab|ima|rss|confluence|seafile|github|
+    # google_drive|onedrive|web_crawler|slack|imap），由 kb_format.validate_external_type 校验；
     # proxy 与 type≠3 必须为 NULL。每个外部知识库固定其平台与凭据（见 ConnectorInstance）。
     external_type = Column(
         String(32), nullable=True, index=True,
-        comment='外部知识库平台类型: feishu|yuque|dingtalk|wecom|notion|web',
+        comment='外部知识库平台类型: feishu|lark|feishu_drive|lark_drive|yuque|dingtalk|wecom|notion|gitlab|ima|rss|confluence|seafile|github|google_drive|onedrive|web_crawler|slack|imap',
     )
     multimodal_enabled = Column(
         Boolean, nullable=False, server_default='false',

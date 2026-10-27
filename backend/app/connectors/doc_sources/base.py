@@ -128,6 +128,12 @@ class BaseDocSource(ABC):
     # header_raw 模式使用的请求头名（子类按需覆盖）
     token_header_name: str = "Authorization"
     timeout: float = DEFAULT_TIMEOUT
+    # 平台业务响应码字段名（"code" / "errcode"）；None 表示该平台只用 HTTP 状态表达成败
+    error_code_field: Optional[str] = None
+    # 业务码为 0 视为成功；不同平台字段名不同时由子类覆盖
+    success_codes: frozenset = frozenset({0, "0"})
+    # 平台错误信息字段名（按优先级取第一个非空值）
+    error_msg_fields: tuple = ("msg", "message", "errmsg", "error")
 
     def __init__(self, credentials: Dict[str, Any]) -> None:
         self.credentials = credentials or {}
@@ -178,9 +184,14 @@ class BaseDocSource(ABC):
         headers: Optional[Dict[str, str]] = None,
         params: Optional[Dict[str, Any]] = None,
         json_body: Optional[Dict[str, Any]] = None,
+        form_body: Optional[Dict[str, str]] = None,
         with_token: bool = True,
     ) -> httpx.Response:
-        """统一 HTTP 出口：注入令牌、超时、把传输错误转成 DocSourceError。"""
+        """统一 HTTP 出口：注入令牌、超时、把传输错误转成 DocSourceError。
+
+        ``form_body`` 供 OAuth2 令牌端点使用（Google / Microsoft 的 token 端点要求
+        ``application/x-www-form-urlencoded``）。
+        """
         hdrs = dict(headers or {})
         q = dict(params or {})
         if with_token and self.token_in != "none":
@@ -195,7 +206,8 @@ class BaseDocSource(ABC):
                     q[self.token_query_name] = token
         try:
             resp = await self._client_instance().request(
-                method, url, headers=hdrs or None, params=q or None, json=json_body,
+                method, url, headers=hdrs or None, params=q or None,
+                json=json_body, data=form_body,
             )
         except httpx.HTTPError as exc:
             raise DocSourceError(f"无法连接外部平台（{type(exc).__name__}），请检查网络或凭据") from exc
@@ -204,14 +216,40 @@ class BaseDocSource(ABC):
     async def _request_json(
         self, method: str, url: str, **kwargs: Any
     ) -> Any:
-        """请求并解析 JSON；非 2xx / 非法 JSON 统一转成 DocSourceError。"""
+        """请求并解析 JSON；非 2xx / 非法 JSON / 平台业务码非 0 统一转成 DocSourceError。"""
         resp = await self._request(method, url, **kwargs)
         if resp.status_code >= 400:
             raise DocSourceError(self._http_error_message(resp))
         try:
-            return resp.json()
+            body = resp.json()
         except ValueError as exc:
             raise DocSourceError("外部平台返回了非 JSON 响应") from exc
+        self._raise_if_platform_error(body)
+        return body
+
+    def _raise_if_platform_error(self, body: Any) -> None:
+        """校验平台业务响应码。
+
+        飞书 / 钉钉 / 企微等平台在「权限不足、参数错误、资源不可见」时仍返回
+        **HTTP 200**，只在 body 里给非 0 的 ``code``/``errcode``。若只校验 HTTP
+        状态，这类错误会被静默解析成「data 缺失 → 空列表」，表现为「测试连通
+        成功但文档列表为空」，极难定位。故此处统一拦截。
+        """
+        field = self.error_code_field
+        if not field or not isinstance(body, dict) or field not in body:
+            return
+        code = body.get(field)
+        if code is None or code in self.success_codes:
+            return
+        msg = ""
+        for key in self.error_msg_fields:
+            value = body.get(key)
+            if value:
+                msg = str(value)
+                break
+        raise DocSourceError(
+            f"外部平台返回错误（{field}={code}）：{msg or '无详细信息'}"
+        )
 
     @staticmethod
     def _http_error_message(resp: httpx.Response) -> str:

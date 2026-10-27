@@ -415,7 +415,9 @@ const form = reactive({
   description: '',
   type: 2,
   kb_format: 'document' as string | null,
-  // 外部类型（仅 type=3 / connector）：平台类型（飞书/语雀/钉钉/企业微信/notion/web）
+  // 外部类型（仅 type=3 / connector）：平台类型（飞书/Lark/飞书云盘/Lark 云盘/语雀/
+  // 钉钉/企业微信/Notion/GitLab/腾讯 IMA/RSS/Confluence/Seafile/GitHub/
+  // Google Drive/OneDrive/Web Crawler/Slack/IMAP）
   external_type: null as string | null,
   // 访问凭据（按平台 schema 动态填充；仅入不出，不回显明文）
   credentials: {} as Record<string, any>,

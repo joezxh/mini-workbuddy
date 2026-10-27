@@ -62,8 +62,23 @@ export interface ExternalDocumentItem {
   status: string | null
   segment_count: number | null
   error_detail: string | null
+  /** 落地文档的正文大小（Markdown 字节数）；段未落地时为 null */
+  file_size: number | null
+  file_type: string | null
+  /** 导入时使用的切片方案（存于文档 meta.chunker_type） */
+  chunker_type: string | null
+  created_at: string | null
   updated_at: string | null
   deleted: string
+}
+
+/** 外部文档全文（按需回源拉取，不落库） */
+export interface ExternalDocumentContent {
+  document_uuid: string
+  title: string
+  markdown: string
+  external_updated_at: string | null
+  source_type: string
 }
 
 /** 五个平台元数据 + 各自凭据字段 schema */
@@ -130,4 +145,12 @@ export function listExternalDocuments(knowledgeId: number) {
   return request.get<{ items: ExternalDocumentItem[] }>(
     `${BASE}/knowledges/${knowledgeId}/external-documents`,
   )
+}
+
+/** 查看已导入外部文档全文（服务端实时回源，凭据取已存加密记录） */
+export function getExternalDocumentContent(documentUuid: string) {
+  return request.get<ExternalDocumentContent>(`${BASE}/documents/${documentUuid}/content`, {
+    // 回源需调用外部平台，比普通接口慢
+    timeout: 60_000,
+  })
 }
