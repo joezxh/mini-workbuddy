@@ -58,6 +58,8 @@ markdownify>=0.13.1  # web 站点连接器：HTML → Markdown（依赖 bs4）
 pdfplumber>=0.10.0
 pandas==3.0.6  # AgentScope ExcelParser 解析 xlsx/xls 必需（此前缺失导致 parse 步 ImportError）
 xlrd  # 旧版 .xls 读取（pandas.read_excel 的 xls 引擎）
+ezdxf==1.4.5  # KB 多模态：DXF 图纸解析（图层/文字标注）+ 预览渲染（spec 2026-10-28）
+matplotlib==3.11.2  # KB 多模态：DXF 预览渲染后端（ezdxf drawing add-on 依赖）
 openpyxl==3.1.5  # 升至 >=3.1.5 以匹配 pandas 3.0.x 的依赖下限（原为 3.1.2）
 python-pptx>=0.6.23
 playwright>=1.40.0
