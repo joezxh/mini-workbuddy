@@ -706,10 +706,12 @@ def execute_write_request(
 # 标准项 / 标准绑定 / 关系推断（P2 Task 11 / Task 13）
 # ====================================================================== #
 from app.models.dataops.standard import MetaStandard  # noqa: E402
+from app.services.dataops.object_relation_service import MetaObjectRelationService  # noqa: E402
 from app.services.dataops.object_standard_service import MetaObjectStandardService  # noqa: E402
 from app.services.dataops.relation_inference_service import RelationInferenceService
 from app.services.dataops.standard_binding_service import StandardBindingService
 from app.services.dataops.standard_catalog_service import MetaStandardCatalogService  # noqa: E402
+from app.services.dataops.standard_query_service import StandardQueryService  # noqa: E402
 from app.services.dataops.standard_service import MetaStandardService
 
 
@@ -1107,6 +1109,165 @@ def delete_object(
     return {"deleted": object_id}
 
 
+@router.get("/standards/objects/{object_id}/bindings")
+def list_object_bindings(
+    object_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> list:
+    """对象标准被哪些物理表绑定（检视面板下钻入口）。"""
+    svc = StandardQueryService(db, _require_tenant_id(current_user))
+    return svc.object_bindings(object_id)
+
+
+# ---------------------------------------------------------------------- #
+# 标准中心（CDM）：关系标准 + 图/统计/NL 检索
+# ---------------------------------------------------------------------- #
+class RelationCreate(BaseModel):
+    code: str
+    name: str
+    from_object_id: int
+    to_object_id: int
+    relation_type: str
+    catalog_id: Optional[int] = None
+    via_attribute_ids: Optional[list] = None
+    description: Optional[str] = None
+
+
+class RelationUpdate(BaseModel):
+    code: Optional[str] = None
+    name: Optional[str] = None
+    catalog_id: Optional[int] = None
+    relation_type: Optional[str] = None
+    via_attribute_ids: Optional[list] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+
+class NlQueryBody(BaseModel):
+    question: str
+    catalog_id: Optional[int] = None
+    model_id: Optional[int] = None
+
+
+@router.get("/standards/relations")
+def list_relations(
+    catalog_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> list:
+    svc = MetaObjectRelationService(db, _require_tenant_id(current_user))
+    return [MetaObjectRelationService.serialize(r) for r in svc.list(catalog_id)]
+
+
+@router.post("/standards/relations", status_code=201)
+def create_relation(
+    body: RelationCreate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = MetaObjectRelationService(db, _require_tenant_id(current_user))
+    try:
+        obj = svc.create(
+            body.code, body.name, body.from_object_id, body.to_object_id,
+            body.relation_type, catalog_id=body.catalog_id,
+            via_attribute_ids=body.via_attribute_ids, description=body.description,
+            creator_id=getattr(current_user, "user_id", None),
+        )
+        warning = svc.cross_catalog_warning(obj.id)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="关系标准创建失败，请稍后重试")
+    data = MetaObjectRelationService.serialize(obj)
+    data["warning"] = warning
+    return data
+
+
+@router.put("/standards/relations/{relation_id}")
+def update_relation(
+    relation_id: int,
+    body: RelationUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = MetaObjectRelationService(db, _require_tenant_id(current_user))
+    try:
+        obj = svc.update(relation_id, **body.model_dump(exclude_none=True))
+        db.commit()
+    except KeyError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="关系标准不存在")
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="关系标准更新失败，请稍后重试")
+    return MetaObjectRelationService.serialize(obj)
+
+
+@router.delete("/standards/relations/{relation_id}")
+def delete_relation(
+    relation_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = MetaObjectRelationService(db, _require_tenant_id(current_user))
+    try:
+        svc.delete(relation_id)
+        db.commit()
+    except KeyError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="关系标准不存在")
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="关系标准删除失败，请稍后重试")
+    return {"deleted": relation_id}
+
+
+@router.get("/standards/relations/{relation_id}/checks")
+def list_relation_checks(
+    relation_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> list:
+    svc = StandardQueryService(db, _require_tenant_id(current_user))
+    return svc.relation_checks(relation_id)
+
+
+@router.get("/standards/graph")
+def standard_graph(
+    catalog_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = StandardQueryService(db, _require_tenant_id(current_user))
+    return svc.graph(catalog_id)
+
+
+@router.get("/standards/stats")
+def standard_stats(
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = StandardQueryService(db, _require_tenant_id(current_user))
+    return svc.stats()
+
+
+@router.post("/standards/nl-query")
+async def standard_nl_query(
+    body: NlQueryBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = StandardQueryService(db, _require_tenant_id(current_user))
+    return await svc.nl_query(body.question, body.catalog_id, body.model_id)
+
+
 @router.post("/sources/{source_id}/bind", status_code=200)
 def bind_source(
     source_id: int,
@@ -1131,6 +1292,9 @@ def bind_source(
         "bound": report.bound,
         "updated": report.updated,
         "skipped_human": report.skipped_human,
+        "objects_bound": report.objects_bound,
+        "objects_updated": report.objects_updated,
+        "objects_skipped_human": report.objects_skipped_human,
         "details": report.details,
     }
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.ai.dataops.rule_engine import TIER_ACCEPTED, RuleEngine, tier
@@ -226,6 +226,138 @@ class StandardBindingService:
              "confidence": matched.confidence, "status": status, "action": action}
         )
 
+    # ── 关系校验（B4）─────────────────────────────────────────────────
+    def _bound_tables(self, object_id: int, source_id: int, database: str) -> List[str]:
+        """对象在某数据源/库下已绑定的物理表名。"""
+        rows = self.db.execute(
+            select(MetaTable.table_name)
+            .join(MetaTableStandard, MetaTableStandard.table_id == MetaTable.id)
+            .where(
+                MetaTableStandard.object_standard_id == object_id,
+                MetaTable.source_id == source_id,
+                MetaTable.database == database,
+            )
+        ).all()
+        return [r[0] for r in rows]
+
+    def _check_relations(self, source_id: int, database: str) -> None:
+        """按 (source, database) 全量校验已发布关系标准（幂等 upsert）。
+
+        verdict 语义：
+        - ``hit``：存在同向推断关系；
+        - ``conflict``：只存在反方向推断（left/right 与标准 from/to 相反）；
+        - ``missing``：无任何推断关系。
+        任一端对象在该库无绑定表 → 无法定位比对范围，跳过。
+        """
+        relations = self.db.execute(
+            select(MetaObjectRelation).where(
+                MetaObjectRelation.tenant_id == self.tenant_id,
+                MetaObjectRelation.status == "published",
+            )
+        ).scalars().all()
+        for rel in relations:
+            from_tables = self._bound_tables(rel.from_object_id, source_id, database)
+            to_tables = self._bound_tables(rel.to_object_id, source_id, database)
+            if not from_tables or not to_tables:
+                continue
+            from_set, to_set = set(from_tables), set(to_tables)
+            forward = self.db.execute(
+                select(MetaRelation).where(
+                    MetaRelation.tenant_id == self.tenant_id,
+                    MetaRelation.source_id == source_id,
+                    MetaRelation.database == database,
+                    MetaRelation.left_table.in_(from_set),
+                    MetaRelation.right_table.in_(to_set),
+                )
+            ).scalars().first()
+            reverse = self.db.execute(
+                select(MetaRelation).where(
+                    MetaRelation.tenant_id == self.tenant_id,
+                    MetaRelation.source_id == source_id,
+                    MetaRelation.database == database,
+                    MetaRelation.left_table.in_(to_set),
+                    MetaRelation.right_table.in_(from_set),
+                )
+            ).scalars().first()
+            if forward is not None:
+                verdict, inferred_id, conf = "hit", forward.id, forward.confidence
+            elif reverse is not None:
+                verdict, inferred_id, conf = "conflict", reverse.id, reverse.confidence
+            else:
+                verdict, inferred_id, conf = "missing", None, None
+            self._upsert_relation_check(
+                rel.id, source_id, database, verdict, inferred_id, conf,
+                {
+                    "from_tables": sorted(from_set),
+                    "to_tables": sorted(to_set),
+                    "relation_type": rel.relation_type,
+                },
+            )
+
+    def _upsert_relation_check(
+        self,
+        relation_id: int,
+        source_id: int,
+        database: str,
+        verdict: str,
+        inferred_id: Optional[int],
+        confidence: Optional[float],
+        evidence: dict,
+    ) -> None:
+        row = self.db.execute(
+            select(MetaRelationCheck).where(
+                MetaRelationCheck.standard_relation_id == relation_id,
+                MetaRelationCheck.source_id == source_id,
+                MetaRelationCheck.database == database,
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = MetaRelationCheck(
+                tenant_id=self.tenant_id,
+                standard_relation_id=relation_id,
+                source_id=source_id,
+                database=database,
+            )
+            self.db.add(row)
+        row.verdict = verdict
+        row.inferred_relation_id = inferred_id
+        row.confidence = confidence
+        row.evidence_json = evidence
+        self.db.flush()
+
+    def _source_databases(self, source_id: int, database: Optional[str] = None) -> List[str]:
+        """校验作用域：显式库优先，否则取该源下快照里出现过的全部库。"""
+        if database:
+            return [database]
+        rows = self.db.execute(
+            select(MetaTable.database)
+            .where(
+                MetaTable.tenant_id == self.tenant_id,
+                MetaTable.source_id == source_id,
+            )
+            .distinct()
+        ).all()
+        return [r[0] for r in rows]
+
+    def _tally_relation_verdicts(
+        self, report: BindReport, source_id: int, database: Optional[str] = None
+    ) -> None:
+        stmt = (
+            select(MetaRelationCheck.verdict, func.count())
+            .where(
+                MetaRelationCheck.tenant_id == self.tenant_id,
+                MetaRelationCheck.source_id == source_id,
+            )
+            .group_by(MetaRelationCheck.verdict)
+        )
+        if database:
+            stmt = stmt.where(MetaRelationCheck.database == database)
+        counts = {verdict: count for verdict, count in self.db.execute(stmt).all()}
+        report.hit = counts.get("hit", 0)
+        report.missing = counts.get("missing", 0)
+        report.conflict = counts.get("conflict", 0)
+        report.relation_checked = report.hit + report.missing + report.conflict
+
     def bind_table(self, table_id: int) -> BindReport:
         table = self.db.execute(
             select(MetaTable).where(
@@ -254,7 +386,7 @@ class StandardBindingService:
         )
         if database:
             stmt = stmt.where(MetaTable.database == database)
-        tables = list(self.db.execute(stmt.scalars()).all())
+        tables = list(self.db.execute(stmt).scalars().all())
         report = BindReport(tables=len(tables))
         for t in tables:
             sub = self.bind_table(t.id)
@@ -267,4 +399,8 @@ class StandardBindingService:
             report.objects_updated += sub.objects_updated
             report.objects_skipped_human += sub.objects_skipped_human
             report.details.extend(sub.details)
+        # 表→对象 落库之后：关系标准 vs 推断关系的三态校验
+        for db_name in self._source_databases(source_id, database):
+            self._check_relations(source_id, db_name)
+        self._tally_relation_verdicts(report, source_id, database)
         return report
