@@ -66,14 +66,20 @@ def _from_model_mgmt(
 
 
 def _from_env(kind: str) -> MediaProviderConfig:
+    # 默认 base_url 指向 GPUStack：MEDIA_*_API_KEY 未配置时回落 GPUSTACK_API_KEY
+    # （GPUStack 单一密钥体系；走百炼时显式配置 MEDIA_*_API_KEY）
     if kind == "vision":
         return MediaProviderConfig(
-            settings.MEDIA_VISION_PROVIDER, settings.MEDIA_VISION_BASE_URL.rstrip("/"),
-            settings.MEDIA_VISION_API_KEY, settings.MEDIA_VISION_MODEL,
+            settings.MEDIA_VISION_PROVIDER,
+            settings.MEDIA_VISION_BASE_URL.rstrip("/"),
+            settings.MEDIA_VISION_API_KEY or settings.GPUSTACK_API_KEY,
+            settings.MEDIA_VISION_MODEL,
         )
     return MediaProviderConfig(
-        settings.MEDIA_ASR_PROVIDER, settings.MEDIA_ASR_BASE_URL.rstrip("/"),
-        settings.MEDIA_ASR_API_KEY, settings.MEDIA_ASR_MODEL,
+        settings.MEDIA_ASR_PROVIDER,
+        settings.MEDIA_ASR_BASE_URL.rstrip("/"),
+        settings.MEDIA_ASR_API_KEY or settings.GPUSTACK_API_KEY,
+        settings.MEDIA_ASR_MODEL,
     )
 
 
