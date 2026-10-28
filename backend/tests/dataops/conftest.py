@@ -57,6 +57,11 @@ def _tables() -> List:
     )
     from app.models.dataops.write_request import DataWriteRequest
     from app.models.dataops.meta_relation import MetaRelation
+    from app.models.dataops.standard_cdm import (
+        MetaObjectRelation, MetaObjectStandard, MetaObjectStandardAttribute,
+        MetaRelationCheck, MetaStandardCatalog, MetaTableStandard,
+        MetaTableStandardHistory,
+    )
 
     return [
         SysUser.__table__,
@@ -70,6 +75,13 @@ def _tables() -> List:
         MetaColumnStandardHistory.__table__,
         DataWriteRequest.__table__,
         MetaRelation.__table__,
+        MetaStandardCatalog.__table__,
+        MetaObjectStandard.__table__,
+        MetaObjectStandardAttribute.__table__,
+        MetaObjectRelation.__table__,
+        MetaTableStandard.__table__,
+        MetaTableStandardHistory.__table__,
+        MetaRelationCheck.__table__,
     ]
 
 

@@ -71,6 +71,11 @@ from app.models.dataops.standard import (                                       
 )
 from app.models.dataops.write_request import DataWriteRequest                   # noqa: F401
 from app.models.dataops.meta_relation import MetaRelation                         # noqa: F401
+from app.models.dataops.standard_cdm import (                                       # noqa: F401
+    MetaObjectRelation, MetaObjectStandard, MetaObjectStandardAttribute,
+    MetaRelationCheck, MetaStandardCatalog, MetaTableStandard,
+    MetaTableStandardHistory,
+)
 # --- 连接器落库 (P3 Task 7) ---
 from app.models.connectors.connector_record import (                              # noqa: F401
     ConnectorIngest, ConnectorSyncState, ConnectorInstance, ConnectorSyncLog,
