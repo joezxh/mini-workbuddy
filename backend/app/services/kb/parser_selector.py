@@ -55,6 +55,11 @@ _EXT_MEDIA = {
     "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
     "gif": "image/gif", "bmp": "image/bmp", "webp": "image/webp",
     "csv": "text/csv", "html": "text/html", "json": "application/json",
+    # KB 多模态（spec 2026-10-28）：媒体扩展名仅用于上传入口 mime 推断，
+    # 实际解析走 media 包（detect_media_kind 分支），不经 AgentScope Parser
+    "mp3": "audio/mpeg", "wav": "audio/wav", "m4a": "audio/mp4",
+    "mp4": "video/mp4", "mov": "video/quicktime",
+    "dxf": "image/vnd.dxf",
 }
 
 

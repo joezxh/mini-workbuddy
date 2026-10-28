@@ -96,6 +96,17 @@ def run_document_ingest(
     db.commit()
 
     try:
+        # 媒体文件（图片/音频/视频/DXF）不走 parser/chunker，直接媒体提取路径（spec §5）
+        from app.services.kb.media.base import detect_media_kind
+
+        if detect_media_kind(filename) is not None:
+            from app.services.kb.media.ingest import run_media_ingest
+
+            return run_media_ingest(
+                db, tenant_id, doc_id, file_bytes or b"", filename,
+                session_factory=None, kb_factory=knowledge_factory,
+            )
+
         # 1)-3) 解析 → 清洗 → 切块：与 dry-run 共用的编排执行器（spec §10.7）
         #    知识库 pipeline_config 优先，扁平 chunker_* 参数作兜底
         result = run_pipeline_from_config(
