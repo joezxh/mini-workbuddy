@@ -30,7 +30,7 @@ def test_pg_still_registered():
 
 def test_unknown_source_type_rejected():
     with pytest.raises(ValueError):
-        get_adapter("oracle")
+        get_adapter("mongodb")
 
 
 def test_normalize_type():

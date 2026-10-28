@@ -64,6 +64,68 @@ def test_scan_writes_metadata(scannable, db):
     assert job.progress == 100.0
 
 
+# ── 三级作用域（PG 族：物理库→schema→表）──────────────────────
+def test_scope_helpers():
+    svc = MetaScanService
+    assert svc._has_schema("postgresql") is True
+    assert svc._has_schema("kingbase") is True
+    assert svc._has_schema("mysql") is False
+    assert svc._has_schema("bogus") is False
+    assert svc._resolve_scope("demo", "kev_db") == "demo"   # 传了 schema 以 schema 限定
+    assert svc._resolve_scope(None, "public") == "public"   # 旧语义兼容
+
+
+def test_remote_browse_three_level(scannable, db):
+    """导入向导链路：列物理库→按库重连列 schema→按 schema 列表（回归：早期版本库名被当 schema 恒查空）。"""
+    source_id, probe = scannable
+    svc = MetaScanService(db, TENANT_A)
+    assert TEST_DB_NAME in svc.list_remote_databases(source_id)
+    assert probe in svc.list_remote_schemas(source_id, TEST_DB_NAME)
+    tables = svc.list_remote_tables(source_id, TEST_DB_NAME, schema=probe)
+    assert any(x["name"] == "orders" for x in tables)
+    # 旧参数形态（不传 schema，database 直接当作用域）仍可用
+    assert any(x["name"] == "orders" for x in svc.list_remote_tables(source_id, probe))
+
+
+def test_import_tables_with_schema(scannable, db):
+    """三级导入：meta_table.database=schema、db_name=物理库（跨库同名 schema 靠
+    db_name 区分，回归：早期仅按 schema 过滤导致混库）。"""
+    from app.models.dataops.meta import MetaTable
+    from sqlalchemy import select
+
+    source_id, probe = scannable
+    svc = MetaScanService(db, TENANT_A)
+    r = svc.import_tables(source_id, TEST_DB_NAME, ["orders"], schema=probe)
+    assert r["imported"] == 1 and not r["failed"]
+    row = db.execute(
+        select(MetaTable).where(
+            MetaTable.source_id == source_id,
+            MetaTable.database == probe,
+            MetaTable.table_name == "orders",
+        )
+    ).scalar_one()
+    assert row.table_comment == "订单表"
+    assert row.column_count == 3
+    # 第一级物理库单独存 db_name，供前端按库过滤
+    assert row.db_name == TEST_DB_NAME
+
+
+def test_tables_route_filters_by_db_name(scannable, db, client_a):
+    """回归（用户报障）：选数据源/库/schema 后，左侧元数据表须按
+    物理库(db_name)+schema(database) 双条件过滤；早期仅按 schema 过滤，
+    跨物理库同名 schema 会串库。"""
+    source_id, probe = scannable
+    MetaScanService(db, TENANT_A).start_scan(source_id, probe, connect_database=TEST_DB_NAME)
+    url = f"/api/v1/dataops/sources/{source_id}/tables"
+    # 正确物理库：命中 orders，且回带 db_name
+    ok = client_a.get(url, params={"database": probe, "db_name": TEST_DB_NAME}).json()
+    assert any(x["table_name"] == "orders" for x in ok)
+    assert ok[0]["db_name"] == TEST_DB_NAME
+    # 错误物理库：即使 schema 同名也应过滤为空（证明 db 维度生效）
+    empty = client_a.get(url, params={"database": probe, "db_name": "not_exist_db"}).json()
+    assert empty == []
+
+
 def test_scan_powers_adapters(scannable, db):
     source_id, probe = scannable
     MetaScanService(db, TENANT_A).start_scan(source_id, probe)

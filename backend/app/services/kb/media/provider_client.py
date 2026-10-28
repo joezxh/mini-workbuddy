@@ -1,7 +1,7 @@
 """媒体 provider 客户端（OpenAI 兼容）：VLM 图片描述 + ASR 转写。
 
-配置解析镜像 embedding_config：模型管理默认（type=6 vision / type=7 asr，
-is_default + status=1 + 关联密钥可用）优先，collection 级覆盖
+配置解析镜像 embedding_config：模型管理默认（type=4 多模态理解 vision /
+type=8 语音识别 asr，is_default + status=1 + 关联密钥可用）优先，collection 级覆盖
 （kb_collection.retrieval_settings.vision_model / asr_model，spec §6）次之，
 未配置回落 env（MediaSettings）。
 重试 2 次指数退避，超时 120s（spec §8）。
@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -22,8 +23,17 @@ from app.config import settings
 
 _TIMEOUT = 120.0
 _RETRIES = 2
-_VISION_MODEL_TYPE = 6
-_ASR_MODEL_TYPE = 7
+_VISION_MODEL_TYPE = 4   # 数据字典 model_type：4=多模态理解
+_ASR_MODEL_TYPE = 8      # 数据字典 model_type：8=语音识别（7=语音合成，被语音 RTC 占用）
+
+# 转写提示：只要文本，避免模型附加解释污染入库内容
+_ASR_PROMPT = "请完整转写这段音频的内容，只输出转写文本，不要添加解释或标题。"
+
+# 音频容器格式（input_audio.format 取值）
+_AUDIO_FORMATS = {
+    ".wav": "wav", ".mp3": "mp3", ".m4a": "m4a", ".aac": "aac",
+    ".flac": "flac", ".ogg": "ogg", ".opus": "opus", ".webm": "webm",
+}
 
 
 @dataclass
@@ -57,17 +67,20 @@ def _from_model_mgmt(
             f"[Media] 模型管理默认{label} {row.code or row.id} 密钥/地址不可用，回落 env"
         )
         return None
+    base = (key.url or "").strip().rstrip("/")
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
     return MediaProviderConfig(
         provider=f"model_mgmt:{row.code or row.id}",
-        base_url=(key.url or "").strip().rstrip("/") + "/v1",
+        base_url=base,
         api_key=key.api_key or "",
         model=row.model,
     )
 
 
 def _from_env(kind: str) -> MediaProviderConfig:
-    # 默认 base_url 指向 GPUStack：MEDIA_*_API_KEY 未配置时回落 GPUSTACK_API_KEY
-    # （GPUStack 单一密钥体系；走百炼时显式配置 MEDIA_*_API_KEY）
+    # 默认走百炼（dashscope）兼容模式；MEDIA_*_API_KEY 未配置时回落
+    # GPUSTACK_API_KEY（仅本地 GPUStack 部署适用，远端服务需显式配置 MEDIA_*_API_KEY）
     if kind == "vision":
         return MediaProviderConfig(
             settings.MEDIA_VISION_PROVIDER,
@@ -156,27 +169,41 @@ async def describe_image(
     return (choice.get("message") or {}).get("content") or ""
 
 
+def _audio_format(filename: str) -> str:
+    """由文件名后缀推断 input_audio.format（未知后缀按 wav）。"""
+    return _AUDIO_FORMATS.get(Path(filename or "").suffix.lower(), "wav")
+
+
 async def transcribe_audio(
     cfg: MediaProviderConfig, audio_bytes: bytes, filename: str
 ) -> list[dict]:
-    """ASR 转写（OpenAI 兼容 /audio/transcriptions，verbose_json 取时间轴分段）。
+    """ASR 转写（OpenAI 兼容 chat/completions + input_audio 内容块）。
 
-    返回 [{"start": 秒, "end": 秒, "text": 文本}]；服务端不支持 verbose_json
-    segments 时降级为单段（start=end=0），不做词级对齐假设。
+    DashScope 兼容模式未提供 /audio/transcriptions（实测 404），音频只能经
+    chat/completions 的 ``input_audio`` 传入，故选取支持音频输入的多模态模型
+    （如 qwen3.8-omni-flash）。
+
+    返回 [{"start": 秒, "end": 秒, "text": 文本}]；该通道不返回时间轴，
+    统一为单段（start=end=0），不做词级/句级对齐假设。
     """
+    b64 = base64.b64encode(audio_bytes).decode()
+    fmt = _audio_format(filename)
     resp = await _post_with_retry(
-        f"{cfg.base_url}/audio/transcriptions",
-        data={"model": cfg.model, "response_format": "verbose_json"},
-        files={"file": (filename, audio_bytes)},
+        f"{cfg.base_url}/chat/completions",
+        json={
+            "model": cfg.model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "input_audio",
+                     "input_audio": {"data": f"data:audio/{fmt};base64,{b64}",
+                                      "format": fmt}},
+                    {"type": "text", "text": _ASR_PROMPT},
+                ],
+            }],
+        },
         headers={"Authorization": f"Bearer {cfg.api_key or 'not-required'}"},
     )
-    body = resp.json()
-    segs = body.get("segments") or []
-    if segs:
-        return [
-            {"start": float(s.get("start") or 0), "end": float(s.get("end") or 0),
-             "text": (s.get("text") or "").strip()}
-            for s in segs if (s.get("text") or "").strip()
-        ]
-    text = (body.get("text") or "").strip()
+    choice = (resp.json().get("choices") or [{}])[0]
+    text = ((choice.get("message") or {}).get("content") or "").strip()
     return [{"start": 0.0, "end": 0.0, "text": text}] if text else []

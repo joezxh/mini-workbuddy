@@ -1,7 +1,8 @@
-"""PostgreSQL 方言适配器测试（P2 Task 3）。
+"""PostgreSQL 方言适配器测试（P2 Task 3；三级作用域后 list_databases 回归物理库）。
 
 fixture：探针 schema（probe_<uuid>）内建带注释的表 + 已知数据，
-用例结束 DROP。计划用例：list_databases 排除模板库；列注释来自 pg_catalog。
+用例结束 DROP。计划用例：list_databases 返回物理库（排除模板库）；
+list_schemas 返回用户 schema（排除系统目录）；列注释来自 pg_catalog。
 """
 from __future__ import annotations
 
@@ -58,10 +59,26 @@ def pg_conn():
             admin.dispose()
 
 
-def test_list_databases_excludes_templates(pg_conn):
+def test_list_databases_returns_physical_dbs(pg_conn):
+    """导入向导第一级：返回物理库清单并排除模板库（pg_database）。
+
+    三级作用域（库→schema→表）：跨物理库浏览由服务层按所选库重连，
+    本方法只负责列库；表限定名走 list_schemas + list_tables。"""
+    from sqlalchemy.engine import make_url
+
     dbs = PostgresAdapter().list_databases(pg_conn)
-    assert "template0" not in dbs and "template1" not in dbs
-    assert "minworkbuddy_test" in dbs
+    assert make_url(TEST_DB_URL).database in dbs   # 当前测试库自身必可见
+    for tpl in ("template0", "template1"):
+        assert tpl not in dbs
+
+
+def test_list_schemas_returns_user_schemas(pg_conn):
+    """导入向导第二级：返回用户 schema 并排除系统目录。"""
+    schemas = PostgresAdapter().list_schemas(pg_conn)
+    assert SCHEMA in schemas     # fixture 建的探针 schema 应可见
+    assert "public" in schemas
+    for sys_schema in ("pg_catalog", "information_schema", "pg_toast"):
+        assert sys_schema not in schemas
 
 
 def test_list_tables_returns_comment_and_type(pg_conn):
@@ -144,4 +161,4 @@ def test_registry_dispatch():
     assert isinstance(get_adapter("postgresql"), PostgresAdapter)
     assert isinstance(get_adapter("PostgreSQL"), PostgresAdapter)
     with pytest.raises(ValueError):
-        get_adapter("oracle")
+        get_adapter("sqlite")

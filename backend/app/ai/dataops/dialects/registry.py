@@ -25,14 +25,35 @@ def get_adapter(source_type: str) -> DialectAdapter:
     return factory()
 
 
+def is_registered(source_type: str) -> bool:
+    """适配器是否已注册（保存前的能力门禁：字典启用 ≠ 驱动已实现）。"""
+    return (source_type or "").lower().strip() in _ADAPTER_FACTORIES
+
+
 def _register_builtins() -> None:
+    from app.ai.dataops.dialects.clickhouse import ClickhouseAdapter
+    from app.ai.dataops.dialects.dm import DmAdapter
     from app.ai.dataops.dialects.doris import DorisAdapter
+    from app.ai.dataops.dialects.es import EsAdapter
+    from app.ai.dataops.dialects.excel_pg import ExcelPgAdapter
+    from app.ai.dataops.dialects.kingbase import KingbaseAdapter
     from app.ai.dataops.dialects.mysql import MysqlAdapter
+    from app.ai.dataops.dialects.oracle import OracleAdapter
     from app.ai.dataops.dialects.postgres import PostgresAdapter
+    from app.ai.dataops.dialects.sqlserver import SqlserverAdapter
+    from app.ai.dataops.dialects.starrocks import StarrocksAdapter
 
     register_adapter("postgresql", PostgresAdapter)
+    register_adapter("kingbase", KingbaseAdapter)      # PG 协议兼容子类
     register_adapter("mysql", MysqlAdapter)
     register_adapter("doris", DorisAdapter)
+    register_adapter("starrocks", StarrocksAdapter)    # MySQL 协议兼容子类
+    register_adapter("oracle", OracleAdapter)
+    register_adapter("sqlserver", SqlserverAdapter)
+    register_adapter("clickhouse", ClickhouseAdapter)
+    register_adapter("dm", DmAdapter)
+    register_adapter("es", EsAdapter)
+    register_adapter("excel", ExcelPgAdapter)
 
 
 _register_builtins()

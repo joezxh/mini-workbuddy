@@ -83,9 +83,28 @@ class WriteImpact:
 
 @runtime_checkable
 class DialectAdapter(Protocol):
-    """方言适配器协议（spec 6.1）。"""
+    """方言适配器协议（spec 6.1；类型体系扩展后增 open/test_connect）。"""
 
     name: str
+
+    def open(self, ds, connect_database: Optional[str] = None) -> tuple:
+        """打开连接，返回 (conn_handle, cleanup)；cleanup 为无参关闭函数。
+
+        ``ds`` 为 DataSource ORM 对象（密码由服务层先行解密后传入 ds._password_plain
+        临时属性，避免适配器层触碰 password_enc）。
+
+        ``connect_database``：PG 族跨物理库浏览时的连接目标覆盖（选另一个库时传入）；
+        缺省连 ds.database。非 SQLAlchemy 族（dm/es）忽略。
+        """
+        ...
+
+    def list_schemas(self, conn) -> List[str]:
+        """当前连接库内的 schema 清单（仅 PG 族实现；其余族无 schema 概念）。"""
+        ...
+
+    def test_connect(self, ds) -> tuple[bool, Optional[str]]:
+        """探活：返回 (ok, error)；error 为用户可读的失败原因（含驱动未安装指引）。"""
+        ...
 
     def list_databases(self, conn) -> List[str]: ...
     def list_tables(self, conn, database: str) -> List[TableMeta]: ...

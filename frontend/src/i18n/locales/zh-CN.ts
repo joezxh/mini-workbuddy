@@ -1954,8 +1954,8 @@ export default {
     /* 创建向导按形态分支（spec §10.6） */
     multimodal: '多模态（媒体摄取）',
     multimodalTip: '开启后支持上传图片/语音/视频/DXF 图纸：内容经视觉模型描述、语音转写、图纸标注提取后入检索',
-    visionModelPlaceholder: '视觉模型（描述/OCR，留空用服务端默认，如 Qwen3-VL-32B）',
-    asrModelPlaceholder: '语音模型（转写，留空用服务端默认，如 Qwen3-ASR-1.7B）',
+    visionModelPlaceholder: '视觉模型（描述/OCR，留空用服务端默认，如 qwen3.8-flash）',
+    asrModelPlaceholder: '语音模型（转写，需支持音频输入，留空用服务端默认，如 qwen3.8-omni-flash）',
     mediaModelTip: '模型可留空走服务端默认；也可在模型管理中设为默认（视觉/语音）',
     mediaTooLarge: '文件超过 100MB 上限',
     mediaLayer: '图层',

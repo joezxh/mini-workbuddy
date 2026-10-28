@@ -3,8 +3,8 @@ from app.config import settings
 
 
 def test_media_settings_defaults():
-    assert settings.MEDIA_VISION_PROVIDER == "gpustack"
-    assert settings.MEDIA_ASR_PROVIDER == "gpustack"
+    assert settings.MEDIA_VISION_PROVIDER == "dashscope"
+    assert settings.MEDIA_ASR_PROVIDER == "dashscope"
     assert settings.MEDIA_MAX_FILE_MB == 100
     assert settings.MEDIA_MAX_AUDIO_HOURS == 2
     assert settings.MEDIA_MAX_VIDEO_MINUTES == 30

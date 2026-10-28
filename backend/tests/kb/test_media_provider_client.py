@@ -57,30 +57,28 @@ def test_describe_image_builds_data_uri(monkeypatch):
     assert call["headers"]["Authorization"] == "Bearer key"
 
 
-def test_transcribe_audio_verbose_segments(monkeypatch):
+def test_transcribe_audio_uses_chat_input_audio(monkeypatch):
     _patch_httpx(monkeypatch)
-    _FakeClient.next_payload = {"segments": [
-        {"start": 0.0, "end": 2.5, "text": "你好"},
-        {"start": 2.5, "end": 4.0, "text": "再见"},
-    ]}
-    cfg = pc.MediaProviderConfig("gpustack", "http://x/v1", "key", "m")
+    _FakeClient.next_payload = {"choices": [{"message": {"content": " 你好世界 "}}]}
+    cfg = pc.MediaProviderConfig("dashscope", "http://x/v1", "key", "omni")
     segs = asyncio.run(pc.transcribe_audio(cfg, b"audio", "a.wav"))
-    assert segs == [
-        {"start": 0.0, "end": 2.5, "text": "你好"},
-        {"start": 2.5, "end": 4.0, "text": "再见"},
-    ]
+    # 该通道无时间轴：单段返回，start=end=0
+    assert segs == [{"start": 0.0, "end": 0.0, "text": "你好世界"}]
     call = _FakeClient.calls[0]
-    assert call["url"] == "http://x/v1/audio/transcriptions"
-    assert call["data"]["response_format"] == "verbose_json"
-    assert call["files"]["file"][0] == "a.wav"
+    assert call["url"] == "http://x/v1/chat/completions"
+    assert call["json"]["model"] == "omni"
+    parts = call["json"]["messages"][0]["content"]
+    audio = parts[0]["input_audio"]
+    assert audio["format"] == "wav"
+    assert audio["data"] == "data:audio/wav;base64," + base64.b64encode(b"audio").decode()
+    assert parts[1]["type"] == "text"
 
 
-def test_transcribe_audio_fallback_single_segment(monkeypatch):
+def test_transcribe_audio_empty_content(monkeypatch):
     _patch_httpx(monkeypatch)
-    _FakeClient.next_payload = {"text": "整段转写"}
-    cfg = pc.MediaProviderConfig("gpustack", "http://x/v1", "", "m")
-    segs = asyncio.run(pc.transcribe_audio(cfg, b"audio", "a.wav"))
-    assert segs == [{"start": 0.0, "end": 0.0, "text": "整段转写"}]
+    _FakeClient.next_payload = {"choices": [{"message": {"content": ""}}]}
+    cfg = pc.MediaProviderConfig("dashscope", "http://x/v1", "", "omni")
+    assert asyncio.run(pc.transcribe_audio(cfg, b"audio", "a.mp3")) == []
 
 
 def test_resolve_vision_config_env_fallback_and_override(monkeypatch):

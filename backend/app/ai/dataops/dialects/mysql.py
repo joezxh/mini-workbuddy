@@ -20,6 +20,7 @@ from sqlalchemy import text as _text
 from app.ai.dataops.dialect_base import (
     ColRef, ColumnMeta, ColumnProfile, QueryResult, TableMeta, WriteImpact,
 )
+from app.ai.dataops.dialects._sqlalchemy_base import SQLAlchemyProbeMixin
 
 #: MySQL information_schema 原生类型 → 归一化类型
 _NORMALIZE_TYPES = {
@@ -102,7 +103,7 @@ def _build_column_type(data_type: str, char_len, num_prec, num_scale, dt_prec) -
     return base
 
 
-class MysqlAdapter:
+class MysqlAdapter(SQLAlchemyProbeMixin):
     """MySQL 方言适配器（实现 DialectAdapter 协议）。"""
 
     name = "mysql"

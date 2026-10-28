@@ -8,10 +8,10 @@
         <SourceManagement />
       </a-tab-pane>
       <a-tab-pane key="metadata" :tab="t('kbMgmt.dataSource.tabMetadata')">
-        <MetadataExplorer />
+        <MetadataExplorer :focus="metaFocus" />
       </a-tab-pane>
       <a-tab-pane key="standard" :tab="t('kbMgmt.dataSource.tabStandard')">
-        <StandardManagement />
+        <StandardManagement @drill-down="onDrillDown" />
       </a-tab-pane>
       <a-tab-pane key="binding" :tab="t('kbMgmt.dataSource.tabBinding')">
         <BindingWorkbench />
@@ -26,14 +26,21 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import SourceManagement from './data-source/SourceManagement.vue'
-import MetadataExplorer from './data-source/MetadataExplorer.vue'
-import StandardManagement from './data-source/StandardManagement.vue'
-import BindingWorkbench from './data-source/BindingWorkbench.vue'
-import SqlWorkbench from './data-source/SqlWorkbench.vue'
+import SourceManagement from './SourceManagement.vue'
+import MetadataExplorer from './MetadataExplorer.vue'
+import StandardManagement from './StandardManagement.vue'
+import BindingWorkbench from './BindingWorkbench.vue'
+import SqlWorkbench from './SqlWorkbench.vue'
 
 const { t } = useI18n()
 const active = ref('source')
+/** 标准检视 → 元数据浏览的下钻落点（每次都换新对象，便于子组件 watch 感知） */
+const metaFocus = ref<{ source_id: number; db_name?: string; database?: string; table: string } | null>(null)
+
+function onDrillDown(payload: { source_id: number; db_name?: string; database?: string; table: string }) {
+  metaFocus.value = { ...payload }
+  active.value = 'metadata'
+}
 </script>
 
 <style lang="less" scoped>

@@ -24,7 +24,7 @@ import TeamList from '@/views/admin/agent-team/TeamList.vue'
 import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 // 知识治理（数据源 / 知识库 / 外部知识库 / 本体）
-import DataSourcePanel from '@/views/kms/DataSourcePanel.vue'
+import DataSourcePanel from '@/views/data-source/DataSourcePanel.vue'
 import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
 import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）

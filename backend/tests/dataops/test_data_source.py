@@ -82,7 +82,8 @@ def test_update_forbids_source_type_change(client_a):
 
 
 def test_invalid_source_type_rejected(client_a):
-    r = _create(client_a, source_type="oracle")
+    # oracle 现已是合法类型；改用未收录的 sqlite 验证拒绝逻辑
+    r = _create(client_a, source_type="sqlite")
     assert r.status_code == 400
 
 

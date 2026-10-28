@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from app.ai.dataops.dialect_base import (
     ColRef, ColumnMeta, ColumnProfile, QueryResult, TableMeta, WriteImpact,
 )
+from app.ai.dataops.dialects._sqlalchemy_base import SQLAlchemyProbeMixin
 
 _NUMERIC_TYPES = {
     "smallint", "integer", "bigint", "decimal", "numeric", "real",
@@ -61,12 +62,31 @@ class _TablesMixin:
 
     # ------------------------------------------------------------------
     def list_databases(self, conn) -> List[str]:
+        """物理库清单（pg_database）：供导入向导第一级“数据库”下拉。
+
+        注意：PG 单连接只绑一个物理库，表浏览需先按所选库重连（服务层
+        connect_database 覆盖），再用 list_schemas / list_tables 取 schema 与表。"""
         rows = conn.exec_driver_sql(
             "SELECT datname FROM pg_database WHERE datistemplate = false AND datallowconn"
         ).fetchall()
         names = [r[0] for r in rows]
         # 模板库排除（评审用例：template0/template1 不可见）
         return [n for n in names if not n.startswith("template")]
+
+    def list_schemas(self, conn) -> List[str]:
+        """当前连接库内的用户 schema 清单：导入向导第二级。排除系统目录。"""
+        rows = conn.execute(
+            _text(
+                """
+                SELECT n.nspname
+                FROM pg_namespace n
+                WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND n.nspname NOT LIKE 'pg\\_%'
+                ORDER BY n.nspname
+                """
+            )
+        ).fetchall()
+        return [r[0] for r in rows]
 
     def list_tables(self, conn, database: str) -> List[TableMeta]:
         schema = database
@@ -299,7 +319,7 @@ class _DryRunMixin:
             return WriteImpact(statement_type=stmt_type, estimated_rows=None, detail=str(exc).split(chr(10))[0][:200])
 
 
-class PostgresAdapter(_TablesMixin, _ColumnsMixin, _ProfileMixin, _DryRunMixin):
+class PostgresAdapter(_TablesMixin, _ColumnsMixin, _ProfileMixin, _DryRunMixin, SQLAlchemyProbeMixin):
     """PostgreSQL 适配器（组合各能力 Mixin，见文件头约定）。"""
 
     name = "postgresql"

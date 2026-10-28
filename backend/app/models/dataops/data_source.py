@@ -4,7 +4,7 @@
 API 永不返回明文，仅回 ``has_password`` 布尔。
 """
 from sqlalchemy import (
-    BigInteger, Boolean, Column, Integer, String, Text, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Boolean, Column, Integer, JSON, String, Text, TIMESTAMP, UniqueConstraint, func,
 )
 
 from app.db.database import Base
@@ -12,20 +12,22 @@ from app.models.tenant_mixin import TenantMixin
 
 
 class DataSource(Base, TenantMixin):
-    """数据源连接配置（mysql / doris / postgresql）。"""
+    """数据源连接配置（类型由数据字典 ``data_source_type`` 维护）。"""
 
     __tablename__ = "meta_data_source"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     name = Column(String(128), nullable=False, comment="显示名称")
-    # mysql | doris | postgresql
-    source_type = Column(String(32), nullable=False, comment="数据源类型: mysql|doris|postgresql")
+    # 取值合法性以字典 data_source_type 启用项为准（见 services/dataops/source_types.py）
+    source_type = Column(String(32), nullable=False, comment="数据源类型（字典 item_code）")
     host = Column(String(256), nullable=False, comment="主机")
     port = Column(Integer, nullable=False, comment="端口")
     username = Column(String(128), nullable=True, comment="用户名")
     password_enc = Column(Text, nullable=True, comment="密码密文（Fernet，永不外显）")
     database = Column(String(128), nullable=True, comment="默认库")
     charset = Column(String(32), nullable=False, server_default="utf8mb4", comment="字符集")
+    # 类型特有参数（dbSchema/mode/extra/timeout 等，仿 SQLBot DatasourceConf），永不含密码
+    config_json = Column(JSON, nullable=True, comment="类型特有参数 JSON（不含凭据）")
     # unknown | online | offline（探活后更新）
     status = Column(
         String(32), nullable=False, server_default="unknown", comment="状态: unknown|online|offline"

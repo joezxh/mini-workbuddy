@@ -56,7 +56,11 @@ class MetaTable(Base, TenantMixin):
     source_id = Column(
         BigInteger, ForeignKey("meta_data_source.id", ondelete="CASCADE"), nullable=False, comment="数据源 ID"
     )
-    database = Column(String(128), nullable=False, comment="库名")
+    db_name = Column(
+        String(128), nullable=False, server_default="",
+        comment="物理库/连接库名（PG 族三级作用域第一级；非 PG 族与 database 同值）",
+    )
+    database = Column(String(128), nullable=False, comment="库名（PG 族=schema）")
     table_name = Column(String(256), nullable=False, comment="表名")
     table_type = Column(String(32), nullable=True, comment="表类型（BASE TABLE/VIEW 等）")
     table_comment = Column(Text, nullable=True, comment="表注释")
@@ -75,7 +79,7 @@ class MetaTable(Base, TenantMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint("source_id", "database", "table_name", name="uq_meta_table"),
+        UniqueConstraint("source_id", "db_name", "database", "table_name", name="uq_meta_table"),
         Index("idx_meta_table_domain", "domain"),
     )
 

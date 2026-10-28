@@ -6,6 +6,12 @@ import request from '@/utils/request'
 
 const BASE = '/api/v1/dataops'
 
+// ── 数据源类型字典（sys_dictionary：data_source_type） ────────────────
+/** 启用项含 item_name/color/sort/family/default_port/fields，下拉与展示同源 */
+export function listSourceTypes() {
+  return request.get(`${BASE}/source-types`)
+}
+
 // ── 数据源 ───────────────────────────────────────────────────────
 export function listSources() {
   return request.get(`${BASE}/sources`)
@@ -22,17 +28,49 @@ export function updateSource(id: number, data: Record<string, any>) {
 export function deleteSource(id: number) {
   return request.delete(`${BASE}/sources/${id}`)
 }
-/** 探活：后端 dataops router 暂未提供 /sources/{id}/test，需补齐（见设计文档 §7.1） */
+/** 已存数据源探活：回写 status，返回 {ok, error, status} */
 export function testSource(id: number) {
   return request.post(`${BASE}/sources/${id}/test`)
 }
+/** 未保存表单探活：不落库，返回 {ok, error} */
+export function testSourceDraft(data: Record<string, any>) {
+  return request.post(`${BASE}/sources/test`, data)
+}
+/** Excel/CSV 型上传入库（落隔离 schema excel_ds_<id>） */
+export function ingestExcel(id: number, file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post(`${BASE}/sources/${id}/excel/ingest`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+// ── 远端浏览 / 选表导入（SQLBot 式先探后选再导入） ────────────────────
+export function listRemoteDatabases(id: number) {
+  return request.get(`${BASE}/sources/${id}/remote/databases`)
+}
+/** PG 族导入向导第二级：按所选物理库列其用户 schema（非 PG 族返回空） */
+export function listRemoteSchemas(id: number, database: string) {
+  return request.get(`${BASE}/sources/${id}/remote/schemas`, { params: { database } })
+}
+export function listRemoteTables(id: number, database: string, schema?: string) {
+  return request.get(`${BASE}/sources/${id}/remote/tables`, { params: { database, schema } })
+}
+export function importTables(id: number, body: { database: string; schema?: string; tables: string[]; with_profile?: boolean }) {
+  return request.post(`${BASE}/sources/${id}/import-tables`, body)
+}
 
 // ── 元数据扫描 / 浏览 ──────────────────────────────────────────────
-export function scanSource(id: number, database: string, withProfile = false) {
-  return request.post(`${BASE}/sources/${id}/scan`, { database, with_profile: withProfile })
+export function scanSource(id: number, database: string, withProfile = false, connectDatabase?: string) {
+  return request.post(`${BASE}/sources/${id}/scan`,
+    { database, with_profile: withProfile, connect_database: connectDatabase })
 }
-export function listTables(id: number, database?: string) {
-  return request.get(`${BASE}/sources/${id}/tables`, { params: { database } })
+export function listTables(id: number, database?: string, dbName?: string) {
+  return request.get(`${BASE}/sources/${id}/tables`, { params: { database, db_name: dbName } })
+}
+/** 已入库的列快照（按表 ID） */
+export function listMetaColumns(id: number, tableId: number) {
+  return request.get(`${BASE}/sources/${id}/tables/${tableId}/columns`)
 }
 export function runQuery(id: number, sql: string, limit = 200) {
   return request.post(`${BASE}/sources/${id}/query`, { sql, limit })
