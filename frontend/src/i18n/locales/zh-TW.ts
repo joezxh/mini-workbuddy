@@ -2022,7 +2022,8 @@ export default {
       columnInfo: '欄位資訊',
       columnName: '欄位名',
       nullable: '可空',
-      columnKey: '鍵'
+      columnKey: '鍵',
+      focusMissing: '未在快照中找到該表，請先掃描該庫元資料'
     },
     bind: {
       run: '執行綁定',
@@ -2056,6 +2057,32 @@ export default {
       objectDeleted: '對象已刪除',
       saveFailed: '保存失敗',
       loadFailed: '載入失敗'
+    },
+    graph: {
+      tab: '標準圖',
+      viewGraph: '關係圖',
+      empty: '暫無對象標準',
+      createRelation: '新建關係',
+      editRelation: '編輯關係',
+      fromTo: '關係兩端',
+      fromObject: '來源對象',
+      toObject: '目標對象',
+      pairLocked: '關係兩端建立後不可修改',
+      relationType: '關係類型',
+      selectHint: '在圖上點選對象或關係查看詳情',
+      required: '必填',
+      boundTables: '已綁定物理表',
+      drill: '下鑽',
+      checks: '檢驗結論',
+      noChecks: '暫無檢驗記錄',
+      requiredHint: '請填寫編碼、名稱、關係兩端與關係類型',
+      sameObject: '關係兩端不能是同一對象',
+      saved: '關係已保存',
+      deleted: '關係已刪除'
+    },
+    overview: {
+      tab: '總覽',
+      placeholder: '總覽視圖建置中：統計看板與自然語言檢索將於下一批交付'
     },
     common: {
       name: '名稱',

@@ -1,33 +1,34 @@
 <template>
   <div class="std-mgr">
-    <a-tabs v-model:active-key="activeTab" class="std-mgr__tabs">
-      <!-- 目录/场景 → 对象标准 -->
-      <a-tab-pane key="catalog" :tab="t('kbMgmt.catalog.tabObjects')">
-        <div class="std-mgr__split">
-          <aside class="std-mgr__aside">
-            <div class="std-mgr__toolbar std-mgr__toolbar--aside">
-              <a-button type="link" size="small" :disabled="!catalogId" @click="selectCatalog(null)">
-                {{ t('kbMgmt.catalog.all') }}
-              </a-button>
-              <span class="std-mgr__spacer" />
-              <a-button type="text" size="small" :title="t('kbMgmt.catalog.create')" @click="openCatalogForm">
-                <PlusOutlined />
-              </a-button>
-              <a-popconfirm :title="t('kbMgmt.common.deleteConfirm')" @confirm="removeCatalog">
-                <a-button type="text" size="small" danger :disabled="!catalogId" :title="t('kbMgmt.catalog.delete')">
-                  <DeleteOutlined />
-                </a-button>
-              </a-popconfirm>
-            </div>
-            <StdCatalogTree
-              :tree-data="catalogs"
-              :selected-keys="catalogId ? [catalogId] : []"
-              :loading="catalogLoading"
-              @select="selectCatalog"
-            />
-          </aside>
+    <div class="std-mgr__body">
+      <!-- 目录/场景树：目录与对象、标准图两个视图共用同一份选中态 -->
+      <aside v-if="activeTab !== 'attributes'" class="std-mgr__aside">
+        <div class="std-mgr__toolbar std-mgr__toolbar--aside">
+          <a-button type="link" size="small" :disabled="!catalogId" @click="selectCatalog(null)">
+            {{ t('kbMgmt.catalog.all') }}
+          </a-button>
+          <span class="std-mgr__spacer" />
+          <a-button type="text" size="small" :title="t('kbMgmt.catalog.create')" @click="openCatalogForm">
+            <PlusOutlined />
+          </a-button>
+          <a-popconfirm :title="t('kbMgmt.common.deleteConfirm')" @confirm="removeCatalog">
+            <a-button type="text" size="small" danger :disabled="!catalogId" :title="t('kbMgmt.catalog.delete')">
+              <DeleteOutlined />
+            </a-button>
+          </a-popconfirm>
+        </div>
+        <StdCatalogTree
+          :tree-data="catalogs"
+          :selected-keys="catalogId ? [catalogId] : []"
+          :loading="catalogLoading"
+          @select="selectCatalog"
+        />
+      </aside>
 
-          <section class="std-mgr__main">
+      <div class="std-mgr__content">
+        <a-tabs v-model:active-key="activeTab" class="std-mgr__tabs">
+          <!-- 目录/场景 → 对象标准 -->
+          <a-tab-pane key="catalog" :tab="t('kbMgmt.catalog.tabObjects')">
             <div class="std-mgr__toolbar">
               <a-button type="primary" @click="openObjectForm()">
                 <PlusOutlined /> {{ t('kbMgmt.catalog.createObject') }}
@@ -54,30 +55,66 @@
                 </template>
               </template>
             </DataTable>
-          </section>
-        </div>
-      </a-tab-pane>
+          </a-tab-pane>
 
-      <!-- 属性标准（原扁平字典，保持独立页签） -->
-      <a-tab-pane key="attributes" :tab="t('kbMgmt.catalog.tabAttributes')">
-        <div class="std-mgr__toolbar">
-          <a-button type="primary" @click="openForm()"><PlusOutlined /> {{ t('kbMgmt.common.create') }}</a-button>
-          <a-button @click="seed"><DatabaseOutlined /> {{ t('kbMgmt.std.seed') }}</a-button>
-          <a-button @click="load"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
-        </div>
-        <DataTable :columns="columns" :data-source="standards" :loading="loading" row-key="id" :page-visible="false">
-          <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'aliases'">{{ (record.aliases || []).join(', ') || '—' }}</template>
-            <template v-else-if="column.key === 'action'">
-              <a-button size="small" @click="openForm(record)">{{ t('kbMgmt.common.edit') }}</a-button>
-              <a-popconfirm :title="t('kbMgmt.common.deleteConfirm')" @confirm="remove(record)">
-                <a-button size="small" danger>{{ t('kbMgmt.common.delete') }}</a-button>
-              </a-popconfirm>
-            </template>
-          </template>
-        </DataTable>
-      </a-tab-pane>
-    </a-tabs>
+          <!-- 标准图 + 检视面板 -->
+          <a-tab-pane key="graph" :tab="t('kbMgmt.graph.tab')">
+            <div class="std-mgr__toolbar">
+              <a-segmented v-model:value="graphView" :options="graphViewOptions" size="small" />
+              <span class="std-mgr__spacer" />
+              <a-button type="primary" @click="openRelationForm()">
+                <PlusOutlined /> {{ t('kbMgmt.graph.createRelation') }}
+              </a-button>
+              <a-button @click="loadGraph"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
+            </div>
+            <div class="std-mgr__graph-body">
+              <div class="std-mgr__graph">
+                <StdGraphView
+                  v-if="graphView === 'graph'"
+                  :nodes="graph.nodes"
+                  :edges="graph.edges"
+                  :highlight-codes="highlightCodes"
+                  @node-click="onNodeClick"
+                  @edge-click="onEdgeClick"
+                />
+                <a-empty v-else :description="t('kbMgmt.overview.placeholder')" />
+              </div>
+              <div class="std-mgr__inspector">
+                <StdInspector
+                  :selected="selected"
+                  :objects="graph.nodes"
+                  :relations="relations"
+                  @edit-object="editObjectById"
+                  @edit-relation="editRelationById"
+                  @delete-relation="removeRelation"
+                  @drill-down="onDrillDown"
+                />
+              </div>
+            </div>
+          </a-tab-pane>
+
+          <!-- 属性标准（原扁平字典，保持独立页签） -->
+          <a-tab-pane key="attributes" :tab="t('kbMgmt.catalog.tabAttributes')">
+            <div class="std-mgr__toolbar">
+              <a-button type="primary" @click="openForm()"><PlusOutlined /> {{ t('kbMgmt.common.create') }}</a-button>
+              <a-button @click="seed"><DatabaseOutlined /> {{ t('kbMgmt.std.seed') }}</a-button>
+              <a-button @click="load"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
+            </div>
+            <DataTable :columns="columns" :data-source="standards" :loading="loading" row-key="id" :page-visible="false">
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'aliases'">{{ (record.aliases || []).join(', ') || '—' }}</template>
+                <template v-else-if="column.key === 'action'">
+                  <a-button size="small" @click="openForm(record)">{{ t('kbMgmt.common.edit') }}</a-button>
+                  <a-popconfirm :title="t('kbMgmt.common.deleteConfirm')" @confirm="remove(record)">
+                    <a-button size="small" danger>{{ t('kbMgmt.common.delete') }}</a-button>
+                  </a-popconfirm>
+                </template>
+              </template>
+            </DataTable>
+          </a-tab-pane>
+        </a-tabs>
+      </div>
+    </div>
 
     <ObjectFormModal
       v-model:open="objectFormOpen"
@@ -85,7 +122,16 @@
       :catalogs="catalogs"
       :standards="standards"
       :default-catalog-id="catalogId"
-      @saved="loadObjects"
+      @saved="onObjectSaved"
+    />
+
+    <RelationFormModal
+      v-model:open="relationFormOpen"
+      :record="editingRelation"
+      :objects="graph.nodes"
+      :catalogs="catalogs"
+      :default-catalog-id="catalogId"
+      @saved="loadGraph"
     />
 
     <a-modal v-model:open="catalogFormOpen" :title="t('kbMgmt.catalog.create')" @ok="saveCatalog">
@@ -124,19 +170,26 @@
 
 <script setup lang="ts">
 /**
- * 标准中心 shell（F1）：左「目录/场景」树 + 右「对象标准」表；属性标准保留为独立页签。
- * 图视图/检视面板/总览在 F2/F3 接入同一 shell。
+ * 标准中心 shell：左「目录/场景」树 + 右视图（目录与对象 / 标准图 + 检视 / 属性标准）。
+ * 总览视图（F3）在标准图页签内以 segmented 切换占位；下钻事件向上抛给 DataSourcePanel。
  */
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, ReloadOutlined, DatabaseOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import DataTable from '@/components/common/DataTable/index.vue'
 import StdCatalogTree from './standard/StdCatalogTree.vue'
+import StdGraphView from './standard/StdGraphView.vue'
+import StdInspector from './standard/StdInspector.vue'
 import ObjectFormModal from './standard/ObjectFormModal.vue'
+import RelationFormModal from './standard/RelationFormModal.vue'
 import * as api from '@/api/dataops'
 
 const { t } = useI18n()
+const emit = defineEmits<{
+  (e: 'drill-down', payload: { source_id: number; db_name?: string; database?: string; table: string }): void
+}>()
+
 const activeTab = ref('catalog')
 
 // ── 目录 / 对象 ────────────────────────────────────────────────
@@ -197,16 +250,26 @@ async function loadObjects() {
 function selectCatalog(id: number | null) {
   catalogId.value = id
   loadObjects()
+  if (activeTab.value === 'graph') loadGraph()
 }
 function openObjectForm(row?: any) {
   editingObject.value = row ? { ...row } : null
   objectFormOpen.value = true
+}
+function onObjectSaved() {
+  loadObjects()
+  loadGraph()
+}
+async function editObjectById(id: number) {
+  const node = graph.value.nodes.find((n: any) => n.id === id)
+  openObjectForm(node)
 }
 async function removeObject(row: any) {
   try {
     await api.deleteObject(row.id)
     message.success(t('kbMgmt.catalog.objectDeleted'))
     loadObjects()
+    loadGraph()
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('kbMgmt.common.deleteFailed'))
   }
@@ -242,6 +305,65 @@ async function removeCatalog() {
     message.error(e?.response?.data?.detail || t('kbMgmt.common.deleteFailed'))
   }
 }
+
+// ── 标准图 / 关系 / 检视 ─────────────────────────────────────────
+const graph = ref<{ nodes: any[]; edges: any[] }>({ nodes: [], edges: [] })
+const relations = ref<any[]>([])
+const graphView = ref<'graph' | 'overview'>('graph')
+const selected = ref<{ kind: 'node' | 'edge'; id: number } | null>(null)
+const highlightCodes = ref<string[]>([])
+const relationFormOpen = ref(false)
+const editingRelation = ref<any>(null)
+
+const graphViewOptions = computed(() => [
+  { label: t('kbMgmt.graph.viewGraph'), value: 'graph' },
+  { label: t('kbMgmt.overview.tab'), value: 'overview' },
+])
+
+async function loadGraph() {
+  const [g, r]: any[] = await Promise.all([
+    api.listGraph(catalogId.value ?? undefined),
+    api.listRelations(catalogId.value ?? undefined),
+  ])
+  graph.value = (g.data || g) || { nodes: [], edges: [] }
+  relations.value = r.data || r || []
+  // 选中项可能已被本次刷新移除
+  if (selected.value) {
+    const pool = selected.value.kind === 'node' ? graph.value.nodes : relations.value
+    if (!pool.some((x: any) => x.id === selected.value!.id)) selected.value = null
+  }
+}
+function onNodeClick(id: number) {
+  selected.value = { kind: 'node', id }
+}
+function onEdgeClick(id: number) {
+  selected.value = { kind: 'edge', id }
+}
+function openRelationForm(row?: any) {
+  editingRelation.value = row ? { ...row } : null
+  relationFormOpen.value = true
+}
+function editRelationById(id: number) {
+  const row = relations.value.find((r: any) => r.id === id)
+  if (row) openRelationForm(row)
+}
+async function removeRelation(id: number) {
+  try {
+    await api.deleteRelation(id)
+    message.success(t('kbMgmt.graph.deleted'))
+    if (selected.value?.id === id) selected.value = null
+    await loadGraph()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.common.deleteFailed'))
+  }
+}
+function onDrillDown(payload: { source_id: number; db_name?: string; database?: string; table: string }) {
+  emit('drill-down', payload)
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'graph' && !graph.value.nodes.length) loadGraph()
+})
 
 // ── 属性标准（原逻辑）──────────────────────────────────────────
 const standards = ref<any[]>([])
@@ -320,15 +442,11 @@ onMounted(async () => {
   flex-direction: column;
   height: 100%;
 }
-.std-mgr__tabs {
+.std-mgr__body {
   flex: 1;
   min-height: 0;
-}
-.std-mgr__split {
   display: flex;
   gap: 16px;
-  height: 100%;
-  min-height: 420px;
 }
 .std-mgr__aside {
   width: 260px;
@@ -338,22 +456,47 @@ onMounted(async () => {
   padding: 8px;
   overflow: auto;
 }
-.std-mgr__main {
+.std-mgr__content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
+.std-mgr__tabs {
+  flex: 1;
+  min-height: 0;
+}
 .std-mgr__toolbar {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  align-items: center;
 }
 .std-mgr__toolbar--aside {
   margin-bottom: 4px;
-  align-items: center;
 }
 .std-mgr__spacer {
   flex: 1;
+}
+.std-mgr__graph-body {
+  display: flex;
+  gap: 12px;
+  height: calc(100vh - 280px);
+  min-height: 360px;
+}
+.std-mgr__graph {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.std-mgr__inspector {
+  width: 340px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  overflow: hidden;
 }
 </style>

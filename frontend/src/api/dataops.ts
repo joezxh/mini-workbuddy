@@ -118,3 +118,29 @@ export function deleteObject(id: number) {
 export function setObjectAttributes(id: number, items: any[]) {
   return request.put(`${BASE}/standards/objects/${id}/attributes`, { items })
 }
+/** 对象标准被哪些物理表绑定（检视面板下钻入口） */
+export function listObjectBindings(id: number) {
+  return request.get(`${BASE}/standards/objects/${id}/bindings`)
+}
+
+// ── 标准中心（CDM）：关系标准 + 标准图 + 统计 + NL 检索 ─────────────────
+/** nodes=对象标准、edges=关系标准；传 catalogId 只取该子树 */
+export function listGraph(catalogId?: number) {
+  return request.get(`${BASE}/standards/graph`, { params: { catalog_id: catalogId } })
+}
+export function listRelations(catalogId?: number) {
+  return request.get(`${BASE}/standards/relations`, { params: { catalog_id: catalogId } })
+}
+export function createRelation(data: Record<string, any>) {
+  return request.post(`${BASE}/standards/relations`, data)
+}
+export function updateRelation(id: number, data: Record<string, any>) {
+  return request.put(`${BASE}/standards/relations/${id}`, data)
+}
+export function deleteRelation(id: number) {
+  return request.delete(`${BASE}/standards/relations/${id}`)
+}
+/** 关系标准在各数据源上的校验结论（hit/missing/conflict） */
+export function listRelationChecks(id: number) {
+  return request.get(`${BASE}/standards/relations/${id}/checks`)
+}

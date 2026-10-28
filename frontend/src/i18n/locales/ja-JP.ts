@@ -2021,7 +2021,8 @@ export default {
       columnInfo: 'カラム情報',
       columnName: 'カラム名',
       nullable: 'NULL可',
-      columnKey: 'キー'
+      columnKey: 'キー',
+      focusMissing: 'スナップショットに該当テーブルがありません。先にメタデータをスキャンしてください'
     },
     bind: {
       run: 'バインド実行',
@@ -2055,6 +2056,32 @@ export default {
       objectDeleted: 'オブジェクトを削除しました',
       saveFailed: '保存に失敗しました',
       loadFailed: '読み込みに失敗しました'
+    },
+    graph: {
+      tab: '標準グラフ',
+      viewGraph: '関係グラフ',
+      empty: 'オブジェクト標準がありません',
+      createRelation: '関係を作成',
+      editRelation: '関係を編集',
+      fromTo: '関係の両端',
+      fromObject: 'ソースオブジェクト',
+      toObject: 'ターゲットオブジェクト',
+      pairLocked: '両端は作成後に変更できません',
+      relationType: '関係タイプ',
+      selectHint: 'グラフ上のノードまたはエッジをクリックして詳細を表示',
+      required: '必須',
+      boundTables: 'バインド済み物理テーブル',
+      drill: 'ドリルダウン',
+      checks: '検証結果',
+      noChecks: '検証記録なし',
+      requiredHint: 'コード、名称、両端、関係タイプを入力してください',
+      sameObject: '両端に同じオブジェクトは指定できません',
+      saved: '関係を保存しました',
+      deleted: '関係を削除しました'
+    },
+    overview: {
+      tab: '概要',
+      placeholder: '概要ビューは構築中です。統計と自然言語検索は次回提供予定です'
     },
     common: {
       name: '名前',

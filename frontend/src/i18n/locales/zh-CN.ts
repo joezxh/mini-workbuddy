@@ -2029,7 +2029,8 @@ export default {
       columnInfo: '列信息',
       columnName: '列名',
       nullable: '可空',
-      columnKey: '键'
+      columnKey: '键',
+      focusMissing: '未在快照中找到该表，请先扫描该库元数据'
     },
     bind: {
       run: '执行绑定',
@@ -2063,6 +2064,32 @@ export default {
       objectDeleted: '对象已删除',
       saveFailed: '保存失败',
       loadFailed: '加载失败'
+    },
+    graph: {
+      tab: '标准图',
+      viewGraph: '关系图',
+      empty: '暂无对象标准',
+      createRelation: '新建关系',
+      editRelation: '编辑关系',
+      fromTo: '关系两端',
+      fromObject: '源对象',
+      toObject: '目标对象',
+      pairLocked: '关系两端创建后不可修改',
+      relationType: '关系类型',
+      selectHint: '在图上点选对象或关系查看详情',
+      required: '必填',
+      boundTables: '已绑定物理表',
+      drill: '下钻',
+      checks: '校验结论',
+      noChecks: '暂无校验记录',
+      requiredHint: '请填写编码、名称、关系两端与关系类型',
+      sameObject: '关系两端不能是同一对象',
+      saved: '关系已保存',
+      deleted: '关系已删除'
+    },
+    overview: {
+      tab: '总览',
+      placeholder: '总览视图建设中：统计看板与自然语言检索将在下一批交付'
     },
     common: {
       name: '名称',

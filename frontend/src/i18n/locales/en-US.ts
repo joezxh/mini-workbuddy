@@ -2017,7 +2017,8 @@ export default {
       columnInfo: 'Columns',
       columnName: 'Column',
       nullable: 'Null',
-      columnKey: 'Key'
+      columnKey: 'Key',
+      focusMissing: 'Table not found in the snapshot; scan this database first'
     },
     bind: {
       run: 'Run Binding',
@@ -2051,6 +2052,32 @@ export default {
       objectDeleted: 'Object deleted',
       saveFailed: 'Save failed',
       loadFailed: 'Load failed'
+    },
+    graph: {
+      tab: 'Standard Graph',
+      viewGraph: 'Graph',
+      empty: 'No object standard yet',
+      createRelation: 'New Relation',
+      editRelation: 'Edit Relation',
+      fromTo: 'Endpoints',
+      fromObject: 'From object',
+      toObject: 'To object',
+      pairLocked: 'Endpoints cannot be changed after creation',
+      relationType: 'Relation Type',
+      selectHint: 'Click a node or edge to inspect details',
+      required: 'Required',
+      boundTables: 'Bound Tables',
+      drill: 'Drill down',
+      checks: 'Check Results',
+      noChecks: 'No check result yet',
+      requiredHint: 'Code, name, endpoints and relation type are required',
+      sameObject: 'Endpoints must be two different objects',
+      saved: 'Relation saved',
+      deleted: 'Relation deleted'
+    },
+    overview: {
+      tab: 'Overview',
+      placeholder: 'Overview is under construction: stats board and NL search arrive in the next batch'
     },
     common: {
       name: 'Name',
