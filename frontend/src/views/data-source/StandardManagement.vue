@@ -68,18 +68,29 @@
               <a-button @click="loadGraph"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
             </div>
             <div class="std-mgr__graph-body">
-              <div class="std-mgr__graph">
+              <div class="std-mgr__graph" :class="{ 'std-mgr__graph--overview': graphView === 'overview' }">
                 <StdGraphView
                   v-if="graphView === 'graph'"
                   :nodes="graph.nodes"
                   :edges="graph.edges"
                   :highlight-codes="highlightCodes"
+                  :highlight-relation-codes="highlightRelationCodes"
                   @node-click="onNodeClick"
                   @edge-click="onEdgeClick"
                 />
-                <a-empty v-else :description="t('kbMgmt.overview.placeholder')" />
+                <template v-else>
+                  <StdGuidTour class="std-mgr__tour" :current="tourStep" />
+                  <StdOverviewView
+                    :stats="stats"
+                    :loading="statsLoading"
+                    :summary="nlSummary"
+                    :degraded="nlDegraded"
+                    :searching="nlSearching"
+                    @search="onNlSearch"
+                  />
+                </template>
               </div>
-              <div class="std-mgr__inspector">
+              <div v-if="graphView === 'graph'" class="std-mgr__inspector">
                 <StdInspector
                   :selected="selected"
                   :objects="graph.nodes"
@@ -183,6 +194,9 @@ import StdGraphView from './standard/StdGraphView.vue'
 import StdInspector from './standard/StdInspector.vue'
 import ObjectFormModal from './standard/ObjectFormModal.vue'
 import RelationFormModal from './standard/RelationFormModal.vue'
+import StdOverviewView from './standard/StdOverviewView.vue'
+import StdGuidTour from './standard/StdGuidTour.vue'
+import { toNlFocus } from './standard/nlFocus'
 import * as api from '@/api/dataops'
 
 const { t } = useI18n()
@@ -312,8 +326,31 @@ const relations = ref<any[]>([])
 const graphView = ref<'graph' | 'overview'>('graph')
 const selected = ref<{ kind: 'node' | 'edge'; id: number } | null>(null)
 const highlightCodes = ref<string[]>([])
+const highlightRelationCodes = ref<string[]>([])
 const relationFormOpen = ref(false)
 const editingRelation = ref<any>(null)
+
+// ── 总览 / NL 检索 ─────────────────────────────────────────────
+const stats = ref({
+  catalogs: 0,
+  objects: 0,
+  relations: 0,
+  relation_check: { hit: 0, missing: 0, conflict: 0 },
+})
+const statsLoading = ref(false)
+const nlSummary = ref('')
+const nlDegraded = ref(false)
+const nlSearching = ref(false)
+
+/** 导览当前步：按数据充实度推进（属性/绑定无汇总字段，命中对象即视为已过属性步） */
+const tourStep = computed(() => {
+  const s = stats.value
+  if (!s.catalogs) return 0
+  if (!s.objects) return 1
+  if (!s.relations) return 3
+  const checked = s.relation_check.hit + s.relation_check.missing + s.relation_check.conflict
+  return checked ? 5 : 4
+})
 
 const graphViewOptions = computed(() => [
   { label: t('kbMgmt.graph.viewGraph'), value: 'graph' },
@@ -321,12 +358,20 @@ const graphViewOptions = computed(() => [
 ])
 
 async function loadGraph() {
-  const [g, r]: any[] = await Promise.all([
-    api.listGraph(catalogId.value ?? undefined),
-    api.listRelations(catalogId.value ?? undefined),
-  ])
-  graph.value = (g.data || g) || { nodes: [], edges: [] }
-  relations.value = r.data || r || []
+  statsLoading.value = true
+  try {
+    const [g, r, s]: any[] = await Promise.all([
+      api.listGraph(catalogId.value ?? undefined),
+      api.listRelations(catalogId.value ?? undefined),
+      api.getStats(),
+    ])
+    graph.value = (g.data || g) || { nodes: [], edges: [] }
+    relations.value = r.data || r || []
+    const st = s.data || s
+    if (st) stats.value = { ...stats.value, ...st }
+  } finally {
+    statsLoading.value = false
+  }
   // 选中项可能已被本次刷新移除
   if (selected.value) {
     const pool = selected.value.kind === 'node' ? graph.value.nodes : relations.value
@@ -359,6 +404,45 @@ async function removeRelation(id: number) {
 }
 function onDrillDown(payload: { source_id: number; db_name?: string; database?: string; table: string }) {
   emit('drill-down', payload)
+}
+
+/** 目录 code → id（NL 返回的 focus_catalog_code 用 code 指代目录） */
+function findCatalogIdByCode(code?: string | null): number | null {
+  if (!code) return null
+  const walk = (nodes: any[]): number | null => {
+    for (const n of nodes) {
+      if (n.code === code) return n.id
+      const hit = n.children?.length ? walk(n.children) : null
+      if (hit) return hit
+    }
+    return null
+  }
+  return walk(catalogs.value)
+}
+
+/** NL 检索：高亮对象/关系、切回图视图，降级时提示但不清空当前视图 */
+async function onNlSearch(question: string) {
+  nlSearching.value = true
+  try {
+    const r: any = await api.nlQuery(question, catalogId.value ?? undefined)
+    const focus = toNlFocus(r.data || r)
+    nlSummary.value = focus.summary
+    nlDegraded.value = focus.degraded
+    highlightCodes.value = focus.objectCodes
+    highlightRelationCodes.value = focus.relationCodes
+    graphView.value = 'graph'
+    const cid = findCatalogIdByCode(focus.focusCatalogCode)
+    if (cid && cid !== catalogId.value) {
+      catalogId.value = cid
+      await loadGraph()
+      await loadObjects()
+    }
+    if (focus.degraded) message.warning(t('kbMgmt.overview.degraded'))
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.overview.searchFailed'))
+  } finally {
+    nlSearching.value = false
+  }
 }
 
 watch(activeTab, (tab) => {
@@ -490,6 +574,17 @@ onMounted(async () => {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
+}
+/* 总览：导览步骤条在上，统计与检索可滚动 */
+.std-mgr__graph--overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow: auto;
+}
+.std-mgr__tour {
+  flex-shrink: 0;
 }
 .std-mgr__inspector {
   width: 340px;

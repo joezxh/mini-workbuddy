@@ -25,6 +25,8 @@ const props = defineProps<{
   edges: any[]
   /** 高亮对象标准 code（NL 检索 / 下钻联动） */
   highlightCodes?: string[]
+  /** 高亮关系标准 code（NL 检索命中边） */
+  highlightRelationCodes?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +37,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const highlighted = computed(() => new Set(props.highlightCodes || []))
+const highlightedEdges = computed(() => new Set(props.highlightRelationCodes || []))
 
 const option = computed(() => ({
   tooltip: { confine: true },
@@ -61,8 +64,10 @@ const option = computed(() => ({
       links: props.edges.map((e) => ({
         source: String(e.from),
         target: String(e.to),
+        code: e.code,
         relation_type: e.relation_type,
         edgeId: e.id,
+        lineStyle: highlightedEdges.value.has(e.code) ? { width: 3, color: '#faad14' } : undefined,
       })),
     },
   ],

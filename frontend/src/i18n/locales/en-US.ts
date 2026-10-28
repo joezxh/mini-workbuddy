@@ -2077,7 +2077,28 @@ export default {
     },
     overview: {
       tab: 'Overview',
-      placeholder: 'Overview is under construction: stats board and NL search arrive in the next batch'
+      catalogs: 'Catalogs',
+      objects: 'Object Standards',
+      relations: 'Relation Standards',
+      chart: 'Relation check verdicts',
+      hit: 'Hit',
+      missing: 'Missing',
+      conflict: 'Conflict',
+      searchPlaceholder: 'Describe the object/relation you need, e.g. "how are orders linked to customers"',
+      summary: 'AI summary',
+      degraded: 'AI search is unavailable; current view is kept',
+      searchFailed: 'Search failed',
+      empty: 'No check verdict yet'
+    },
+    tour: {
+      title: 'Modeling tour',
+      hint: 'Finish the six steps in order to get a verifiable standard graph',
+      catalog: 'Catalog',
+      object: 'Define object',
+      attribute: 'Attach attributes',
+      relation: 'Link relations',
+      bind: 'Bind sources',
+      stats: 'Review stats'
     },
     common: {
       name: 'Name',

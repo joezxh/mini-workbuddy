@@ -2081,7 +2081,28 @@ export default {
     },
     overview: {
       tab: '概要',
-      placeholder: '概要ビューは構築中です。統計と自然言語検索は次回提供予定です'
+      catalogs: 'ディレクトリ',
+      objects: 'オブジェクト標準',
+      relations: '関係標準',
+      chart: '関係検証の三態分布',
+      hit: 'ヒット',
+      missing: '不足',
+      conflict: '競合',
+      searchPlaceholder: '探したいオブジェクト/関係を自然言語で記述（例：注文と顧客の関係）',
+      summary: 'AI の解釈',
+      degraded: 'AI 検索は一時的に利用できません。現在のビューを保持します',
+      searchFailed: '検索失敗',
+      empty: '検証結果がありません'
+    },
+    tour: {
+      title: 'モデリングガイド',
+      hint: '6 ステップを順に進めると検証可能な標準グラフができます',
+      catalog: 'ディレクトリ作成',
+      object: 'オブジェクト定義',
+      attribute: '属性付与',
+      relation: '関係作成',
+      bind: 'ソースをバインド',
+      stats: '統計を見る'
     },
     common: {
       name: '名前',

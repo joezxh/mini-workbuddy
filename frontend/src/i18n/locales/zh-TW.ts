@@ -2082,7 +2082,28 @@ export default {
     },
     overview: {
       tab: '總覽',
-      placeholder: '總覽視圖建置中：統計看板與自然語言檢索將於下一批交付'
+      catalogs: '目錄/場景',
+      objects: '對象標準',
+      relations: '關係標準',
+      chart: '關係檢驗三態分佈',
+      hit: '命中',
+      missing: '缺失',
+      conflict: '衝突',
+      searchPlaceholder: '用自然語言描述要尋找的對象/關係，如「訂單和客戶怎麼關聯」',
+      summary: 'AI 解讀',
+      degraded: 'AI 檢索暫不可用，已保留當前視圖',
+      searchFailed: '檢索失敗',
+      empty: '暫無檢驗結論'
+    },
+    tour: {
+      title: '建模導覽',
+      hint: '按順序完成六步，即可得到可檢驗的標準圖',
+      catalog: '建目錄',
+      object: '定義對象',
+      attribute: '掛屬性',
+      relation: '連關係',
+      bind: '綁定資料來源',
+      stats: '看統計'
     },
     common: {
       name: '名稱',

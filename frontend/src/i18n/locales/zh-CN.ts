@@ -2089,7 +2089,28 @@ export default {
     },
     overview: {
       tab: '总览',
-      placeholder: '总览视图建设中：统计看板与自然语言检索将在下一批交付'
+      catalogs: '目录/场景',
+      objects: '对象标准',
+      relations: '关系标准',
+      chart: '关系校验三态分布',
+      hit: '命中',
+      missing: '缺失',
+      conflict: '冲突',
+      searchPlaceholder: '用自然语言描述要找的对象/关系，如「订单和客户怎么关联」',
+      summary: 'AI 解读',
+      degraded: 'AI 检索暂不可用，已保留当前视图',
+      searchFailed: '检索失败',
+      empty: '暂无校验结论'
+    },
+    tour: {
+      title: '建模导览',
+      hint: '按顺序完成六步，即可得到可校验的标准图',
+      catalog: '建目录',
+      object: '定义对象',
+      attribute: '挂属性',
+      relation: '连关系',
+      bind: '绑定数据源',
+      stats: '看统计'
     },
     common: {
       name: '名称',

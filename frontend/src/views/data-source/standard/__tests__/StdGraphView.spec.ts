@@ -19,6 +19,7 @@ vi.mock('vue-echarts', () => ({
             links: props.option?.series?.[0]?.links?.length ?? -1,
             first: props.option?.series?.[0]?.data?.[0]?.name ?? null,
             sizes: props.option?.series?.[0]?.data?.map((d: any) => d.symbolSize) ?? null,
+            edgeWidths: props.option?.series?.[0]?.links?.map((l: any) => l.lineStyle?.width ?? 1) ?? null,
           }),
         )
     },
@@ -71,5 +72,10 @@ describe('StdGraphView', () => {
     const html = unescapeHtml(await ssr({ nodes: NODES, edges: EDGES, highlightCodes: ['obj_order'] }))
     // obj_customer 未命中=48，obj_order 命中=64
     expect(html).toContain('"sizes":[48,64]')
+  })
+
+  it('highlightRelationCodes 命中时加粗对应边', async () => {
+    const html = unescapeHtml(await ssr({ nodes: NODES, edges: EDGES, highlightRelationCodes: ['rel_order_customer'] }))
+    expect(html).toContain('"edgeWidths":[3]')
   })
 })

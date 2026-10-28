@@ -144,3 +144,13 @@ export function deleteRelation(id: number) {
 export function listRelationChecks(id: number) {
   return request.get(`${BASE}/standards/relations/${id}/checks`)
 }
+
+// ── 标准中心（CDM）：总览统计 + 自然语言检索 ──────────────────────────
+/** 目录/对象/关系计数 + 关系校验三态分布 */
+export function getStats() {
+  return request.get(`${BASE}/standards/stats`)
+}
+/** 自然语言 → 高亮对象/关系 code + 一句话解释；AI 不可用时返回 degraded:true */
+export function nlQuery(question: string, catalogId?: number) {
+  return request.post(`${BASE}/standards/nl-query`, { question, catalog_id: catalogId })
+}
