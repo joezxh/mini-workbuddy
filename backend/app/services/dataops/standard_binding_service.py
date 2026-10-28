@@ -5,9 +5,14 @@
 2. 用 ``RuleEngine.match_standard`` 把列匹配到 ``MetaStandard`` 标准项；
 3. 落 ``meta_column_standard``（source=rule，评审状态由置信度分层决定），并写变更历史。
 
+CDM 扩展（B3/B4）：
+4. 用 ``RuleEngine.match_object`` 把**表**匹配到 ``MetaObjectStandard``，落
+   ``meta_table_standard``（表侧 1:1，评审语义与列绑定一致）；
+5. 按 (source, database) 校验已发布关系标准，落 ``meta_relation_check``。
+
 安全/幂等：
-- 已存在且为「人工 accepted」的绑定**不覆盖**（尊重人工裁决）；
-- 其它情况 upsert（按 column_id 唯一），每次重绑写一条 history；
+- 已存在且为「人工 accepted」的绑定**不覆盖**（尊重人工裁决，列/表同策略）；
+- 其它情况 upsert（按 column_id / table_id 唯一），每次重绑写一条 history；
 - 低于 ``CONF_SUGGEST_MIN`` 的标准匹配不落库（drop）。
 """
 from __future__ import annotations
@@ -20,8 +25,13 @@ from sqlalchemy.orm import Session
 
 from app.ai.dataops.rule_engine import TIER_ACCEPTED, RuleEngine, tier
 from app.models.dataops.meta import MetaColumn, MetaTable
+from app.models.dataops.meta_relation import MetaRelation
 from app.models.dataops.standard import (
     MetaColumnStandard, MetaColumnStandardHistory, MetaStandard,
+)
+from app.models.dataops.standard_cdm import (
+    MetaObjectRelation, MetaObjectStandard, MetaRelationCheck, MetaTableStandard,
+    MetaTableStandardHistory,
 )
 from app.services.dataops.standard_service import MetaStandardService
 
@@ -36,6 +46,15 @@ class BindReport:
     bound: int = 0              # 新建标准绑定
     updated: int = 0            # 更新已有绑定
     skipped_human: int = 0      # 跳过人工 accepted 绑定
+    # 表→对象绑定（B3）
+    objects_bound: int = 0
+    objects_updated: int = 0
+    objects_skipped_human: int = 0
+    # 关系校验（B4）
+    relation_checked: int = 0
+    hit: int = 0
+    missing: int = 0
+    conflict: int = 0
     details: List[dict] = field(default_factory=list)
 
 
@@ -130,6 +149,83 @@ class StandardBindingService:
              "confidence": matched.confidence, "status": status, "action": action}
         )
 
+    def _object_standards(self) -> List[dict]:
+        """本租户已发布的对象标准（供 ``match_object`` 消费）。"""
+        objs = self.db.execute(
+            select(MetaObjectStandard).where(
+                MetaObjectStandard.tenant_id == self.tenant_id,
+                MetaObjectStandard.status == "published",
+            )
+        ).scalars().all()
+        return [
+            {"id": o.id, "code": o.code, "name": o.name, "aliases": o.aliases_json or []}
+            for o in objs
+        ]
+
+    def _bind_table_object(
+        self, table: MetaTable, object_standards: List[dict], report: BindReport
+    ) -> None:
+        """把物理表绑定到对象标准（尊重人工 accepted；无命中/降级则跳过）。"""
+        if not object_standards:
+            return
+        matched = RuleEngine.match_object(
+            table.table_name, getattr(table, "table_comment", None), object_standards
+        )
+        if matched is None or matched.object_id is None:
+            return
+        status = tier(matched.confidence)
+        if status == "drop":
+            return
+
+        existing = self.db.execute(
+            select(MetaTableStandard).where(MetaTableStandard.table_id == table.id)
+        ).scalar_one_or_none()
+        if existing is not None:
+            if existing.source == "human" and existing.status == TIER_ACCEPTED:
+                report.objects_skipped_human += 1
+                report.details.append({"table": table.table_name, "action": "skip_human"})
+                return
+            existing.object_standard_id = matched.object_id
+            existing.confidence = matched.confidence
+            existing.evidence_json = matched.evidence
+            existing.status = status
+            existing.source = "rule"
+            report.objects_updated += 1
+            action = "bind_update"
+        else:
+            self.db.add(
+                MetaTableStandard(
+                    tenant_id=self.tenant_id,
+                    table_id=table.id,
+                    object_standard_id=matched.object_id,
+                    confidence=matched.confidence,
+                    evidence_json=matched.evidence,
+                    status=status,
+                    source="rule",
+                )
+            )
+            report.objects_bound += 1
+            action = "bind_new"
+            self.db.flush()
+
+        self.db.add(
+            MetaTableStandardHistory(
+                tenant_id=self.tenant_id,
+                table_id=table.id,
+                object_standard_id=matched.object_id,
+                action=action,
+                snapshot_json={
+                    "object_code": matched.object_code,
+                    "confidence": matched.confidence,
+                    "status": status,
+                },
+            )
+        )
+        report.details.append(
+            {"table": table.table_name, "object": matched.object_code,
+             "confidence": matched.confidence, "status": status, "action": action}
+        )
+
     def bind_table(self, table_id: int) -> BindReport:
         table = self.db.execute(
             select(MetaTable).where(
@@ -148,6 +244,8 @@ class StandardBindingService:
             if self._annotate(col):
                 report.annotated += 1
             self._bind_column(col, standards, report)
+        # 列 → 属性 之后：表 → 对象
+        self._bind_table_object(table, self._object_standards(), report)
         return report
 
     def bind_source(self, source_id: int, database: Optional[str] = None) -> BindReport:
@@ -165,5 +263,8 @@ class StandardBindingService:
             report.bound += sub.bound
             report.updated += sub.updated
             report.skipped_human += sub.skipped_human
+            report.objects_bound += sub.objects_bound
+            report.objects_updated += sub.objects_updated
+            report.objects_skipped_human += sub.objects_skipped_human
             report.details.extend(sub.details)
         return report

@@ -43,6 +43,9 @@ __all__ = [
     "AnnotationResult",
     "RuleEngine",
     "BUILTIN_STANDARDS",
+    "StandardMatch",
+    "ObjectMatch",
+    "BUILTIN_OBJECT_STANDARDS",
 ]
 
 
@@ -225,6 +228,51 @@ class RuleEngine:
             evidence={"why": best_why, "score": round(best_conf, 4)},
         )
 
+    @staticmethod
+    def match_object(
+        table_name: str,
+        comment: Optional[str],
+        object_standards: List[Dict],
+    ) -> "Optional[ObjectMatch]":
+        """把物理表匹配到对象标准（按 code/name/别名 精确或子串命中）。
+
+        与 ``match_standard`` 同构，只是去掉 data_type 维度（表没有类型预期）。
+
+        :param object_standards: 形如 ``{id,code,name,aliases}`` 的字典列表。
+        :return: 最佳命中，无命（或低于 ``CONF_SUGGEST_MIN``）返回 None。
+        """
+        haystack = f"{table_name or ''} {(comment or '')}".lower()
+        best: Optional[Dict] = None
+        best_conf = 0.0
+        best_why: List[str] = []
+        for s in object_standards:
+            conf = 0.0
+            why: List[str] = []
+            aliases = [str(s.get("code", "")), str(s.get("name", ""))]
+            aliases += [str(a) for a in (s.get("aliases") or [])]
+            for alias in aliases:
+                a = (alias or "").lower().strip()
+                if not a:
+                    continue
+                if a == haystack.strip():
+                    conf = max(conf, 0.9)
+                    why.append(f"alias_exact:{a}")
+                elif a in haystack:
+                    conf = max(conf, 0.72)
+                    why.append(f"alias_substr:{a}")
+            if conf > best_conf:
+                best_conf = conf
+                best = s
+                best_why = why
+        if best is None or best_conf < CONF_SUGGEST_MIN:
+            return None
+        return ObjectMatch(
+            object_code=best["code"],
+            object_id=best.get("id"),
+            confidence=round(best_conf, 4),
+            evidence={"why": best_why, "score": round(best_conf, 4)},
+        )
+
 
 @dataclass
 class StandardMatch:
@@ -232,6 +280,16 @@ class StandardMatch:
 
     standard_code: str
     standard_id: Optional[int]
+    confidence: float
+    evidence: Dict
+
+
+@dataclass
+class ObjectMatch:
+    """对象标准匹配结果（表→对象）。"""
+
+    object_code: str
+    object_id: Optional[int]
     confidence: float
     evidence: Dict
 
@@ -277,5 +335,22 @@ BUILTIN_STANDARDS: List[Dict] = [
         "code": "std_datetime", "name": "时间", "semantic_type": "datetime", "security_level": "L0",
         "aliases": ["created_at", "updated_at", "time", "date", "时间", "日期", "时间戳"],
         "data_type_expect": "timestamp", "domain": "交易",
+    },
+]
+
+
+#: 内置对象标准（种子）：表级业务对象模板（表→对象绑定用）。
+BUILTIN_OBJECT_STANDARDS: List[Dict] = [
+    {
+        "code": "obj_customer", "name": "客户",
+        "aliases": ["customer", "user", "客户", "会员"], "domain": "客户",
+    },
+    {
+        "code": "obj_order", "name": "订单",
+        "aliases": ["order", "orders", "订单"], "domain": "交易",
+    },
+    {
+        "code": "obj_product", "name": "商品",
+        "aliases": ["product", "item", "goods", "商品"], "domain": "交易",
     },
 ]
