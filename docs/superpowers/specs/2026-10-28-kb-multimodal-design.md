@@ -101,7 +101,7 @@ MEDIA_ASR_MODEL         # 如 Qwen3-ASR（本地）或 paraformer-v2（百炼）
 **结果增强**：
 
 - 命中媒体段时返回体增加 `media` 块：`{kind, file_path, locator, asset_url}`；音频/视频带 `{start_ms,end_ms}`，DXF 带预览图
-- 新增可选过滤参数 `media_kind`（image/audio/video/drawing/document），映射为 `chunk_type` 过滤
+- 新增可选过滤参数 `media_kind`（image/audio/video/drawing/document）：前四者映射为对应 `chunk_type` 精确匹配；`document` 表示「排除媒体段」，映射为 `chunk_type IN (text, qa, table_row, parent, child)`（即现有全部文本类 chunk_type）
 
 **前端**：
 
