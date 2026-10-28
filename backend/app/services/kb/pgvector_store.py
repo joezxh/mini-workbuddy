@@ -73,6 +73,29 @@ class SearchResult:
     metadata: Optional[dict] = None
     class_uris: Optional[List[str]] = None
 
+    @property
+    def media(self) -> Optional[dict]:
+        """媒体定位块（spec §7）：仅媒体段返回；文件路径由前端按 document_id 回查。"""
+        md = self.metadata or {}
+        kind = md.get("media_kind")
+        if not kind:
+            return None
+        return {"kind": kind, "locator": md.get("media_locator")}
+
+
+def _media_kind_filter(media_kind: Optional[str]):
+    """media_kind → kms_segment.chunk_type SQL 条件（spec §7）；None 表示不过滤。
+
+    "document" 表示「排除媒体段」（text/qa/table_row/parent/child），
+    其余取值精确匹配 chunk_type。
+    """
+    if not media_kind:
+        return None
+    if media_kind == "document":
+        return KbSegment.chunk_type.in_(
+            ("text", "qa", "table_row", "parent", "child"))
+    return KbSegment.chunk_type == media_kind
+
 
 class PGVectorStore:
     """基于 PostgreSQL + pgvector 的知识库向量存储。
@@ -238,6 +261,7 @@ class PGVectorStore:
         top_k: int = 10,
         score_threshold: Optional[float] = None,
         class_uris: Optional[List[str]] = None,
+        media_kind: Optional[str] = None,
     ) -> List[SearchResult]:
         """向量相似检索（余弦距离 + HNSW 加速，迁移 006 已建索引）。
 
@@ -248,6 +272,8 @@ class PGVectorStore:
             仅返回 ``score >= score_threshold`` 的结果；None 表示不过滤
         :param class_uris: 本体类 URI 列表（P4.3 检索过滤）；JSONB ``?|`` 任一命中
             即通过（OR 语义），空列表/None 表示不过滤
+        :param media_kind: 媒体类型过滤（spec §7）：image/audio/video/drawing 精确
+            匹配 chunk_type；"document" 排除媒体段；None 不过滤
         :return: 按相似度降序的 ``SearchResult`` 列表，``score`` 为余弦相似度
         """
         if not query_embedding:
@@ -273,6 +299,9 @@ class PGVectorStore:
             )
             .order_by(dist.asc())
         )
+        media_cond = _media_kind_filter(media_kind)
+        if media_cond is not None:
+            stmt = stmt.where(media_cond)
         if score_threshold is not None:
             stmt = stmt.where((1 - dist) >= score_threshold)
         if class_uris:
@@ -306,6 +335,7 @@ class PGVectorStore:
         vector_top_n: Optional[int] = None,
         keyword_top_n: Optional[int] = None,
         class_uris: Optional[List[str]] = None,
+        media_kind: Optional[str] = None,
     ) -> List[SearchResult]:
         """中文混合检索：向量召回 + 中文子串关键词召回，RRF 融合（P1 Task 5）。
 
@@ -322,6 +352,8 @@ class PGVectorStore:
             None 表示不过滤
         :param class_uris: 本体类 URI 列表（P4.3 检索过滤，向量/关键词两路都过滤）；
             JSONB ``?|`` 任一命中即通过，空列表/None 表示不过滤
+        :param media_kind: 媒体类型过滤（spec §7）：image/audio/video/drawing 精确
+            匹配 chunk_type；"document" 排除媒体段；None 不过滤（两路都过滤）
         :return: 按融合分数降序的 ``SearchResult`` 列表，``score`` 为 RRF 分数
         """
         if not query_embedding and not query_text:
@@ -351,6 +383,9 @@ class PGVectorStore:
                 )
                 .order_by(dist.asc())
             )
+            media_cond = _media_kind_filter(media_kind)
+            if media_cond is not None:
+                v_stmt = v_stmt.where(media_cond)
             if class_uris:
                 v_stmt = v_stmt.where(_class_uris_any(class_uris))
             v_stmt = v_stmt.limit(v_top)
@@ -385,6 +420,9 @@ class PGVectorStore:
                 )
                 .order_by(pos.asc(), func.length(KbSegment.content).asc())
             )
+            media_cond = _media_kind_filter(media_kind)
+            if media_cond is not None:
+                k_stmt = k_stmt.where(media_cond)
             if class_uris:
                 k_stmt = k_stmt.where(_class_uris_any(class_uris))
             k_stmt = k_stmt.limit(k_top)

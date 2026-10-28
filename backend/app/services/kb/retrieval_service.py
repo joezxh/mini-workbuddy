@@ -46,17 +46,20 @@ class KbRetrievalService:
         top_k: int = 10,
         score_threshold: Optional[float] = None,
         class_uris: Optional[List[str]] = None,
+        media_kind: Optional[str] = None,
     ) -> List[SearchResult]:
         """文本检索：向量化查询后做余弦相似检索。
 
         :param class_uris: 本体类过滤（P4.3）；应传「后代扩展后」的 URI 列表
             （见 ``app.services.ontology.search_filter.expand_with_descendants``）
+        :param media_kind: 媒体类型过滤（spec §7）；None 不过滤
         """
         vectors = self._embed_fn([query_text])
         if not vectors:
             return []
         return self.store.search(
-            collection, vectors[0], top_k, score_threshold, class_uris=class_uris
+            collection, vectors[0], top_k, score_threshold,
+            class_uris=class_uris, media_kind=media_kind,
         )
 
     def search_by_vector(
@@ -80,6 +83,7 @@ class KbRetrievalService:
         score_threshold: Optional[float] = None,
         rrf_k: int = 60,
         class_uris: Optional[List[str]] = None,
+        media_kind: Optional[str] = None,
     ) -> List[SearchResult]:
         """中文混合检索（文本入口）：向量化查询后做向量 + 关键词 RRF 融合（P1 Task 5）。"""
         vectors = self._embed_fn([query_text])
@@ -92,4 +96,5 @@ class KbRetrievalService:
             score_threshold,
             rrf_k=rrf_k,
             class_uris=class_uris,
+            media_kind=media_kind,
         )
