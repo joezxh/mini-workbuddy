@@ -2023,6 +2023,28 @@ export default {
       inferDone: '推斷完成',
       inferFailed: '推斷失敗'
     },
+    catalog: {
+      tabObjects: '目錄與對象',
+      tabAttributes: '屬性標準',
+      empty: '暫無目錄',
+      all: '全部對象',
+      create: '新建目錄',
+      delete: '刪除目錄',
+      parent: '上級目錄',
+      description: '描述',
+      createObject: '新建對象',
+      editObject: '編輯對象',
+      attributes: '引用屬性',
+      attributesHint: '選擇該對象應包含的屬性標準',
+      aliasesHint: '逗號分隔，用於匹配物理表名/備註',
+      requiredHint: '請填寫編碼與名稱',
+      catalogSaved: '目錄已保存',
+      catalogDeleted: '目錄已刪除',
+      objectSaved: '對象已保存',
+      objectDeleted: '對象已刪除',
+      saveFailed: '保存失敗',
+      loadFailed: '載入失敗'
+    },
     common: {
       name: '名稱',
       type: '類型',

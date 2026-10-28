@@ -77,3 +77,44 @@ export function bindSource(id: number, database?: string) {
 export function inferRelations(id: number, database?: string, withOverlap = false) {
   return request.post(`${BASE}/sources/${id}/infer-relations`, { database, with_overlap: withOverlap })
 }
+
+// ── 标准中心（CDM）：目录/场景 + 对象标准 + 引用属性 ─────────────────
+/** 整棵目录树（每节点带 children） */
+export function listCatalogs() {
+  return request.get(`${BASE}/standards/catalogs`)
+}
+export function createCatalog(data: Record<string, any>) {
+  return request.post(`${BASE}/standards/catalogs`, data)
+}
+export function updateCatalog(id: number, data: Record<string, any>) {
+  return request.put(`${BASE}/standards/catalogs/${id}`, data)
+}
+/** 挂到新父节点（null=移为根）；后端拒绝移入自身子树 */
+export function moveCatalog(id: number, parentId: number | null) {
+  return request.put(`${BASE}/standards/catalogs/${id}/move`, { parent_id: parentId })
+}
+export function deleteCatalog(id: number) {
+  return request.delete(`${BASE}/standards/catalogs/${id}`)
+}
+
+/** catalogId 省略=全部对象，传值=该目录下的对象 */
+export function listObjects(catalogId?: number) {
+  return request.get(`${BASE}/standards/objects`, { params: { catalog_id: catalogId } })
+}
+/** 详情多带 `attributes`（引用属性列表） */
+export function getObject(id: number) {
+  return request.get(`${BASE}/standards/objects/${id}`)
+}
+export function createObject(data: Record<string, any>) {
+  return request.post(`${BASE}/standards/objects`, data)
+}
+export function updateObject(id: number, data: Record<string, any>) {
+  return request.put(`${BASE}/standards/objects/${id}`, data)
+}
+export function deleteObject(id: number) {
+  return request.delete(`${BASE}/standards/objects/${id}`)
+}
+/** 全量替换对象的引用属性（先清后插） */
+export function setObjectAttributes(id: number, items: any[]) {
+  return request.put(`${BASE}/standards/objects/${id}/attributes`, { items })
+}

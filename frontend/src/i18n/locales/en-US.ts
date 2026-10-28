@@ -2018,6 +2018,28 @@ export default {
       inferDone: 'Inference complete',
       inferFailed: 'Inference failed'
     },
+    catalog: {
+      tabObjects: 'Catalogs & Objects',
+      tabAttributes: 'Attributes',
+      empty: 'No catalog',
+      all: 'All Objects',
+      create: 'New Catalog',
+      delete: 'Delete Catalog',
+      parent: 'Parent Catalog',
+      description: 'Description',
+      createObject: 'New Object',
+      editObject: 'Edit Object',
+      attributes: 'Referenced Attributes',
+      attributesHint: 'Pick the attribute standards this object contains',
+      aliasesHint: 'Comma separated, used to match physical table names/comments',
+      requiredHint: 'Code and name are required',
+      catalogSaved: 'Catalog saved',
+      catalogDeleted: 'Catalog deleted',
+      objectSaved: 'Object saved',
+      objectDeleted: 'Object deleted',
+      saveFailed: 'Save failed',
+      loadFailed: 'Load failed'
+    },
     common: {
       name: 'Name',
       type: 'Type',

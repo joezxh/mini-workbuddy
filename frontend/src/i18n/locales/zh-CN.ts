@@ -2030,6 +2030,28 @@ export default {
       inferDone: '推断完成',
       inferFailed: '推断失败'
     },
+    catalog: {
+      tabObjects: '目录与对象',
+      tabAttributes: '属性标准',
+      empty: '暂无目录',
+      all: '全部对象',
+      create: '新建目录',
+      delete: '删除目录',
+      parent: '上级目录',
+      description: '描述',
+      createObject: '新建对象',
+      editObject: '编辑对象',
+      attributes: '引用属性',
+      attributesHint: '选择该对象应包含的属性标准',
+      aliasesHint: '逗号分隔，用于匹配物理表名/注释',
+      requiredHint: '请填写编码与名称',
+      catalogSaved: '目录已保存',
+      catalogDeleted: '目录已删除',
+      objectSaved: '对象已保存',
+      objectDeleted: '对象已删除',
+      saveFailed: '保存失败',
+      loadFailed: '加载失败'
+    },
     common: {
       name: '名称',
       type: '类型',

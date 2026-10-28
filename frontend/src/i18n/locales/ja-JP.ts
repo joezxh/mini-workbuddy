@@ -2022,6 +2022,28 @@ export default {
       inferDone: '推論完了',
       inferFailed: '推論失敗'
     },
+    catalog: {
+      tabObjects: 'ディレクトリとオブジェクト',
+      tabAttributes: '属性標準',
+      empty: 'ディレクトリなし',
+      all: 'すべてのオブジェクト',
+      create: 'ディレクトリ作成',
+      delete: 'ディレクトリ削除',
+      parent: '親ディレクトリ',
+      description: '説明',
+      createObject: 'オブジェクト作成',
+      editObject: 'オブジェクト編集',
+      attributes: '参照属性',
+      attributesHint: 'このオブジェクトに含める属性標準を選択',
+      aliasesHint: 'カンマ区切り。物理テーブル名・コメントの照合に使用',
+      requiredHint: 'コードと名称は必須です',
+      catalogSaved: 'ディレクトリを保存しました',
+      catalogDeleted: 'ディレクトリを削除しました',
+      objectSaved: 'オブジェクトを保存しました',
+      objectDeleted: 'オブジェクトを削除しました',
+      saveFailed: '保存に失敗しました',
+      loadFailed: '読み込みに失敗しました'
+    },
     common: {
       name: '名前',
       type: '種類',
