@@ -142,7 +142,16 @@ def upload_document(
     tenant_id = _tenant_id(current_user)
     _require_knowledge(db, kid)
 
+    # 媒体文件上传门禁（spec §2.4）：未启用多模态 / 超限 → 422
+    from app.models.wiki.wiki_knowledge import WikiKnowledge
+    from app.services.kb.media.validation import validate_media_upload
+
     content = file.file.read()
+    knowledge = db.get(WikiKnowledge, kid)
+    try:
+        validate_media_upload(knowledge, file.filename or "", len(content))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
     doc = KbDocument(
         tenant_id=tenant_id,
         knowledge_id=kid,
