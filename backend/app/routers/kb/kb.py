@@ -191,6 +191,42 @@ def upload_document(
     return _serialize(doc)
 
 
+@router.get("/knowledges/{kid}/documents/{document_uuid}/file")
+def download_document_file(
+    kid: int,
+    document_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """原文件下载（媒体命中播放/预览用，spec §7）。
+
+    路径由 tenant+uuid_code 重建（upload_store 布局），不信任 meta.file_path，
+    避免目录穿越/越权读取。目录内取唯一文件。
+    """
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    tenant_id = _tenant_id(current_user)
+    doc = db.execute(
+        select(KbDocument).where(
+            KbDocument.tenant_id == tenant_id,
+            KbDocument.knowledge_id == kid,
+            KbDocument.uuid_code == document_uuid,
+        )
+    ).scalars().first()
+    if doc is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    from app.config import settings as app_settings
+
+    dir_path = Path(app_settings.UPLOAD_DIR) / "kb" / str(tenant_id) / doc.uuid_code
+    files = [p for p in dir_path.iterdir() if p.is_file()] if dir_path.is_dir() else []
+    if not files:
+        raise HTTPException(status_code=404, detail="原文件不存在")
+    return FileResponse(files[0], filename=doc.name)
+
+
 @router.get("/knowledges/{kid}/documents")
 def list_documents(
     kid: int,

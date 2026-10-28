@@ -56,10 +56,17 @@ def run_media_ingest(
     db.commit()
 
     try:
-        # collection 级 provider 覆盖（spec §6）：kb_collection.retrieval_settings
+        # provider 覆盖（spec §6）：知识库 pipeline_config.media → collection retrieval_settings
+        override: dict = {}
+        from app.models.wiki.wiki_knowledge import WikiKnowledge
+
+        kb = db.get(WikiKnowledge, doc.knowledge_id)
+        if kb is not None:
+            override.update((kb.pipeline_config or {}).get("media") or {})
         col = db.query(KbCollection).filter(
             KbCollection.name == doc.collection).first()
-        override = (col.retrieval_settings or {}) if col is not None else {}
+        if col is not None:
+            override.update(col.retrieval_settings or {})
         extractor = get_extractor(kind, db, override)
 
         async def _extract():

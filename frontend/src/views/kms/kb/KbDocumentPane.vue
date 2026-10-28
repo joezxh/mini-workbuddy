@@ -23,6 +23,7 @@
           v-if="formatMode !== 'table'"
           :before-upload="handleUpload"
           :show-upload-list="false"
+          accept=".pdf,.pptx,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.bmp,.webp,.csv,.html,.json,.md,.txt,.mp3,.wav,.m4a,.mp4,.mov,.dxf"
         >
           <a-button type="primary" size="small" :loading="uploading">
             {{ t('kbMgmt.uploadDocument') }}
@@ -68,7 +69,7 @@
       </div>
 
       <a-empty v-if="!documents.length" :description="t('common.noData')">
-        <a-upload :before-upload="handleUpload" :show-upload-list="false">
+        <a-upload :before-upload="handleUpload" :show-upload-list="false" accept=".pdf,.pptx,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.bmp,.webp,.csv,.html,.json,.md,.txt,.mp3,.wav,.m4a,.mp4,.mov,.dxf">
           <a-button type="primary" :loading="uploading">{{ t('kbMgmt.uploadDocument') }}</a-button>
         </a-upload>
       </a-empty>
@@ -471,6 +472,10 @@ async function pollStatus() {
 }
 
 async function handleUpload(file: File) {
+  if (file.size > 100 * 1024 * 1024) {
+    message.error(t('kbMgmt.mediaTooLarge'))
+    return false
+  }
   uploading.value = true
   try {
     const fd = new FormData()

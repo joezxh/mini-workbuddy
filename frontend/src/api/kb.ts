@@ -22,6 +22,8 @@ export interface RetrieveResult {
   chunk_index: number
   content: string
   metadata: Record<string, unknown>
+  /** 媒体命中定位块（spec §7）：仅媒体段返回 */
+  media?: { kind: string; locator: Record<string, number | string> | null } | null
 }
 
 export function uploadDocument(kid: number, formData: FormData) {

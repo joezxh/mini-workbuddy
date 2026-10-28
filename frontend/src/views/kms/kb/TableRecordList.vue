@@ -176,6 +176,8 @@
               <a-list-item>
                 <div class="trl__hit">
                   <div class="trl__hit-content">{{ item.content }}</div>
+                  <MediaHit :media="item.media" :document-id="item.document_id"
+                            :knowledge-id="props.knowledgeId" />
                   <div class="trl__hit-meta">
                     <a-tag color="blue">{{ t('kbMgmt.similarity') }} {{ item.score?.toFixed?.(3) ?? item.score }}</a-tag>
                     <span>{{ t('kbMgmt.sourceFile') }}：{{ fileNameOf(item.document_id) }}</span>
@@ -275,6 +277,7 @@ import {
 import { tableImportErrorMessage } from './tableImportError'
 import DocumentFlowDrawer from './DocumentFlowDrawer.vue'
 import KbCollectionManager from './KbCollectionManager.vue'
+import MediaHit from './MediaHit.vue'
 
 const props = defineProps<{
   knowledgeId: number

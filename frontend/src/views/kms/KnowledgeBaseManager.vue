@@ -220,28 +220,25 @@
           <div class="kb-manager__tip">{{ t('kbMgmt.indexModeTip') }}</div>
         </a-form-item>
 
-        <!-- 多模态开关：type=2/document，仅文搜图（D9） -->
+        <!-- 多模态开关：type=2/document，媒体摄取（图片/语音/视频/DXF，spec 2026-10-28） -->
         <a-form-item v-if="form.type === 2 && form.kb_format === 'document'" :label="t('kbMgmt.multimodal')">
           <a-switch v-model:checked="form.multimodal_enabled" />
           <div class="kb-manager__tip">{{ t('kbMgmt.multimodalTip') }}</div>
-          <a-alert
-            v-if="form.multimodal_enabled && !isVisionModel"
-            class="kb-manager__tip"
-            type="warning"
-            :message="t('kbMgmt.visionModelRequired')"
-            show-icon
-          />
-          <a-select
-            v-if="form.multimodal_enabled"
-            v-model:value="form.embedding_model"
-            class="kb-manager__tip"
-            :placeholder="t('kbMgmt.selectEmbeddingModel')"
-            allow-clear
-          >
-            <a-select-option value="qwen3-vl-embedding">qwen3-vl-embedding（Vision）</a-select-option>
-            <a-select-option value="multimodal-embedding-v1">multimodal-embedding-v1（Vision）</a-select-option>
-            <a-select-option value="text-embedding-v4">text-embedding-v4（纯文本）</a-select-option>
-          </a-select>
+          <template v-if="form.multimodal_enabled">
+            <a-input
+              v-model:value="form.media_vision_model"
+              class="kb-manager__tip"
+              :placeholder="t('kbMgmt.visionModelPlaceholder')"
+              allow-clear
+            />
+            <a-input
+              v-model:value="form.media_asr_model"
+              class="kb-manager__tip"
+              :placeholder="t('kbMgmt.asrModelPlaceholder')"
+              allow-clear
+            />
+            <div class="kb-manager__tip">{{ t('kbMgmt.mediaModelTip') }}</div>
+          </template>
         </a-form-item>
 
         <!-- 切片方案：按二级形态过滤（问答→仅问答对切分；文档→其它方案；表格→不切分） -->
@@ -424,6 +421,9 @@ const form = reactive({
   index_mode: 'high_quality',
   multimodal_enabled: false,
   embedding_model: '' as string,
+  // 多模态媒体模型（可空=走服务端默认，spec §6 collection 级覆盖）
+  media_vision_model: '' as string,
+  media_asr_model: '' as string,
   chunker_type: 'approx_token' as string,
   chunker_params: {} as Record<string, any>,
   category_id: null as number | null,
@@ -452,8 +452,7 @@ const currentCredFields = computed(() => {
   return p?.credential_fields ?? []
 })
 
-/** 多模态仅文搜图（D9），要求嵌入模型是 Vision 系列 */
-const isVisionModel = computed(() => /vl|vision|multimodal/.test((form.embedding_model || '').toLowerCase()))
+/** 多模态媒体模型说明见 multimodalTip；旧 Vision 嵌入强校验已随 D9 语义更新移除 */
 
 // ── 切片方案（chunker）──────────────────────────────────────────────
 const chunkers = ref<any[]>([])
@@ -518,6 +517,13 @@ function onChunkerChange() {
 function buildPipelineConfig() {
   const cfg: Record<string, any> = {}
   if (form.embedding_model) cfg.embedding = { model: form.embedding_model }
+  // 多模态：视觉/语音模型经 pipeline_config.media 下发（spec §6，可空=服务端默认）
+  if (form.type === 2 && form.kb_format === 'document' && form.multimodal_enabled) {
+    const media: Record<string, string> = {}
+    if (form.media_vision_model.trim()) media.vision_model = form.media_vision_model.trim()
+    if (form.media_asr_model.trim()) media.asr_model = form.media_asr_model.trim()
+    if (Object.keys(media).length) cfg.media = media
+  }
   if (chunkerRule.value !== 'none' && form.chunker_type) {
     cfg.chunker = {
       type: form.chunker_type,
@@ -839,11 +845,6 @@ function hasEnteredCredentials() {
 async function submit() {
   if (!form.name.trim()) {
     message.warning(t('kbMgmt.nameRequired'))
-    return
-  }
-  // 多模态强制校验 Vision 嵌入模型（spec §10.6）
-  if (form.type === 2 && form.kb_format === 'document' && form.multimodal_enabled && !isVisionModel.value) {
-    message.warning(t('kbMgmt.visionModelRequired'))
     return
   }
   // 新建时才校验需要表单完整数据的形态规则（编辑态这些明细未回显，避免误拦）
