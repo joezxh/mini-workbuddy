@@ -26,6 +26,7 @@ from ._redis import RedisSettings
 from ._search import SearchSettings
 from ._voice import VoiceSettings
 from ._embedding import EmbeddingSettings
+from ._media import MediaSettings
 from ._otel import OTelSettings
 from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
@@ -41,6 +42,7 @@ class Settings(
     SearchSettings,
     VoiceSettings,
     EmbeddingSettings,
+    MediaSettings,
     OTelSettings,
     AuditSettings,
     AsyncTaskSettings,
