@@ -60,13 +60,11 @@ def test_object_set_attributes_replaces_and_resists_attr_delete(db):
     # 全量替换为空
     obj_svc.set_attributes(obj.id, [])
     assert obj_svc.get_attributes(obj.id) == []
-    # 属性被引用时删除属性标准应被拒（RESTRICT）
+    # 属性被对象引用时删除属性标准应被拒（RESTRICT，服务层给可读原因）
     obj_svc.set_attributes(obj.id, [{"standard_id": attr.id}])
     db.flush()
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="对象标准"):
         MetaStandardService(db, TENANT_A).delete(attr.id)
-        db.flush()
-    db.rollback()
 
 
 def test_catalog_and_object_routes(client_a, db):
@@ -241,3 +239,62 @@ def test_nl_query_degrades_without_llm(client_a, db, monkeypatch):
     resp = client_a.post("/api/v1/dataops/standards/nl-query", json={"question": "有哪些客户相关对象"})
     assert resp.status_code == 200
     assert resp.json()["degraded"] is True
+
+
+# ---------------------------------------------------------------------- #
+# 属性字典治理：删除保护（对象引用 / 关系连接键）+ 引用计数
+# ---------------------------------------------------------------------- #
+def test_attr_delete_blocked_by_relation_via_key(db):
+    """属性作为关系连接键时，删除同样要被拒并给出关系 code。"""
+    attr = MetaStandardService(db, TENANT_A).create("std_via_key", "客户号")
+    a = MetaObjectStandard(tenant_id=TENANT_A, code="via_a", name="A", aliases_json=[], status="published")
+    b = MetaObjectStandard(tenant_id=TENANT_A, code="via_b", name="B", aliases_json=[], status="published")
+    db.add_all([a, b])
+    db.flush()
+    db.add(MetaObjectRelation(
+        tenant_id=TENANT_A, code="rel_via", name="A到B", from_object_id=a.id,
+        to_object_id=b.id, relation_type="N:1", via_attribute_ids=[attr.id],
+        status="published",
+    ))
+    db.flush()
+    with pytest.raises(ValueError, match="rel_via"):
+        MetaStandardService(db, TENANT_A).delete(attr.id)
+
+
+def test_attr_delete_route_returns_400_when_referenced(client_a, db):
+    attr = client_a.post("/api/v1/dataops/standards", json={"code": "r_del_attr", "name": "待删属性"}).json()
+    obj = client_a.post("/api/v1/dataops/standards/objects", json={"code": "r_del_obj", "name": "对象"}).json()
+    put = client_a.put(f"/api/v1/dataops/standards/objects/{obj['id']}/attributes",
+                       json={"items": [{"standard_id": attr["id"]}]})
+    assert put.status_code == 200, put.text
+    resp = client_a.delete(f"/api/v1/dataops/standards/{attr['id']}")
+    assert resp.status_code == 400
+    assert "对象标准" in resp.json()["detail"]
+
+
+def test_std_list_with_usage_counts(client_a, db):
+    """with_usage=true 时三类引用分别计数，未引用属性全 0。"""
+    a1 = client_a.post("/api/v1/dataops/standards", json={"code": "u_obj", "name": "对象引用"}).json()
+    a2 = client_a.post("/api/v1/dataops/standards", json={"code": "u_via", "name": "连接键"}).json()
+    client_a.post("/api/v1/dataops/standards", json={"code": "u_orphan", "name": "孤儿属性"}).json()
+
+    o1 = client_a.post("/api/v1/dataops/standards/objects", json={"code": "u_o1", "name": "O1"}).json()
+    o2 = client_a.post("/api/v1/dataops/standards/objects", json={"code": "u_o2", "name": "O2"}).json()
+    put = client_a.put(f"/api/v1/dataops/standards/objects/{o1['id']}/attributes",
+                       json={"items": [{"standard_id": a1["id"]}]})
+    assert put.status_code == 200, put.text
+    rel = client_a.post("/api/v1/dataops/standards/relations", json={
+        "code": "u_rel", "name": "O1到O2", "from_object_id": o1["id"],
+        "to_object_id": o2["id"], "relation_type": "1:N",
+        "via_attribute_ids": [a2["id"]],
+    })
+    assert rel.status_code == 201, rel.text
+    assert rel.json()["via_attribute_ids"] == [a2["id"]]
+
+    rows = {r["code"]: r for r in client_a.get("/api/v1/dataops/standards", params={"with_usage": True}).json()}
+    assert rows["u_obj"]["usage"] == {"columns": 0, "objects": 1, "relations": 0}
+    assert rows["u_via"]["usage"] == {"columns": 0, "objects": 0, "relations": 1}
+    assert rows["u_orphan"]["usage"] == {"columns": 0, "objects": 0, "relations": 0}
+    # 默认契约不变：不带 with_usage 时不返回 usage 字段
+    plain = client_a.get("/api/v1/dataops/standards").json()
+    assert all("usage" not in r for r in plain)

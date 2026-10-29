@@ -22,6 +22,13 @@ describe('toNlFocus', () => {
     expect(focus.objectCodes).toEqual([])
     expect(focus.relationCodes).toEqual([])
     expect(focus.focusCatalogCode).toBeNull()
+    expect(focus.error).toBe('no model')
+  })
+
+  it('降级原因：换行压成空格并截断', () => {
+    expect(toNlFocus({ degraded: true, error: '  a\nb  ' }).error).toBe('a b')
+    expect(toNlFocus({ degraded: true, error: 'x'.repeat(300) }).error.length).toBe(201)
+    expect(toNlFocus({ degraded: true, error: 123 }).error).toBe('')
   })
 
   it('脏数据：数组内非字符串被过滤，缺字段走默认值', () => {
@@ -39,6 +46,7 @@ describe('toNlFocus', () => {
       focusCatalogCode: null,
       summary: '',
       degraded: false,
+      error: '',
     })
   })
 })

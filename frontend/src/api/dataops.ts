@@ -94,8 +94,9 @@ export function executeWriteRequest(requestId: number, token: string) {
 }
 
 // ── 元数据标准 / 绑定 / 关系推断 ───────────────────────────────────
-export function listStandards() {
-  return request.get(`${BASE}/standards`)
+/** withUsage=true 时每项多带 `usage`（列/对象/关系三类引用计数），供字典治理用 */
+export function listStandards(withUsage = false) {
+  return request.get(`${BASE}/standards`, { params: { with_usage: withUsage } })
 }
 export function createStandard(data: Record<string, any>) {
   return request.post(`${BASE}/standards`, data)

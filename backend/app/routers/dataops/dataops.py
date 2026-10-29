@@ -743,6 +743,9 @@ def seed_standards(
     try:
         created = svc.seed_builtins()
         db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="标准种子失败，请稍后重试")
@@ -751,11 +754,23 @@ def seed_standards(
 
 @router.get("/standards")
 def list_standards(
+    with_usage: bool = False,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ) -> list:
+    """属性标准列表。
+
+    ``with_usage=True`` 时附带引用计数 ``usage={columns,objects,relations}``，
+    供字典治理视图识别孤儿属性；默认关闭以保持旧客户端契约。
+    """
     svc = MetaStandardService(db, _require_tenant_id(current_user))
-    return [MetaStandardService.serialize(s) for s in svc.list_standards()]
+    items = [MetaStandardService.serialize(s) for s in svc.list_standards()]
+    if not with_usage:
+        return items
+    usage = svc.usage_counts()
+    for item in items:
+        item["usage"] = usage.get(item["id"], {"columns": 0, "objects": 0, "relations": 0})
+    return items
 
 
 @router.post("/standards", status_code=201)
@@ -831,6 +846,9 @@ def delete_standard(
     except KeyError:
         db.rollback()
         raise HTTPException(status_code=404, detail="标准项不存在")
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="标准删除失败，请稍后重试")

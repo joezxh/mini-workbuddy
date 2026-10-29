@@ -32,6 +32,20 @@
       <a-form-item :label="t('kbMgmt.graph.relationType')" required>
         <a-select v-model:value="form.relation_type" :options="typeOptions" />
       </a-form-item>
+      <a-form-item :label="t('kbMgmt.graph.viaAttributes')">
+        <a-select
+          v-model:value="form.via_attribute_ids"
+          mode="multiple"
+          :options="viaOptions"
+          :loading="viaLoading"
+          :disabled="!form.from_object_id || !form.to_object_id"
+          :placeholder="t('kbMgmt.graph.viaPlaceholder')"
+          option-filter-prop="label"
+          show-search
+          allow-clear
+        />
+        <div class="rel-form__hint">{{ t('kbMgmt.graph.viaHint') }}</div>
+      </a-form-item>
       <a-form-item :label="t('kbMgmt.catalog.parent')">
         <a-tree-select
           v-model:value="form.catalog_id"
@@ -51,12 +65,14 @@
 
 <script setup lang="ts">
 /**
- * 关系标准表单：两端对象 + 关系类型（1:1/1:N/N:1/N:N）。
+ * 关系标准表单：两端对象 + 关系类型（1:1/1:N/N:1/N:N）+ 连接键。
  * 两端对象创建后不可改（后端 RelationUpdate 不接受 from/to），避免改写既有校验结论语义。
+ * 连接键（via_attribute_ids）从两端对象已引用的属性中取候选，按 standard_id 去重。
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
+import { mergeViaOptions, type ViaOption } from './viaOptions'
 import * as api from '@/api/dataops'
 
 const props = defineProps<{
@@ -75,7 +91,10 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const form = ref<any>({})
 const saving = ref(false)
-const catalogFieldNames = { title: 'name', value: 'id', children: 'children' }
+const viaOptions = ref<ViaOption[]>([])
+const viaLoading = ref(false)
+// a-tree-select 用 label 取节点文案（a-tree 才是 title/key）
+const catalogFieldNames = { label: 'name', value: 'id', children: 'children' }
 
 const objectOptions = computed(() =>
   props.objects.map((o) => ({ value: o.id, label: `${o.name}（${o.code}）` })),
@@ -89,10 +108,45 @@ watch(
   (open) => {
     if (!open) return
     form.value = props.record
-      ? { ...props.record }
-      : { catalog_id: props.defaultCatalogId ?? null, relation_type: 'N:1' }
+      ? { ...props.record, via_attribute_ids: [...(props.record.via_attribute_ids || [])] }
+      : { catalog_id: props.defaultCatalogId ?? null, relation_type: 'N:1', via_attribute_ids: [] }
+    loadedPair = ''
+    loadViaOptions()
   },
 )
+
+// 新建时改了任意一端，候选集合随之变化（编辑时两端锁定，不触发）
+watch(
+  () => [form.value.from_object_id, form.value.to_object_id],
+  () => {
+    if (props.open) loadViaOptions()
+  },
+)
+
+/** 最近一次已加载候选的 <from>-<to>：避免打开表单时两个 watcher 重复拉取 */
+let loadedPair = ''
+
+/** 连接键候选 = 两端对象各自引用的属性（from 端优先，按 standard_id 去重） */
+async function loadViaOptions() {
+  const ids = [form.value.from_object_id, form.value.to_object_id].filter(Boolean) as number[]
+  if (ids.length < 2) {
+    viaOptions.value = []
+    loadedPair = ''
+    return
+  }
+  const key = ids.join('-')
+  if (key === loadedPair) return
+  loadedPair = key
+  viaLoading.value = true
+  try {
+    const details = await Promise.all(
+      ids.map((id) => api.getObject(id).then((r: any) => r.data || r).catch(() => null)),
+    )
+    viaOptions.value = mergeViaOptions(details as any)
+  } finally {
+    viaLoading.value = false
+  }
+}
 
 function close() {
   emit('update:open', false)
@@ -116,6 +170,7 @@ async function save() {
         name: f.name,
         relation_type: f.relation_type,
         catalog_id: f.catalog_id ?? undefined,
+        via_attribute_ids: f.via_attribute_ids || [],
         description: f.description || undefined,
       })
       message.success(t('kbMgmt.graph.saved'))
@@ -127,6 +182,7 @@ async function save() {
         to_object_id: f.to_object_id,
         relation_type: f.relation_type,
         catalog_id: f.catalog_id ?? undefined,
+        via_attribute_ids: f.via_attribute_ids || [],
         description: f.description || undefined,
       })
       const data = r.data || r

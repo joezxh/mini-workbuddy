@@ -11,10 +11,19 @@ export interface NlFocus {
   summary: string
   /** AI 不可用时的降级标记：仍返回空高亮，不阻断视图 */
   degraded: boolean
+  /** 降级原因（后端透传的 LLM 异常，已截断），用于告诉用户到底为什么不可用 */
+  error: string
 }
 
 function toCodes(input: unknown): string[] {
   return Array.isArray(input) ? input.filter((x): x is string => typeof x === 'string' && !!x) : []
+}
+
+/** 异常文本可能很长且含换行，截断后只用于提示条展示 */
+function toErrorText(input: unknown, max = 200): string {
+  if (typeof input !== 'string') return ''
+  const text = input.trim().replace(/\s+/g, ' ')
+  return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
 /** 正常 / 降级 / 异常三种返回体都收敛到这里 */
@@ -25,5 +34,6 @@ export function toNlFocus(data: any): NlFocus {
     focusCatalogCode: typeof data?.focus_catalog_code === 'string' ? data.focus_catalog_code : null,
     summary: typeof data?.summary === 'string' ? data.summary : '',
     degraded: data?.degraded === true,
+    error: toErrorText(data?.error),
   }
 }

@@ -16,6 +16,7 @@ from app.models.dataops.standard_cdm import (
     MetaObjectRelation, MetaObjectStandard, MetaObjectStandardAttribute,
     MetaTableStandard,
 )
+from app.services.dataops import alias_json
 
 
 class MetaObjectStandardService:
@@ -70,7 +71,7 @@ class MetaObjectStandardService:
             code=code,
             name=name,
             catalog_id=catalog_id,
-            aliases_json=aliases or [],
+            aliases_json=alias_json.build(aliases),
             domain=domain,
             description=description,
             status="published",
@@ -89,7 +90,8 @@ class MetaObjectStandardService:
                 raise ValueError(f"对象标准编码已存在: {new_code}")
         aliases = fields.pop("aliases", None)
         if aliases is not None:
-            obj.aliases_json = aliases
+            # 保留本体导入写入的 _opl 富元数据，只替换别名列表
+            obj.aliases_json = alias_json.with_aliases(obj.aliases_json, aliases)
         for key, value in fields.items():
             if value is None:
                 continue
@@ -135,13 +137,15 @@ class MetaObjectStandardService:
             ).first()
             if exists is None:
                 raise ValueError(f"属性标准不存在或跨租户: {standard_id}")
+            # sort_order 显式传 null 时按入参下标兜底（路由 model_dump 会带 None）
+            sort_order = item.get("sort_order")
             self.db.add(
                 MetaObjectStandardAttribute(
                     tenant_id=self.tenant_id,
                     object_id=obj.id,
                     standard_id=standard_id,
                     required=bool(item.get("required", False)),
-                    sort_order=int(item.get("sort_order", index)),
+                    sort_order=index if sort_order is None else int(sort_order),
                     security_level_override=item.get("security_level_override"),
                     note=item.get("note"),
                 )
@@ -182,7 +186,7 @@ class MetaObjectStandardService:
             "catalog_id": o.catalog_id,
             "code": o.code,
             "name": o.name,
-            "aliases": o.aliases_json or [],
+            "aliases": alias_json.aliases_list(o.aliases_json),
             "domain": o.domain,
             "description": o.description,
             "status": o.status,

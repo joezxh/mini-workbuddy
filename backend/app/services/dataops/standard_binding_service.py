@@ -33,6 +33,7 @@ from app.models.dataops.standard_cdm import (
     MetaObjectRelation, MetaObjectStandard, MetaRelationCheck, MetaTableStandard,
     MetaTableStandardHistory,
 )
+from app.services.dataops import alias_json
 from app.services.dataops.standard_service import MetaStandardService
 
 
@@ -158,7 +159,8 @@ class StandardBindingService:
             )
         ).scalars().all()
         return [
-            {"id": o.id, "code": o.code, "name": o.name, "aliases": o.aliases_json or []}
+            {"id": o.id, "code": o.code, "name": o.name,
+             "aliases": alias_json.aliases_list(o.aliases_json)}
             for o in objs
         ]
 
