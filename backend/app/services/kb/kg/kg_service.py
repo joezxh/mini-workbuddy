@@ -165,17 +165,13 @@ class KgService:
         self.db.refresh(entity)
         return entity
 
-    def list_entities(
+    def _entity_filtered_stmt(
         self,
-        *,
         type_code: Optional[str] = None,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
-        limit: int = 200,
-        offset: int = 0,
-    ) -> list[KgEntity]:
-        """列出实体（按类型 / 状态 / 关键词过滤，关键词命中名称或别名）。"""
-        self._guard()
+    ):
+        """实体过滤条件（列表与计数共用，保证两者口径一致）。"""
         stmt = self._entity_stmt()
         if type_code:
             stmt = stmt.where(KgEntity.type_code == type_code)
@@ -191,8 +187,37 @@ class KgService:
                     cast(KgEntity.aliases, String).ilike(like),
                 )
             )
+        return stmt
+
+    def list_entities(
+        self,
+        *,
+        type_code: Optional[str] = None,
+        status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[KgEntity]:
+        """列出实体（按类型 / 状态 / 关键词过滤，关键词命中名称或别名）。"""
+        self._guard()
+        stmt = self._entity_filtered_stmt(type_code, status, keyword)
         stmt = stmt.order_by(KgEntity.id).limit(max(1, limit)).offset(max(0, offset))
         return list(self.db.execute(stmt).scalars().all())
+
+    def count_entities(
+        self,
+        *,
+        type_code: Optional[str] = None,
+        status: Optional[str] = None,
+        keyword: Optional[str] = None,
+    ) -> int:
+        """实体计数（与 ``list_entities`` 同一过滤口径）。"""
+        self._guard()
+        stmt = self._entity_filtered_stmt(type_code, status, keyword)
+        total = self.db.execute(
+            stmt.with_only_columns(func.count(KgEntity.id))
+        ).scalar_one()
+        return int(total or 0)
 
     def get_entity(self, entity_id: int) -> Optional[KgEntity]:
         """取实体（受租户 + 知识库双重约束）。"""
@@ -322,6 +347,25 @@ class KgService:
         self.db.refresh(triple)
         return triple
 
+    def _triple_filtered_stmt(
+        self,
+        relation_code: Optional[str] = None,
+        status: Optional[str] = None,
+        from_entity_id: Optional[int] = None,
+        to_entity_id: Optional[int] = None,
+    ):
+        """关系过滤条件（列表与计数共用）。"""
+        stmt = self._triple_stmt()
+        if relation_code is not None:
+            stmt = stmt.where(KgTriple.relation_code == relation_code)
+        if status:
+            stmt = stmt.where(KgTriple.status == status)
+        if from_entity_id is not None:
+            stmt = stmt.where(KgTriple.from_entity_id == from_entity_id)
+        if to_entity_id is not None:
+            stmt = stmt.where(KgTriple.to_entity_id == to_entity_id)
+        return stmt
+
     def list_triples(
         self,
         *,
@@ -334,17 +378,29 @@ class KgService:
     ) -> list[KgTriple]:
         """列出关系（按类型 / 状态 / 端点过滤）。"""
         self._guard()
-        stmt = self._triple_stmt()
-        if relation_code is not None:
-            stmt = stmt.where(KgTriple.relation_code == relation_code)
-        if status:
-            stmt = stmt.where(KgTriple.status == status)
-        if from_entity_id is not None:
-            stmt = stmt.where(KgTriple.from_entity_id == from_entity_id)
-        if to_entity_id is not None:
-            stmt = stmt.where(KgTriple.to_entity_id == to_entity_id)
+        stmt = self._triple_filtered_stmt(
+            relation_code, status, from_entity_id, to_entity_id
+        )
         stmt = stmt.order_by(KgTriple.id).limit(max(1, limit)).offset(max(0, offset))
         return list(self.db.execute(stmt).scalars().all())
+
+    def count_triples(
+        self,
+        *,
+        relation_code: Optional[str] = None,
+        status: Optional[str] = None,
+        from_entity_id: Optional[int] = None,
+        to_entity_id: Optional[int] = None,
+    ) -> int:
+        """关系计数（与 ``list_triples`` 同一过滤口径）。"""
+        self._guard()
+        stmt = self._triple_filtered_stmt(
+            relation_code, status, from_entity_id, to_entity_id
+        )
+        total = self.db.execute(
+            stmt.with_only_columns(func.count(KgTriple.id))
+        ).scalar_one()
+        return int(total or 0)
 
     def get_triple(self, triple_id: int) -> Optional[KgTriple]:
         """取关系（受租户 + 知识库双重约束）。"""

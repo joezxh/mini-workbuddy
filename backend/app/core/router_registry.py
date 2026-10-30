@@ -184,6 +184,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.kb.kb_external_source", tags=["外部知识库文档导入"]),
     # --- 28.4 通用知识库管理（知识库/分类 CRUD；2026-10 由 wiki.py 迁移，前缀 /api/v1/kb）---
     RouterSpec("app.routers.kb.knowledge_mgnt", tags=["知识库管理"]),
+    # --- 28.5 图谱知识库（type=4 实例层；router 自带完整 prefix /api/v1/kb/knowledges/{kid}/graph）---
+    RouterSpec("app.routers.kb.kg", tags=["图谱知识库"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),
