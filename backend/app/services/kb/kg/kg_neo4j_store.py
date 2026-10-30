@@ -130,6 +130,13 @@ MATCH (c:Chunk:{base}:`{kb}` {{chunk_id: cid}})
 DETACH DELETE c
 """
 
+# 单删边：按 triple_id 属性定位（关系类型统一为 RELATION，故不能用类型区分）
+CYPHER_DELETE_RELATIONS = """
+UNWIND $triple_ids AS tid
+MATCH ()-[r:RELATION {{kb_id: $kb_id, triple_id: tid}}]->()
+DELETE r
+"""
+
 CYPHER_DELETE_KB = """
 MATCH (n:{base}:`{kb}`)
 DETACH DELETE n
@@ -327,6 +334,17 @@ class KgNeo4jStore:
         if not ids:
             return
         self._run(CYPHER_DELETE_CHUNKS, chunk_ids=ids)
+
+    def delete_relations(self, triple_ids: Sequence[str], *, kb_id: Optional[int] = None) -> None:
+        """按 triple_id 删除 RELATION 边（实体节点保留）。"""
+        ids = [t for t in triple_ids if t]
+        if not ids:
+            return
+        self._run(
+            CYPHER_DELETE_RELATIONS,
+            triple_ids=ids,
+            kb_id=self.kb_id if kb_id is None else int(kb_id),
+        )
 
     def delete_kb(self) -> None:
         """删除该知识库全部投影节点（rebuild / 删除知识库时用）。"""

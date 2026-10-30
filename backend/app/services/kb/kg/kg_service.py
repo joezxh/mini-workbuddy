@@ -21,6 +21,7 @@ import re
 from typing import Any, Optional
 
 from fastapi import HTTPException
+from loguru import logger
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -108,6 +109,41 @@ class KgService:
             stmt = stmt.where(KgTriple.tenant_id == self.tenant_id)
         return stmt
 
+    # ── Neo4j 投影（P2）────────────────────────────────────────────────
+    # 全部为 best-effort：Neo4j 不可用时静默跳过，绝不阻断 PG 事实写入
+    # （否则图库故障会连带打挂知识库本身）。投影可随时由 reconcile/rebuild 补齐。
+    def _project_entity(self, entity: KgEntity) -> None:
+        from app.services.kb.kg import kg_graph_store
+
+        try:
+            kg_graph_store.project_entity(self.db, entity)
+        except Exception as exc:  # noqa: BLE001 - 兜底：投影层已内部消化，此处只防漏
+            logger.warning(f"[kg] 实体投影跳过 entity={entity.id}: {exc}")
+
+    def _project_triple(self, triple: KgTriple) -> None:
+        from app.services.kb.kg import kg_graph_store
+
+        try:
+            kg_graph_store.project_relation(self.db, triple)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[kg] 关系投影跳过 triple={triple.id}: {exc}")
+
+    def _unproject_entity(self, entity: KgEntity) -> None:
+        from app.services.kb.kg import kg_graph_store
+
+        try:
+            kg_graph_store.unproject_entities(entity.knowledge_id, [entity])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[kg] 实体撤销投影跳过 entity={entity.id}: {exc}")
+
+    def _unproject_triple(self, triple: KgTriple) -> None:
+        from app.services.kb.kg import kg_graph_store
+
+        try:
+            kg_graph_store.unproject_relations(self.db, [triple])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[kg] 关系撤销投影跳过 triple={triple.id}: {exc}")
+
     # ── 实体 ────────────────────────────────────────────────────────────
     def create_entity(
         self,
@@ -145,6 +181,7 @@ class KgService:
                     existing.source_document_ids, source_document_ids
                 )
             self.db.commit()
+            self._project_entity(existing)
             return existing
 
         entity = KgEntity(
@@ -163,6 +200,7 @@ class KgService:
         self.db.add(entity)
         self.db.commit()
         self.db.refresh(entity)
+        self._project_entity(entity)
         return entity
 
     def _entity_filtered_stmt(
@@ -248,6 +286,7 @@ class KgService:
             entity.properties = fields["properties"]
         self.db.commit()
         self.db.refresh(entity)
+        self._project_entity(entity)
         return entity
 
     def delete_entity(self, entity_id: int) -> None:
@@ -256,6 +295,7 @@ class KgService:
         entity = self.get_entity(entity_id)
         if entity is None:
             raise HTTPException(status_code=404, detail="实体不存在")
+        self._unproject_entity(entity)
         self.db.delete(entity)
         self.db.commit()
 
@@ -273,6 +313,7 @@ class KgService:
         entity.status = ENTITY_STATUS_ACTIVE
         self.db.commit()
         self.db.refresh(entity)
+        self._project_entity(entity)
         return entity
 
     # ── 关系 ────────────────────────────────────────────────────────────
@@ -345,6 +386,7 @@ class KgService:
         self.db.add(triple)
         self.db.commit()
         self.db.refresh(triple)
+        self._project_triple(triple)
         return triple
 
     def _triple_filtered_stmt(
@@ -438,11 +480,15 @@ class KgService:
         return triple
 
     def delete_triple(self, triple_id: int) -> None:
-        """删除关系。"""
+        """删除关系。
+
+        投影侧只删这条边、保留端点实体（``DETACH DELETE`` 会误伤实体的其它边）。
+        """
         self._guard()
         triple = self.get_triple(triple_id)
         if triple is None:
             raise HTTPException(status_code=404, detail="关系不存在")
+        self._unproject_triple(triple)
         self.db.delete(triple)
         self.db.commit()
 
