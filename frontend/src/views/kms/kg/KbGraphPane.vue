@@ -46,55 +46,38 @@
           @inspect-entity="onInspectEntity"
         />
       </a-tab-pane>
+      <!-- P4/P5/P6 已交付 -->
+      <a-tab-pane key="graph" :tab="t('kbMgmt.kg.tabGraph')">
+        <KgGraphView
+          ref="graphViewRef"
+          :knowledge-id="knowledgeId"
+          @inspect-entity="onInspectEntity"
+          @inspect-relation="onInspectRelation"
+        />
+      </a-tab-pane>
+      <a-tab-pane key="provenance" :tab="t('kbMgmt.kg.tabProvenance')">
+        <KgProvenance :knowledge-id="knowledgeId" />
+      </a-tab-pane>
+      <a-tab-pane key="search" :tab="t('kbMgmt.kg.tabSearchTest')">
+        <KgSearchTester :knowledge-id="knowledgeId" />
+      </a-tab-pane>
       <a-tab-pane key="config" :tab="t('kbMgmt.kg.tabConfig')">
         <KgBuildConfig :knowledge-id="knowledgeId" />
       </a-tab-pane>
 
       <!-- 后续阶段交付：禁用占位并标注阶段，避免误以为功能缺失 -->
       <a-tab-pane key="documents" :tab="t('kbMgmt.kg.tabDoc')" disabled />
-      <a-tab-pane key="graph" :tab="t('kbMgmt.kg.tabGraph')" disabled />
-      <a-tab-pane key="provenance" :tab="t('kbMgmt.kg.tabProvenance')" disabled />
-      <a-tab-pane key="search" :tab="t('kbMgmt.kg.tabSearchTest')" disabled />
     </a-tabs>
 
-    <a-drawer v-model:open="inspectorOpen" :title="t('kbMgmt.kg.inspectorTitle')" :width="420">
-      <a-descriptions :column="1" size="small" bordered>
-        <a-descriptions-item :label="t('kbMgmt.kg.entityName')">
-          {{ inspected?.name || '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item :label="t('kbMgmt.kg.entityKey')">
-          {{ inspected?.entity_key || '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item :label="t('kbMgmt.kg.entityType')">
-          {{ inspected?.type_code || t('kbMgmt.kg.unclassified') }}
-        </a-descriptions-item>
-        <a-descriptions-item :label="t('kbMgmt.kg.aliases')">
-          {{ (inspected?.aliases || []).join('、') || '-' }}
-        </a-descriptions-item>
-        <a-descriptions-item :label="t('kbMgmt.kg.status')">
-          <a-tag :color="inspected?.status === 'active' ? 'green' : 'orange'">
-            {{ inspected?.status }}
-          </a-tag>
-        </a-descriptions-item>
-        <a-descriptions-item :label="t('kbMgmt.kg.mentionCount')">
-          {{ inspected?.mention_count ?? 0 }}
-        </a-descriptions-item>
-      </a-descriptions>
-
-      <a-divider orientation="left">{{ t('kbMgmt.kg.adjacentRelations') }}</a-divider>
-      <a-list size="small" bordered :data-source="inspected?.adjacent_relations || []">
-        <template #renderItem="{ item }">
-          <a-list-item>
-            <span>
-              {{ item.from_entity_name || `#${item.from_entity_id}` }}
-              →
-              {{ item.to_entity_name || `#${item.to_entity_id}` }}
-              <a-tag v-if="item.relation_code" color="purple">{{ item.relation_code }}</a-tag>
-            </span>
-          </a-list-item>
-        </template>
-      </a-list>
-    </a-drawer>
+    <KgInspector
+      :open="inspectorOpen"
+      :knowledge-id="knowledgeId"
+      :entity-id="inspectedId"
+      @close="inspectorOpen = false"
+      @inspect-entity="onInspectEntity"
+      @locate="onLocate"
+      @provenance="onProvenance"
+    />
   </div>
 </template>
 
@@ -107,8 +90,12 @@ import KgOverview from './KgOverview.vue'
 import KgEntityTable from './KgEntityTable.vue'
 import KgTripleTable from './KgTripleTable.vue'
 import KgBuildConfig from './KgBuildConfig.vue'
+import KgGraphView from './KgGraphView.vue'
+import KgInspector from './KgInspector.vue'
+import KgProvenance from './KgProvenance.vue'
+import KgSearchTester from './KgSearchTester.vue'
 import * as api from '@/api/kg'
-import type { KgBuildStatus, KgEntity } from '@/api/kg'
+import type { KgBuildStatus } from '@/api/kg'
 
 const props = defineProps<{ knowledgeId: number; knowledgeName?: string }>()
 
@@ -118,7 +105,8 @@ const activeTab = ref('overview')
 const refreshing = ref(false)
 const submitting = ref(false)
 const inspectorOpen = ref(false)
-const inspected = ref<KgEntity | null>(null)
+const inspectedId = ref<number | null>(null)
+const graphViewRef = ref<InstanceType<typeof KgGraphView> | null>(null)
 /** 递增以强制子组件重建（子组件 watch(immediate) 随之重载数据） */
 const reloadKey = ref(0)
 const status = ref<KgBuildStatus | null>(null)
@@ -186,12 +174,23 @@ async function onBuild(action: 'build' | 'rebuild') {
 }
 
 async function onInspectEntity(entityId: number) {
-  try {
-    inspected.value = await api.getEntity(props.knowledgeId, entityId)
-    inspectorOpen.value = true
-  } catch {
-    inspectorOpen.value = false
-  }
+  inspectedId.value = entityId
+  inspectorOpen.value = true
+}
+
+function onInspectRelation(_relationId: number) {
+  message.info(t('kbMgmt.kg.relationDetailTip'))
+}
+
+/** 在图谱视图中以该实体为种子展开 */
+async function onLocate(entityId: number) {
+  activeTab.value = 'graph'
+  await graphViewRef.value?.focusEntities([entityId])
+}
+
+/** 跳到溯源 Tab */
+function onProvenance(_entityId: number) {
+  activeTab.value = 'provenance'
 }
 
 function refreshAll() {

@@ -59,6 +59,34 @@
       <div class="kg-overview__row">
         <KgBuildStatusCard :knowledge-id="knowledgeId" />
       </div>
+
+      <a-card size="small" :title="t('kbMgmt.kg.cdmCheck')" class="kg-overview__row">
+        <a-space class="kg-overview__row" wrap>
+          <a-tag color="green">{{ t('kbMgmt.kg.verdictHit') }}: {{ cdm.hit ?? 0 }}</a-tag>
+          <a-tag color="orange">{{ t('kbMgmt.kg.verdictMissing') }}: {{ cdm.missing ?? 0 }}</a-tag>
+          <a-tag color="red">{{ t('kbMgmt.kg.verdictConflict') }}: {{ cdm.conflict ?? 0 }}</a-tag>
+          <a-tag v-if="(cdm.uncovered || []).length" color="default">
+            {{ t('kbMgmt.kg.verdictUncovered') }}: {{ cdm.uncovered?.length }}
+          </a-tag>
+        </a-space>
+        <a-list size="small" bordered :data-source="cdm.items || []" class="kg-overview__row">
+          <template #renderItem="{ item }">
+            <a-list-item>
+              <a-space>
+                <a-tag
+                  :color="item.verdict === 'hit' ? 'green'
+                    : item.verdict === 'missing' ? 'orange' : 'red'"
+                >
+                  {{ item.verdict }}
+                </a-tag>
+                <span>{{ item.relation_code }}</span>
+                <span class="kg-muted">{{ item.from_type }} → {{ item.to_type }}</span>
+                <span v-if="item.detail" class="kg-muted">{{ item.detail }}</span>
+              </a-space>
+            </a-list-item>
+          </template>
+        </a-list>
+      </a-card>
     </a-spin>
   </div>
 </template>
@@ -67,7 +95,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as api from '@/api/kg'
-import type { KgStats } from '@/api/kg'
+import type { KgCdmCheck, KgStats } from '@/api/kg'
 import KgBuildStatusCard from './KgBuildStatusCard.vue'
 
 const props = defineProps<{ knowledgeId: number }>()
@@ -76,6 +104,10 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const stats = ref<KgStats>({ entities: 0, relations: 0, by_type: {}, by_relation: {} })
+const cdm = ref<KgCdmCheck>({
+  hit: 0, missing: 0, conflict: 0, items: [], uncovered: [],
+  total_relations: 0, total_triples: 0,
+})
 
 const typeRows = computed(() =>
   Object.entries(stats.value.by_type || {}).map(([key, value]) => ({ key, value })),
@@ -97,6 +129,14 @@ async function load() {
   } catch {
     // 概览统计失败不阻塞主流程（实体/关系页仍可用）
     stats.value = { entities: 0, relations: 0, by_type: {}, by_relation: {} }
+  }
+  try {
+    cdm.value = (await api.getCdmCheck(props.knowledgeId)) || cdm.value
+  } catch {
+    cdm.value = {
+      hit: 0, missing: 0, conflict: 0, items: [], uncovered: [],
+      total_relations: 0, total_triples: 0,
+    }
   } finally {
     loading.value = false
   }

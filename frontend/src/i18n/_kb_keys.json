@@ -1431,6 +1431,138 @@
   "kbMgmt.kg.failedVector": {
    "ctx": "return t('kbMgmt.kg.failedVector')",
    "ph": []
+  },
+  "kbMgmt.kg.relationDetailTip": {
+   "ctx": "message.info(t('kbMgmt.kg.relationDetailTip'))",
+   "ph": []
+  },
+  "kbMgmt.kg.expandFromSeed": {
+   "ctx": "{{ t('kbMgmt.kg.expandFromSeed') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.clearSelection": {
+   "ctx": "{{ t('kbMgmt.kg.clearSelection') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.nodeCount": {
+   "ctx": "{{ t('kbMgmt.kg.nodeCount') }}: {{ nodes.length }} /",
+   "ph": []
+  },
+  "kbMgmt.kg.edgeCount": {
+   "ctx": "{{ t('kbMgmt.kg.edgeCount') }}: {{ edges.length }}",
+   "ph": []
+  },
+  "kbMgmt.kg.graphEmpty": {
+   "ctx": "<a-empty :description=\"t('kbMgmt.kg.graphEmpty')\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.depth": {
+   "ctx": "{ label: `${t('kbMgmt.kg.depth')} 1`, value: 1 },",
+   "ph": []
+  },
+  "kbMgmt.kg.locateInGraph": {
+   "ctx": "{{ t('kbMgmt.kg.locateInGraph') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.viewProvenance": {
+   "ctx": "{{ t('kbMgmt.kg.viewProvenance') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.noSelection": {
+   "ctx": "<a-empty v-else-if=\"!loading\" :description=\"t('kbMgmt.kg.noSelection')\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.cdmCheck": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.cdmCheck')\" class=\"kg-overview__row\">",
+   "ph": []
+  },
+  "kbMgmt.kg.verdictHit": {
+   "ctx": "<a-tag color=\"green\">{{ t('kbMgmt.kg.verdictHit') }}: {{ cdm.hit ?? 0 }}</a-tag>",
+   "ph": []
+  },
+  "kbMgmt.kg.verdictMissing": {
+   "ctx": "<a-tag color=\"orange\">{{ t('kbMgmt.kg.verdictMissing') }}: {{ cdm.missing ?? 0 }}</a-tag>",
+   "ph": []
+  },
+  "kbMgmt.kg.verdictConflict": {
+   "ctx": "<a-tag color=\"red\">{{ t('kbMgmt.kg.verdictConflict') }}: {{ cdm.conflict ?? 0 }}</a-tag>",
+   "ph": []
+  },
+  "kbMgmt.kg.verdictUncovered": {
+   "ctx": "{{ t('kbMgmt.kg.verdictUncovered') }}: {{ cdm.uncovered?.length }}",
+   "ph": []
+  },
+  "kbMgmt.kg.provSource": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.provSource')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.selectEntity": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.selectEntity')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.provMentions": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.provMentions') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.provDocument": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.provDocument')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.selectDocument": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.selectDocument')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.provContributions": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.provContributions') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.noFailedSegments": {
+   "ctx": "<div v-if=\"!failed.length\" class=\"kg-muted\">{{ t('kbMgmt.kg.noFailedSegments') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.kg.searchQueryPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.searchQueryPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.search": {
+   "ctx": "{{ t('kbMgmt.kg.search') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.compareMode": {
+   "ctx": "<span class=\"kg-muted\">{{ t('kbMgmt.kg.compareMode') }}</span>",
+   "ph": []
+  },
+  "kbMgmt.kg.graphDegraded": {
+   "ctx": ":message=\"t('kbMgmt.kg.graphDegraded')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.graphDegradedDesc": {
+   "ctx": ":description=\"t('kbMgmt.kg.graphDegradedDesc')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.onlyVector": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.onlyVector')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.fusedResult": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.fusedResult')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.hitPath": {
+   "ctx": "{{ t('kbMgmt.kg.hitPath') }}:",
+   "ph": []
+  },
+  "kbMgmt.kg.noSearchResult": {
+   "ctx": "<a-empty v-if=\"!hits.length && !loading\" :description=\"t('kbMgmt.kg.noSearchResult')\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.searchQueryRequired": {
+   "ctx": "message.warning(t('kbMgmt.kg.searchQueryRequired'))",
+   "ph": []
+  },
+  "kbMgmt.kg.searchFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.kg.searchFailed'))",
+   "ph": []
   }
  },
  "wikiMgmt": {

@@ -227,3 +227,156 @@ export function rebuildDocumentGraph(kid: number, documentUuid: string) {
     { document_uuid: documentUuid },
   )
 }
+
+// ── 图查询（P5）──────────────────────────────────────────────────────────
+export interface KgGraphNode {
+  id: number
+  name: string
+  code: string
+  type_code?: string
+  entity_key?: string
+  status?: string
+}
+
+export interface KgGraphEdge {
+  id: number
+  from: number
+  to: number
+  relation_type: string
+  predicate?: string | null
+  weight?: number | null
+  status?: string
+}
+
+export interface KgSubgraph {
+  nodes: KgGraphNode[]
+  edges: KgGraphEdge[]
+}
+
+export interface KgPath {
+  nodes: KgGraphNode[]
+  edges: KgGraphEdge[]
+}
+
+export interface KgLabel {
+  code: string
+  name: string
+  count: number
+}
+
+export function getSubgraph(
+  kid: number,
+  entityIds: number[],
+  depth = 1,
+  limit = 200,
+) {
+  return request.get<KgSubgraph>(`${BASE}/${kid}/graph/subgraph`, {
+    params: { entity_ids: entityIds.join(','), depth, limit },
+  })
+}
+
+export function getSeedSubgraph(kid: number, seedIds: number[], depth = 2, limit = 1000) {
+  return request.get<KgSubgraph>(`${BASE}/${kid}/graph/subgraph/seed`, {
+    params: { seed_ids: seedIds.join(','), depth, limit },
+  })
+}
+
+export function getEntityMentions(kid: number, entityId: number) {
+  return request.get<{
+    items: {
+      segment_id: number
+      chunk_index: number
+      document_id: string
+      content: string
+      evidence: unknown
+    }[]
+  }>(`${BASE}/${kid}/graph/entities/${entityId}/mentions`)
+}
+
+export function getNeighbors(kid: number, entityId: number, depth = 1, limit = 100) {
+  return request.get<KgSubgraph>(`${BASE}/${kid}/graph/entities/${entityId}/neighbors`, {
+    params: { depth, limit },
+  })
+}
+
+export function getPaths(
+  kid: number,
+  fromEntityId: number,
+  toEntityId: number,
+  maxDepth = 2,
+  limit = 20,
+) {
+  return request.post<{ paths: KgPath[] }>(`${BASE}/${kid}/graph/paths`, {
+    from_entity_id: fromEntityId,
+    to_entity_id: toEntityId,
+    max_depth: maxDepth,
+    limit,
+  })
+}
+
+export function getLabels(kid: number) {
+  return request.get<{ items: KgLabel[] }>(`${BASE}/${kid}/graph/labels`)
+}
+
+// ── CDM 双向校验（P6）────────────────────────────────────────────────────
+export type KgVerdict = 'hit' | 'missing' | 'conflict'
+
+export interface KgCdmCheckItem {
+  verdict: KgVerdict
+  relation_code: string
+  relation_name: string
+  from_type: string
+  to_type: string
+  cardinality: string
+  count: number
+  detail: string
+}
+
+export interface KgCdmCheck {
+  hit: number
+  missing: number
+  conflict: number
+  items: KgCdmCheckItem[]
+  uncovered: { relation_code: string; count: number }[]
+  total_relations: number
+  total_triples: number
+}
+
+export function getCdmCheck(kid: number) {
+  return request.get<KgCdmCheck>(`${BASE}/${kid}/graph/cdm-check`)
+}
+
+// ── 导出（P6）───────────────────────────────────────────────────────────
+export function exportGraph(kid: number, fmt: 'json' | 'csv' = 'json') {
+  return request.get<Record<string, unknown>>(`${BASE}/${kid}/graph/export`, {
+    params: { fmt },
+  })
+}
+
+// ── 图谱增强检索（P4）────────────────────────────────────────────────────
+export interface KgRetrieveHit {
+  score: number
+  document_id: string
+  chunk_index: number
+  content: string
+  metadata?: {
+    fusion_sources?: string[]
+    score_type?: string
+    graph_path?: unknown[]
+    graph_seed_entities?: string[]
+    [k: string]: unknown
+  }
+}
+
+export interface KgRetrieveResponse {
+  results: KgRetrieveHit[]
+  index_mode?: string
+  graph_enabled?: boolean
+}
+
+export function retrieveGraph(kid: number, query: string, topK = 10) {
+  return request.post<KgRetrieveResponse>(`${BASE}/${kid}/retrieve`, {
+    query,
+    top_k: topK,
+  })
+}
