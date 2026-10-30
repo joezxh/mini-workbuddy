@@ -484,3 +484,46 @@ git commit -m "test(kb): e2e smoke for graph KB type=4 and regression on existin
 **未交付（按计划归后续阶段）**：文档上传与抽取管线（P3）、Neo4j 投影（P2）、
 图谱可视化/溯源/检索测试/配置 Tab（P4/P5）、`kg_query` Agent 工具与 CDM 双向校验（P6）。
 
+
+---
+
+## P2–P6 执行记录（2026-10-31，全部阶段已完成）
+
+### 提交序列
+
+| # | commit | 内容 |
+|---|---|---|
+| 1 | `dd655ce` | P2 Neo4j 投影层（Cypher 模板集中 / label 白名单 / 幂等 MERGE / 可重建） |
+| 2 | `b27ea0e` | P2 PG→Neo4j 投影接入实例层 CRUD（best-effort 降级） |
+| 3 | `b43cfbd` | P3 抽取器 + 两阶段构建编排 + 单库互斥 + 构建端点 |
+| 4 | `9ccdcde` | P3 前端构建配置 Tab / 状态轮询徽标 / 失败清单 |
+| 5 | `bc158aa` | P4 图谱检索通道（PPR + 加权 RRF + 降级） |
+| 6 | `42e2684` | P5 子图/路径端点 + CDM 校验 + `kg_query` 工具（P6） |
+| 7 | `cfbe824` | P5 实体溯源端点 |
+| 8 | `f5bfa03` | P4–P6 前端（图谱视图 / 检视面板 / 溯源 / 检索测试 / CDM 摘要） |
+
+### 验证结果
+
+| 项 | 结果 |
+|---|---|
+| `tests/kb` 全量 | **437 passed**（P1 时 313 → 新增 124 项） |
+| 其余后端目录 | dataops/agent/connectors/unit/workflow/ai/semantica/integration 全绿（workflow 1 项与 integration 4 项为**基线既有失败**，已在 `799793c` 复现验证） |
+| 前端 `npm run build` | 本次改动文件 **0 类型错误**（仓库既有 vue-tsc 报错未触碰） |
+| Alembic | `2026_10_31_0005_add_kms_segment_graph_columns` 已应用 |
+
+### 执行中新增的设计决策
+
+| # | 决策 | 理由 |
+|---|---|---|
+| D10 | PPR 采用**无向图**传播 | Neo4j 的 MENTIONS 方向是「切片→实体」，有向图下种子实体永远无法把分数传到切片（切片为纯汇点，得分恒 0）。PPR 只承担相关性扩散、不承载方向语义，故取无向；方向语义由子图响应的 from/to 表达 |
+| D11 | CDM 校验中「标准未覆盖的边」**不计入 conflict**，单列 `uncovered` 诊断 | spec §6.5 的 conflict 严格指「违反基数等约束」；CDM 目录未必覆盖全图，把未覆盖当冲突会淹没真冲突。hit/missing/conflict 三态词表保持不变 |
+| D12 | 子图/路径查询走 **PG BFS**（跳数≤3 + 节点限流），不强制走 Neo4j | PG 是可见性权威；交互式查询规模下 BFS 足够，避免「Neo4j 不可用则整个图谱页不可用」 |
+| D13 | `kg_query` 工具加 `tenant_resolver` 注入口 | 测试 schema 不含 `sys_user`；生产仍走 SysUser 查询（fail-closed 不变） |
+| D14 | 溯源经**独立端点** `/graph/entities/{id}/mentions` 取切片正文 | 实体详情里的 `source_segment_ids` 只有 ID 没有正文，前端无法展示「这条实体出现在哪句话里」 |
+| D15 | `networkx` 在 requirements.txt **显式声明** | spec §9.1 要求不可依赖传递依赖；实测环境虽已装 3.6.1，仍须显式声明 |
+
+### 已知遗留（非本计划范围）
+
+* **文档 Tab 仍为占位**：图谱库的文档上传/列表需等 P3 的摄取链路在真实图谱库上跑通后再开放 UI 入口。
+* **`kg_entity.embedding` 无 ANN 索引**：生效维度 2048 超出 pgvector HNSW 上限（2000），与既有 `kms_segment` 保持同一策略；索引选型待实测（见 spec §9.2）。
+* **PPR 规模上限**：子图取自 Neo4j 种子扩展（`graph_max_nodes` 默认 10000），万级节点下 networkx PPR 耗时需实测评估，超出即评估 Neo4j GDS（spec P7 可选项）。

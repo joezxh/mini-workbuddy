@@ -760,6 +760,20 @@ POST /api/v1/kb/knowledges/{kid}/retrieve   body: {query, top_k, hybrid, metadat
 | **P6** Agent 工具与生态对接 | `kg_query` 工具、CDM↔图谱双向校验（hit/missing/conflict）、图谱导出；**前端**：概览 Tab 的 CDM 校验摘要 + 跳转标准中心 | **P2** | P5 | Agent 可多跳问答；校验产出三种结论 |
 | **P7（可选）** | KG 流水线可视化画布、时序图谱、GDS 插件替代 networkx PPR | **P3** | P6 | 仅在有实测性能数据支撑时立项 |
 
+### 7.1 实施状态（2026-10-31）
+
+| 阶段 | 状态 | 交付要点 |
+|---|---|---|
+| P0 | ✅ 已验证 | semantica/ontology/CDM/Neo4j 四项门禁全部通过 |
+| P1 | ✅ 已交付 | type=4、4 张实例表、CRUD+评审、12 端点、前端向导与主面板 |
+| P2 | ✅ 已交付 | `kg_neo4j_store.py`（Cypher 集中 + label 白名单 + 幂等 MERGE）+ `kg_graph_store.py`（PG→Neo4j 投影/撤销/对账），并接入 CRUD 写入路径（best-effort 降级） |
+| P3 | ✅ 已交付 | `kg_extractor.py`（长度守卫/归一化/CDM 约束/容错）、`kg_build_service.py`（两阶段状态机 + 单库互斥 + 四种动作）、`kg_config.py`、切片三列迁移、构建端点；前端配置 Tab + 状态轮询徽标 + 失败清单 |
+| P4 | ✅ 已交付 | `kg_retriever.py`（向量召回 → 种子子图 → PPR → 回 PG 过滤）、加权 RRF 融合接入 `retrieve`（type=4 分支）、降级链 `graph_enabled=false`；前端增强检索测试 Tab |
+| P5 | ✅ 已交付 | 子图/种子子图/邻接/路径/类型分布端点（PG BFS，跳数封顶 3）、实体溯源端点；前端图谱 Tab（ECharts 力导向）+ `KgInspector` 检视面板 + 溯源 Tab |
+| P6 | ✅ 已交付 | `kg_query` Agent 工具（4 子命令，租户 fail-closed，已注册进工具 seed）、CDM↔图谱校验（hit/missing/conflict + uncovered 诊断）、图谱导出（json/csv）；前端概览 CDM 校验摘要 |
+
+**验证**：`tests/kb` **437 passed**（P1 时 313，新增 124 项）；前端 `npm run build` 中本次改动文件 **0 类型错误**。
+
 **明确不做**：时序图谱、推理引擎、跨库图谱、Milvus/新向量库、AntV G6 新依赖。
 
 ---
