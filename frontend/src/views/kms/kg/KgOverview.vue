@@ -55,6 +55,10 @@
           :description="t('kbMgmt.kg.buildPendingDesc')"
         />
       </a-card>
+
+      <div class="kg-overview__row">
+        <KgBuildStatusCard :knowledge-id="knowledgeId" />
+      </div>
     </a-spin>
   </div>
 </template>
@@ -64,6 +68,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as api from '@/api/kg'
 import type { KgStats } from '@/api/kg'
+import KgBuildStatusCard from './KgBuildStatusCard.vue'
 
 const props = defineProps<{ knowledgeId: number }>()
 

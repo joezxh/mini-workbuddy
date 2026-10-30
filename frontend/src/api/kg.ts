@@ -149,3 +149,81 @@ export function reviewRelation(kid: number, relationId: number, verdict: 'accept
 export function getGraphStats(kid: number) {
   return request.get<KgStats>(`${BASE}/${kid}/graph/stats`)
 }
+
+// ── 构建管理（P3）───────────────────────────────────────────────────────
+export type KgBuildState =
+  | 'not_built' | 'pending' | 'running' | 'ready' | 'partial_failed'
+
+export interface KgBuildStatus {
+  state: KgBuildState
+  running: boolean
+  neo4j_available: boolean
+  segments: number
+  structure_done: number
+  vector_done: number
+  failed: number
+}
+
+export interface KgFailedSegment {
+  segment_id: number
+  document_id: string
+  chunk_index: number
+  structure_indexed: boolean | null
+  vector_indexed: boolean | null
+  details: Record<string, unknown> | null
+}
+
+export interface KgGraphConfig {
+  extractor_type: string
+  model_spec: Record<string, unknown> | null
+  schema_source: 'none' | 'cdm' | 'free_text'
+  catalog_id: number | null
+  schema: string
+  concurrency_count: number
+  timeout_seconds: number
+  use_graph_retrieval: boolean
+  graph_entity_top_k: number
+  graph_triple_top_k: number
+  graph_max_nodes: number
+  graph_top_k: number
+  graph_weight: number
+  ppr_damping: number
+}
+
+export type KgBuildAction = 'build' | 'clear_document' | 'rebuild' | 'reconcile'
+
+export function submitGraphBuild(
+  kid: number,
+  action: KgBuildAction = 'build',
+  documentUuid?: string,
+) {
+  return request.post<{ accepted: boolean; action: string; knowledge_id: number }>(
+    `${BASE}/${kid}/graph-build/submit`,
+    { action, document_uuid: documentUuid },
+  )
+}
+
+export function getGraphBuildStatus(kid: number) {
+  return request.get<KgBuildStatus>(`${BASE}/${kid}/graph-build/status`)
+}
+
+export function listFailedSegments(kid: number) {
+  return request.get<{ items: KgFailedSegment[]; total: number }>(
+    `${BASE}/${kid}/graph/failed-segments`,
+  )
+}
+
+export function getGraphConfig(kid: number) {
+  return request.get<KgGraphConfig>(`${BASE}/${kid}/graph/config`)
+}
+
+export function saveGraphConfig(kid: number, body: Partial<KgGraphConfig>) {
+  return request.put<KgGraphConfig>(`${BASE}/${kid}/graph/config`, body)
+}
+
+export function rebuildDocumentGraph(kid: number, documentUuid: string) {
+  return request.post<{ accepted: boolean }>(
+    `${BASE}/${kid}/graph/documents/rebuild`,
+    { document_uuid: documentUuid },
+  )
+}

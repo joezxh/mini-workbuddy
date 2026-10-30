@@ -1275,6 +1275,162 @@
   "kbMgmt.createFailed": {
    "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.createFailed'))",
    "ph": []
+  },
+  "kbMgmt.kg.neo4jDown": {
+   "ctx": "{{ t('kbMgmt.kg.neo4jDown') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.actionBuild": {
+   "ctx": "{{ t('kbMgmt.kg.actionBuild') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.actionRebuild": {
+   "ctx": "{{ t('kbMgmt.kg.actionRebuild') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.stateRunning": {
+   "ctx": "case 'running': return t('kbMgmt.kg.stateRunning')",
+   "ph": []
+  },
+  "kbMgmt.kg.stateReady": {
+   "ctx": "case 'ready': return t('kbMgmt.kg.stateReady')",
+   "ph": []
+  },
+  "kbMgmt.kg.statePending": {
+   "ctx": "case 'pending': return t('kbMgmt.kg.statePending')",
+   "ph": []
+  },
+  "kbMgmt.kg.statePartialFailed": {
+   "ctx": "case 'partial_failed': return t('kbMgmt.kg.statePartialFailed')",
+   "ph": []
+  },
+  "kbMgmt.kg.stateNotBuilt": {
+   "ctx": "default: return t('kbMgmt.kg.stateNotBuilt')",
+   "ph": []
+  },
+  "kbMgmt.kg.buildSubmitted": {
+   "ctx": "message.success(t('kbMgmt.kg.buildSubmitted'))",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgExtractor": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.cfgExtractor') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgExtractorType": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgExtractorType')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgExtractorLlm": {
+   "ctx": "<a-select-option value=\"llm\">{{ t('kbMgmt.kg.cfgExtractorLlm') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgConcurrency": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgConcurrency')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgTimeout": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgTimeout')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchema": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.cfgSchema') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaSource": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgSchemaSource')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaNone": {
+   "ctx": "<a-radio value=\"none\">{{ t('kbMgmt.kg.cfgSchemaNone') }}</a-radio>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaCdm": {
+   "ctx": "<a-radio value=\"cdm\">{{ t('kbMgmt.kg.cfgSchemaCdm') }}</a-radio>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaFree": {
+   "ctx": "<a-radio value=\"free_text\">{{ t('kbMgmt.kg.cfgSchemaFree') }}</a-radio>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgCatalog": {
+   "ctx": "<a-form-item v-if=\"form.schema_source === 'cdm'\" :label=\"t('kbMgmt.kg.cfgCatalog')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgCatalogPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.cfgCatalogPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgCatalogTip": {
+   "ctx": "<div class=\"kg-build-config__tip\">{{ t('kbMgmt.kg.cfgCatalogTip') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaText": {
+   "ctx": "<a-form-item v-if=\"form.schema_source === 'free_text'\" :label=\"t('kbMgmt.kg.cfgSchemaText')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgSchemaTextPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.cfgSchemaTextPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgRetrieval": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.cfgRetrieval') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgUseGraphTip": {
+   "ctx": "<span class=\"kg-build-config__tip\">{{ t('kbMgmt.kg.cfgUseGraphTip') }}</span>",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgEntityTopK": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgEntityTopK')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgTripleTopK": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgTripleTopK')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgGraphTopK": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgGraphTopK')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgGraphWeight": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgGraphWeight')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgPprDamping": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgPprDamping')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.cfgMaxNodes": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.cfgMaxNodes')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.statSegments": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.statSegments')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.stageStructure": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.stageStructure')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.stageVector": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.stageVector')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.neo4jDownDesc": {
+   "ctx": ":description=\"t('kbMgmt.kg.neo4jDownDesc')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.failedList": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.failedList') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.failedStructure": {
+   "ctx": "if (item.structure_indexed === false) return t('kbMgmt.kg.failedStructure')",
+   "ph": []
+  },
+  "kbMgmt.kg.failedVector": {
+   "ctx": "return t('kbMgmt.kg.failedVector')",
+   "ph": []
   }
  },
  "wikiMgmt": {
