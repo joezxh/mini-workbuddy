@@ -26,7 +26,9 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.kb.kg_entity import KgEntity
+from app.models.kb.kg_entity_mention import KgEntityMention
 from app.models.kb.kg_triple import KgTriple
+from app.models.kb.kb_segment import KbSegment
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.services.kb.kb_format import GRAPH_KB_TYPE
 
@@ -640,6 +642,33 @@ class KgService:
         for r in results:
             r["nodes"] = [detail.get(n["id"], n) for n in r["nodes"] if n]
         return results
+
+    def entity_mentions(self, entity_id: int) -> list:
+        """实体提及的切片清单（溯源：这条实体出现在哪些切片里）。
+
+        返回 ``[{segment_id, chunk_index, document_id, content, evidence}]``；
+        内容取自 PG（可见性权威），切片已被删除的提及自动跳过。
+        """
+        mentions = self.db.execute(
+            select(KgEntityMention).where(KgEntityMention.kg_entity_id == entity_id)
+        ).scalars().all()
+        out: list = []
+        for m in mentions:
+            seg = None
+            if m.segment_id is not None:
+                seg = self.db.get(KbSegment, m.segment_id)
+            if seg is None:
+                continue  # 切片已删 -> 提及不再可见
+            out.append(
+                {
+                    "segment_id": seg.id,
+                    "chunk_index": seg.chunk_index,
+                    "document_id": seg.document_id,
+                    "content": (seg.content or "")[:500],
+                    "evidence": m.evidence,
+                }
+            )
+        return out
 
     def labels(self) -> list:
         """实体类型分布（对齐 Yuxi /graph/labels）。"""

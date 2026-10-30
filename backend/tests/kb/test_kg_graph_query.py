@@ -191,3 +191,40 @@ def test_cdm_check_uses_existing_verdict_vocabulary(db, kb, svc, chain):
     out = run_cdm_check(db, kb.id, TENANT_A)
     verdicts = {i["verdict"] for i in out["items"]}
     assert verdicts <= {"hit", "missing", "conflict"}
+
+
+def test_entity_mentions_returns_segment_provenance(db, kb, svc):
+    """实体溯源：返回提及该实体的切片（chunk_index / 文档 / 正文）。"""
+    from app.models.kb.kb_document import KbDocument, new_document_uuid
+    from app.models.kb.kb_segment import KbSegment
+    from app.models.kb.kg_entity_mention import KgEntityMention
+
+    doc = KbDocument(
+        uuid_code=new_document_uuid(), knowledge_id=kb.id,
+        collection=f"kb_{kb.id}", name="溯源文档", status="completed",
+        tenant_id=TENANT_A,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    seg = KbSegment(
+        collection=f"kb_{kb.id}", document_id=doc.uuid_code, chunk_index=2,
+        content="星海科技下单内容", tenant_id=TENANT_A,
+    )
+    db.add(seg)
+    db.commit()
+    db.refresh(seg)
+
+    e = svc.create_entity(name="星海科技", type_code="CUS")
+    db.add(KgEntityMention(
+        tenant_id=TENANT_A, kg_entity_id=e.id, segment_id=seg.id,
+        document_id=doc.uuid_code,
+    ))
+    db.commit()
+
+    out = svc.entity_mentions(e.id)
+    assert len(out) == 1
+    assert out[0]["chunk_index"] == 2
+    assert out[0]["document_id"] == doc.uuid_code
+    assert "星海科技" in out[0]["content"]
+

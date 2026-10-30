@@ -505,6 +505,21 @@ def graph_neighbors(
     return _svc(db, current_user, kid).neighbors(entity_id, depth=depth, limit=limit)
 
 
+@router.get("/{kid}/graph/entities/{entity_id}/mentions")
+def graph_entity_mentions(
+    kid: int,
+    entity_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """实体溯源：它被哪些切片提及（含切片正文与抽取依据）。"""
+    svc = _svc(db, current_user, kid)
+    if svc.get_entity(entity_id) is None:
+        raise HTTPException(status_code=404, detail="实体不存在")
+    return {"items": svc.entity_mentions(entity_id)}
+
+
 class PathsBody(BaseModel):
     from_entity_id: int = Field(..., description="起点实体 ID")
     to_entity_id: int = Field(..., description="终点实体 ID")
