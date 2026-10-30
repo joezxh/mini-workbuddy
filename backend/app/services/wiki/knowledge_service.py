@@ -82,6 +82,11 @@ class WikiKnowledgeService:
         # 多模态仅 type=2/document 有意义（§10.1 ④）
         data["multimodal_enabled"] = bool(data.get("multimodal_enabled")) and kb_type == 2
 
+        # 图谱知识库（type=4）强制约束：形态固定 graph、索引恒 high_quality、恒不启用多模态
+        from app.services.kb.kb_format import normalize_graph_kb
+
+        normalize_graph_kb(kb_type, data)
+
         # pipeline_config 规范化（D8：键名对齐原生）
         from app.services.kb.pipeline_config import normalize_pipeline_config
 
@@ -134,9 +139,11 @@ class WikiKnowledgeService:
         obj = self._require(knowledge_id)
         payload_dict = payload.dict(exclude_none=True)
         # 创建后不可切换（spec §10.2）
-        from app.services.kb.kb_format import assert_format_unchanged
+        from app.services.kb.kb_format import assert_format_unchanged, normalize_graph_kb
 
         assert_format_unchanged(obj.kb_format, payload_dict.get("kb_format"))
+        # 图谱知识库（type=4）强制约束在编辑态同样生效（index_mode 不得被改成 economy）
+        normalize_graph_kb(obj.type, payload_dict)
         # pipeline_config 规范化（D8）
         if "pipeline_config" in payload_dict:
             from app.services.kb.pipeline_config import normalize_pipeline_config

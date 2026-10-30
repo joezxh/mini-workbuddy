@@ -4,13 +4,19 @@
     type=1 llm-wiki    → kb_format 必须为 NULL
     type=2 general-kb  → document | table | qa（multimodal 是 document 上的开关，非形态）
     type=3 external-kb → connector | proxy
+    type=4 graph-kb    → graph（唯一形态，缺省自动补齐；其它值一律 422）
 """
 from fastapi import HTTPException
+
+# 图谱知识库（type=4）常量：唯一形态 + 强制约束
+GRAPH_KB_TYPE = 4
+GRAPH_KB_FORMAT = "graph"
 
 VALID_KB_FORMATS: dict[int, tuple[str, ...]] = {
     1: (),
     2: ("document", "table", "qa"),
     3: ("connector", "proxy"),
+    4: (GRAPH_KB_FORMAT,),
 }
 
 
@@ -23,6 +29,14 @@ def validate_kb_format(kb_type: int, kb_format: str | None) -> str | None:
         if kb_format is not None:
             raise HTTPException(status_code=422, detail="llm-wiki 容器不使用 kb_format")
         return None
+    # 图谱知识库：形态唯一且固定，缺省自动补齐（客户端无需记忆 magic 字符串）
+    if kb_type == GRAPH_KB_TYPE:
+        if kb_format in (None, GRAPH_KB_FORMAT):
+            return GRAPH_KB_FORMAT
+        raise HTTPException(
+            status_code=422,
+            detail=f"图谱知识库（type=4）仅支持 kb_format={GRAPH_KB_FORMAT!r}",
+        )
     if not kb_format:
         raise HTTPException(status_code=422, detail=f"type={kb_type} 必须选择 kb_format")
     if kb_format not in allowed:
@@ -30,6 +44,24 @@ def validate_kb_format(kb_type: int, kb_format: str | None) -> str | None:
             status_code=422, detail=f"kb_format={kb_format!r} 不合法，允许: {allowed}"
         )
     return kb_format
+
+
+def normalize_graph_kb(kb_type: int, data: dict) -> dict:
+    """type=4 强制约束（原地修改并返回 ``data``）；非 type=4 不做任何改动。
+
+    - ``kb_format`` 固定为 ``graph``
+    - ``index_mode`` 强制 ``high_quality``（economy 不产向量，实体/关系无法召回）
+    - ``multimodal_enabled`` 恒 False（图谱库无「图片独立向量化」语义）
+
+    ``external_type`` 必须为 NULL —— 由 ``validate_external_type`` 的 type≠3 分支
+    既有拒绝逻辑保证，无需在此重复实现。
+    """
+    if kb_type != GRAPH_KB_TYPE:
+        return data
+    data["kb_format"] = GRAPH_KB_FORMAT
+    data["index_mode"] = "high_quality"
+    data["multimodal_enabled"] = False
+    return data
 
 
 def validate_external_type(

@@ -28,7 +28,11 @@ from app.models.sys.sys_user import SysUser
 from app.models.kb.kb_category import KbCategory
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_knowledge import WikiKnowledge
-from app.services.kb.kb_format import validate_external_type, validate_kb_format
+from app.services.kb.kb_format import (
+    normalize_graph_kb,
+    validate_external_type,
+    validate_kb_format,
+)
 from app.services.kb.pipeline_config import normalize_pipeline_config
 
 router = APIRouter(prefix="/api/v1/kb", tags=["知识库管理"])
@@ -268,15 +272,25 @@ def create_knowledge(
         body.type, body.kb_format, body.external_type
     )
 
+    # 图谱知识库（type=4）强制约束：形态固定 graph、索引恒 high_quality、恒不启用多模态
+    graph_fields = normalize_graph_kb(
+        body.type,
+        {
+            "kb_format": validated_format,
+            "index_mode": body.index_mode or "high_quality",
+            "multimodal_enabled": body.multimodal_enabled,
+        },
+    )
+
     kb = WikiKnowledge(
         name=body.name,
         slug=slug,
         description=body.description,
         type=body.type,
-        kb_format=validated_format,
+        kb_format=graph_fields["kb_format"],
         external_type=validated_external,
-        index_mode=body.index_mode or "high_quality",
-        multimodal_enabled=body.multimodal_enabled,
+        index_mode=graph_fields["index_mode"],
+        multimodal_enabled=graph_fields["multimodal_enabled"],
         category_id=body.category_id,
     )
     db.add(kb)

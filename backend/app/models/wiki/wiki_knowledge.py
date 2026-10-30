@@ -23,6 +23,7 @@ class KnowledgeType(IntEnum):
     LLM_WIKI = 1      # llm-wiki：文章 + 版本 + OKF 合规
     GENERAL_KB = 2    # 通用 KB：文档 / 表格 / Q&A 切片检索（kb_collection）
     EXTERNAL_KB = 3   # 外部集成：连接器拉取 / 外部检索代理
+    GRAPH_KB = 4      # 知识图谱：实体 / 关系实例层（kb_format='graph'）
 
 
 class WikiKnowledge(Base, TenantMixin):
@@ -42,10 +43,11 @@ class WikiKnowledge(Base, TenantMixin):
         Integer,
         nullable=False,
         server_default='1',
-        comment='知识库类型: 1=llm-wiki 2=general-kb 3=external-kb',
+        comment='知识库类型: 1=llm-wiki 2=general-kb 3=external-kb 4=graph-kb',
     )
-    # 二级形态（spec §10.2，Dify 对齐）：type=2 → document|table|qa；type=3 → connector|proxy；type=1 为 NULL
-    kb_format = Column(String(16), nullable=True, comment='二级形态: document|table|qa|connector|proxy')
+    # 二级形态（spec §10.2，Dify 对齐）：type=2 → document|table|qa；type=3 → connector|proxy；
+    # type=4 → graph（唯一形态，固定值）；type=1 为 NULL
+    kb_format = Column(String(16), nullable=True, comment='二级形态: document|table|qa|connector|proxy|graph')
     # 外部类型（外部知识库平台绑定，spec 知识库管理）：仅 type=3/connector 时有值，
     # 取值为 doc_sources.supported_source_types() 的运行时结果（feishu|lark|feishu_drive|
     # lark_drive|yuque|dingtalk|wecom|notion|gitlab|ima|rss|confluence|seafile|github|
