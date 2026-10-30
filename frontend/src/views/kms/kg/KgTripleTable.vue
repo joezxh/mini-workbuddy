@@ -134,7 +134,7 @@ import * as api from '@/api/kg'
 import type { KgEntity, KgRelation, KgRelationStatus } from '@/api/kg'
 
 const props = defineProps<{ knowledgeId: number }>()
-const emit = defineEmits<{ (e: 'inspect-entity', entityId: number): void }>()
+defineEmits<{ (e: 'inspect-entity', entityId: number): void }>()
 
 const { t } = useI18n()
 
