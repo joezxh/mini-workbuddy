@@ -61,6 +61,11 @@ from app.models.kb.kb_ref import KbRef                                         #
 from app.models.kb.kb_category import KbCategory                               # noqa: F401
 from app.models.kb.kb_document import KbDocument                               # noqa: F401
 from app.models.kb.kb_segment_asset import KbSegmentAsset                      # noqa: F401
+# --- 知识图谱实例层 (kg_) ---
+from app.models.kb.kg_entity import KgEntity                                   # noqa: F401
+from app.models.kb.kg_entity_mention import KgEntityMention                   # noqa: F401
+from app.models.kb.kg_triple import KgTriple                                  # noqa: F401
+from app.models.kb.kg_triple_mention import KgTripleMention                   # noqa: F401
 # --- DataOps (dataops_) ---
 from app.models.dataops.data_source import DataSource                           # noqa: F401
 from app.models.dataops.meta import (                                           # noqa: F401

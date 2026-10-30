@@ -1,4 +1,4 @@
-"""tests/kb 测试基础设施（镜像 tests/ontology/conftest 的 per-schema 隔离思路）。
+"""tests/kb 测试基础设施（镜像 tests/dataops/conftest 的 per-schema 隔离思路）。
 
 每个用例一个独立 PostgreSQL schema（t_<uuid>），用例结束 DROP SCHEMA ... CASCADE，
 用例间完全隔离；只建 kb 三张表（不加迁移里的 HNSW/trgm 索引，那些留给 Task 4/5）。
@@ -24,6 +24,10 @@ from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_document import KbDocument  # noqa: F401
 from app.models.kb.kb_segment import KbSegment
 from app.models.kb.kb_ref import KbRef
+from app.models.kb.kg_entity import KgEntity
+from app.models.kb.kg_entity_mention import KgEntityMention
+from app.models.kb.kg_triple import KgTriple
+from app.models.kb.kg_triple_mention import KgTripleMention
 
 TENANT_A = 100
 TENANT_B = 200
@@ -51,6 +55,8 @@ IS_POSTGRES = make_url(TEST_DB_URL).get_backend_name() == "postgresql"
 KB_TABLES = [
     WikiKnowledge.__table__, KbCollection.__table__, KbDocument.__table__,
     KbSegment.__table__, KbRef.__table__,
+    KgEntity.__table__, KgEntityMention.__table__,
+    KgTriple.__table__, KgTripleMention.__table__,
 ]
 
 
