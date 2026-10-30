@@ -759,6 +759,522 @@
   "kbMgmt.review.reviewFailed": {
    "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.review.reviewFailed'))",
    "ph": []
+  },
+  "kbMgmt.kg.typeLabel": {
+   "ctx": "<a-tag color=\"purple\">{{ t('kbMgmt.kg.typeLabel') }}</a-tag>",
+   "ph": []
+  },
+  "kbMgmt.kg.tabOverview": {
+   "ctx": "<a-tab-pane key=\"overview\" :tab=\"t('kbMgmt.kg.tabOverview')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.tabEntity": {
+   "ctx": "<a-tab-pane key=\"entities\" :tab=\"t('kbMgmt.kg.tabEntity')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.tabRelation": {
+   "ctx": "<a-tab-pane key=\"relations\" :tab=\"t('kbMgmt.kg.tabRelation')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.tabDoc": {
+   "ctx": "<a-tab-pane key=\"documents\" :tab=\"t('kbMgmt.kg.tabDoc')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.kg.tabGraph": {
+   "ctx": "<a-tab-pane key=\"graph\" :tab=\"t('kbMgmt.kg.tabGraph')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.kg.tabProvenance": {
+   "ctx": "<a-tab-pane key=\"provenance\" :tab=\"t('kbMgmt.kg.tabProvenance')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.kg.tabSearchTest": {
+   "ctx": "<a-tab-pane key=\"search\" :tab=\"t('kbMgmt.kg.tabSearchTest')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.kg.tabConfig": {
+   "ctx": "<a-tab-pane key=\"config\" :tab=\"t('kbMgmt.kg.tabConfig')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.kg.inspectorTitle": {
+   "ctx": "<a-drawer v-model:open=\"inspectorOpen\" :title=\"t('kbMgmt.kg.inspectorTitle')\" :width=\"420\">",
+   "ph": []
+  },
+  "kbMgmt.kg.entityName": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.entityName')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.entityKey": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.entityKey')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.entityType": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.entityType')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.unclassified": {
+   "ctx": "{{ inspected?.type_code || t('kbMgmt.kg.unclassified') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.aliases": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.aliases')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.status": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.status')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.mentionCount": {
+   "ctx": "<a-descriptions-item :label=\"t('kbMgmt.kg.mentionCount')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.adjacentRelations": {
+   "ctx": "<a-divider orientation=\"left\">{{ t('kbMgmt.kg.adjacentRelations') }}</a-divider>",
+   "ph": []
+  },
+  "kbMgmt.kg.statEntities": {
+   "ctx": "<a-statistic :title=\"t('kbMgmt.kg.statEntities')\" :value=\"stats.entities\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.statRelations": {
+   "ctx": "<a-statistic :title=\"t('kbMgmt.kg.statRelations')\" :value=\"stats.relations\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.statEntityTypes": {
+   "ctx": "<a-statistic :title=\"t('kbMgmt.kg.statEntityTypes')\" :value=\"typeRows.length\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.statRelationTypes": {
+   "ctx": "<a-statistic :title=\"t('kbMgmt.kg.statRelationTypes')\" :value=\"relationRows.length\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.entityTypeDistribution": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.entityTypeDistribution')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.noData": {
+   "ctx": "<div v-if=\"!typeRows.length\" class=\"kg-muted\">{{ t('kbMgmt.kg.noData') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.kg.relationTypeDistribution": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.relationTypeDistribution')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.freePredicate": {
+   "ctx": "<span class=\"kg-overview__bar-label\">{{ r.key || t('kbMgmt.kg.freePredicate') }}</span>",
+   "ph": []
+  },
+  "kbMgmt.kg.buildStatus": {
+   "ctx": "<a-card size=\"small\" :title=\"t('kbMgmt.kg.buildStatus')\" class=\"kg-overview__row\">",
+   "ph": []
+  },
+  "kbMgmt.kg.buildPendingTip": {
+   "ctx": ":message=\"t('kbMgmt.kg.buildPendingTip')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.buildPendingDesc": {
+   "ctx": ":description=\"t('kbMgmt.kg.buildPendingDesc')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.searchPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.searchPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.filterType": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.filterType')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.filterStatus": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.filterStatus')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.statusSuggested": {
+   "ctx": "<a-select-option value=\"suggested\">{{ t('kbMgmt.kg.statusSuggested') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.statusActive": {
+   "ctx": "<a-select-option value=\"active\">{{ t('kbMgmt.kg.statusActive') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.statusDeprecated": {
+   "ctx": "<a-select-option value=\"deprecated\">{{ t('kbMgmt.kg.statusDeprecated') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.addEntity": {
+   "ctx": "<a-button type=\"primary\" @click=\"openCreate\">{{ t('kbMgmt.kg.addEntity') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.kg.accept": {
+   "ctx": "{{ t('kbMgmt.kg.accept') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.confirmDeleteEntity": {
+   "ctx": ":title=\"t('kbMgmt.kg.confirmDeleteEntity')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.editEntity": {
+   "ctx": ":title=\"editing ? t('kbMgmt.kg.editEntity') : t('kbMgmt.kg.addEntity')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.entityNamePlaceholder": {
+   "ctx": "<a-input v-model:value=\"form.name\" :placeholder=\"t('kbMgmt.kg.entityNamePlaceholder')\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.entityTypePlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.entityTypePlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.aliasesPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.aliasesPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.properties": {
+   "ctx": "{ title: t('kbMgmt.kg.properties'), key: 'properties', width: 220 },",
+   "ph": []
+  },
+  "kbMgmt.colActions": {
+   "ctx": "{ title: t('kbMgmt.colActions'), key: 'actions', width: 220, fixed: 'right' },",
+   "ph": []
+  },
+  "kbMgmt.kg.loadFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.kg.loadFailed'))",
+   "ph": []
+  },
+  "kbMgmt.kg.entityNameRequired": {
+   "ctx": "message.warning(t('kbMgmt.kg.entityNameRequired'))",
+   "ph": []
+  },
+  "kbMgmt.kg.saveFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.kg.saveFailed'))",
+   "ph": []
+  },
+  "kbMgmt.kg.accepted": {
+   "ctx": "message.success(t('kbMgmt.kg.accepted'))",
+   "ph": []
+  },
+  "kbMgmt.kg.actionFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))",
+   "ph": []
+  },
+  "kbMgmt.kg.deleted": {
+   "ctx": "message.success(t('kbMgmt.kg.deleted'))",
+   "ph": []
+  },
+  "kbMgmt.kg.filterRelationType": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.filterRelationType')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.statusAccepted": {
+   "ctx": "<a-select-option value=\"accepted\">{{ t('kbMgmt.kg.statusAccepted') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.statusRejected": {
+   "ctx": "<a-select-option value=\"rejected\">{{ t('kbMgmt.kg.statusRejected') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.kg.addRelation": {
+   "ctx": "{{ t('kbMgmt.kg.addRelation') }}",
+   "ph": []
+  },
+  "kbMgmt.kg.confirmRejectRelation": {
+   "ctx": ":title=\"t('kbMgmt.kg.confirmRejectRelation')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.reject": {
+   "ctx": "<a-button size=\"small\" type=\"link\" danger>{{ t('kbMgmt.kg.reject') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.kg.confirmDeleteRelation": {
+   "ctx": ":title=\"t('kbMgmt.kg.confirmDeleteRelation')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.fromEntity": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.fromEntity')\" required>",
+   "ph": []
+  },
+  "kbMgmt.kg.fromEntityPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.fromEntityPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.relationType": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.relationType')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.relationTypePlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.relationTypePlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.predicate": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.predicate')\">",
+   "ph": []
+  },
+  "kbMgmt.kg.predicatePlaceholder": {
+   "ctx": "<a-input v-model:value=\"form.predicate\" :placeholder=\"t('kbMgmt.kg.predicatePlaceholder')\" />",
+   "ph": []
+  },
+  "kbMgmt.kg.toEntity": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.kg.toEntity')\" required>",
+   "ph": []
+  },
+  "kbMgmt.kg.toEntityPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.kg.toEntityPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kg.weight": {
+   "ctx": "{ title: t('kbMgmt.kg.weight'), key: 'weight', width: 110 },",
+   "ph": []
+  },
+  "kbMgmt.kg.relationEndpointsRequired": {
+   "ctx": "message.warning(t('kbMgmt.kg.relationEndpointsRequired'))",
+   "ph": []
+  },
+  "kbMgmt.kg.created": {
+   "ctx": "message.success(t('kbMgmt.kg.created'))",
+   "ph": []
+  },
+  "kbMgmt.kg.reviewDone": {
+   "ctx": "message.success(t('kbMgmt.kg.reviewDone'))",
+   "ph": []
+  },
+  "kbMgmt.treeTitle": {
+   "ctx": "<div class=\"kb-manager__tree-title\">{{ t('kbMgmt.treeTitle') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.selectKbFirst": {
+   "ctx": "<a-empty v-else-if=\"selectedKbType === 2\" :description=\"t('kbMgmt.selectKbFirst')\" />",
+   "ph": []
+  },
+  "kbMgmt.edit": {
+   "ctx": ":title=\"editingId ? t('kbMgmt.edit') : t('kbMgmt.createWizard')\"",
+   "ph": []
+  },
+  "kbMgmt.createWizard": {
+   "ctx": ":title=\"editingId ? t('kbMgmt.edit') : t('kbMgmt.createWizard')\"",
+   "ph": []
+  },
+  "kbMgmt.name": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.name')\" required>",
+   "ph": []
+  },
+  "kbMgmt.namePlaceholder": {
+   "ctx": "<a-input v-model:value=\"form.name\" :placeholder=\"t('kbMgmt.namePlaceholder')\" />",
+   "ph": []
+  },
+  "kbMgmt.type": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.type')\">",
+   "ph": []
+  },
+  "kbMgmt.typeWiki": {
+   "ctx": "<a-select-option :value=\"1\">{{ t('kbMgmt.typeWiki') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeGeneral": {
+   "ctx": "<a-select-option :value=\"2\">{{ t('kbMgmt.typeGeneral') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeExternal": {
+   "ctx": "<a-select-option :value=\"3\">{{ t('kbMgmt.typeExternal') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeGraph": {
+   "ctx": "<a-select-option :value=\"4\">{{ t('kbMgmt.typeGraph') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeLocked": {
+   "ctx": ":message=\"t('kbMgmt.typeLocked')\"",
+   "ph": []
+  },
+  "kbMgmt.category": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.category')\">",
+   "ph": []
+  },
+  "kbMgmt.categoryPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.categoryPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.kbFormat": {
+   "ctx": "<a-form-item v-if=\"form.type === 2\" :label=\"t('kbMgmt.kbFormat')\">",
+   "ph": []
+  },
+  "kbMgmt.fmtDocument": {
+   "ctx": "<a-select-option value=\"document\">{{ t('kbMgmt.fmtDocument') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.fmtTable": {
+   "ctx": "<a-select-option value=\"table\">{{ t('kbMgmt.fmtTable') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.fmtQa": {
+   "ctx": "<a-select-option value=\"qa\">{{ t('kbMgmt.fmtQa') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.fmtGraph": {
+   "ctx": "<a-input :value=\"t('kbMgmt.fmtGraph')\" disabled />",
+   "ph": []
+  },
+  "kbMgmt.graphFormatTip": {
+   "ctx": "<div class=\"kb-manager__tip\">{{ t('kbMgmt.graphFormatTip') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.fmtConnector": {
+   "ctx": "<a-tab-pane key=\"connector\" :tab=\"t('kbMgmt.fmtConnector')\">",
+   "ph": []
+  },
+  "kbMgmt.connectorHint": {
+   "ctx": ":message=\"t('kbMgmt.connectorHint')\"",
+   "ph": []
+  },
+  "kbMgmt.externalType": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.externalType')\" required>",
+   "ph": []
+  },
+  "kbMgmt.externalTypePlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.externalTypePlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.fmtProxy": {
+   "ctx": "<a-tab-pane key=\"proxy\" :tab=\"t('kbMgmt.fmtProxy')\">",
+   "ph": []
+  },
+  "kbMgmt.endpointUrl": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.endpointUrl')\" required>",
+   "ph": []
+  },
+  "kbMgmt.authKey": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.authKey')\">",
+   "ph": []
+  },
+  "kbMgmt.indexName": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.indexName')\">",
+   "ph": []
+  },
+  "kbMgmt.indexMode": {
+   "ctx": "<a-form-item v-if=\"form.type === 2\" :label=\"t('kbMgmt.indexMode')\">",
+   "ph": []
+  },
+  "kbMgmt.highQuality": {
+   "ctx": "<a-radio value=\"high_quality\">{{ t('kbMgmt.highQuality') }}</a-radio>",
+   "ph": []
+  },
+  "kbMgmt.economy": {
+   "ctx": "<a-radio value=\"economy\">{{ t('kbMgmt.economy') }}</a-radio>",
+   "ph": []
+  },
+  "kbMgmt.indexModeTip": {
+   "ctx": "<div class=\"kb-manager__tip\">{{ t('kbMgmt.indexModeTip') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.multimodal": {
+   "ctx": "<a-form-item v-if=\"form.type === 2 && form.kb_format === 'document'\" :label=\"t('kbMgmt.multimodal')\">",
+   "ph": []
+  },
+  "kbMgmt.multimodalTip": {
+   "ctx": "<div class=\"kb-manager__tip\">{{ t('kbMgmt.multimodalTip') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.visionModelPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.visionModelPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.asrModelPlaceholder": {
+   "ctx": ":placeholder=\"t('kbMgmt.asrModelPlaceholder')\"",
+   "ph": []
+  },
+  "kbMgmt.mediaModelTip": {
+   "ctx": "<div class=\"kb-manager__tip\">{{ t('kbMgmt.mediaModelTip') }}</div>",
+   "ph": []
+  },
+  "kbMgmt.chunkerType": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.chunkerType')\">",
+   "ph": []
+  },
+  "kbMgmt.selectChunker": {
+   "ctx": ":placeholder=\"t('kbMgmt.selectChunker')\"",
+   "ph": []
+  },
+  "kbMgmt.chunkerNoneHint": {
+   "ctx": ":message=\"t('kbMgmt.chunkerNoneHint')\"",
+   "ph": []
+  },
+  "kbMgmt.chunkerHint": {
+   "ctx": ":message=\"t('kbMgmt.chunkerHint')\"",
+   "ph": []
+  },
+  "kbMgmt.schemaConfig": {
+   "ctx": "<a-form-item v-if=\"form.type === 2 && form.kb_format === 'table'\" :label=\"t('kbMgmt.schemaConfig')\">",
+   "ph": []
+  },
+  "kbMgmt.schemaConfigHint": {
+   "ctx": "<a-alert class=\"kb-manager__tip\" type=\"info\" :message=\"t('kbMgmt.schemaConfigHint')\" show-icon />",
+   "ph": []
+  },
+  "kbMgmt.schemaConfigEmptyHint": {
+   "ctx": ":message=\"t('kbMgmt.schemaConfigEmptyHint')\"",
+   "ph": []
+  },
+  "kbMgmt.fieldName": {
+   "ctx": "<a-input v-model:value=\"f.name\" :placeholder=\"t('kbMgmt.fieldName')\" style=\"width: 40%\" />",
+   "ph": []
+  },
+  "kbMgmt.typeString": {
+   "ctx": "<a-select-option value=\"string\">{{ t('kbMgmt.typeString') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeNumber": {
+   "ctx": "<a-select-option value=\"number\">{{ t('kbMgmt.typeNumber') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.typeBoolean": {
+   "ctx": "<a-select-option value=\"boolean\">{{ t('kbMgmt.typeBoolean') }}</a-select-option>",
+   "ph": []
+  },
+  "kbMgmt.filterable": {
+   "ctx": "<a-checkbox v-model:checked=\"f.filterable\">{{ t('kbMgmt.filterable') }}</a-checkbox>",
+   "ph": []
+  },
+  "kbMgmt.embedField": {
+   "ctx": "<a-checkbox v-model:checked=\"f.embedding\">{{ t('kbMgmt.embedField') }}</a-checkbox>",
+   "ph": []
+  },
+  "kbMgmt.addField": {
+   "ctx": "<a-button size=\"small\" @click=\"addField\">{{ t('kbMgmt.addField') }}</a-button>",
+   "ph": []
+  },
+  "kbMgmt.description": {
+   "ctx": "<a-form-item :label=\"t('kbMgmt.description')\">",
+   "ph": []
+  },
+  "kbMgmt.uncategorized": {
+   "ctx": "title: t('kbMgmt.uncategorized'),",
+   "ph": []
+  },
+  "kbMgmt.externalTypeRequired": {
+   "ctx": "message.warning(t('kbMgmt.externalTypeRequired'))",
+   "ph": []
+  },
+  "kbMgmt.nameRequired": {
+   "ctx": "message.warning(t('kbMgmt.nameRequired'))",
+   "ph": []
+  },
+  "kbMgmt.endpointHttpsRequired": {
+   "ctx": "message.warning(t('kbMgmt.endpointHttpsRequired'))",
+   "ph": []
+  },
+  "kbMgmt.embedFieldRequired": {
+   "ctx": "message.warning(t('kbMgmt.embedFieldRequired'))",
+   "ph": []
+  },
+  "kbMgmt.externalCredRequired": {
+   "ctx": "message.warning(t('kbMgmt.externalCredRequired'))",
+   "ph": []
+  },
+  "kbMgmt.created": {
+   "ctx": "message.success(t('kbMgmt.created'))",
+   "ph": []
+  },
+  "kbMgmt.createFailed": {
+   "ctx": "message.error(e?.response?.data?.detail || t('kbMgmt.createFailed'))",
+   "ph": []
   }
  },
  "wikiMgmt": {

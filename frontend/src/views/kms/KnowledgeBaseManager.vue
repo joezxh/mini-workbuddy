@@ -35,6 +35,7 @@
                   <FolderOpenOutlined v-else-if="data.type === 'group'" class="kb-icon kb-icon--folder" />
                   <ReadOutlined v-else-if="data.kbType === 1" class="kb-icon kb-icon--wiki" />
                   <LinkOutlined v-else-if="data.kbType === 3" class="kb-icon kb-icon--external" />
+                  <PartitionOutlined v-else-if="data.kbType === 4" class="kb-icon kb-icon--graph" />
                   <BookOutlined v-else class="kb-icon kb-icon--general" />
                   <span class="kb-node-name">{{ data.title }}</span>
                   <span v-if="data.count != null" class="kb-node-count">{{ data.count }}</span>
@@ -59,6 +60,7 @@
                 <FolderOpenOutlined v-else-if="data?.type === 'group'" class="kb-icon kb-icon--folder" />
                 <ReadOutlined v-else-if="data?.kbType === 1" class="kb-icon kb-icon--wiki" />
                 <LinkOutlined v-else-if="data?.kbType === 3" class="kb-icon kb-icon--external" />
+                <PartitionOutlined v-else-if="data?.kbType === 4" class="kb-icon kb-icon--graph" />
                 <BookOutlined v-else-if="data" class="kb-icon kb-icon--general" />
                 <span class="kb-node-name">{{ data?.title }}</span>
                 <span v-if="data?.count != null" class="kb-node-count">{{ data?.count }}</span>
@@ -78,6 +80,11 @@
         <a-empty v-else-if="selectedKbType === 2" :description="t('kbMgmt.selectKbFirst')" />
         <ExternalLinkPane
           v-else-if="selectedKbType === 3 && selectedId"
+          :knowledge-id="selectedId"
+          :knowledge-name="selectedKbName"
+        />
+        <KbGraphPane
+          v-else-if="selectedKbType === 4 && selectedId"
           :knowledge-id="selectedId"
           :knowledge-name="selectedKbName"
         />
@@ -112,6 +119,7 @@
             <a-select-option :value="1">{{ t('kbMgmt.typeWiki') }}</a-select-option>
             <a-select-option :value="2">{{ t('kbMgmt.typeGeneral') }}</a-select-option>
             <a-select-option :value="3">{{ t('kbMgmt.typeExternal') }}</a-select-option>
+            <a-select-option :value="4">{{ t('kbMgmt.typeGraph') }}</a-select-option>
           </a-select>
           <a-alert
             v-if="editingId"
@@ -137,6 +145,11 @@
             <a-select-option value="table">{{ t('kbMgmt.fmtTable') }}</a-select-option>
             <a-select-option value="qa">{{ t('kbMgmt.fmtQa') }}</a-select-option>
           </a-select>
+        </a-form-item>
+        <!-- 知识图谱库：二级形态唯一且固定为 graph（不可选择、不可切换） -->
+        <a-form-item v-if="form.type === 4" :label="t('kbMgmt.kbFormat')">
+          <a-input :value="t('kbMgmt.fmtGraph')" disabled />
+          <div class="kb-manager__tip">{{ t('kbMgmt.graphFormatTip') }}</div>
         </a-form-item>
         <!-- 外部知识库：以 Tab 切换两种接入方式（spec 知识库管理） -->
         <a-tabs v-if="form.type === 3" v-model:activeKey="externalTab">
@@ -376,10 +389,11 @@ import {
   testExternalSource,
   type ExternalProvider,
 } from '@/api/kbExternalSource'
-import { PlusOutlined, BookOutlined, ReadOutlined, LinkOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, BookOutlined, ReadOutlined, LinkOutlined, PartitionOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons-vue'
 import KbDocumentPane from './kb/KbDocumentPane.vue'
 import ExternalLinkPane from './kb/ExternalLinkPane.vue'
 import ExternalSourceWizard from './kb/ExternalSourceWizard.vue'
+import KbGraphPane from './kg/KbGraphPane.vue'
 import WikiHome from '@/views/kms/wiki/index.vue'
 
 const { t } = useI18n()
@@ -697,6 +711,7 @@ const VALID_KB_FORMATS: Record<number, readonly string[] | null> = {
   1: null,
   2: ['document', 'table', 'qa'],
   3: ['connector', 'proxy'],
+  4: ['graph'],
 }
 
 /**
@@ -716,7 +731,8 @@ function syncFormatForType() {
     form.kb_format = null
   } else if (allowed) {
     if (!form.kb_format || !allowed.includes(form.kb_format)) {
-      form.kb_format = form.type === 3 ? 'connector' : 'document'
+      // 图谱库形态唯一且固定为 graph；外部库默认 connector；通用库默认 document
+      form.kb_format = form.type === 4 ? 'graph' : form.type === 3 ? 'connector' : 'document'
     }
   }
   externalTab.value = form.kb_format === 'proxy' ? 'proxy' : 'connector'
@@ -737,7 +753,7 @@ function resetForm() {
   form.name = ''
   form.description = ''
   form.type = 2
-  form.kb_format = form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : null
+  form.kb_format = form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : form.type === 4 ? 'graph' : null
   form.index_mode = 'high_quality'
   form.multimodal_enabled = false
   form.embedding_model = ''
@@ -768,7 +784,7 @@ async function openEdit() {
   form.name = kb.name
   form.description = kb.description || ''
   form.type = Number(kb.type || 2)
-  form.kb_format = kb.kb_format || (form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : null)
+  form.kb_format = kb.kb_format || (form.type === 2 ? 'document' : form.type === 3 ? 'proxy' : form.type === 4 ? 'graph' : null)
   // 规整二级形态并同步外部 Tab：历史 type=3 行可能是非法的 document，
   // 需归一到 connector，否则 external_type 不会提交、编辑后不落库
   syncFormatForType()
@@ -1244,6 +1260,9 @@ onMounted(() => {
 }
 .kb-icon--external {
   color: #fa8c16;
+}
+.kb-icon--graph {
+  color: #722ed1;
 }
 /* 树上部标题 */
 .kb-manager__tree-title {
