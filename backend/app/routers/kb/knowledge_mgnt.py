@@ -292,6 +292,9 @@ def create_knowledge(
         index_mode=graph_fields["index_mode"],
         multimodal_enabled=graph_fields["multimodal_enabled"],
         category_id=body.category_id,
+        # 租户归属：生产环境的 SQLAlchemy 租户拦截器按 tenant_id 自动过滤
+        # （with_loader_criteria），tenant_id 为 NULL 的知识库对任何租户都不可见。
+        tenant_id=getattr(current_user, "tenant_id", None),
     )
     db.add(kb)
     db.commit()

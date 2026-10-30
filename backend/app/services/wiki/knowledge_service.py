@@ -68,6 +68,14 @@ class WikiKnowledgeService:
         data = payload.dict(exclude_none=True)
         data["slug"] = slug
         data.setdefault("owner_id", user.id if user else None)
+        # 租户归属：生产环境的租户拦截器按 tenant_id 过滤（with_loader_criteria），
+        # tenant_id 为 NULL 的知识库对任何租户都不可见——必须显式落租户。
+        if data.get("tenant_id") is None:
+            from app.core.tenant_context import get_tenant_id
+
+            tenant_id = getattr(user, "tenant_id", None) or get_tenant_id()
+            if tenant_id is not None:
+                data["tenant_id"] = tenant_id
 
         # 统一容器校验（spec §10.2）：type/kb_format 合法性矩阵
         from app.services.kb.kb_format import validate_kb_format
