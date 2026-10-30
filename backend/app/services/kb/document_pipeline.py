@@ -35,6 +35,33 @@ def _fail(db: Session, doc_id: int, step: str, exc: Exception) -> None:
     logger.error(f"[KB 管线] 文档 {doc_id} 在 {step} 步失败: {exc}")
 
 
+def _maybe_submit_graph_build(db: Session, tenant_id: int, doc_id: int) -> None:
+    """图谱库（type=4）在切片就绪后提交后台图谱构建。
+
+    这里只做**提交**，不等结果：LLM 抽取耗时长，不能阻塞摄取返回。
+    任何异常都只记日志——图谱构建是增强能力，失败不得让文档摄取看起来失败。
+    """
+    try:
+        doc = db.get(KbDocument, doc_id)
+        if doc is None or doc.knowledge_id is None:
+            return
+        from app.models.wiki.wiki_knowledge import KnowledgeType, WikiKnowledge
+
+        kb = db.get(WikiKnowledge, doc.knowledge_id)
+        if kb is None or kb.type != KnowledgeType.GRAPH_KB:
+            return
+        from app.services.kb.kg.kg_build_service import submit_build
+
+        submit_build(
+            tenant_id=tenant_id,
+            knowledge_id=doc.knowledge_id,
+            action="build",
+            document_uuid=doc.uuid_code,
+        )
+    except Exception as exc:  # noqa: BLE001 - 图谱构建失败不影响文档可用
+        logger.warning(f"[KB 管线] 文档 {doc_id} 图谱构建提交失败: {exc}")
+
+
 def _resolve_index_mode(db: Session, collection: str) -> str:
     """由 collection 名反查知识库索引模式（spec §10.2）；复用共享实现。"""
     from app.services.kb.index_mode import resolve_index_mode
@@ -182,6 +209,9 @@ def run_document_ingest(
             "failed_step": None,
         }
         db.commit()
+        # 5) 图谱构建（仅 type=4）：切片已就绪 → 提交后台抽取。
+        #    图谱失败**不回滚**文档摄取（切片仍可用），仅标记图谱未就绪（spec §5.6）。
+        _maybe_submit_graph_build(db, tenant_id, doc_id)
         return count
     except PipelineStepError as exc:
         # §10.7 单步可观测：error_detail 带具体步名（parse/clean/chunk/vectorize）

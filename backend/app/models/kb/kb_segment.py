@@ -1,6 +1,6 @@
 """知识库切片（chunk）+ 向量（pgvector）。"""
 from sqlalchemy import (
-    BigInteger, Column, ForeignKey, Index, Integer, String, Text, TIMESTAMP,
+    BigInteger, Boolean, Column, ForeignKey, Index, Integer, String, Text, TIMESTAMP,
     UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -16,8 +16,8 @@ class KbSegment(Base, TenantMixin):
     """知识库切片：content + embedding + metadata + 本体类归属。
 
     ``class_uris`` 是**前向兼容 P4 Task 7（本体驱动检索）**的列：把切片映射到的
-    本体（ontology_class.uri）列表，供检索时按本体类过滤。P1 计划未含，本简报
-    在 Task 1 迁移一并加入，避免二次迁移。
+    本体类 URI 列表，供检索时按本体类过滤（语义能力由 ``semantica`` 提供）。
+    P1 计划未含，本简报在 Task 1 迁移一并加入，避免二次迁移。
     """
 
     __tablename__ = "kms_segment"
@@ -55,6 +55,18 @@ class KbSegment(Base, TenantMixin):
         comment='chunk_type=qa: 完整答案（content=问题，仅问题做 embedding）',
     )
     keywords = Column(JSONB, nullable=True, comment='手动关键词（全文检索加权）')
+
+    # ── 图谱两阶段状态机（spec §3.7，仅 type=4 图谱库使用）───────────────
+    graph_structure_indexed = Column(
+        Boolean, nullable=True,
+        comment='阶段1完成: 实体/三元组已落 PG 并投影 Neo4j',
+    )
+    graph_indexed = Column(
+        Boolean, nullable=True, comment='阶段2完成: 实体/三元组向量已写入 pgvector',
+    )
+    graph_extraction_details = Column(
+        JSONB, nullable=True, comment='抽取详情: 实体数/关系数/丢弃数/错误/耗时',
+    )
 
     created_at = Column(
         TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间"

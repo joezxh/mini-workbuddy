@@ -17,8 +17,9 @@
    （如 `agent.py` 的 `/api/v1/agent`、`agent_config.py` 的 `/api/v1/agent-config`），
    另一些则是相对 prefix（如 `agent_team.py` 的 `/ai-team`）依赖外部拼接。
    自动扫描无法判断哪些该再叠加 `/api/v1`，会直接改坏 URL。
-2. **存在未启用的模块**：`app/routers/wiki/` 下的 `wiki.py` / `wiki_owl.py`
-   目前未被注册（`wiki/__init__.py` 为空），自动扫描会把它暴露出去。
+2. **存在刻意不注册的模块**：`wiki/__init__.py` 为空；自研本体层
+   （`routers/ontology`、`routers/wiki/wiki_owl.py`）已随 `ontology_*` 九表一并删除，
+   语义/本体能力改由 `routers/semantica` 提供。
 3. **`sys/__init__.py` 本身就是 router**（控制台统计/用户/菜单/角色/审计等），
    按「文件」扫描会与同目录 `sys_*.py` 产生归属歧义。
 4. **单模块多 router**：`ai_mcp.py` 同时导出 4 个 router
@@ -186,6 +187,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.routers.kb.knowledge_mgnt", tags=["知识库管理"]),
     # --- 28.5 图谱知识库（type=4 实例层；router 自带完整 prefix /api/v1/kb/knowledges/{kid}/graph）---
     RouterSpec("app.routers.kb.kg", tags=["图谱知识库"]),
+    # --- 28.6 图谱构建管理（独立前缀 /graph-build，与查询端点分离）---
+    RouterSpec("app.routers.kb.kg", attr="build_router", tags=["图谱构建"]),
 
     # --- 30. 工作流管理 ---
     RouterSpec("app.routers.workflow.workflow", tags=["工作流管理"]),

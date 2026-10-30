@@ -345,3 +345,218 @@ def graph_stats(
     """概览统计：实体 / 关系计数与类型分布（概览 Tab 数据源）。"""
     svc = _svc(db, current_user, kid)
     return svc.stats()
+
+
+# ── 失败切片清单（spec §5.6，对齐 Yuxi failed-chunks）──────────────────
+
+@router.get("/{kid}/graph/failed-segments")
+def failed_segments(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """抽取失败/未就绪的切片清单（含失败原因，供「溯源」Tab 重试）。"""
+    from sqlalchemy import select
+
+    from app.models.kb.kb_segment import KbSegment
+
+    tenant_id = _tenant_id(current_user)
+    stmt = select(KbSegment).where(
+        KbSegment.collection == f"kb_{kid}",
+        KbSegment.graph_structure_indexed.is_not(None),
+    )
+    rows = db.execute(stmt.limit(500)).scalars().all()
+    return {
+        "items": [
+            {
+                "segment_id": s.id,
+                "document_id": s.document_id,
+                "chunk_index": s.chunk_index,
+                "structure_indexed": s.graph_structure_indexed,
+                "vector_indexed": s.graph_indexed,
+                "details": s.graph_extraction_details,
+            }
+            for s in rows
+            if s.graph_structure_indexed is False or s.graph_indexed is False
+        ],
+        "total": len(rows),
+        "tenant_id": tenant_id,
+    }
+
+
+# ── 单文档重抽（前端「文档」Tab 的「重新抽取图谱」）────────────────────
+
+class DocRebuildBody(BaseModel):
+    document_uuid: str = Field(..., description="文档 uuid_code")
+
+
+@router.post("/{kid}/graph/documents/rebuild")
+def rebuild_document_graph(
+    kid: int,
+    body: DocRebuildBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """仅对指定文档重抽图谱：先撤销其贡献，再重建（后台执行）。"""
+    from app.services.kb.kg.kg_build_service import submit_build
+
+    tenant_id = _tenant_id(current_user)
+    out = submit_build(
+        tenant_id=tenant_id, knowledge_id=kid, action="rebuild",
+        document_uuid=body.document_uuid,
+    )
+    if not out.get("accepted"):
+        raise HTTPException(status_code=409, detail=out.get("reason", "任务冲突"))
+    return out
+
+
+# ── KB 级图谱配置（存 pipeline_config["graph"]，不新增列）────────────────
+
+class GraphConfigPatch(BaseModel):
+    extractor_type: Optional[str] = None
+    model_spec: Optional[Dict[str, Any]] = None
+    schema_source: Optional[str] = None
+    catalog_id: Optional[int] = None
+    schema: Optional[str] = None
+    concurrency_count: Optional[int] = None
+    timeout_seconds: Optional[int] = None
+    use_graph_retrieval: Optional[bool] = None
+    graph_entity_top_k: Optional[int] = None
+    graph_triple_top_k: Optional[int] = None
+    graph_max_nodes: Optional[int] = None
+    graph_top_k: Optional[int] = None
+    graph_weight: Optional[float] = None
+    ppr_damping: Optional[float] = None
+
+
+@router.get("/{kid}/graph/config")
+def get_config(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """读取图谱配置（缺省补齐 + 越界钳制后的生效值）。"""
+    from app.services.kb.kg.kg_config import get_graph_config
+
+    return get_graph_config(db, kid)
+
+
+@router.put("/{kid}/graph/config")
+def save_config(
+    kid: int,
+    body: GraphConfigPatch,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """保存图谱配置（只更新提交的键，其余保持既有值）。"""
+    from app.services.kb.kg.kg_config import save_graph_config
+
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    return save_graph_config(db, kid, patch)
+
+
+# ── 构建管理（独立前缀，避免与查询端点混在一起）──────────────────────────
+
+build_router = APIRouter(prefix="/api/v1/kb/knowledges", tags=["图谱构建"])
+
+
+class BuildBody(BaseModel):
+    action: str = Field("build", description="build|clear_document|rebuild|reconcile")
+    document_uuid: Optional[str] = None
+
+
+@build_router.post("/{kid}/graph-build/submit")
+def submit_graph_build(
+    kid: int,
+    body: BuildBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """提交图谱构建任务（后台执行，立即返回）。
+
+    同一知识库已有任务在执行时返回 409（单库互斥，spec §5.5）。
+    """
+    from app.services.kb.kg.kg_build_service import submit_build
+
+    tenant_id = _tenant_id(current_user)
+    if body.action not in ("build", "clear_document", "rebuild", "reconcile"):
+        raise HTTPException(status_code=422, detail=f"未知构建动作: {body.action!r}")
+    out = submit_build(
+        tenant_id=tenant_id, knowledge_id=kid, action=body.action,
+        document_uuid=body.document_uuid,
+    )
+    if not out.get("accepted"):
+        raise HTTPException(status_code=409, detail=out.get("reason", "任务冲突"))
+    return out
+
+
+@build_router.get("/{kid}/graph-build/status")
+def graph_build_status(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """构建状态与两阶段进度（前端轮询端点）。"""
+    from sqlalchemy import func, select
+
+    from app.models.kb.kb_segment import KbSegment
+    from app.services.kb.kg import kg_build_service, kg_neo4j_store
+
+    tenant_id = _tenant_id(current_user)
+    total = db.execute(
+        select(func.count(KbSegment.id)).where(
+            KbSegment.collection == f"kb_{kid}",
+            KbSegment.tenant_id == tenant_id,
+        )
+    ).scalar_one()
+    structure_done = db.execute(
+        select(func.count(KbSegment.id)).where(
+            KbSegment.collection == f"kb_{kid}",
+            KbSegment.tenant_id == tenant_id,
+            KbSegment.graph_structure_indexed.is_(True),
+        )
+    ).scalar_one()
+    vector_done = db.execute(
+        select(func.count(KbSegment.id)).where(
+            KbSegment.collection == f"kb_{kid}",
+            KbSegment.tenant_id == tenant_id,
+            KbSegment.graph_indexed.is_(True),
+        )
+    ).scalar_one()
+    failed = db.execute(
+        select(func.count(KbSegment.id)).where(
+            KbSegment.collection == f"kb_{kid}",
+            KbSegment.tenant_id == tenant_id,
+            KbSegment.graph_structure_indexed.is_(False),
+        )
+    ).scalar_one()
+
+    neo4j_ok = kg_neo4j_store.is_available()
+    running = kg_build_service.is_locked(kid)
+
+    if running:
+        state = "running"
+    elif failed:
+        state = "partial_failed"
+    elif total and structure_done == total and vector_done == total:
+        state = "ready"
+    elif total:
+        state = "pending"
+    else:
+        state = "not_built"
+
+    return {
+        "state": state,
+        "running": running,
+        "neo4j_available": neo4j_ok,
+        "segments": total,
+        "structure_done": structure_done,
+        "vector_done": vector_done,
+        "failed": failed,
+    }

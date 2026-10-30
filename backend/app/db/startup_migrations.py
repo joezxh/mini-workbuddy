@@ -141,6 +141,12 @@ _COLUMN_MIGRATIONS: list[str] = [
     "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS operation_type VARCHAR(32)",
     "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS summary VARCHAR(1000)",
     "ALTER TABLE kms_article_version ADD COLUMN IF NOT EXISTS owl_class_uris JSONB",
+    # ── 2026-10-31 图谱知识库（type=4，spec §3.7）：切片两阶段状态机 ──────────
+    # 阶段 1 结构写入（PG 事实 + Neo4j 投影）／阶段 2 向量索引；
+    # 两阶段分离使得 Neo4j 或嵌入失败都能断点续跑，不必重复 LLM 抽取。
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS graph_structure_indexed BOOLEAN",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS graph_indexed BOOLEAN",
+    "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS graph_extraction_details JSONB",
 ]
 
 
