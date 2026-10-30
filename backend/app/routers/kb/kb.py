@@ -374,8 +374,10 @@ def retrieve_knowledge(
     """
     tenant_id = _tenant_id(current_user)
     _require_knowledge(db, kid)
+    from app.models.wiki.wiki_knowledge import KnowledgeType, WikiKnowledge
     from app.services.kb.segment_service import knowledge_collection_names
 
+    kb = db.get(WikiKnowledge, kid)
     merged: list[dict] = []
     modes: set[str] = set()
     for name in knowledge_collection_names(db, tenant_id, kid):
@@ -388,10 +390,96 @@ def retrieve_knowledge(
         merged.extend(res.get("results") or [])
 
     merged.sort(key=lambda h: h.get("score") or 0, reverse=True)
+    base_results = merged[: body.top_k]
+
+    # ── 图谱库（type=4）：追加图通道并 RRF 融合（spec §6.2）──────────────
+    graph_enabled = False
+    if getattr(kb, "type", None) == KnowledgeType.GRAPH_KB:
+        base_results, graph_enabled = _fuse_graph_channel(
+            db, tenant_id, kid, base_results, body
+        )
+
     return {
-        "results": merged[: body.top_k],
+        "results": base_results,
         "index_mode": modes.pop() if len(modes) == 1 else (next(iter(modes), "")),
+        "graph_enabled": graph_enabled,
     }
+
+
+def _fuse_graph_channel(
+    db,
+    tenant_id: int,
+    kid: int,
+    base_results: list[dict],
+    body,
+) -> tuple[list[dict], bool]:
+    """图通道召回 + RRF 融合（type=4 专用）。
+
+    契约不变：产物仍是 chunk 级 ``RetrieveResult``，只是 ``metadata`` 内新增
+    ``fusion_sources`` / ``score_type``（可选键），既有字段语义不变。
+
+    降级：图通道任何异常都不得让整个检索 500 —— 失败即返回基础结果，
+    且 ``graph_enabled=False``（显式降级，不静默伪装成功）。
+    """
+    try:
+        from app.services.kb.kg.kg_config import get_graph_config
+        from app.services.kb.kg.kg_retriever import KgRetriever, rrf_fuse
+
+        cfg = get_graph_config(db, kid)
+        if not cfg.get("use_graph_retrieval", True):
+            return base_results, False
+
+        graph = KgRetriever(db, tenant_id, kid, config=cfg).recall(
+            body.query, top_k=int(cfg.get("graph_top_k", 20))
+        )
+        if not graph.get("enabled"):
+            return base_results, False
+        graph_results = graph.get("results") or []
+        if not graph_results:
+            return base_results, True
+
+        # RRF：key = (document_id, chunk_index)
+        def _key(hit: dict) -> str:
+            return f"{hit.get('document_id')}::{hit.get('chunk_index')}"
+
+        base_rank = [(_key(h), h.get("score") or 0.0) for h in base_results]
+        graph_rank = [(_key(h), h.get("score") or 0.0) for h in graph_results]
+        weight = float(cfg.get("graph_weight", 1.0))
+        fused = rrf_fuse([base_rank, graph_rank], k=60, weights=[1.0, weight])
+
+        by_key = {_key(h): h for h in base_results}
+        by_key.update({_key(h): h for h in graph_results})
+        weight = float(cfg.get("graph_weight", 1.0)) or 1.0
+
+        out: list[dict] = []
+        for key, score in fused[: body.top_k]:
+            hit = by_key.get(key)
+            if hit is None:
+                continue
+            meta = dict(hit.get("metadata") or {})
+            sources = set(meta.get("fusion_sources") or [])
+            if key in {k for k, _ in graph_rank}:
+                sources.add("graph")
+            if key in {k for k, _ in base_rank}:
+                sources.add("chunk")
+            meta["fusion_sources"] = sorted(sources)
+            meta["score_type"] = "fusion" if len(sources) > 1 else (
+                "graph" if sources == {"graph"} else "chunk"
+            )
+            new_hit = dict(hit)
+            new_hit["score"] = score
+            new_hit["metadata"] = meta
+            out.append(new_hit)
+
+        # 保留未参与融合的原始命中（当图谱无结果时至少还有基础召回）
+        if not out:
+            return base_results, True
+        return out, True
+    except Exception:  # noqa: BLE001 - 图通道异常绝不阻断主检索
+        from loguru import logger
+
+        logger.debug(f"[kg] 图谱检索通道降级: {__import__('traceback').format_exc()}")
+        return base_results, False
 
 
 class IndexModeBody(BaseModel):
