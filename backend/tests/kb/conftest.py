@@ -28,6 +28,13 @@ from app.models.kb.kg_entity import KgEntity
 from app.models.kb.kg_entity_mention import KgEntityMention
 from app.models.kb.kg_triple import KgTriple
 from app.models.kb.kg_triple_mention import KgTripleMention
+# CDM 模式层：图谱的 CDM 双向校验（P6）需要对象标准与关系标准两张表。
+# 仅引入这两张（及其自引用目录表），避免拉入整个 dataops 表族。
+from app.models.dataops.standard_cdm import (
+    MetaObjectRelation,
+    MetaObjectStandard,
+    MetaStandardCatalog,
+)
 
 TENANT_A = 100
 TENANT_B = 200
@@ -57,6 +64,9 @@ KB_TABLES = [
     KbSegment.__table__, KbRef.__table__,
     KgEntity.__table__, KgEntityMention.__table__,
     KgTriple.__table__, KgTripleMention.__table__,
+    # CDM 模式层（图谱校验用）：目录 -> 对象标准 -> 关系标准
+    MetaStandardCatalog.__table__, MetaObjectStandard.__table__,
+    MetaObjectRelation.__table__,
 ]
 
 

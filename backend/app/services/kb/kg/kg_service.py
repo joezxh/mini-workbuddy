@@ -492,6 +492,169 @@ class KgService:
         self.db.delete(triple)
         self.db.commit()
 
+    # ── 图查询（子图 / 路径 / 邻接）────────────────────────────────────
+    # 说明：走 PG 而非 Neo4j——PG 是可见性权威，且 BFS 在 ≤3 跳 + 限流下
+    # 足以覆盖交互式查询；Neo4j 投影留给检索侧的 PPR 与大规模遍历。
+    MAX_GRAPH_DEPTH = 3
+    MAX_GRAPH_NODES = 1000
+
+    def _entity_map(self, ids: set) -> dict:
+        if not ids:
+            return {}
+        rows = self.db.execute(
+            select(KgEntity).where(KgEntity.id.in_(list(ids)))
+        ).scalars().all()
+        return {
+            e.id: {
+                "id": e.id,
+                "name": e.name,
+                "code": e.type_code or "",
+                "type_code": e.type_code or "",
+                "entity_key": e.entity_key,
+                "status": e.status,
+            }
+            for e in rows
+        }
+
+    def _triples_touching(self, frontier: set) -> list:
+        if not frontier:
+            return []
+        stmt = select(KgTriple).where(
+            or_(
+                KgTriple.from_entity_id.in_(list(frontier)),
+                KgTriple.to_entity_id.in_(list(frontier)),
+            )
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(KgTriple.tenant_id == self.tenant_id)
+        return list(self.db.execute(stmt).scalars().all())
+
+    @staticmethod
+    def _edge_dict(t: KgTriple) -> dict:
+        return {
+            "id": t.id,
+            "from": t.from_entity_id,
+            "to": t.to_entity_id,
+            "relation_type": t.relation_code or "",
+            "predicate": t.predicate,
+            "weight": t.weight,
+            "status": t.status,
+        }
+
+    def subgraph(self, entity_ids, *, depth: int = 1, limit: int = 200) -> dict:
+        """以给定实体为种子取子图（层数 ≤3，节点数限流）。
+
+        返回 ``{"nodes": [...], "edges": [...]}``，字段与标准中心 ``graph()``
+        对齐（nodes: id/name/code；edges: id/from/to/relation_type），
+        因此前端图组件可与标准中心共用同一套渲染代码。
+        """
+        d = max(1, min(self.MAX_GRAPH_DEPTH, int(depth)))
+        cap = max(1, min(self.MAX_GRAPH_NODES, int(limit)))
+        seeds = {int(e) for e in (entity_ids or []) if e}
+        if not seeds:
+            return {"nodes": [], "edges": []}
+
+        visited: set = set(seeds)
+        frontier: set = set(seeds)
+        edges: dict = {}
+        endpoint_ids: set = set(seeds)
+
+        for _ in range(d):
+            if not frontier or len(endpoint_ids) >= cap:
+                break
+            next_frontier: set = set()
+            for t in self._triples_touching(frontier):
+                edges[t.id] = self._edge_dict(t)
+                for eid in (t.from_entity_id, t.to_entity_id):
+                    endpoint_ids.add(eid)
+                    if eid not in visited:
+                        next_frontier.add(eid)
+                if len(endpoint_ids) >= cap:
+                    break
+            visited |= next_frontier
+            frontier = next_frontier
+
+        nodes = self._entity_map(endpoint_ids)
+        node_list = list(nodes.values())[:cap]
+        node_ids = {n["id"] for n in node_list}
+        edge_list = [
+            e for e in edges.values()
+            if e["from"] in node_ids and e["to"] in node_ids
+        ]
+        return {"nodes": node_list, "edges": edge_list}
+
+    def neighbors(self, entity_id: int, *, depth: int = 1, limit: int = 100) -> dict:
+        """单实体的邻接子图（检视面板「相邻关系」用）。"""
+        return self.subgraph([entity_id], depth=depth, limit=limit)
+
+    def paths(
+        self, from_entity_id: int, to_entity_id: int, *, max_depth: int = 2,
+        limit: int = 20,
+    ) -> list:
+        """两实体间的简单路径（≤max_depth 跳，最多 limit 条）。"""
+        max_d = max(1, min(self.MAX_GRAPH_DEPTH, int(max_depth)))
+        cap = max(1, min(100, int(limit)))
+        src, tgt = int(from_entity_id), int(to_entity_id)
+        if src == tgt:
+            return []
+
+        # 邻接表
+        adj: dict = {}
+        for t in self._triples_touching({src, tgt}):
+            adj.setdefault(t.from_entity_id, []).append((t.to_entity_id, t))
+            adj.setdefault(t.to_entity_id, []).append((t.from_entity_id, t))
+
+        results: list = []
+
+        def _dfs(node: int, path_nodes: list, path_edges: list, seen: set):
+            if len(results) >= cap:
+                return
+            if node == tgt and path_edges:
+                results.append(
+                    {
+                        "nodes": [
+                            self._entity_map({n}).get(n)
+                            for n in path_nodes
+                        ],
+                        "edges": [self._edge_dict(t) for t in path_edges],
+                    }
+                )
+                return
+            if len(path_edges) >= max_d:
+                return
+            for nxt, t in adj.get(node, []):
+                if nxt in seen:
+                    continue
+                seen.add(nxt)
+                path_nodes.append(nxt)
+                path_edges.append(t)
+                _dfs(nxt, path_nodes, path_edges, seen)
+                path_edges.pop()
+                path_nodes.pop()
+                seen.discard(nxt)
+
+        _dfs(src, [src], [], {src})
+        # 节点详情批量补全（避免 N+1 查询）
+        all_ids = {n["id"] for r in results for n in r["nodes"] if n}
+        detail = self._entity_map(all_ids)
+        for r in results:
+            r["nodes"] = [detail.get(n["id"], n) for n in r["nodes"] if n]
+        return results
+
+    def labels(self) -> list:
+        """实体类型分布（对齐 Yuxi /graph/labels）。"""
+        stmt = select(KgEntity.type_code, func.count(KgEntity.id)).where(
+            KgEntity.knowledge_id == self.knowledge_id
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(KgEntity.tenant_id == self.tenant_id)
+        stmt = stmt.group_by(KgEntity.type_code)
+        rows = self.db.execute(stmt).all()
+        return [
+            {"code": code or "", "name": code or "", "count": int(cnt)}
+            for code, cnt in rows
+        ]
+
     # ── 统计 ────────────────────────────────────────────────────────────
     def stats(self) -> dict:
         """概览统计：实体 / 关系计数与类型分布。"""

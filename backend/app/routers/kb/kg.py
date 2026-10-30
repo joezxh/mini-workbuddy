@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -457,6 +457,161 @@ def save_config(
 
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
     return save_graph_config(db, kid, patch)
+
+
+# ── 图查询：子图 / 路径 / 邻接 / 类型分布（spec §6.3）────────────────────
+
+@router.get("/{kid}/graph/subgraph")
+def graph_subgraph(
+    kid: int,
+    entity_ids: str = Query(..., description="逗号分隔的实体 ID"),
+    depth: int = Query(1, ge=1, le=3),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """以实体为种子取子图；返回 {nodes, edges}（结构与标准中心 graph() 对齐）。"""
+    ids = [int(x) for x in entity_ids.split(",") if x.strip().isdigit()]
+    return _svc(db, current_user, kid).subgraph(ids, depth=depth, limit=limit)
+
+
+@router.get("/{kid}/graph/subgraph/seed")
+def graph_seed_subgraph(
+    kid: int,
+    seed_ids: str = Query(..., description="逗号分隔的种子实体 ID"),
+    depth: int = Query(2, ge=1, le=3),
+    limit: int = Query(1000, ge=1, le=5000),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """种子子图（多跳起点；与 /subgraph 同结构，供图视图「以此为种子扩展」用）。"""
+    ids = [int(x) for x in seed_ids.split(",") if x.strip().isdigit()]
+    return _svc(db, current_user, kid).subgraph(ids, depth=depth, limit=limit)
+
+
+@router.get("/{kid}/graph/entities/{entity_id}/neighbors")
+def graph_neighbors(
+    kid: int,
+    entity_id: int,
+    depth: int = Query(1, ge=1, le=3),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """单实体邻接子图（检视面板「相邻关系」）。"""
+    return _svc(db, current_user, kid).neighbors(entity_id, depth=depth, limit=limit)
+
+
+class PathsBody(BaseModel):
+    from_entity_id: int = Field(..., description="起点实体 ID")
+    to_entity_id: int = Field(..., description="终点实体 ID")
+    max_depth: int = Field(2, ge=1, le=3)
+    limit: int = Field(20, ge=1, le=100)
+
+
+@router.post("/{kid}/graph/paths")
+def graph_paths(
+    kid: int,
+    body: PathsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """两实体间路径查询（≤3 跳）。"""
+    return {
+        "paths": _svc(db, current_user, kid).paths(
+            body.from_entity_id, body.to_entity_id,
+            max_depth=body.max_depth, limit=body.limit,
+        )
+    }
+
+
+@router.get("/{kid}/graph/labels")
+def graph_labels(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """实体类型分布（对齐 Yuxi /graph/labels）。"""
+    return {"items": _svc(db, current_user, kid).labels()}
+
+
+# ── CDM 双向校验（spec §6.5，沿用 meta_relation_check 词表）──────────────
+
+@router.get("/{kid}/graph/cdm-check")
+def graph_cdm_check(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """图谱实例层 <-> CDM 模式层校验：hit / missing / conflict 三态。"""
+    from app.services.kb.kg.kg_cdm_check import run_cdm_check
+
+    return run_cdm_check(db, kid, _tenant_id(current_user))
+
+
+# ── 图谱导出（spec §6.3 生态对接）────────────────────────────────────────
+
+@router.get("/{kid}/graph/export")
+def graph_export(
+    kid: int,
+    fmt: str = Query("json", description="json|csv"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """导出图谱实例（JSON 三元组 / CSV 边列表），供外部消费。"""
+    svc = _svc(db, current_user, kid)
+    entities = svc.list_entities(limit=10000)
+    triples = svc.list_triples(limit=10000)
+    names = {e.id: e.name for e in entities}
+
+    if fmt == "csv":
+        lines = ["source,source_type,relation_type,target,target_type,weight,status"]
+        for t in triples:
+            lines.append(
+                "{},{},{},{},{},{},{}".format(
+                    names.get(t.from_entity_id, ""),
+                    _type_of_id(svc, t.from_entity_id),
+                    t.relation_code or "",
+                    names.get(t.to_entity_id, ""),
+                    _type_of_id(svc, t.to_entity_id),
+                    t.weight if t.weight is not None else "",
+                    t.status,
+                )
+            )
+        return {"format": "csv", "content": "\n".join(lines)}
+
+    return {
+        "format": "json",
+        "entities": [
+            {
+                "id": e.id, "name": e.name, "type": e.type_code or "",
+                "aliases": e.aliases or [], "properties": e.properties or {},
+                "status": e.status,
+            }
+            for e in entities
+        ],
+        "relations": [
+            {
+                "id": t.id,
+                "source": t.from_entity_id, "target": t.to_entity_id,
+                "relation_type": t.relation_code or "", "predicate": t.predicate,
+                "weight": t.weight, "status": t.status,
+            }
+            for t in triples
+        ],
+    }
+
+
+def _type_of_id(svc, entity_id: Optional[int]) -> str:
+    e = svc.get_entity(entity_id) if entity_id is not None else None
+    return (e.type_code or "") if e is not None else ""
 
 
 # ── 构建管理（独立前缀，避免与查询端点混在一起）──────────────────────────
