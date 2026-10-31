@@ -1,81 +1,85 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderToString } from '@vue/server-renderer'
 import { createSSRApp, h } from 'vue'
 import { createI18n } from 'vue-i18n'
 import Antd from 'ant-design-vue'
-
-// node 环境无 canvas，且不需要真实渲染：用桩组件把传入的 option 序列化进 DOM
-vi.mock('vue-echarts', () => ({
-  default: {
-    name: 'VChartStub',
-    props: { option: { type: Object, default: () => ({}) } },
-    setup(props: any) {
-      return () =>
-        h(
-          'pre',
-          { class: 'chart-option' },
-          JSON.stringify({
-            nodes: props.option?.series?.[0]?.data?.length ?? -1,
-            links: props.option?.series?.[0]?.links?.length ?? -1,
-            first: props.option?.series?.[0]?.data?.[0]?.name ?? null,
-            sizes: props.option?.series?.[0]?.data?.map((d: any) => d.symbolSize) ?? null,
-            edgeWidths: props.option?.series?.[0]?.links?.map((l: any) => l.lineStyle?.width ?? 1) ?? null,
-          }),
-        )
-    },
-  },
-}))
+import { typeTone } from '@/components/common/graph/graphTheme'
 
 import StdGraphView from '../StdGraphView.vue'
 
-const EMPTY_MARKER = 'GRAPH_EMPTY_MARKER'
+const EMPTY_TITLE = 'GRAPH_EMPTY_TITLE'
+const HINT = 'GRAPH_HINT'
 
 const NODES = [
-  { id: 1, code: 'obj_customer', name: '客户', domain: 'crm', catalog_id: 1, status: 'published' },
-  { id: 2, code: 'obj_order', name: '订单', domain: 'trade', catalog_id: 1, status: 'published' },
+  { id: 1, code: 'OBJ_CUSTOMER', name: '客户', domain: 'crm', catalog_id: 1, status: 'published' },
+  { id: 2, code: 'OBJ_ORDER', name: '订单', domain: 'trade', catalog_id: 1, status: 'published' },
 ]
-const EDGES = [{ id: 9, code: 'rel_order_customer', from: 2, to: 1, relation_type: 'N:1', catalog_id: 1 }]
+const EDGES = [
+  { id: 9, code: 'REL_ORDER_CUSTOMER', name: '订单属客户', from: 2, to: 1, relation_type: 'N:1', catalog_id: 1 },
+]
 
-function ssr(props: Record<string, unknown>) {
-  const app = createSSRApp(StdGraphView, props)
+function ssr(props: Record<string, unknown> = {}) {
+  const app = createSSRApp({
+    render: () => h(StdGraphView, { nodes: [], edges: [], selection: null, ...props }),
+  })
   app.use(Antd)
   app.use(
     createI18n({
       legacy: false,
       locale: 'zh-CN',
-      messages: { 'zh-CN': { kbMgmt: { graph: { empty: EMPTY_MARKER } } } },
+      messages: {
+        'zh-CN': {
+          kbMgmt: {
+            graph: {
+              selectHint: HINT,
+              legendNodeSize: 'LEGEND_SIZE',
+              empty: EMPTY_TITLE,
+              graphEmptyDesc: 'EMPTY_DESC',
+              modeFull: 'FULL_MODE',
+            },
+          },
+        },
+      },
     }),
   )
   return renderToString(app)
 }
 
-/** SSR 会把属性与文本里的引号转义成 &quot;，断言前还原 */
-function unescapeHtml(html: string) {
-  return html.replace(/&quot;/g, '"')
-}
-
 describe('StdGraphView', () => {
-  it('nodes/edges 映射进 series.data 与 series.links', async () => {
-    const html = unescapeHtml(await ssr({ nodes: NODES, edges: EDGES }))
-    expect(html).toContain('"nodes":2')
-    expect(html).toContain('"links":1')
-    expect(html).toContain('"first":"客户"')
+  it('不再依赖 ECharts：渲染的是 SVG 画布', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    expect(html).toContain('kg-canvas__svg')
+    expect(html).not.toContain('echarts')
   })
 
-  it('无节点：渲染空态而不是图表', async () => {
+  it('节点按对象标准 code 分色，边标签取关系标准 name', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    expect(html).toContain(`fill="${typeTone('OBJ_CUSTOMER').color}"`)
+    expect(html).toContain(`fill="${typeTone('OBJ_ORDER').color}"`)
+    expect(html).toContain('订单属客户')
+    // 基数不上边（原型边标签是语义名）
+    expect(html).not.toContain('N:1')
+  })
+
+  it('图例与提示胶囊文案来自 kbMgmt.graph', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    expect(html).toContain(HINT)
+    expect(html).toContain('LEGEND_SIZE')
+  })
+
+  it('空节点：空态而不是画布节点', async () => {
     const html = await ssr({ nodes: [], edges: [] })
-    expect(html).toContain(EMPTY_MARKER)
-    expect(html).not.toContain('chart-option')
+    expect(html).toContain(EMPTY_TITLE)
+    expect(html).not.toContain('kg-node"')
   })
 
-  it('highlightCodes 命中时放大节点', async () => {
-    const html = unescapeHtml(await ssr({ nodes: NODES, edges: EDGES, highlightCodes: ['obj_order'] }))
-    // obj_customer 未命中=48，obj_order 命中=64
-    expect(html).toContain('"sizes":[48,64]')
+  it('选中节点：画布标记 is-on', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES, selection: { kind: 'node', id: 2 } })
+    expect(html).toContain('is-on')
   })
 
-  it('highlightRelationCodes 命中时加粗对应边', async () => {
-    const html = unescapeHtml(await ssr({ nodes: NODES, edges: EDGES, highlightRelationCodes: ['rel_order_customer'] }))
-    expect(html).toContain('"edgeWidths":[3]')
+  it('NL 命中集当焦点：命中节点 is-hit', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES, highlightCodes: ['OBJ_ORDER'] })
+    expect(html).toContain('is-hit')
   })
 })

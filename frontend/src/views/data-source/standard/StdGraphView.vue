@@ -1,94 +1,60 @@
 <template>
-  <div class="std-graph-wrap">
-    <v-chart v-if="nodes.length" class="std-graph" :option="option" autoresize @click="onClick" />
-    <a-empty v-else :description="t('kbMgmt.graph.empty')" />
-  </div>
+  <GraphCanvas
+    ref="canvasRef"
+    :nodes="canvasNodes"
+    :edges="canvasEdges"
+    :selection="selection"
+    :focus-node-codes="highlightCodes || []"
+    :focus-edge-codes="highlightRelationCodes || []"
+    :loading="loading"
+    :hint-text="t('kbMgmt.graph.selectHint')"
+    :legend-size-text="t('kbMgmt.graph.legendNodeSize')"
+    :empty-title="t('kbMgmt.graph.empty')"
+    :empty-desc="t('kbMgmt.graph.graphEmptyDesc')"
+    :empty-action-text="canvasNodes.length ? '' : t('kbMgmt.graph.modeFull')"
+    @select="emit('select', $event)"
+    @empty-action="emit('clear-filter')"
+  />
 </template>
 
 <script setup lang="ts">
 /**
- * 标准关系图（对象=节点，关系=边）：力导向布局，点击节点/边向外抛事件。
- * 只注册用到的 ECharts 模块，避免把整包 echarts 打进首屏。
+ * 标准关系图：共享 SVG 画布的薄壳。
+ *
+ * 只做「原始对象/关系 → 画布节点/边」的取色取标签（graphViewUtils），
+ * 布局、指针、分色图例、三态淡化全部交给 GraphCanvas；不发请求、不做筛选。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { GraphChart } from 'echarts/charts'
-import { CanvasRenderer } from 'echarts/renderers'
-import { TooltipComponent } from 'echarts/components'
-
-use([GraphChart, CanvasRenderer, TooltipComponent])
+import GraphCanvas from '@/components/common/graph/GraphCanvas.vue'
+import type { CanvasEdge, CanvasNode, CanvasSelection } from '@/components/common/graph/graphTypes'
+import { toCanvasEdges, toCanvasNodes, type StdGraphEdge, type StdGraphNode } from './graphViewUtils'
 
 const props = defineProps<{
-  nodes: any[]
-  edges: any[]
-  /** 高亮对象标准 code（NL 检索 / 下钻联动） */
+  nodes: StdGraphNode[]
+  edges: StdGraphEdge[]
+  selection: CanvasSelection | null
+  /** 高亮对象标准 code（NL 检索 / 下钻联动）：无选中时当焦点做邻接淡化 */
   highlightCodes?: string[]
   /** 高亮关系标准 code（NL 检索命中边） */
   highlightRelationCodes?: string[]
+  loading?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'node-click', id: number): void
-  (e: 'edge-click', id: number): void
+  (e: 'select', v: CanvasSelection | null): void
+  (e: 'clear-filter'): void
 }>()
 
 const { t } = useI18n()
+const canvasRef = ref<InstanceType<typeof GraphCanvas> | null>(null)
 
-const highlighted = computed(() => new Set(props.highlightCodes || []))
-const highlightedEdges = computed(() => new Set(props.highlightRelationCodes || []))
+const canvasNodes = computed<CanvasNode[]>(() => toCanvasNodes(props.nodes || []))
+const canvasEdges = computed<CanvasEdge[]>(() => toCanvasEdges(props.edges || []))
 
-const option = computed(() => ({
-  tooltip: { confine: true },
-  series: [
-    {
-      type: 'graph',
-      layout: 'force',
-      roam: true,
-      draggable: true,
-      label: { show: true, formatter: (p: any) => p.name },
-      edgeLabel: { show: true, formatter: (p: any) => p.data.relation_type },
-      force: { repulsion: 240, edgeLength: 120 },
-      lineStyle: { color: 'source', curveness: 0.1 },
-      emphasis: { focus: 'adjacency' },
-      data: props.nodes.map((n) => ({
-        id: String(n.id),
-        name: n.name,
-        code: n.code,
-        symbolSize: highlighted.value.has(n.code) ? 64 : 48,
-        itemStyle: highlighted.value.has(n.code)
-          ? { borderColor: '#faad14', borderWidth: 3 }
-          : undefined,
-      })),
-      links: props.edges.map((e) => ({
-        source: String(e.from),
-        target: String(e.to),
-        code: e.code,
-        relation_type: e.relation_type,
-        edgeId: e.id,
-        lineStyle: highlightedEdges.value.has(e.code) ? { width: 3, color: '#faad14' } : undefined,
-      })),
-    },
-  ],
-}))
-
-function onClick(p: any) {
-  if (p.dataType === 'node') emit('node-click', Number(p.data.id))
-  else if (p.dataType === 'edge') emit('edge-click', p.data.edgeId)
+/** 父级工具栏「在图中定位」：把 id 居中（透传画布 expose） */
+function locate(id: number) {
+  canvasRef.value?.locate(id)
 }
+defineExpose({ locate })
 </script>
-
-<style scoped>
-.std-graph-wrap {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.std-graph {
-  width: 100%;
-  height: 100%;
-}
-</style>

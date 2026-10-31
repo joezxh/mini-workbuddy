@@ -107,12 +107,15 @@
               <div class="std-mgr__graph" :class="{ 'std-mgr__graph--overview': graphView === 'overview' }">
                 <StdGraphView
                   v-if="graphView === 'graph'"
+                  ref="stdGraphRef"
                   :nodes="graph.nodes"
                   :edges="graph.edges"
+                  :selection="selected"
+                  :loading="statsLoading"
                   :highlight-codes="highlightCodes"
                   :highlight-relation-codes="highlightRelationCodes"
-                  @node-click="onNodeClick"
-                  @edge-click="onEdgeClick"
+                  @select="selected = $event"
+                  @clear-filter="resetGraphFilters"
                 />
                 <template v-else>
                   <StdGuidTour class="std-mgr__tour" :current="tourStep" />
@@ -567,11 +570,11 @@ async function loadGraph() {
     if (!pool.some((x: any) => x.id === selected.value!.id)) selected.value = null
   }
 }
-function onNodeClick(id: number) {
-  selected.value = { kind: 'node', id }
-}
-function onEdgeClick(id: number) {
-  selected.value = { kind: 'edge', id }
+const stdGraphRef = ref<{ locate(id: number): void } | null>(null)
+function resetGraphFilters() {
+  selected.value = null
+  highlightCodes.value = []
+  highlightRelationCodes.value = []
 }
 function openRelationForm(row?: any) {
   editingRelation.value = row ? { ...row } : null
@@ -809,6 +812,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
 }
 .std-mgr__body {
   flex: 1;
@@ -879,6 +885,9 @@ onMounted(async () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
 }
 .std-mgr__tabs {
   flex: 1;
@@ -927,5 +936,12 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   padding: 8px;
   overflow: hidden;
+}
+
+/* 浅色皮肤：整个 tab（左栏目录树 + 右栏内容）白底，与图谱知识库管理一致 */
+:root[data-theme='light'] .std-mgr,
+:root[data-theme='light'] .std-mgr__aside,
+:root[data-theme='light'] .std-mgr__content {
+  background: #ffffff;
 }
 </style>
