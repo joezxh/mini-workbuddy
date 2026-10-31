@@ -472,7 +472,7 @@
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
-/* 类型标签（实体 / 关系类型，底色由 kgTheme.typeTone 内联给出） */
+/* 类型标签（实体 / 关系类型，底色由 graphTheme.typeTone 内联给出） */
 .kb-graph-pane .kg-type-tag {
   display: inline-flex;
   align-items: center;

@@ -1,7 +1,7 @@
 # 标准中心关系图对齐图谱知识库原型 设计
 
 - 日期：2026-11-01
-- 状态：已与用户逐节确认（分色维度 / 渲染方案 / 对齐边界 / NL 命中语义 / 筛选与导出口径 五项决策已裁决）
+- 状态：已实施（2026-11-01，实施计划 `docs/superpowers/plans/2026-11-01-standard-graph-prototype-alignment.md`，Task 1–8）
 - 参考原型：`docs/prototypes/kg-knowledge-base-preview.html`（图谱 Tab 的画布与检视面板）
 - 原型真实实现：`frontend/src/views/kms/kg/KgGraphView.vue` + `KgInspector.vue` + `kg-tokens.css` + `kgTheme.ts`
 - 关联：标准三层语义模型 CDM spec（2026-10-28，其决策 7 被本 spec 取代）、图谱知识库 spec（2026-10-30）
