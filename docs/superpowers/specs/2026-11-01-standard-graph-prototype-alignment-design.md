@@ -59,17 +59,18 @@
 ```
 components/common/graph/
 ├─ GraphCanvas.vue      画布：布局 + SVG + 缩放/平移/拖拽 + 点选 + 邻接淡化 + 图例 + 空态
+├─ graphTypes.ts        CanvasNode / CanvasEdge / CanvasSelection（`<script setup>` 不允许 ES `export`，类型必须单独成文件供两侧引用）
 ├─ graphTheme.ts        由 views/kms/kg/kgTheme.ts 迁移（同内容，改位置）
-└─ graph-tokens.css     由 views/kms/kg/kg-tokens.css 迁移（同内容，改位置 + 头部注释）
+└─ graph-tokens.css     由 views/kms/kg/kg-tokens.css 迁移（同内容，改位置 + 头部注释 + 末尾 `.is-hit` 三条规则）
 ```
 
 ### 3.1 `GraphCanvas.vue` 接口
 
-只负责呈现与交互，**不含任何 i18n key、不发请求、不做筛选**（文案与数据都由调用方注入，避免 `components/common` 反向依赖 `views/kms`）。
+只负责呈现与交互，**不含任何 i18n key、不发请求、不做筛选、不取色**（颜色/显示名/文案都由调用方注入，避免 `components/common` 反向依赖 `views/kms`）。下列类型定义在 `graphTypes.ts`：
 
 ```ts
 interface CanvasNode { id: number; name: string; code: string; color: string; typeLabel: string }
-interface CanvasEdge { id: number; from: number; to: number; label: string }
+interface CanvasEdge { id: number; from: number; to: number; label: string; code?: string }
 interface Selection { kind: 'node' | 'edge'; id: number }
 
 props: {
@@ -83,11 +84,15 @@ props: {
   /** 文案注入（调用方用自己的 i18n 命名空间） */
   hintText: string
   legendSizeText: string
-  emptyText: string
+  emptyTitle: string
+  emptyDesc: string
+  emptyActionText?: string   // 不传则空态不渲染按钮
 }
-emits: { (e: 'select', v: Selection | null): void }
-expose: { locate(id: number): void }   // 选中 + 平移使该节点进入视野中心
+emits: { (e: 'select', v: Selection | null): void; (e: 'empty-action'): void }
+expose: { locate(id: number): void }   // 平移使该节点进入视野中心；不改 selection（由调用方维护）
 ```
+
+`CanvasEdge.code` 是关系的 code（标准侧为关系标准 `code`，kg 侧为 `relation_type || predicate`）：命中集按 code 比对边，因此画布需要它；`label` 只管显示。
 
 从 `KgGraphView` 原样搬入的部分（常量与算法不改值）：`VB_W/VB_H = 790/490`、`MIN/MAX_SCALE`、`LABEL_ALL_MAX = 60`、黄金角撒点 + FR 斥力/引力/向心力 + 位移限幅 + 归一化留白、`r = min(52, 15 + deg * 4.2)`、曲率 0.12 的二次贝塞尔与 `0.25/0.5/0.25` 标签锚点、hover 命中测试、`nodeOpacity`、`showNodeLabel` / `showEdgeLabel`、图例聚合（按节点数降序）、空态与 loading 遮罩。
 
@@ -172,23 +177,28 @@ expose: { locate(id: number): void }   // 选中 + 平移使该节点进入视�
 `frontend/src/views/data-source/standard/graphViewUtils.ts`（新，纯函数、可脱 DOM 单测）：
 
 ```ts
-export function toCanvasNodes(nodes, edges): CanvasNode[]      // code→color/label + 度数半径前的 deg
-export function toCanvasEdges(edges): CanvasEdge[]             // label = name || code
+export function toCanvasNodes(nodes): CanvasNode[]            // code→color/typeLabel
+export function toCanvasEdges(edges): CanvasEdge[]            // label = name || code，code 供命中比对
 export function degreeMap(edges): Record<number, number>
 export function neighborsOf(id, edges): Set<number>
 export function bfsSubgraph(seed, edges, depth): Set<number>   // 种子子图
+export function filterByObjectCode(nodes, edges, code): { nodes, edges }
+export function filterByRelationType(nodes, edges, relationType): { nodes, edges }
 export function applyNodeLimit(nodes, edges, cap): { nodes, edges }  // 度数降序 + 丢悬空边
-export function filterByObject(nodes, edges, code): { nodes, edges }
-export function filterByRelationType(edges, relationType): Edge[]
-export function buildLegend(nodes): { code, label, color, count }[]
+export function selectVisibleGraph(nodes, edges, filters): { nodes, edges }  // 种子→对象→基数→上限的固定编排
+export function objectFacets(nodes): FacetOption[]           // 下拉项：value/label/count
+export function relationTypeFacets(edges): FacetOption[]
+export function csvEscape(value): string
 export function serializeGraph(nodes, edges, fmt: 'json' | 'csv'): string
 ```
+
+图例聚合**属于画布内部**（`GraphCanvas` 从 props 节点算 code 降序），不抽到 util；检视面板的状态/校验三态→文案 key 与 badge 类名另置 `standard/inspectorFormat.ts`（纯函数，理由同 `attrDict.ts` / `nlFocus.ts`：node 环境的 SSR 拿不到 `await` 之后的数据，映射必须在组件外可测）。
 
 `FR 布局`留在 `GraphCanvas` 内部（与渲染强相关，且 kg 侧已验证）；`StandardManagement.vue` 侧只做筛选参数持有与结果透传。
 
 改动文件清单：
 
-- 新增：`components/common/graph/GraphCanvas.vue`、`standard/graphViewUtils.ts`、测试 `graphViewUtils.spec.ts` 与 `GraphCanvas.spec.ts`
+- 新增：`components/common/graph/GraphCanvas.vue`、`components/common/graph/graphTypes.ts`、`standard/graphViewUtils.ts`、`standard/inspectorFormat.ts`，测试 `GraphCanvas.spec.ts` / `graphViewUtils.spec.ts` / `inspectorFormat.spec.ts` / `i18n/__tests__/stdGraphKeys.spec.ts`
 - 迁移：`views/kms/kg/kgTheme.ts` → `components/common/graph/graphTheme.ts`；`views/kms/kg/kg-tokens.css` → `components/common/graph/graph-tokens.css`
 - 重写：`standard/StdGraphView.vue`、`standard/StdInspector.vue`（含各自 `__tests__` 两份 spec 的同步重写）
 - 修改：`StandardManagement.vue`（工具栏 + 皮肤作用域容器 + `@select` 收敛）、`KbGraphPane.vue`（`<style src>` 路径 + 头注释）、`kms/kg/KgGraphView.vue`（瘦身）、6 个 kg 组件的 `kgTheme` import 路径
@@ -197,23 +207,29 @@ export function serializeGraph(nodes, edges, fmt: 'json' | 'csv'): string
 
 ## 8. i18n
 
-新增 key 全部落 `kbMgmt.graph.*`（标准中心语义命名），**包括通用文案在内一律新增，不引用 `kbMgmt.kg.*`**：那些文案说的是「实体/切片/权重/抽取器」，标准中心对应的是「对象标准/引用属性/基数/校验结论」，混用会把概念讲错，跨命名空间引用也会让 `components/common` 与 `views/kms` 的边界重新模糊。`GraphCanvas` 的三个文案（提示胶囊、图例度数说明、空态）由 props 注入，标准侧传 `kbMgmt.graph.*`，kg 侧继续传 `kbMgmt.kg.*`。
+新增 key 全部落 `kbMgmt.graph.*`（标准中心语义命名），**包括通用文案在内一律新增，不引用 `kbMgmt.kg.*`**：那些文案说的是「实体/切片/权重/抽取器」，标准中心对应的是「对象标准/引用属性/基数/校验结论」，混用会把概念讲错，跨命名空间引用也会让 `components/common` 与 `views/kms` 的边界重新模糊。`GraphCanvas` 的画布文案（提示胶囊、图例度数说明、空态标题/说明/按钮）由 props 注入，标准侧传 `kbMgmt.graph.*`，kg 侧继续传 `kbMgmt.kg.*`。
 
-`kbMgmt.graph.` 新增：`modeFull`、`modeSubgraph`、`objectFilter`、`relationFilter`、`nodeLimit`、`expandFromSeed`、`exportGraph`、`exported`、`objectDetail`、`relationDetail`、`adjacentRelations`、`locateInGraph`、`nodeEdgeCount`、`legendNodeSize`、`statusDraft`、`statusPublished`、`verdictHit`、`verdictMissing`、`verdictConflict`、`filterObjectHint`、`filterRelationHint`。
+`kbMgmt.graph.` 新增 22 个：`modeFull`、`modeSubgraph`、`objectFilterAll`、`relationFilterAll`、`depthLabel`、`nodeLimit`、`expandFromSeed`、`seedPickFirst`、`exportGraph`、`exported`、`nodeEdgeCount`、`legendNodeSize`、`graphEmptyDesc`、`objectDetail`、`relationDetail`、`adjacentRelations`、`noAttributes`、`noAdjacent`、`noBindings`、`locateInGraph`、`statusDraft`、`statusPublished`。
+
+复用既有 key（不新增、不复制文案）：`kbMgmt.graph.empty`（空态标题，文案已是「暂无对象标准」，再开一个同名 key 是重复）、`kbMgmt.graph.selectHint`（画布提示胶囊与面板未选中态）、`kbMgmt.graph.boundTables` / `drill` / `checks` / `noChecks` / `relationType` / `required` / `fromTo` / `fromObject` / `toObject`（面板分区与字段），以及校验三态 `kbMgmt.overview.hit` / `missing` / `conflict`（`inspectorFormat.verdictTextKey` 返回它们）。下拉项标签里的「对象标准：全部」「关系基数：全部」直接写成完整短语（`objectFilterAll` / `relationFilterAll`），避免在模板里拼 i18n 片段。
 
 三份 locale 全部补齐；`zh-TW` 走简体→繁体对照翻译，不留英文占位。
 
 ## 9. 测试
 
-**9.1 新增 `standard/__tests__/graphViewUtils.spec.ts`**：度数统计、邻居集、BFS 深度边界（0/1/3 与悬空种子）、节点上限截断（同度数稳定性、截断后无悬空边）、对象/基数筛选、图例聚合降序、CSV 转义（名称含逗号/引号/换行）。
+**9.1 新增 `standard/__tests__/graphViewUtils.spec.ts`**：度数统计、邻居集、BFS 深度边界（0/1/3 与悬空种子）、节点上限截断（同度数稳定性、截断后无悬空边）、对象/基数筛选、`selectVisibleGraph` 的编排顺序（种子→对象→基数→上限）、facets 计数与排序、CSV 转义（名称含逗号/引号/换行）。图例聚合不在这里——它属画布内部（§7）。
 
-**9.2 重写 `standard/__tests__/StdGraphView.spec.ts`**：移除 `vue-echarts` 桩与 `GRAPH_EMPTY_MARKER` 的 option 断言，改为 SSR 断言骨架（画布容器类名、皮肤作用域类、空态文案、无 nodes 时不渲染 svg），分色/淡化/高亮判定通过 §7 纯函数断言覆盖；新增断言：`code` 相同对象同色、边标签取 `name` 而非基数、命中集非空时命中节点 `is-hit`。
+**9.2 重写 `standard/__tests__/StdGraphView.spec.ts`**：移除 `vue-echarts` 桩与 `GRAPH_EMPTY_MARKER` 的 option 断言，改为 SSR 断言骨架（画布容器类名、提示胶囊与图例文案来自 `kbMgmt.graph.*`、空节点时出空态而不出 `kg-node`）；新增断言：`code` 相同对象同色、边标签取 `name` 而非基数（`not.toContain('N:1')`）、命中集非空时命中节点 `is-hit`。分色/淡化/高亮的具体判定已在 §9.3 的画布层覆盖，本层只证明映射正确。
 
 **9.3 新增 `components/common/graph/__tests__/GraphCanvas.spec.ts`**：补共享层的结构与焦点判定断言（空节点不画、度数半径单调、`selection` 优先于 `focus`、邻居保留/非邻居 `.35`、边 `is-hl`/`is-on` 判定、图例只列可见 code）。布局用固定输入断言确定性（同输入同坐标），不测动画。
 
-**9.4 重写 `standard/__tests__/StdInspector.spec.ts`**：marker 换成分区（引用属性 / 邻接关系 / 已绑定物理表 / 校验结论），断言邻接行的方向箭头与对端名、点击邻接项 emit 边选中、verdict→badge 三类词表、类型 tag 拿到 code 对应色。
+**9.4 重写 `standard/__tests__/StdInspector.spec.ts`**：marker 换成分区（引用属性 / 邻接关系 / 已绑定物理表 / 校验结论），断言邻接行的方向箭头与对端名、类型 tag 拿到 code 对应色与空态文案。badge/verdict 映射与邻接行构造不放在组件断言里：node 环境下的 SSR 拿不到 `await` 之后的数据，它们归 9.6 的纯函数。SSR 断言只覆盖同步可得内容（分区标题、骨架、props 池里直接取到的字段与空态文案）。
 
-**9.5 回归**：`npm run test`（vitest）全绿 + `vue-tsc` 类型检查通过（迁 `kgTheme` 的漏改会被 TS 直接抓到）。
+**9.5 新增 `i18n/__tests__/stdGraphKeys.spec.ts`**：22 个新 key 在三份 locale 均为非空字符串，插值占位符（`{objects}` / `{edges}` / `{name}`）三份一致，且被复用的既有 key 未被误删。
+
+**9.6 新增 `standard/__tests__/inspectorFormat.spec.ts`**：状态→`statusDraft`/`statusPublished`、校验三态→`hit`/`missing`/`conflict` 的 key 与 badge 类名映射，含未知值与空值降级。
+
+**9.7 回归**：`npx vitest run src` 全绿 + `npx vue-tsc --noEmit -p tsconfig.json` 通过（迁 `kgTheme` 的漏改会被 TS 直接抓到）。注意 `npm run test` 只跑 `node --test` 的个别 utils 测试，**不含 vitest**，故统一用 `npx vitest run`。
 
 ## 10. 手工回归清单（`kg` 模块，无自动化兜底）
 
@@ -241,9 +257,9 @@ export function serializeGraph(nodes, edges, fmt: 'json' | 'csv'): string
 | 片 | 交付 | 依赖 |
 |---|---|---|
 | S1 | 建 `components/common/graph/`：迁 `graphTheme.ts` + `graph-tokens.css`（含 6 处 import 改路径 + `KbGraphPane` style src），`GraphCanvas.vue` 抽出，`KgGraphView` 瘦身接入，§9.3 测试 + §10 清单通过 | — |
-| S2 | `graphViewUtils.ts` 纯函数 + §9.1 测试（可先于 S2 之后，但必须早于 S3） | — |
+| S2 | `graphViewUtils.ts` 纯函数 + §9.1 测试（可与 S1 并行，但必须早于 S3） | — |
 | S3 | `StdGraphView` 接画布（分色/图例/边标签/选中/NL 命中）+ §9.2 测试 | S1, S2 |
-| S4 | `StdInspector` 重写为原型形态（含邻接关系下钻）+ §9.4 测试 | S3 |
-| S5 | 工具栏（模式/筛选/上限/种子/导出）+ `StandardManagement` 皮肤容器与 `@select` 收敛 + i18n 三份补齐 | S3 |
+| S4 | `StdInspector` 重写为原型形态（含邻接关系下钻、`inspectorFormat.ts`）+ §9.4 / §9.6 测试 | S3 |
+| S5 | 工具栏（模式/筛选/上限/种子/导出）+ `StandardManagement` 皮肤容器与 `@select` 收敛 + i18n 三份补齐（§9.5） | S3 |
 
 S1 完成即可独立验证「kg 模块未劣化」，S3–S5 完成标准中心对齐。旧 spec 的取代注记随 S1 一并提交。
