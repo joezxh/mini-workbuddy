@@ -234,4 +234,5 @@ StandardManagement.vue（标准中心 shell：视图切换 + 布局）
 5. `catalog_id` **可空**（允许未归类，逐步归档）。
 6. 迁移**预置电商/物流 2 个种子场景**（各带示例对象+关系）。
 7. 图库 = ECharts graph；导览 = 轻量步骤条；NL 查询本期落地（复用 `llm_json`）。
+   > 已被取代（2026-11-01）：图库改为与图谱知识库共用的原生 SVG 画布 `components/common/graph/GraphCanvas.vue`，详见 `2026-11-01-standard-graph-prototype-alignment-design.md` §2。本 spec 其余决策继续有效。
 8. 冲突判定收敛为"方向反转"，类型不符降级为 hit+备注。
