@@ -103,37 +103,58 @@
               </a-button>
               <a-button @click="loadGraph"><ReloadOutlined /> {{ t('kbMgmt.common.refresh') }}</a-button>
             </div>
-            <div class="std-mgr__graph-body">
-              <div class="std-mgr__graph" :class="{ 'std-mgr__graph--overview': graphView === 'overview' }">
+            <!-- 关系图：挂 kb-graph-pane 复用图谱工作台皮肤（仅图模式，总览不挂，spec §3.3） -->
+            <div v-if="graphView === 'graph'" class="kb-graph-pane">
+              <div class="kg-toolbar">
+                <div class="kg-toolbar__l">
+                  <div class="kg-seg">
+                    <span
+                      class="kg-seg__item"
+                      :class="{ 'kg-seg__item--on': graphMode === 'full' }"
+                      @click="switchGraphMode('full')"
+                    >{{ t('kbMgmt.graph.modeFull') }}</span>
+                    <span
+                      class="kg-seg__item"
+                      :class="{ 'kg-seg__item--on': graphMode === 'seed' }"
+                      @click="switchGraphMode('seed')"
+                    >{{ t('kbMgmt.graph.modeSubgraph') }}</span>
+                  </div>
+                  <a-select v-model:value="graphObjectCode" size="small" style="width: 168px" :options="objectOptions" @change="onFilterChange" />
+                  <a-select v-model:value="graphRelationType" size="small" style="width: 150px" :options="relationOptions" @change="onFilterChange" />
+                  <a-select v-model:value="graphDepth" size="small" style="width: 92px" :options="depthOptions" :disabled="graphMode !== 'seed'" @change="onFilterChange" />
+                  <a-input-number v-model:value="graphLimit" size="small" style="width: 92px" :min="20" :max="2000" :step="50" @change="onFilterChange" />
+                </div>
+                <div class="kg-toolbar__r">
+                  <span class="kg-muted">
+                    {{ t('kbMgmt.graph.nodeEdgeCount', { objects: visibleGraph.nodes.length, edges: visibleGraph.edges.length }) }}
+                  </span>
+                  <a-button size="small" :disabled="!selectedNodeAvailable" @click="expandFromSeed">
+                    {{ t('kbMgmt.graph.expandFromSeed') }}
+                  </a-button>
+                  <a-dropdown :trigger="['click']">
+                    <a-button size="small">{{ t('kbMgmt.graph.exportGraph') }}</a-button>
+                    <template #overlay>
+                      <a-menu @click="onExport">
+                        <a-menu-item key="json">JSON</a-menu-item>
+                        <a-menu-item key="csv">CSV</a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
+                </div>
+              </div>
+
+              <div class="kg-wrap">
                 <StdGraphView
-                  v-if="graphView === 'graph'"
                   ref="stdGraphRef"
-                  :nodes="graph.nodes"
-                  :edges="graph.edges"
+                  :nodes="visibleGraph.nodes"
+                  :edges="visibleGraph.edges"
                   :selection="selected"
-                  :loading="statsLoading"
                   :highlight-codes="highlightCodes"
                   :highlight-relation-codes="highlightRelationCodes"
-                  @select="selected = $event"
+                  :loading="statsLoading"
+                  @select="onGraphSelect"
                   @clear-filter="resetGraphFilters"
                 />
-                <template v-else>
-                  <StdGuidTour class="std-mgr__tour" :current="tourStep" />
-                  <StdOverviewView
-                    :stats="stats"
-                    :loading="statsLoading"
-                    :summary="nlSummary"
-                    :degraded="nlDegraded"
-                    :degraded-reason="nlDegradedReason"
-                    :hits="nlHits"
-                    :search-empty="nlSearchEmpty"
-                    :searching="nlSearching"
-                    @search="onNlSearch"
-                    @view-in-graph="graphView = 'graph'"
-                  />
-                </template>
-              </div>
-              <div v-if="graphView === 'graph'" class="std-mgr__inspector">
                 <StdInspector
                   :selected="selected"
                   :objects="graph.nodes"
@@ -142,6 +163,27 @@
                   @edit-relation="editRelationById"
                   @delete-relation="removeRelation"
                   @drill-down="onDrillDown"
+                  @inspect-entity="selectObject"
+                  @inspect-relation="selectRelation"
+                  @locate="locateInGraph"
+                />
+              </div>
+            </div>
+
+            <div v-else class="std-mgr__graph-body">
+              <div class="std-mgr__graph std-mgr__graph--overview">
+                <StdGuidTour class="std-mgr__tour" :current="tourStep" />
+                <StdOverviewView
+                  :stats="stats"
+                  :loading="statsLoading"
+                  :summary="nlSummary"
+                  :degraded="nlDegraded"
+                  :degraded-reason="nlDegradedReason"
+                  :hits="nlHits"
+                  :search-empty="nlSearchEmpty"
+                  :searching="nlSearching"
+                  @search="onNlSearch"
+                  @view-in-graph="graphView = 'graph'"
                 />
               </div>
             </div>
@@ -275,7 +317,7 @@
  * 主流程是在对象表单里就地新建属性并引用，属性页签负责存量清理（引用计数 / 孤儿项）。
  * 总览视图（F3）在标准图页签内以 segmented 切换占位；下钻事件向上抛给 DataSourcePanel。
  */
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
@@ -292,6 +334,12 @@ import StdGuidTour from './standard/StdGuidTour.vue'
 import { toNlFocus } from './standard/nlFocus'
 import { keywordHits } from './standard/keywordSearch'
 import { filterAttributes, isOrphan, usageOf } from './standard/attrDict'
+import {
+  objectFacets,
+  relationTypeFacets,
+  selectVisibleGraph,
+  serializeGraph,
+} from './standard/graphViewUtils'
 import * as api from '@/api/dataops'
 
 const { t } = useI18n()
@@ -513,6 +561,12 @@ const graphView = ref<'graph' | 'overview'>('graph')
 const selected = ref<{ kind: 'node' | 'edge'; id: number } | null>(null)
 const highlightCodes = ref<string[]>([])
 const highlightRelationCodes = ref<string[]>([])
+// 图视图筛选状态（全前端计算，零后端改动）
+const graphMode = ref<'full' | 'seed'>('full')
+const graphObjectCode = ref('')
+const graphRelationType = ref('')
+const graphDepth = ref(2)
+const graphLimit = ref(500)
 const relationFormOpen = ref(false)
 const editingRelation = ref<any>(null)
 
@@ -569,12 +623,126 @@ async function loadGraph() {
     const pool = selected.value.kind === 'node' ? graph.value.nodes : relations.value
     if (!pool.some((x: any) => x.id === selected.value!.id)) selected.value = null
   }
+  // 刷新后种子仍有效：种子对象已不存在则清空，避免子图直接空掉
+  if (seedId.value && !graph.value.nodes.some((n: any) => n.id === seedId.value)) seedId.value = null
 }
 const stdGraphRef = ref<{ locate(id: number): void } | null>(null)
 function resetGraphFilters() {
   selected.value = null
   highlightCodes.value = []
   highlightRelationCodes.value = []
+}
+
+/** 可见子图：模式 → 对象 → 基数 → 上限（全本地计算） */
+const visibleGraph = computed(() =>
+  selectVisibleGraph(graph.value.nodes, graph.value.edges, {
+    mode: graphMode.value,
+    seedId: graphMode.value === 'seed' ? seedId.value : null,
+    depth: graphDepth.value,
+    objectCode: graphObjectCode.value,
+    relationType: graphRelationType.value,
+    limit: graphLimit.value,
+  }),
+)
+
+const objectOptions = computed(() => [
+  { value: '', label: t('kbMgmt.graph.objectFilterAll'), count: graph.value.nodes.length },
+  ...objectFacets(graph.value.nodes).map((f) => ({ value: f.value, label: f.label, count: f.count })),
+])
+
+const relationOptions = computed(() => [
+  { value: '', label: t('kbMgmt.graph.relationFilterAll'), count: graph.value.edges.length },
+  ...relationTypeFacets(graph.value.edges).map((f) => ({ value: f.value, label: f.label, count: f.count })),
+])
+
+const depthOptions = computed(() =>
+  [1, 2, 3].map((d) => ({ value: d, label: `${t('kbMgmt.graph.depthLabel')} ${d}` })),
+)
+
+const selectedNodeAvailable = computed(() => selected.value?.kind === 'node')
+
+/** 种子：优先当前选中对象，其次上一个选中对象（切模式不清种子，避免子图直接空掉） */
+const seedId = ref<number | null>(null)
+
+function switchGraphMode(next: 'full' | 'seed') {
+  if (graphMode.value === next) return
+  if (next === 'seed' && !seedId.value) {
+    message.warning(t('kbMgmt.graph.seedPickFirst'))
+    return
+  }
+  graphMode.value = next
+}
+
+function onFilterChange() {
+  // 选中项被筛掉时清掉，避免面板与图不一致（沿用 loadGraph 里的同款兜底）
+  if (selected.value) {
+    const pool = selected.value.kind === 'node' ? visibleGraph.value.nodes : visibleGraph.value.edges
+    if (!pool.some((x: any) => x.id === selected.value!.id)) selected.value = null
+  }
+}
+
+function onGraphSelect(v: { kind: 'node' | 'edge'; id: number } | null) {
+  selected.value = v
+  if (v?.kind === 'node') seedId.value = v.id
+}
+
+function selectObject(id: number) {
+  seedId.value = id
+  selected.value = { kind: 'node', id }
+}
+
+function selectRelation(id: number) {
+  // 该边可能已被筛选排除：先放宽筛选再选中，点了才有反应（spec §11）
+  if (!visibleGraph.value.edges.some((e) => e.id === id)) {
+    graphMode.value = 'full'
+    graphObjectCode.value = ''
+    graphRelationType.value = ''
+  }
+  selected.value = { kind: 'edge', id }
+}
+
+/** 在图中定位对象：不在可见集则清空筛选，随后平移到视野中心 */
+async function locateInGraph(id?: number | null) {
+  if (!id) return
+  if (!visibleGraph.value.nodes.some((n) => n.id === id)) {
+    graphMode.value = 'full'
+    graphObjectCode.value = ''
+    graphRelationType.value = ''
+    graphLimit.value = 2000
+  }
+  selectObject(id)
+  await nextTick()
+  stdGraphRef.value?.locate(id)
+}
+
+function expandFromSeed() {
+  const id = selected.value?.kind === 'node' ? selected.value.id : seedId.value
+  if (!id) {
+    message.warning(t('kbMgmt.graph.seedPickFirst'))
+    return
+  }
+  seedId.value = id
+  graphMode.value = 'seed'
+}
+
+const exportFilename = 'std-cdm-graph'
+
+function onExport(info: { key: string }) {
+  const fmt = info.key === 'csv' ? 'csv' : 'json'
+  const content = serializeGraph(visibleGraph.value.nodes, visibleGraph.value.edges, fmt)
+  const name = `${exportFilename}.${fmt}`
+  const blob = new Blob([content], {
+    type: fmt === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+  message.success(t('kbMgmt.graph.exported', { name }))
 }
 function openRelationForm(row?: any) {
   editingRelation.value = row ? { ...row } : null
