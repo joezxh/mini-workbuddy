@@ -918,14 +918,14 @@ export function neighborsOf(id: number, edges: StdGraphEdge[]): Set<number> {
   return set
 }
 
-/** 从种子出发按跳数扩张；种子为空/不存在返回空集，depth 0 只保留种子 */
+/** 从种子出发按跳数扩张；种子为空/不在任何边上（不存在或完全孤立）返回空集，depth 0 只保留种子 */
 export function bfsSubgraph(seedId: number | null, edges: StdGraphEdge[], depth: number): Set<number> {
   const reached = new Set<number>()
   if (seedId === null || seedId === undefined) return reached
+  // 种子必须出现在至少一条边上，否则（id 不存在或完全孤立）无子图可展开
   const incident = edges.some((e) => e.from === seedId || e.to === seedId)
-  // 孤立种子也要出现在图上
-  reached.add(seedId)
   if (!incident) return reached
+  reached.add(seedId)
   let frontier = [seedId]
   const maxDepth = Math.max(0, depth)
   for (let d = 0; d < maxDepth && frontier.length; d += 1) {
