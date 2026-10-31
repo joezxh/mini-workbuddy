@@ -1,0 +1,846 @@
+/**
+ * 图谱工作台共用皮肤（2026-11-01 起：图谱知识库 + 标准中心共用）。
+ *
+ * 原 views/kms/kg/kg-tokens.css。所有规则以 .kb-graph-pane 为作用域前缀：
+ * 该前缀同时是「图谱工作台皮肤作用域」的约定名，标准中心图区亦挂它（spec §3.3），
+ * 因此不改名 —— 100+ 选择器逐条改写的收益远低于回归风险。
+ *
+ * 由宿主组件通过 <style src="..."> 引入，非 scoped。
+ */
+
+/* ── 令牌：亮色（原型原值） ─────────────────────────────────────────── */
+.kb-graph-pane {
+  --kg-primary: #3371fc;
+  --kg-primary-hover: #2b5fd9;
+  --kg-bg: #f5f7fa;
+  --kg-card: #ffffff;
+  --kg-subtle: #f7f9fc;
+  --kg-text: #1f2329;
+  --kg-text-2: #646a73;
+  --kg-text-3: #8f959e;
+  --kg-border: #e5e6eb;
+  --kg-border-2: #d0d5dd;
+  --kg-tint: #e6f0ff;
+  --kg-info-bg: #f0f6ff;
+  --kg-info-border: #bcd8ff;
+  --kg-info-fg: #0958d9;
+
+  --kg-ok: #52c41a;
+  --kg-ok-fg: #389e0d;
+  --kg-ok-bg: #f6ffed;
+  --kg-ok-border: #b7eb8f;
+  --kg-err: #ff4d4f;
+  --kg-err-fg: #cf1322;
+  --kg-err-bg: #fff2f0;
+  --kg-err-border: #ffccc7;
+  --kg-warn: #faad14;
+  --kg-warn-fg: #874d00;
+  --kg-warn-bg: #fffbe6;
+  --kg-warn-border: #ffe58f;
+
+  --kg-r: 8px;
+  --kg-r-sm: 6px;
+  --kg-r-xs: 4px;
+  --kg-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --kg-shadow: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --kg-code-fg: #c7254e;
+
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--kg-text);
+}
+
+/* ── 令牌：暗色（保留度量，映射表面色） ─────────────────────────────── */
+[data-theme='dark'] .kb-graph-pane {
+  --kg-primary: #4aa3ff;
+  --kg-primary-hover: #6fb4ff;
+  --kg-bg: #0e141d;
+  --kg-card: #151d29;
+  --kg-subtle: #1a232f;
+  --kg-text: #e6edf6;
+  --kg-text-2: #9fb0c5;
+  --kg-text-3: #6b7c92;
+  --kg-border: rgba(140, 192, 255, 0.16);
+  --kg-border-2: rgba(140, 192, 255, 0.28);
+  --kg-tint: rgba(74, 163, 255, 0.16);
+  --kg-info-bg: rgba(74, 163, 255, 0.1);
+  --kg-info-border: rgba(74, 163, 255, 0.34);
+  --kg-info-fg: #8ec5ff;
+
+  --kg-ok: #4cc38a;
+  --kg-ok-fg: #6fdcae;
+  --kg-ok-bg: rgba(76, 195, 138, 0.12);
+  --kg-ok-border: rgba(76, 195, 138, 0.34);
+  --kg-err: #ff7b72;
+  --kg-err-fg: #ffa198;
+  --kg-err-bg: rgba(255, 123, 114, 0.12);
+  --kg-err-border: rgba(255, 123, 114, 0.34);
+  --kg-warn: #f2b66d;
+  --kg-warn-fg: #f7cd97;
+  --kg-warn-bg: rgba(242, 182, 109, 0.12);
+  --kg-warn-border: rgba(242, 182, 109, 0.34);
+
+  --kg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --kg-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --kg-code-fg: #ff9db1;
+}
+
+/* ── antd：按钮 / 输入 / 下拉 / 复选 ─────────────────────────────────── */
+.kb-graph-pane .ant-btn {
+  border-radius: var(--kg-r-sm);
+  font-size: 12px;
+  box-shadow: none;
+}
+.kb-graph-pane .ant-btn-sm {
+  height: 27px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.kb-graph-pane .ant-btn > span {
+  /* 关掉 antd 对两字按钮自动插入的空格（原型为「重建」「刷新」） */
+  letter-spacing: normal;
+}
+.kb-graph-pane .ant-btn-primary {
+  background: var(--kg-primary);
+  border-color: var(--kg-primary);
+}
+.kb-graph-pane .ant-btn-primary:not(:disabled):hover {
+  background: var(--kg-primary-hover);
+  border-color: var(--kg-primary-hover);
+}
+.kb-graph-pane .ant-btn-link {
+  height: auto;
+  padding: 0 2px;
+  font-size: 12px;
+}
+.kb-graph-pane .ant-input,
+.kb-graph-pane .ant-input-affix-wrapper,
+.kb-graph-pane .ant-input-number,
+.kb-graph-pane .ant-select .ant-select-selector {
+  border-radius: var(--kg-r-sm);
+  font-size: 12.5px;
+}
+.kb-graph-pane .ant-input,
+.kb-graph-pane .ant-input-affix-wrapper,
+.kb-graph-pane .ant-input-number,
+.kb-graph-pane .ant-select-single .ant-select-selector {
+  min-height: 30px;
+}
+.kb-graph-pane .ant-select-single {
+  height: 30px;
+}
+.kb-graph-pane .ant-checkbox-wrapper,
+.kb-graph-pane .ant-radio-wrapper {
+  font-size: 12.5px;
+}
+.kb-graph-pane .ant-tag {
+  border-radius: var(--kg-r-xs);
+  font-size: 11px;
+  line-height: 18px;
+  margin-inline-end: 4px;
+}
+
+/* ── antd：Tabs（原型 34px / 13px / 2px 主色下划线） ────────────────── */
+.kb-graph-pane .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+.kb-graph-pane .ant-tabs-tab {
+  padding: 0 14px;
+  height: 34px;
+  font-size: 13px;
+  color: var(--kg-text-2);
+}
+.kb-graph-pane .ant-tabs-tab + .ant-tabs-tab {
+  margin-left: 2px;
+}
+.kb-graph-pane .ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 600;
+  color: var(--kg-primary);
+}
+.kb-graph-pane .ant-tabs-ink-bar {
+  background: var(--kg-primary);
+  height: 2px;
+}
+.kb-graph-pane .ant-tabs-top > .ant-tabs-nav::before {
+  border-bottom-color: var(--kg-border);
+}
+/* Tab 数字角标 */
+.kb-graph-pane .kg-tab-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--kg-subtle);
+  color: var(--kg-text-3);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 400;
+  vertical-align: 1px;
+}
+.kb-graph-pane .ant-tabs-tab-active .kg-tab-count {
+  background: var(--kg-tint);
+  color: var(--kg-primary);
+}
+
+/* ── antd：Table（表头 11.5px / 单元格 12.5px / 9px 12px） ──────────── */
+.kb-graph-pane .ant-table {
+  font-size: 12.5px;
+  background: transparent;
+}
+.kb-graph-pane .ant-table-thead > tr > th {
+  padding: 9px 12px;
+  background: var(--kg-subtle);
+  color: var(--kg-text-2);
+  font-size: 11.5px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--kg-border);
+}
+.kb-graph-pane .ant-table-thead > tr > th::before {
+  display: none;
+}
+.kb-graph-pane .ant-table-tbody > tr > td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--kg-border);
+}
+.kb-graph-pane .ant-table-tbody > tr:hover > td {
+  background: var(--kg-subtle);
+}
+/* fixed 列必须自带不透明底色，否则横向滚动会透出下层单元格 */
+.kb-graph-pane .ant-table-cell-fix-right,
+.kb-graph-pane .ant-table-cell-fix-left {
+  background: var(--kg-card);
+}
+.kb-graph-pane .ant-table-thead > tr > th.ant-table-cell-fix-right,
+.kb-graph-pane .ant-table-thead > tr > th.ant-table-cell-fix-left {
+  background: var(--kg-subtle);
+}
+.kb-graph-pane .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
+.kb-graph-pane .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left {
+  background: var(--kg-subtle);
+}
+.kb-graph-pane .ant-table-cell-fix-right-first::after,
+.kb-graph-pane .ant-table-cell-fix-left-last::after {
+  box-shadow: inset -8px 0 8px -8px rgba(16, 24, 40, 0.16);
+}
+.kb-graph-pane .ant-pagination {
+  font-size: 12px;
+}
+
+/* ── antd：Card / Modal / Drawer / Empty / Alert ─────────────────────── */
+.kb-graph-pane .ant-card {
+  border-radius: var(--kg-r);
+  border-color: var(--kg-border);
+  box-shadow: var(--kg-shadow-sm);
+}
+.kb-graph-pane .ant-card-head {
+  min-height: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--kg-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.kb-graph-pane .ant-card-body {
+  padding: 14px;
+}
+.kb-graph-pane .ant-empty-description {
+  font-size: 12px;
+  color: var(--kg-text-3);
+}
+.kb-graph-pane .ant-descriptions-item-label,
+.kb-graph-pane .ant-descriptions-item-content {
+  font-size: 12.5px;
+}
+.kb-graph-pane .ant-statistic-title {
+  font-size: 11.5px;
+}
+.kb-graph-pane .ant-statistic-content {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* ── 通用工具类 ──────────────────────────────────────────────────────── */
+.kb-graph-pane .kg-card {
+  background: var(--kg-card);
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r);
+  box-shadow: var(--kg-shadow-sm);
+}
+.kb-graph-pane .kg-card__hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--kg-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--kg-text);
+}
+.kb-graph-pane .kg-card__bd {
+  padding: 14px;
+}
+.kb-graph-pane .kg-card__hd-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--kg-text-3);
+}
+.kb-graph-pane .kg-muted {
+  color: var(--kg-text-3);
+  font-size: 11.5px;
+}
+.kb-graph-pane .kg-note {
+  padding: 8px 14px;
+  border-top: 1px dashed var(--kg-border);
+  color: var(--kg-text-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.kb-graph-pane .kg-note code,
+.kb-graph-pane .kg-code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--kg-subtle);
+  color: var(--kg-code-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.kb-graph-pane .kg-sec-t {
+  margin: 12px 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--kg-text-2);
+}
+.kb-graph-pane .kg-alert {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--kg-info-border);
+  border-radius: var(--kg-r-sm);
+  background: var(--kg-info-bg);
+  color: var(--kg-info-fg);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.kb-graph-pane .kg-alert--warn {
+  border-color: var(--kg-warn-border);
+  background: var(--kg-warn-bg);
+  color: var(--kg-warn-fg);
+}
+/* 进度条 / 分布条 / 三色权重条 */
+.kb-graph-pane .kg-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--kg-border);
+  overflow: hidden;
+}
+.kb-graph-pane .kg-bar__fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.kb-graph-pane .kg-wbar {
+  display: inline-block;
+  width: 44px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--kg-border);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.kb-graph-pane .kg-wbar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.kb-graph-pane .kg-distrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  font-size: 12px;
+}
+.kb-graph-pane .kg-distrow__label {
+  width: 78px;
+  flex: none;
+  color: var(--kg-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-graph-pane .kg-distrow__val {
+  width: 40px;
+  flex: none;
+  text-align: right;
+  color: var(--kg-text);
+  font-variant-numeric: tabular-nums;
+}
+/* 状态徽标 */
+.kb-graph-pane .kg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--kg-border);
+  border-radius: 20px;
+  background: var(--kg-subtle);
+  color: var(--kg-text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.kb-graph-pane .kg-badge--ok {
+  border-color: var(--kg-ok-border);
+  background: var(--kg-ok-bg);
+  color: var(--kg-ok-fg);
+}
+.kb-graph-pane .kg-badge--warn {
+  border-color: var(--kg-warn-border);
+  background: var(--kg-warn-bg);
+  color: var(--kg-warn-fg);
+}
+.kb-graph-pane .kg-badge--err {
+  border-color: var(--kg-err-border);
+  background: var(--kg-err-bg);
+  color: var(--kg-err-fg);
+}
+.kb-graph-pane .kg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: kg-pulse 1.4s infinite;
+}
+@keyframes kg-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+/* 分段控件（全库图 / 按类型过滤 / 种子子图） */
+.kb-graph-pane .kg-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-sm);
+  background: var(--kg-subtle);
+}
+.kb-graph-pane .kg-seg__item {
+  padding: 2px 10px;
+  border-radius: var(--kg-r-xs);
+  color: var(--kg-text-2);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.kb-graph-pane .kg-seg__item--on {
+  background: var(--kg-primary);
+  color: #fff;
+}
+/* 统计卡 */
+.kb-graph-pane .kg-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r);
+  background: var(--kg-card);
+}
+.kb-graph-pane .kg-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--kg-text-3);
+  font-size: 11.5px;
+}
+.kb-graph-pane .kg-stat__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.kb-graph-pane .kg-stat__val {
+  color: var(--kg-text);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+/* 类型标签（实体 / 关系类型，底色由 kgTheme.typeTone 内联给出） */
+.kb-graph-pane .kg-type-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 6px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-xs);
+  font-size: 11px;
+  line-height: 1;
+  vertical-align: middle;
+}
+.kb-graph-pane .kg-type-tag--rel {
+  border-color: #efdbff;
+  background: #f9f0ff;
+  color: #531dab;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ── 图谱工作区：工具栏 / 画布（原型 .toolbar / .kg-wrap / .kg-canvas）── */
+.kb-graph-pane .kg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.kb-graph-pane .kg-toolbar__l,
+.kb-graph-pane .kg-toolbar__r {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kb-graph-pane .kg-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 306px;
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1180px) {
+  .kb-graph-pane .kg-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.kb-graph-pane .kg-canvas {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r);
+  background:
+    radial-gradient(circle at 1px 1px, var(--kg-border) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--kg-card);
+}
+.kb-graph-pane .kg-canvas__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.kb-graph-pane .kg-canvas__mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--kg-card) 55%, transparent);
+}
+.kb-graph-pane .kg-canvas__hint {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--kg-border);
+  border-radius: 20px;
+  background: var(--kg-card);
+  color: var(--kg-text-3);
+  font-size: 11.5px;
+}
+.kb-graph-pane .kg-canvas__legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: calc(100% - 24px);
+  padding: 8px 10px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-sm);
+  background: var(--kg-card);
+  box-shadow: var(--kg-shadow-sm);
+  color: var(--kg-text-2);
+  font-size: 11.5px;
+}
+.kb-graph-pane .kg-canvas__legend span {
+  display: inline-flex;
+  align-items: center;
+}
+.kb-graph-pane .kg-canvas__legend i {
+  width: 9px;
+  height: 9px;
+  margin-right: 5px;
+  border-radius: 50%;
+}
+.kb-graph-pane .kg-canvas__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 18px;
+  color: var(--kg-text-3);
+  font-size: 12.5px;
+  text-align: center;
+}
+.kb-graph-pane .kg-canvas__empty p {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.6;
+}
+.kb-graph-pane .kg-canvas__empty-t {
+  color: var(--kg-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+/* 节点 / 边（原型 .n / .e） */
+.kb-graph-pane .kg-node circle {
+  cursor: pointer;
+  stroke: var(--kg-card);
+  stroke-width: 2;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+.kb-graph-pane .kg-node:hover circle {
+  stroke: var(--kg-primary);
+  stroke-width: 3;
+}
+.kb-graph-pane .kg-node.is-on circle {
+  stroke: var(--kg-primary);
+  stroke-width: 3.5;
+}
+.kb-graph-pane .kg-node text {
+  pointer-events: none;
+  user-select: none;
+}
+.kb-graph-pane .kg-node__name {
+  fill: var(--kg-text);
+  font-size: 11.5px;
+  font-weight: 500;
+  paint-order: stroke;
+  stroke: var(--kg-card);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+}
+.kb-graph-pane .kg-node__type {
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--kg-card);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.kb-graph-pane .kg-edge__line {
+  fill: none;
+  stroke: var(--kg-border-2);
+  stroke-width: 1.4;
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+.kb-graph-pane .kg-edge__hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+.kb-graph-pane .kg-edge.is-hl .kg-edge__line {
+  stroke: var(--kg-primary);
+  stroke-width: 2.2;
+}
+.kb-graph-pane .kg-edge.is-on .kg-edge__line {
+  stroke: var(--kg-primary);
+  stroke-width: 2.6;
+}
+.kb-graph-pane .kg-edge__label {
+  fill: var(--kg-text-3);
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--kg-card);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.kb-graph-pane .kg-edge.is-on .kg-edge__label {
+  fill: var(--kg-primary);
+  font-weight: 600;
+}
+
+/* ── 检视面板（原型 .insp / .kv / .kvlist / .mini）──────────────────── */
+.kb-graph-pane .kg-insp {
+  position: sticky;
+  top: 0;
+  overflow: hidden;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r);
+  background: var(--kg-card);
+}
+.kb-graph-pane .kg-insp__hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--kg-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.kb-graph-pane .kg-insp__hd-ops {
+  display: flex;
+  gap: 4px;
+}
+.kb-graph-pane .kg-insp__bd {
+  max-height: 640px;
+  padding: 12px;
+  overflow: auto;
+}
+.kb-graph-pane .kg-insp__empty {
+  padding: 38px 12px;
+  color: var(--kg-text-3);
+  text-align: center;
+}
+.kb-graph-pane .kg-insp__empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.kb-graph-pane .kg-insp__empty-icon {
+  margin-bottom: 8px;
+  font-size: 30px;
+  opacity: 0.45;
+}
+.kb-graph-pane .kg-insp__empty-t {
+  margin-bottom: 3px;
+  color: var(--kg-text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.kb-graph-pane .kg-kv {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 4px 8px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.kb-graph-pane .kg-kv dt {
+  color: var(--kg-text-3);
+}
+.kb-graph-pane .kg-kv dd {
+  margin: 0;
+  color: var(--kg-text);
+  word-break: break-all;
+}
+.kb-graph-pane .kg-kv dd.is-strong {
+  font-weight: 600;
+}
+.kb-graph-pane .kg-kvlist {
+  overflow: hidden;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-sm);
+}
+.kb-graph-pane .kg-kvrow {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--kg-border);
+  font-size: 12px;
+}
+.kb-graph-pane .kg-kvrow:last-child {
+  border-bottom: none;
+}
+.kb-graph-pane .kg-kvrow .k {
+  color: var(--kg-text-2);
+}
+.kb-graph-pane .kg-kvrow .v {
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+.kb-graph-pane .kg-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: var(--kg-r-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.kb-graph-pane .kg-mini:hover {
+  background: var(--kg-subtle);
+}
+.kb-graph-pane .kg-mini__tail {
+  margin-left: auto;
+  color: var(--kg-text-3);
+  font-size: 11.5px;
+}
+.kb-graph-pane .kg-insp__dir {
+  color: var(--kg-text-3);
+  font-size: 11px;
+}
+.kb-graph-pane .kg-insp__strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-graph-pane .kg-insp__link {
+  color: var(--kg-text);
+  cursor: pointer;
+}
+.kb-graph-pane .kg-insp__link:hover {
+  color: var(--kg-primary);
+}
+.kb-graph-pane .kg-insp__alias {
+  display: inline-block;
+  margin: 0 4px 2px 0;
+  padding: 0 5px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-xs);
+  background: var(--kg-subtle);
+  color: var(--kg-text-2);
+  font-size: 11px;
+}
+.kb-graph-pane .kg-insp__weight {
+  color: var(--kg-text-2);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+.kb-graph-pane .kg-insp__ops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.kb-graph-pane .kg-evidence {
+  padding-left: 9px;
+  border-left: 2px solid var(--kg-border-2);
+  color: var(--kg-text-2);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.kb-graph-pane .kg-evidence--empty {
+  color: var(--kg-text-3);
+}
+
+/* 命中焦点集（标准中心 NL 检索）：与 .is-on/.is-hl 同一套 primary 语言 */
+.kb-graph-pane .kg-node.is-hit circle {
+  stroke: var(--kg-primary);
+  stroke-width: 3;
+}
+.kb-graph-pane .kg-edge.is-hit .kg-edge__line {
+  stroke: var(--kg-primary);
+  stroke-width: 2.2;
+}
+.kb-graph-pane .kg-edge.is-hit .kg-edge__label {
+  fill: var(--kg-primary);
+  font-weight: 600;
+}
