@@ -26,11 +26,12 @@ def test_three_tier_score(t, q, ch, cch, expect):
     assert OntologyAssetService._score(t, q, "table", (ch, cch)) == expect
 
 
-def _add_table(db, source_id, name, comment=None, database="d1"):
+def _add_table(db, source_id, name, comment=None, database="d1", table_type=None, row_count=None):
     from app.models.dataops.meta import MetaTable
 
     mt = MetaTable(tenant_id=100, source_id=source_id, db_name=database,
-                   database=database, table_name=name, table_comment=comment)
+                   database=database, table_name=name, table_comment=comment,
+                   table_type=table_type, row_count=row_count)
     db.add(mt)
     db.flush()
     return mt
@@ -102,3 +103,51 @@ def test_no_similarity_in_sql(db):
     joined = "\n".join(stmt_capture).lower()
     assert "similarity(" not in joined
     assert "word_similarity(" not in joined
+
+
+# ── Task 5：table_type 过滤 + sort 三档（AF-02/07）──
+
+def test_table_type_filter(db):
+    ds = _source(db)
+    _add_table(db, ds.id, "v_ord", table_type="VIEW")
+    _add_table(db, ds.id, "t_ord", table_type="BASE TABLE")
+    _add_table(db, ds.id, "n_ord")  # NULL 类型
+    svc = OntologyAssetService(db, 100)
+    assert [i["table_name"] for i in svc.search(kw="ord", table_type="VIEW")["items"]] == ["v_ord"]
+    # BASE TABLE 过滤下 NULL 行视同基表（扫描器历史行未落 table_type）
+    assert [i["table_name"] for i in svc.search(kw="ord", table_type="BASE TABLE")["items"]] == ["n_ord", "t_ord"]
+    assert svc.search(kw="ord")["total"] == 3
+
+
+def test_sort_rows_and_updated(db):
+    from datetime import datetime, timedelta
+
+    ds = _source(db)
+    t1 = _add_table(db, ds.id, "a_tab", row_count=10)
+    t2 = _add_table(db, ds.id, "b_tab", row_count=500)
+    t3 = _add_table(db, ds.id, "c_tab", row_count=500)
+    svc = OntologyAssetService(db, 100)
+    names = [i["table_name"] for i in svc.search(sort="rows")["items"]]
+    assert names == ["b_tab", "c_tab", "a_tab"]  # 行数降序，同数按字典序
+
+    now = datetime.now()
+    t1.updated_at = now - timedelta(days=1)
+    t2.updated_at = now
+    t3.updated_at = now - timedelta(hours=1)
+    db.flush()
+    names = [i["table_name"] for i in svc.search(sort="updated")["items"]]
+    assert names == ["b_tab", "c_tab", "a_tab"]  # 新→旧
+    names = [i["table_name"] for i in svc.search(sort="score")["items"]]
+    assert names == ["a_tab", "b_tab", "c_tab"]  # 零分同分→字典序（T4 行为）
+
+
+def test_route_rejects_bad_table_type_and_sort(client_a, db):
+    ds = _source(db)
+    _add_table(db, ds.id, "x1")
+    assert client_a.get("/api/v1/dataops/assets/search", params={"table_type": "INDEX"}).status_code == 422
+    assert client_a.get("/api/v1/dataops/assets/search", params={"sort": "bogus"}).status_code == 422
+    # 空格经 URL 编码传参（httpx 对空格的编码形式均接受）
+    assert client_a.get("/api/v1/dataops/assets/search",
+                        params={"table_type": "BASE TABLE"}).status_code == 200
+    r = client_a.get("/api/v1/dataops/assets/search", params={"table_type": "VIEW", "sort": "rows"})
+    assert r.status_code == 200

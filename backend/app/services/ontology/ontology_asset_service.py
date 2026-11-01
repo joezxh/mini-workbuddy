@@ -11,6 +11,7 @@ E40 ``assets/tree`` 已在 P0-2 的 :class:`OntologyService` 提供，本服务�
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from sqlalchemy import func, or_, select
@@ -25,6 +26,7 @@ from app.models.ontology.ontology import MetaOntology
 from app.models.dataops.standard_cdm import MetaObjectStandard, MetaTableStandard
 
 _COLUMN_DIGEST_LIMIT = 6
+_EPOCH_MIN = datetime(1970, 1, 1)  # updated_at 缺失行在 sort=updated 时恒落尾部
 
 
 class OntologyAssetService:
@@ -49,11 +51,19 @@ class OntologyAssetService:
         kind: str = "table",
         page: int = 1,
         size: int = 50,
+        table_type: Optional[str] = None,
+        sort: str = "score",
     ) -> dict:
         q = (kw or "").strip()
         stmt = self._base(select(MetaTable))
         if source_id:
             stmt = stmt.where(MetaTable.source_id == source_id)
+        if table_type == "BASE TABLE":
+            # 扫描器历史行可能未落 table_type，NULL 视同基表（AF-07）
+            stmt = stmt.where(or_(MetaTable.table_type == table_type,
+                                  MetaTable.table_type.is_(None)))
+        elif table_type:
+            stmt = stmt.where(MetaTable.table_type == table_type)
         if tag_ids:
             bound = select(MetaAssetTagBinding.asset_id).where(
                 MetaAssetTagBinding.tenant_id == self.tenant_id,
@@ -86,8 +96,13 @@ class OntologyAssetService:
         # 批量预载列命中，消除逐表 EXISTS 的 N+1（AF-02）
         hits_map = self._column_hit_map(tables, q) if q else {}
         scored = [(self._score(t, q, kind, hits_map.get(t.id, (False, False))), t) for t in tables]
-        # 同分按表名字典序（SQL 已按 table_name 升序，稳定排序保序）
-        scored.sort(key=lambda x: (-x[0], x[1].table_name))
+        # 排序三档（AF-02/07）：score 同分恒按表名字典序（Global Constraint 3，可复现）
+        if sort == "updated":
+            scored.sort(key=lambda x: (x[1].updated_at or _EPOCH_MIN), reverse=True)
+        elif sort == "rows":
+            scored.sort(key=lambda x: (-(x[1].row_count or 0), x[1].table_name))
+        else:
+            scored.sort(key=lambda x: (-x[0], x[1].table_name))
         total = len(scored)
         window = scored[(page - 1) * size: (page - 1) * size + size]
 

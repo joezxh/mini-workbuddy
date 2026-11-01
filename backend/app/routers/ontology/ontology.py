@@ -122,6 +122,8 @@ def assets_search(
     source_id: Optional[int] = Query(default=None),
     tag_ids: Optional[List[int]] = Query(default=None, description="按标签过滤（可多个）"),
     kind: str = Query(default="table", pattern="^(table|column)$"),
+    table_type: Optional[str] = Query(default=None, pattern="^(BASE TABLE|VIEW)$", description="对象类型过滤（AF-07；BASE TABLE 含历史 NULL 行）"),
+    sort: str = Query(default="score", pattern="^(score|updated|rows)$", description="排序：相关度/更新时间/行数"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -129,7 +131,8 @@ def assets_search(
 ) -> dict:
     """表/字段/注释全文检索（AF-02）：返回表卡片含 ``column_digest``/``pii_max_level``/``tags``/``score``。"""
     svc = OntologyAssetService(db, _require_tenant_id(current_user))
-    return svc.search(kw=kw, source_id=source_id, tag_ids=tag_ids, kind=kind, page=page, size=size)
+    return svc.search(kw=kw, source_id=source_id, tag_ids=tag_ids, kind=kind,
+                      page=page, size=size, table_type=table_type, sort=sort)
 
 
 # -------------------------------------------------------------- E3 详情/改/删
