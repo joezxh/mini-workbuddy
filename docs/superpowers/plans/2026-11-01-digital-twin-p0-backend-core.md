@@ -477,15 +477,25 @@ def test_query_draft_version_forces_disabled(db, ontology_factory):
 
 
 def test_query_code_unique_per_version(db, ontology_factory):
+    """uq_onto_query_code：同 (tenant, ontology, version) 下 code 唯一。"""
     oid = ontology_factory()
-    for code in ("dup", "dup"):
-        db.add(MetaOntologyQuery(tenant_id=TENANT_A, ontology_id=oid, version=1, code=code,
-                                 name="n", result_shape="kpi", spec_json={}, status="enabled"))
-        db.commit()
+    db.add(MetaOntologyQuery(tenant_id=TENANT_A, ontology_id=oid, version=1, code="dup",
+                             name="n", result_shape="kpi", spec_json={}, status="enabled"))
+    db.commit()
     with pytest.raises(IntegrityError):
         db.add(MetaOntologyQuery(tenant_id=TENANT_A, ontology_id=oid, version=1, code="dup",
                                  name="n2", result_shape="kpi", spec_json={}, status="enabled"))
         db.commit()
+
+
+def test_query_code_unique_across_version(db, ontology_factory):
+    """版本维在唯一键里：同 code 换版本不冲突（重发布后查询逐版本留痕）。"""
+    oid = ontology_factory()
+    for ver in (1, 2):
+        db.add(MetaOntologyQuery(tenant_id=TENANT_A, ontology_id=oid, version=ver, code="same",
+                                 name="n", result_shape="kpi", spec_json={}, status="enabled"))
+    db.commit()
+    assert db.query(MetaOntologyQuery).filter_by(ontology_id=oid, code="same").count() == 2
 
 
 def test_widget_shape_check_rejects_unknown_result_shape(db, ontology_factory):
@@ -968,7 +978,7 @@ def upgrade() -> None:
         sa.Column("query_id", sa.BigInteger(), sa.ForeignKey("onto_ontology_query.id", ondelete="SET NULL"), nullable=True),
         sa.Column("param_values_json", postgresql.JSONB(), nullable=True),
         sa.Column("display_json", postgresql.JSONB(), nullable=True),
-        sa.Column("grid_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'{\"x\":0,\"y\":0,\"w\":6,\"h\":4}'::jsonb")),
+        sa.Column("grid_json", postgresql.JSONB(), nullable=False, server_default='{"x":0,"y":0,"w":6,"h":4}'),
         sa.Column("refresh_json", postgresql.JSONB(), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
         *_AUDIT_TS,
@@ -1049,11 +1059,23 @@ def downgrade() -> None:
 ```
 
 > **注意**：`downgrade` 内不得留 `pass`——必须真 drop（本仓库既有迁移均如此），否则回滚演练会静默失败。
+>
+> **计划缺陷修正（执行时实测，2026-11-01）**：`grid_json` 的默认值原写为
+> `sa.text("'{\"x\":0,...}'::jsonb")`，但 `text()` 会把 JSON 里的 `:0`/`:6`/`:4` 当成**绑定参数**吞掉，
+> 生成的 DDL 是 `DEFAULT '{"x"NULL,"y"NULL,...}'::jsonb`，PG 报
+> `psycopg2.errors.InvalidTextRepresentation: Token "NULL" is invalid`，`upgrade head` 直接在
+> `CREATE TABLE twin_widget` 处失败。正确写法是与 ORM 模型同形的**纯字符串** `server_default='{"x":0,...}'`
+> （SQLAlchemy 会把它渲染成带引量的字面量，PG 隐式 coercion 到 jsonb）。
 
 - [ ] **Step 7: 跑测试到通过**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/twin/test_models_twin.py -v`
-Expected: PASS（4 passed）
+Expected: PASS（5 passed）
+
+> **计划缺陷修正（执行时实测，2026-11-01）**：原 Step 1 的 `test_query_code_unique_per_version`
+> 写成 `for code in ("dup", "dup")` 并在循环内 `commit()`——第二次循环就会抛未捕获的
+> `IntegrityError`，用例直接报错而不是验证唯一键。已改为「先插一条并提交，再插重复 code 期待报错」，
+> 并补一条 `test_query_code_unique_across_version` 证明 `version` 确实在唯一键里（重发布留痕的前提）。
 
 - [ ] **Step 8: 验证迁移可用（含回滚）**
 
@@ -1061,8 +1083,12 @@ Run: `.\.venv\Scripts\python.exe -m alembic upgrade head`
 Expected: 无异常，输出含 `Running upgrade 2026_11_01_0012_seed_twin_demo_mapping -> 2026_11_01_0013_add_twin_tables`
 
 Run: `.\.venv\Scripts\python.exe -m alembic downgrade -1` 然后 `.\.venv\Scripts\python.exe -m alembic upgrade head`
-Expected: 两个方向均无异常（0012 的 demo seed 已在开发库执行过：本任务的 downgrade 会连带清掉
-`twin_demo` schema 与带标记行，测完务必 `alembic upgrade head` 复原，否则 Task 4/7 的演示链路没数据）
+Expected: 两个方向均无异常（`downgrade -1` 只跑本任务的 0013 → drop 7 张表，**不会**连带清掉
+0012 的 `twin_demo` schema 与 seed 行；若回退到 0012 之前（`downgrade -2` 或 `downgrade base`）则会，
+测完务必 `alembic upgrade head` 复原，否则 Task 4/7 的演示链路没数据）
+
+> 实测（2026-11-01）：`upgrade head` → `current = 2026_11_01_0013_add_twin_tables (head)`；
+> `downgrade -1` → `2026_11_01_0012_seed_twin_demo_mapping`；再 `upgrade head` 回 head，双向无异常。
 
 - [ ] **Step 9: 提交**
 

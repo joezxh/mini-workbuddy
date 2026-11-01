@@ -66,6 +66,8 @@ def _tables() -> List:
     import app.models.dataops.write_request  # noqa: F401
     import app.models.ontology.asset_tag  # noqa: F401
     import app.models.ontology.ontology  # noqa: F401
+    import app.models.ontology.query  # noqa: F401  ← onto_ontology_query
+    import app.models.twin  # noqa: F401            ← twin_* 六表（bound_widget 夹具需要）
     import app.models.sys.sys_dictionary  # noqa: F401
 
     # 与 main.py 同一纪律：检索三表由迁移 006 独占（pg_trgm/HNSW 索引），不进 create_all
