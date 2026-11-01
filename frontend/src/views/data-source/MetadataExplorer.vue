@@ -1,5 +1,16 @@
 <template>
   <div class="meta-explorer">
+    <!-- 模式切换：既有级联浏览（默认）/ 资产送数（AF-08 正向送数，本次新增） -->
+    <div class="meta-explorer__mode">
+      <a-radio-group v-model:value="mode" button-style="solid" size="small" @change="onModeChange">
+        <a-radio-button value="browse">{{ t2('元数据浏览') }}</a-radio-button>
+        <a-radio-button value="picker">{{ t2('资产送数') }}</a-radio-button>
+      </a-radio-group>
+    </div>
+
+    <AssetPickerPanel v-if="mode === 'picker'" ref="pickerRef" class="meta-explorer__picker" />
+
+    <template v-else>
     <div class="meta-explorer__filters">
       <a-select v-model:value="sourceId" :placeholder="t('kbMgmt.meta.selectSource')" style="width: 220px" @change="onSourceChange">
         <a-select-option v-for="s in sources" :key="s.id" :value="s.id">{{ s.name }}</a-select-option>
@@ -48,6 +59,7 @@
       </div>
       <a-empty v-else class="meta-explorer__placeholder" :description="t('kbMgmt.meta.selectTableHint')" />
     </div>
+    </template>
   </div>
 </template>
 
@@ -59,9 +71,17 @@ import { ScanOutlined } from '@ant-design/icons-vue'
 import SchemaTree, { type SchemaNode } from '@/components/common/SchemaTree.vue'
 import JsonViewer from '@/components/common/JsonViewer.vue'
 import * as api from '@/api/dataops'
+import AssetPickerPanel from './asset/AssetPickerPanel.vue'
+import { t2 } from './ontology/ontologyText'
 import { resolveFocusScope, type DrillFocus } from './focusScope'
 
 const { t } = useI18n()
+const mode = ref<'browse' | 'picker'>('browse')
+const pickerRef = ref<any>(null)
+/** 切到送数模式时才懒加载本体清单/目录树，浏览模式行为完全不受影响 */
+function onModeChange() {
+  if (mode.value === 'picker') pickerRef.value?.activate?.()
+}
 const props = defineProps<{
   /** 标准检视面板下钻落点：定位到某数据源某库（schema）下的表 */
   focus?: DrillFocus | null
@@ -269,11 +289,21 @@ watch(() => props.focus, (f) => { if (f) applyFocus() })
 </script>
 
 <style scoped>
-.meta-explorer { display: flex; flex-direction: column; height: 100%; gap: 10px; }
+.meta-explorer { display: flex; flex-direction: column; height: 100%; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+.meta-explorer__mode { display: flex; }
+.meta-explorer__picker { flex: 1; min-height: 0; }
 .meta-explorer__filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .meta-explorer__body { flex: 1; display: flex; gap: 12px; min-height: 0; }
 .meta-explorer__tree { width: 320px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; overflow: auto; }
-.meta-explorer__detail { flex: 1; overflow: auto; }
-.meta-explorer__placeholder { flex: 1; }
+.meta-explorer__detail { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
+.meta-explorer__placeholder { flex: 1; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; }
 .muted { color: var(--fg-muted); }
+
+/* 浅色皮肤：整个 tab（含筛选条与两栏）白底，与图谱知识库管理一致 */
+:root[data-theme='light'] .meta-explorer,
+:root[data-theme='light'] .meta-explorer__tree,
+:root[data-theme='light'] .meta-explorer__detail,
+:root[data-theme='light'] .meta-explorer__placeholder {
+  background: #ffffff;
+}
 </style>

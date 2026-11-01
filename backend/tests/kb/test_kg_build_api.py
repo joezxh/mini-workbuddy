@@ -49,8 +49,9 @@ def kb(db):
     return obj
 
 
-def _segment(db, kb, *, index=0, structure=None, vector=None, details=None):
-    doc_uuid = new_document_uuid()
+def _segment(db, kb, *, index=0, structure=None, vector=None, details=None,
+             document_id=None):
+    doc_uuid = document_id or new_document_uuid()
     seg = KbSegment(
         collection=f"kb_{kb.id}", document_id=doc_uuid, chunk_index=index,
         content="内容", tenant_id=TENANT_A,
@@ -205,6 +206,7 @@ def test_config_does_not_touch_other_pipeline_keys(db, kb):
 def test_rebuild_document_submits(monkeypatch, db, kb):
     import app.core.job_runner as job_runner
 
+    _segment(db, kb, document_id="doc-x")
     monkeypatch.setattr(job_runner, "run_in_background",
                         lambda fn, *a, **kw: None)
     with _client(db) as c:
@@ -213,9 +215,19 @@ def test_rebuild_document_submits(monkeypatch, db, kb):
     assert r.status_code == 200 and r.json()["accepted"] is True
 
 
+def test_rebuild_document_without_segments_409(db, kb):
+    """摄取失败的文档没有切片：必须拒绝，否则后台空转却回 200 骗前端。"""
+    with _client(db) as c:
+        r = c.post(f"/api/v1/kb/knowledges/{kb.id}/graph/documents/rebuild",
+                   json={"document_uuid": "no-such-segment"})
+    assert r.status_code == 409
+    assert "没有可抽取的切片" in r.json()["detail"]
+
+
 def test_rebuild_document_conflict_409(db, kb):
+    _segment(db, kb, document_id="doc-y")
     kg_build_service.try_acquire(kb.id)
     with _client(db) as c:
         r = c.post(f"/api/v1/kb/knowledges/{kb.id}/graph/documents/rebuild",
-                   json={"document_uuid": "doc-x"})
+                   json={"document_uuid": "doc-y"})
     assert r.status_code == 409

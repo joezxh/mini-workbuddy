@@ -160,7 +160,9 @@ cp env.example .env                  # edit as needed
 alembic upgrade head
 
 # Start dev server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# --reload-dir app: watch only production code, so edits under tests/ never
+# restart the server (each reload pays the full import chain on Windows).
+uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 ```
 
 **Frontend**

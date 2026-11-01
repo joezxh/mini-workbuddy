@@ -28,8 +28,10 @@
 因此采用「显式清单」而非「隐式扫描」，保证重构前后路由表完全一致。
 """
 
+import os
+import time
 from dataclasses import dataclass
-from importlib import import_module
+from importlib import import_module, invalidate_caches
 from typing import List, Optional
 
 from fastapi import APIRouter, FastAPI
@@ -37,6 +39,17 @@ from loguru import logger
 
 
 API_V1_PREFIX = "/api/v1"
+
+IMPORT_ATTEMPTS = 2
+"""单个路由模块的导入尝试次数。"""
+
+IMPORT_RETRY_DELAY = 0.2
+"""重试前的等待秒数（秒）。"""
+
+
+def _strict_from_env() -> bool:
+    """严格模式开关：ROUTER_STRICT=1 时任一路由模块加载失败即启动失败。"""
+    return os.getenv("ROUTER_STRICT", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -204,21 +217,55 @@ ROUTER_SPECS: List[RouterSpec] = [
 ]
 
 
+def _load_router(spec: RouterSpec) -> APIRouter:
+    """导入并取出 router；对导入异常做一次重试。
+
+    重试的必要性：同进程内并发/重复初始化 C 扩展（典型报错
+    ``cannot load module more than once per process``）会让首个模块导入失败，
+    而失败后 Python 会把半初始化的包从 ``sys.modules`` 清掉，导致其后整组
+    接口静默 404（历史事故：``app.routers.kb.kb`` 失败使 /api/v1/kb/chunkers 等 52 条路由丢失）。
+    """
+    last_exc: Optional[BaseException] = None
+    for attempt in range(IMPORT_ATTEMPTS):
+        try:
+            module = import_module(spec.module)
+        except Exception as exc:  # noqa: BLE001 - 启动期需捕获全部导入异常
+            last_exc = exc
+            if attempt + 1 < IMPORT_ATTEMPTS:
+                invalidate_caches()
+                time.sleep(IMPORT_RETRY_DELAY)
+                logger.warning(f"路由模块导入失败，重试 {spec.module} -> {exc}")
+            continue
+
+        router = getattr(module, spec.attr, None)
+        if not isinstance(router, APIRouter):
+            raise AttributeError(f"模块 {spec.module} 中未找到 APIRouter 属性 '{spec.attr}'")
+        return router
+
+    raise last_exc if last_exc is not None else ImportError(spec.module)
+
+
 def register_routers(
     app: FastAPI,
     specs: Optional[List[RouterSpec]] = None,
-    strict: bool = False,
+    strict: Optional[bool] = None,
 ) -> List[str]:
     """按清单注册所有 router。
 
     :param app: FastAPI 应用实例
     :param specs: 路由清单，默认使用 ROUTER_SPECS
-    :param strict: True 时单个 router 加载失败直接抛异常；False 时记录错误并跳过
+    :param strict: True 时单个 router 加载失败直接抛异常；None 时取环境变量
+        ``ROUTER_STRICT``；False 时记录 CRITICAL 并跳过
     :return: 实际注册成功的 router 标签列表
+
+    失败清单会写入 ``app.state.router_failures``（供 /health 与排障使用），
+    避免「启动成功但整组接口 404」再次无声发生。
     """
     specs = ROUTER_SPECS if specs is None else specs
+    strict = _strict_from_env() if strict is None else strict
     registered: List[str] = []
     skipped: List[str] = []
+    failures: List[dict] = []
 
     for spec in specs:
         if not spec.enabled:
@@ -226,27 +273,31 @@ def register_routers(
             continue
 
         try:
-            module = import_module(spec.module)
-        except Exception as exc:  # noqa: BLE001 - 启动期需捕获全部导入异常
-            msg = f"路由模块导入失败: {spec.module} -> {exc}"
+            router = _load_router(spec)
+        except Exception as exc:  # noqa: BLE001 - 启动期需捕获全部加载异常
+            failures.append({"module": spec.module, "attr": spec.attr, "error": str(exc)})
+            msg = f"路由模块加载失败: {spec.label} -> {exc}"
             if strict:
                 raise ImportError(msg) from exc
-            logger.error(msg)
-            continue
-
-        router = getattr(module, spec.attr, None)
-        if not isinstance(router, APIRouter):
-            msg = f"模块 {spec.module} 中未找到 APIRouter 属性 '{spec.attr}'"
-            if strict:
-                raise AttributeError(msg)
-            logger.error(msg)
+            logger.critical(msg)
             continue
 
         app.include_router(router, prefix=spec.prefix, tags=spec.tags)
         registered.append(spec.label)
 
+    app.state.router_failures = failures
+
     logger.info(
         f"路由注册完成: 成功 {len(registered)} 个, 跳过 {len(skipped)} 个"
         + (f" [跳过: {', '.join(skipped)}]" if skipped else "")
     )
+    if failures:
+        # 这里必须 CRITICAL：受影响模块的所有接口都会返回 404，
+        # 而服务本身仍显示「启动成功」，此前正是因此长时间误判为前端调错地址。
+        logger.critical(
+            f"有 {len(failures)} 个路由模块未注册，其接口将全部返回 404: "
+            f"{', '.join(f['module'] for f in failures)}"
+            "（常见原因：同进程重复初始化 C 扩展、解释器/虚拟环境混用；"
+            "可置 ROUTER_STRICT=1 让启动直接失败）"
+        )
     return registered

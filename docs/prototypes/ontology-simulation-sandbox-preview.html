@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推演沙盘 · MinWorkBuddy 原型</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   设计基线：与 ontology-modeling-workbench-preview.html 同源
+   （frontend/src/styles/tokens.css · dark skin）—— 姊妹工作台
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --bg-base:#07111f; --bg-page:#0b1322;
+  --bg-surface:rgba(9,18,32,.84); --bg-elevated:rgba(11,22,38,.92);
+  --bg-hover:rgba(74,163,255,.08); --bg-active:rgba(74,163,255,.14);
+  --bg-input:rgba(3,8,14,.55); --bg-subtle:rgba(255,255,255,.05);
+  --fg:#ebf3ff; --fg2:#8fa8c6; --fg3:#5a7a9a; --fg-inv:#050b15;
+  --border:rgba(140,192,255,.14); --border-strong:rgba(140,192,255,.26);
+  --divider:rgba(140,192,255,.1);
+  --accent:#4aa3ff; --accent-hover:#7fd0ff; --accent-soft:rgba(74,163,255,.12);
+  --amber:#f2b66d; --amber-soft:rgba(242,182,109,.12);
+  --ok:#4cc38a; --ok-soft:rgba(76,195,138,.12);
+  --warn:#f2b66d; --warn-soft:rgba(242,182,109,.12);
+  --err:#ff7b72; --err-soft:rgba(255,123,114,.12);
+  --purple:#b48ef0; --purple-soft:rgba(180,142,240,.14);
+  --r:14px; --r-sm:10px; --r-lg:20px;
+  --sh:0 18px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.04);
+  --sh-sm:0 1px 3px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+  --t:200ms cubic-bezier(.4,0,.2,1);
+  --mono:'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg-base); color:var(--fg);
+  font-family:'IBM Plex Sans','Space Grotesk','HarmonyOS Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  font-size:13px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 18% -10%, rgba(103,182,255,.10), transparent 38%),
+                   radial-gradient(circle at 88% -6%, rgba(180,142,240,.08), transparent 32%);
+  overflow:hidden;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(140,192,255,.18);border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:rgba(140,192,255,.32)}
+::-webkit-scrollbar-track{background:transparent}
+code,.mono{font-family:var(--mono)}
+
+/* ── 顶栏：模块导航 ─────────────────────────────────────── */
+.top{
+  height:52px; display:flex; align-items:center; gap:14px; padding:0 14px;
+  background:linear-gradient(180deg,rgba(13,22,38,.94),rgba(11,19,32,.86));
+  border-bottom:1px solid var(--border); backdrop-filter:blur(14px); position:relative; z-index:30;
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--purple);box-shadow:0 0 10px var(--purple)}
+.brand small{color:var(--fg3);font-weight:400;font-size:11px;letter-spacing:0}
+.mnav{display:flex;gap:1px;margin-left:4px}
+.mi{padding:6px 11px;border-radius:9px;border:0;background:transparent;color:var(--fg3);cursor:pointer;font-size:12px;white-space:nowrap;transition:all var(--t)}
+.mi:hover{color:var(--fg2);background:var(--bg-hover)}
+.mi.on{color:var(--accent-hover);background:var(--accent-soft);box-shadow:inset 0 0 0 1px rgba(74,163,255,.28)}
+.spacer{flex:1}
+.search{display:flex;align-items:center;gap:6px;background:var(--bg-input);border:1px solid var(--border);border-radius:999px;padding:4px 11px;color:var(--fg3);font-size:11.5px}
+.search input{background:transparent;border:0;outline:none;width:120px;color:var(--fg)}
+.worldchip{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg2);padding:4px 10px;border-radius:999px;background:var(--purple-soft);border:1px solid rgba(180,142,240,.3)}
+.worldchip .pulse{width:7px;height:7px;border-radius:50%;background:var(--purple);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.ava{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2f7fd4,#b48ef0);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff}
+
+/* ── 通用按钮 ───────────────────────────────────────────── */
+.btn{padding:5px 12px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--bg-elevated);color:var(--fg2);cursor:pointer;transition:all var(--t);font-size:12px;white-space:nowrap}
+.btn:hover{color:var(--fg);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn.pri{background:linear-gradient(135deg,#7a4fd4,#9b6bf0);border-color:transparent;color:#fff;font-weight:500}
+.btn.pri:hover{box-shadow:0 0 0 3px rgba(180,142,240,.28)}
+.btn.blue{background:linear-gradient(135deg,#2f7fd4,#3f9bf0);border-color:transparent;color:#fff;font-weight:500}
+.btn.danger{color:var(--err);border-color:rgba(255,123,114,.35)}
+.btn.danger:hover{background:var(--err);color:#fff;border-color:var(--err);box-shadow:none}
+.btn.sm{padding:3px 9px;font-size:11px;border-radius:8px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn:disabled:hover{border-color:var(--border-strong);color:var(--fg2);box-shadow:none}
+
+/* ── 上下文栏：沙盘实例 + 运行控制 ──────────────────────── */
+.ctxbar{height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg-page);border-bottom:1px solid var(--border);position:relative;z-index:20}
+.atabs{display:flex;gap:2px}
+.atab{display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:8px;font-size:12px;color:var(--fg3);cursor:pointer;border:1px solid transparent}
+.atab.on{color:var(--fg);background:var(--bg-surface);border-color:var(--border)}
+.atab .x{color:var(--fg3);font-size:11px}
+.ctx-sep{width:1px;height:20px;background:var(--divider)}
+.srcchip{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg2);padding:3px 9px;border-radius:8px;background:var(--bg-subtle);border:1px solid var(--border)}
+.srcchip b{color:var(--accent-hover);font-weight:500;font-family:var(--mono);font-size:10.5px}
+.kv-inline{font-size:11px;color:var(--fg3)}
+.kv-inline b{color:var(--fg);font-family:var(--mono)}
+
+/* ── Tick 控制条 + 时间轴 + KPI ─────────────────────────── */
+.tickbar{display:flex;align-items:stretch;gap:0;height:66px;background:linear-gradient(180deg,var(--bg-surface),var(--bg-page));border-bottom:1px solid var(--border);position:relative;z-index:15}
+.tb-sec{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:8px 14px;border-right:1px solid var(--divider)}
+.tb-lbl{font-size:9.5px;letter-spacing:.7px;color:var(--fg3);font-weight:600}
+.playrow{display:flex;align-items:center;gap:6px}
+.ticknum{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--fg)}
+.ticknum b{color:var(--purple)}
+.scrub-wrap{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8px 16px;min-width:0}
+.scrub{display:flex;align-items:center;gap:3px;position:relative}
+.seg{flex:1;height:26px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;cursor:pointer}
+.seg .bar{width:100%;height:5px;border-radius:3px;background:var(--bg-input);transition:all var(--t)}
+.seg.done .bar{background:linear-gradient(90deg,var(--accent),var(--purple))}
+.seg.cur .bar{background:var(--purple);box-shadow:0 0 8px var(--purple);height:7px}
+.seg .n{font-family:var(--mono);font-size:9px;color:var(--fg3)}
+.seg.cur .n{color:var(--purple)}
+.seg .cp{position:absolute;top:-2px;width:2px;height:8px;background:var(--amber)}
+.kpi{display:flex;align-items:center;gap:8px;padding:8px 14px;border-right:1px solid var(--divider)}
+.kpi .box{display:flex;flex-direction:column;gap:2px;min-width:64px}
+.kpi .box .k{font-size:9.5px;color:var(--fg3);letter-spacing:.4px}
+.kpi .box .v{font-size:12.5px;font-weight:600;font-family:var(--mono)}
+.riskrow{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono)}
+.riskrow .sc{padding:0 5px;border-radius:5px;font-weight:600}
+
+/* ── 主体四列 ───────────────────────────────────────────── */
+.main{display:grid;grid-template-columns:236px 1fr 306px 328px;height:calc(100vh - 52px - 42px - 66px)}
+.col{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.col+.col{border-left:1px solid var(--border)}
+.ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--divider);font-size:11px;letter-spacing:.8px;color:var(--fg3);font-weight:600;flex:none}
+.ph .spacer{flex:1}
+.pb{flex:1;overflow:auto;padding:10px 12px}
+.sub{font-size:10.5px;letter-spacing:.7px;color:var(--fg3);font-weight:600;margin:14px 0 7px;display:flex;align-items:center;gap:6px}
+.sub:first-child{margin-top:2px}
+.sub::after{content:'';flex:1;height:1px;background:var(--divider)}
+.mini{padding:2px 8px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--fg3);font-size:10.5px;cursor:pointer;transition:all var(--t)}
+.mini:hover{color:var(--accent);border-color:var(--accent)}
+
+/* 标签 / 徽标 */
+.tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:6px;font-size:10px;border:1px solid var(--border);color:var(--fg2);background:var(--bg-subtle)}
+.tag.b{color:var(--accent);border-color:rgba(74,163,255,.3);background:var(--accent-soft)}
+.tag.g{color:var(--ok);border-color:rgba(76,195,138,.3);background:var(--ok-soft)}
+.tag.a{color:var(--amber);border-color:rgba(242,182,109,.3);background:var(--amber-soft)}
+.tag.r{color:var(--err);border-color:rgba(255,123,114,.3);background:var(--err-soft)}
+.tag.p{color:var(--purple);border-color:rgba(180,142,240,.3);background:var(--purple-soft)}
+.pill{padding:1px 7px;border-radius:6px;font-size:10px;border:1px solid var(--border);color:var(--fg3);background:var(--bg-subtle);white-space:nowrap}
+.pill.ok{color:var(--ok);border-color:rgba(76,195,138,.3);background:var(--ok-soft)}
+.pill.warn{color:var(--warn);border-color:rgba(242,182,109,.3);background:var(--warn-soft)}
+.pill.err{color:var(--err);border-color:rgba(255,123,114,.3);background:var(--err-soft)}
+
+/* 场景探索列表 / 时间线 / 分支 */
+.scard{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:8px;background:var(--bg-surface);cursor:pointer;transition:all var(--t)}
+.scard:hover{border-color:var(--border-strong)}
+.scard.on{border-color:var(--purple);background:var(--purple-soft);box-shadow:0 0 0 2px rgba(180,142,240,.12)}
+.scard .sh{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.scard .sh b{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scard .sm{font-size:10px;color:var(--fg3);font-family:var(--mono)}
+.tl{position:relative;padding-left:16px}
+.tl::before{content:'';position:absolute;left:4px;top:4px;bottom:4px;width:1px;background:var(--divider)}
+.tli{position:relative;padding:5px 0 5px 4px;font-size:11px;color:var(--fg2);cursor:pointer}
+.tli::before{content:'';position:absolute;left:-15px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--bg-page);border:1.5px solid var(--fg3)}
+.tli.done::before{background:var(--accent);border-color:var(--accent)}
+.tli.cur::before{background:var(--purple);border-color:var(--purple);box-shadow:0 0 8px var(--purple)}
+.tli.cur{color:var(--fg)}
+.tli .cp{color:var(--amber);font-family:var(--mono);font-size:9.5px}
+.brow{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:6px;font-size:11px;cursor:pointer;transition:all var(--t)}
+.brow:hover{border-color:var(--border-strong)}
+.brow.sel{border-color:var(--accent);background:var(--accent-soft)}
+.brow .bd{width:8px;height:8px;border-radius:2px;flex:none}
+
+/* ── 画布 ───────────────────────────────────────────────── */
+.ptabs{display:flex;gap:1px;border-bottom:1px solid var(--divider);padding:0 10px;flex:none;background:var(--bg-elevated)}
+.ptab{padding:9px 11px;border:0;background:transparent;color:var(--fg3);cursor:pointer;font-size:12px;border-bottom:2px solid transparent;transition:all var(--t)}
+.ptab:hover{color:var(--fg2)}
+.ptab.on{color:var(--purple);border-bottom-color:var(--purple)}
+.ptab .n{font-family:var(--mono);font-size:10px;color:var(--fg3);margin-left:4px}
+.canvas-wrap{flex:1;position:relative;overflow:hidden;background:
+  linear-gradient(rgba(140,192,255,.045) 1px,transparent 1px) 0 0/26px 26px,
+  linear-gradient(90deg,rgba(140,192,255,.045) 1px,transparent 1px) 0 0/26px 26px,
+  radial-gradient(circle at 46% 42%, rgba(180,142,240,.06), transparent 60%)}
+#canvas{display:block;width:100%;height:100%}
+.n-box{cursor:pointer}
+.n-box rect,.n-box polygon{transition:all var(--t)}
+.cbar{position:absolute;left:12px;top:12px;display:flex;gap:6px;align-items:center;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;padding:4px 6px;backdrop-filter:blur(10px);box-shadow:var(--sh-sm);z-index:5}
+.cbar .sep{width:1px;height:16px;background:var(--divider)}
+.legend{position:absolute;left:12px;bottom:12px;display:flex;gap:11px;align-items:center;background:var(--bg-elevated);border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:10.5px;color:var(--fg2);backdrop-filter:blur(10px);z-index:5}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.hint{position:absolute;right:12px;bottom:12px;font-size:10.5px;color:var(--fg3);background:var(--bg-elevated);border:1px solid var(--border);border-radius:9px;padding:5px 10px;z-index:5}
+.loading-veil{position:absolute;inset:0;background:rgba(7,17,31,.55);backdrop-filter:blur(1px);display:none;align-items:center;justify-content:center;z-index:8;flex-direction:column;gap:10px}
+.loading-veil.on{display:flex}
+.spin{width:26px;height:26px;border:2.5px solid var(--border-strong);border-top-color:var(--purple);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.loading-veil span{font-size:11.5px;color:var(--fg2);font-family:var(--mono)}
+
+/* 节点详情浮层 */
+.ndetail{position:absolute;right:12px;top:12px;width:230px;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:11px 12px;box-shadow:var(--sh);z-index:9;display:none}
+.ndetail.on{display:block;animation:tin .22s ease}
+.ndetail h4{font-size:12.5px;display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.ndetail .kvt{font-size:11px;display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--divider)}
+.ndetail .kvt:last-child{border-bottom:0}
+.ndetail .kvt .k{color:var(--fg3)}
+.ndetail .kvt .v{color:var(--fg);font-family:var(--mono);text-align:right}
+
+/* ── 传播过程面板 ───────────────────────────────────────── */
+.seg{display:flex;flex-wrap:wrap;gap:3px;padding:3px;background:var(--bg-input);border:1px solid var(--border);border-radius:9px;margin-bottom:10px}
+.seg button{padding:3px 9px;border-radius:7px;border:0;background:transparent;color:var(--fg3);cursor:pointer;font-size:11px;transition:all var(--t)}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--purple-soft);color:var(--purple);box-shadow:inset 0 0 0 1px rgba(180,142,240,.28)}
+.impact-cnt{display:flex;gap:8px;margin-bottom:11px}
+.icbox{flex:1;border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 9px;background:var(--bg-surface);text-align:center}
+.icbox .k{font-size:10px;color:var(--fg3)}
+.icbox .v{font-size:18px;font-weight:600;font-family:var(--mono)}
+.obs{border-left:2px solid var(--amber);background:var(--amber-soft);border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:8px;font-size:11.5px;line-height:1.6}
+.obs .oh{font-size:10px;color:var(--amber);font-weight:600;letter-spacing:.5px;margin-bottom:3px;display:flex;align-items:center;gap:5px}
+.obs.info{border-left-color:var(--accent);background:var(--accent-soft)}
+.obs.info .oh{color:var(--accent)}
+.obs.err{border-left-color:var(--err);background:var(--err-soft)}
+.obs.err .oh{color:var(--err)}
+.obs code{font-family:var(--mono);font-size:10.5px;background:rgba(0,0,0,.25);padding:0 4px;border-radius:4px}
+.empty{text-align:center;color:var(--fg3);font-size:11.5px;padding:26px 12px;border:1px dashed var(--border);border-radius:var(--r-sm);background:var(--bg-subtle)}
+.empty .ic{font-size:22px;opacity:.5;margin-bottom:6px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:11.5px;border-bottom:1px dashed var(--divider)}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--fg3);white-space:nowrap}
+.kv .v{color:var(--fg);text-align:right;font-family:var(--mono);font-size:11px;word-break:break-all}
+
+/* ── AI 顾问台 ──────────────────────────────────────────── */
+.chat{display:flex;flex-direction:column;gap:9px;height:100%}
+.msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:9px;padding-bottom:4px}
+.bub{border-radius:var(--r-sm);padding:8px 11px;font-size:11.5px;line-height:1.65;max-width:96%}
+.bub.u{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(74,163,255,.26);color:var(--fg)}
+.bub.a{align-self:flex-start;background:var(--bg-surface);border:1px solid var(--border);color:var(--fg2)}
+.bub .bh{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--fg3);margin-bottom:4px;font-family:var(--mono)}
+.bub .bh .who{color:var(--purple);font-weight:600}
+.bub.u .bh .who{color:var(--accent)}
+.bub .run{color:var(--amber)}
+.bub .tool{margin:5px 0;padding:5px 8px;border-radius:7px;background:var(--bg-input);border:1px solid var(--border);font-family:var(--mono);font-size:10.5px;color:#9fd0ff}
+.bub em{color:var(--fg);font-style:normal;font-weight:500}
+.cmdchips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.cmdchip{padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:var(--bg-subtle);color:var(--fg2);font-size:10.5px;cursor:pointer;transition:all var(--t)}
+.cmdchip:hover{border-color:var(--purple);color:var(--purple)}
+.chatbox{display:flex;gap:6px;padding-top:9px;border-top:1px solid var(--divider);align-items:center}
+.chatbox .inp{flex:1;min-width:0;padding:6px 10px;border-radius:9px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg);outline:none;transition:all var(--t)}
+.chatbox .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.msel{padding:5px 7px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg2);font-size:11px;outline:none;cursor:pointer}
+
+/* ── 模态 ───────────────────────────────────────────────── */
+.mask{position:fixed;inset:0;background:rgba(3,8,14,.62);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:90}
+.mask.on{display:flex}
+.modal{width:440px;max-width:92vw;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;animation:tin .24s cubic-bezier(.2,.9,.3,1)}
+@keyframes tin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.modal .mh{padding:13px 16px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px}
+.modal .mh .spacer{flex:1}
+.modal .mb{padding:16px}
+.modal .mf{padding:12px 16px;border-top:1px solid var(--divider);display:flex;gap:8px;justify-content:flex-end}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:10.5px;color:var(--fg3);margin-bottom:5px;letter-spacing:.4px}
+.field select,.field input,.field textarea{width:100%;padding:7px 9px;border-radius:9px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg);outline:none;font-size:12px}
+.field select:focus,.field input:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.field .note{font-size:10.5px;color:var(--fg3);margin-top:4px}
+.field .note.lock{color:var(--err)}
+
+/* ── toast ──────────────────────────────────────────────── */
+.toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.toast{padding:9px 14px;border-radius:var(--r-sm);font-size:12px;background:var(--bg-elevated);border:1px solid var(--border-strong);color:var(--fg);box-shadow:var(--sh);animation:tin .28s cubic-bezier(.2,.9,.3,1);max-width:440px}
+.toast.ok{border-color:rgba(76,195,138,.4)}
+.toast.warn{border-color:rgba(242,182,109,.45)}
+.toast.err{border-color:rgba(255,123,114,.45)}
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 顶栏 · 模块导航 ══════════════ -->
+<div class="top">
+  <div class="brand"><span class="dot"></span>MinWorkBuddy <small>· 推演沙盘</small></div>
+  <div class="mnav" id="mnav">
+    <button class="mi" data-m="探索">探索</button>
+    <button class="mi" data-m="智能体">智能体</button>
+    <button class="mi" data-m="数据摄取">数据摄取</button>
+    <button class="mi" data-m="数据资产">数据资产</button>
+    <button class="mi" data-m="本体建模">本体建模</button>
+    <button class="mi on" data-m="推演沙盘">推演沙盘</button>
+    <button class="mi" data-m="知识库">知识库</button>
+    <button class="mi" data-m="图可视化">图可视化</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="search">🔍<input placeholder="搜索实体 / 行动 / 检查点"></div>
+  <div class="worldchip"><span class="pulse"></span>隔离沙箱世界 · 未写入生产</div>
+  <div class="ava">决</div>
+</div>
+
+<!-- ══════════════ 上下文栏 · 沙盘实例 + 运行控制 ══════════════ -->
+<div class="ctxbar">
+  <div class="atabs">
+    <div class="atab" onclick="toast('本体建模工作台：汽车零部件供应链 v3（原型内为示意）')"><span>本体建模</span><span class="x">✕</span></div>
+    <div class="atab on"><span>推演沙盘</span><span class="x">✕</span></div>
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="srcchip">世界来源 · <b>本体建模 › 汽车零部件供应链 v3</b> <span class="tag g">已发布</span></div>
+  <div class="kv-inline">克隆范围：供应链子图 · <b>5 实体 / 6 关系</b></div>
+  <div class="spacer"></div>
+  <div class="kv-inline">可达运行 <b id="reach">7/7</b></div>
+  <select class="msel" id="autoMode" onchange="toast('执行模式：'+this.value)">
+    <option>自动执行</option><option>逐步确认</option><option>只读回放</option>
+  </select>
+  <button class="btn sm" onclick="saveCheckpoint()">💾 保存检查点</button>
+  <span class="pill warn" id="cpCnt">检查点 1/5</span>
+  <button class="btn sm" onclick="refreshState()">↻ 刷新状态</button>
+  <button class="btn sm" onclick="openKPI()">场景 KPI</button>
+  <button class="btn sm danger" onclick="askDelete()">🗑 删除沙盘</button>
+</div>
+
+<!-- ══════════════ Tick 控制条 + 时间轴 + KPI ══════════════ -->
+<div class="tickbar">
+  <div class="tb-sec">
+    <div class="tb-lbl">推演时钟 · TICK</div>
+    <div class="playrow">
+      <button class="btn sm" onclick="toggleAuto()" id="autoBtn">▶ 自动推进</button>
+      <button class="btn sm" onclick="advance(1)">Step +1</button>
+      <button class="btn sm" onclick="advance(10)">Step +10</button>
+      <span class="ticknum">Tick <b id="tickNow">0</b>/12</span>
+    </div>
+  </div>
+  <div class="scrub-wrap">
+    <div class="tb-lbl" style="margin-bottom:2px">主时间线 · 点击 Tick 可跳转</div>
+    <div class="scrub" id="scrub"></div>
+  </div>
+  <div class="kpi">
+    <div class="box"><span class="k">需求态势</span><span class="v" id="kHealth" style="color:var(--ok)">健康 A</span></div>
+    <div class="box"><span class="k">可控性</span><span class="v" id="kCtrl" style="color:var(--amber)">medium</span></div>
+    <div class="box"><span class="k">目标体系</span><span class="v" id="kGoal" style="color:var(--fg2)">2</span></div>
+    <div class="box"><span class="k">行动窗口</span><span class="v" style="font-size:11px;color:var(--accent)">#0–#12</span></div>
+  </div>
+  <div class="kpi" style="border-right:0">
+    <div class="tb-lbl">风险 TOP 3</div>
+    <div class="riskrow"><span>东北钢铁 SUP006</span><span class="sc" id="r1" style="background:var(--err-soft);color:var(--err)">0.64</span></div>
+    <div class="riskrow"><span>西北电子 SUP018</span><span class="sc" style="background:var(--warn-soft);color:var(--warn)">0.71</span></div>
+    <div class="riskrow"><span>华东化工 SUP023</span><span class="sc" style="background:var(--warn-soft);color:var(--warn)">0.59</span></div>
+  </div>
+</div>
+
+<!-- ══════════════ 主体四列 ══════════════ -->
+<div class="main">
+
+  <!-- ─── ① 场景探索 ─── -->
+  <div class="col">
+    <div class="ph"><span>场景探索</span><div class="spacer"></div>
+      <button class="mini" onclick="toast('新建推演场景：从已发布本体应用克隆世界状态')">＋ 场景</button></div>
+    <div class="pb">
+      <div class="sub">推演场景</div>
+      <div class="scard on" onclick="pickScene(this,'断供传导')">
+        <div class="sh"><span class="tag p">进行中</span><b>SUP006 断供风险传导</b></div>
+        <div class="sm">Tick 0→12 · 目标 2 · 检查点 1</div>
+      </div>
+      <div class="scard" onclick="pickScene(this,'应急调拨')">
+        <div class="sh"><span class="tag">草稿</span><b>华东仓应急调拨</b></div>
+        <div class="sm">未运行 · 待选行动</div>
+      </div>
+      <div class="scard" onclick="pickScene(this,'产能恢复')">
+        <div class="sh"><span class="tag g">已完成</span><b>FAC007 产能恢复对比</b></div>
+        <div class="sm">Tick 0→8 · 分支 2</div>
+      </div>
+
+      <div class="sub">主时间线</div>
+      <div class="tl" id="timeline"></div>
+
+      <div class="sub">分支对比</div>
+      <div id="branches"></div>
+      <button class="btn sm" style="width:100%;margin-top:4px" onclick="compareBranch()">⇄ 对比所选分支</button>
+    </div>
+  </div>
+
+  <!-- ─── ② 推演画布 ─── -->
+  <div class="col">
+    <div class="ptabs" id="cvTabs">
+      <button class="ptab" data-c="world">世界概览</button>
+      <button class="ptab" data-c="onto">本体结构</button>
+      <button class="ptab on" data-c="causal">因果传播</button>
+      <button class="ptab" data-c="inst">实例探索</button>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="cbar">
+        <button class="btn sm pri" onclick="openAction()">⚡ 施加行动</button>
+        <button class="btn sm" onclick="playProp()">▶ 播放传播</button>
+        <span class="sep"></span>
+        <button class="btn sm" onclick="zoom(-1)">－</button>
+        <button class="btn sm" onclick="zoom(1)">＋</button>
+        <button class="btn sm" onclick="fit()">复位</button>
+      </div>
+      <svg id="canvas"></svg>
+      <div class="legend">
+        <span><i style="background:#4aa3ff"></i>实体</span>
+        <span><i style="background:#b48ef0"></i>事件/行动</span>
+        <span><i style="background:#f2b66d"></i>效应</span>
+        <span><i style="background:#ff7b72"></i>风险</span>
+        <span style="color:var(--fg3)">边 PRODUCES·MODIFIES·CAUSES</span>
+      </div>
+      <div class="hint" id="cvHint">点击节点查看属性与来源 · 随 Tick 逐级点亮因果链</div>
+      <div class="loading-veil" id="veil"><div class="spin"></div><span>世界状态重算中…</span></div>
+      <div class="ndetail" id="ndetail"></div>
+    </div>
+  </div>
+
+  <!-- ─── ③ 传播过程 ─── -->
+  <div class="col">
+    <div class="ptabs" id="trTabs">
+      <button class="ptab" data-t="goal">目标体系</button>
+      <button class="ptab on" data-t="trace">传播过程</button>
+      <button class="ptab" data-t="future">未来事件</button>
+      <button class="ptab" data-t="rule">规则系统</button>
+    </div>
+    <div class="pb" id="tracePanel"></div>
+  </div>
+
+  <!-- ───  AI 推演顾问台 ─── -->
+  <div class="col">
+    <div class="ptabs" id="aiTabs">
+      <button class="ptab on" data-a="chat">推演对话</button>
+      <button class="ptab" data-a="audit">行动审计</button>
+      <button class="ptab" data-a="rec">推荐问答</button>
+    </div>
+    <div class="pb" id="advisor" style="display:flex;flex-direction:column"></div>
+  </div>
+</div>
+
+<!-- ══════════════ 施加行动模态 ══════════════ -->
+<div class="mask" id="actMask">
+  <div class="modal">
+    <div class="mh">⚡ 施加行动到世界状态 <div class="spacer"></div><span style="font-size:10.5px;color:var(--fg3)">行动写入沙箱，不影响生产本体</span></div>
+    <div class="mb">
+      <div class="field"><label>目标实体</label>
+        <select id="actTarget" onchange="actTargetChange()">
+          <option value="SUP006">SUP006 · 东北钢铁实业（Supplier）</option>
+          <option value="FAC007">FAC007 · 华东装配厂（Facility）</option>
+          <option value="WH003">WH003 · 配送中心 WH-03（Warehouse）</option>
+          <option value="SUP018">SUP018 · 西北电子加工（Supplier · 视野受限）</option>
+        </select>
+        <div class="note" id="actNote">来源：数据资产 › dwd_supp_item · 本体映射 Supplier</div>
+      </div>
+      <div class="field"><label>行动类型</label>
+        <select id="actType">
+          <option value="断供">断供（supply_cut）· 触发缺料传播</option>
+          <option value="延迟交付">延迟交付（delay）· +N 天</option>
+          <option value="提价">提价（price_up）· +% 成本</option>
+          <option value="切换供应商">切换供应商（reroute）· 缓解型行动</option>
+        </select>
+      </div>
+      <div class="field"><label>强度 / 参数</label>
+        <input id="actParam" value="SUP006 供料中断 100%，持续至窗口结束">
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn" onclick="closeAction()">取消</button>
+      <button class="btn pri" onclick="submitAction()">施加并推进 Tick</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 删除确认模态 ══════════════ -->
+<div class="mask" id="delMask">
+  <div class="modal" style="width:380px">
+    <div class="mh" style="color:var(--err)">🗑 删除推演沙盘</div>
+    <div class="mb" style="font-size:12px;color:var(--fg2);line-height:1.7">
+      将永久删除场景「SUP006 断供风险传导」及其 <b style="color:var(--fg)">1 个检查点 / 2 个分支</b>，
+      克隆的沙箱世界状态会一并回收。此操作不可撤销。
+    </div>
+    <div class="mf">
+      <button class="btn" onclick="hide('delMask')">取消</button>
+      <button class="btn danger" onclick="confirmDelete()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ KPI 模态 ══════════════ -->
+<div class="mask" id="kpiMask">
+  <div class="modal">
+    <div class="mh">📊 场景 KPI · 断供传导 <div class="spacer"></div><span class="pill" id="kpiTick">Tick 0</span></div>
+    <div class="mb"><div id="kpiBody"></div></div>
+    <div class="mf"><button class="btn" onclick="hide('kpiMask')">关闭</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   推演沙盘 · Mock 世界模型
+   世界来源 = 本体建模「汽车零部件供应链 v3」；实体回链数据资产表
+   ═══════════════════════════════════════════════════════════════ */
+let tick = 0, MAXT = 12, zoomK = 1, cview = 'causal', tview = 'trace', aview = 'chat';
+let autoTimer = null, checkpoints = [{tick:0,label:'初始世界'}], selNode = null;
+let branches = [
+  {id:'b0', name:'基线分支', color:'#4aa3ff', tick:0, sel:true},
+  {id:'b1', name:'断供·未干预', color:'#ff7b72', tick:5, sel:false},
+  {id:'b2', name:'断供·应急调拨', color:'#4cc38a', tick:5, sel:false}
+];
+
+// 世界实体（含来源表 · 权限视野）
+const ENT = {
+  SUP006:{type:'Supplier',  name:'东北钢铁实业', x:60,  y:200, risk:0.64, table:'dwd_supp_item',  masked:false},
+  EVcut :{type:'SimEvent',  name:'供料中断',     x:250, y:110, kind:'event', from:'SUP006', tick:1},
+  FAC007:{type:'Facility',  name:'华东装配厂',   x:430, y:200, risk:0.41, table:'dwd_wh_stock',   masked:false, cap:100},
+  EVlate:{type:'SimEvent',  name:'交付延迟',     x:610, y:110, kind:'event', from:'FAC007', tick:3},
+  ORD012:{type:'Order',     name:'订单 ORD012',  x:790, y:200, risk:0.22, table:'dwd_veh_ord',    masked:false},
+  WH003 :{type:'Warehouse', name:'配送中心 WH-03',x:430, y:360, risk:0.18, table:'dwd_wh_stock',   masked:false},
+  SUP018:{type:'Supplier',  name:'西北电子加工', x:60,  y:360, risk:0.71, table:'dwd_supp_fore',  masked:true}
+};
+// 因果边：随 tick 逐级激活
+const CAUSAL = [
+  {f:'SUP006', t:'EVcut',  l:'PRODUCES', at:1},
+  {f:'EVcut',  t:'FAC007', l:'MODIFIES', at:2},
+  {f:'FAC007', t:'EVlate', l:'PRODUCES', at:3},
+  {f:'EVlate', t:'ORD012', l:'CAUSES',   at:4},
+  {f:'SUP018', t:'WH003',  l:'SUPPLIES', at:0, weak:true},
+  {f:'WH003',  t:'FAC007', l:'FULFILLS', at:0, weak:true}
+];
+// 传播过程观察（按 tick）
+const OBS = [
+  {at:1, sev:'info', h:'时机提示', t:'检测到 <code>SUP006</code> 断供，宜在 <code>Tick #0–#12</code> 窗口内行动，避免错过 deadline。'},
+  {at:2, sev:'warn', h:'观察', t:'Tick #2：最高风险实体「东北钢铁实业」评分 <code>0.64</code>，建议下一窗口内干预 FAC007 产能。'},
+  {at:3, sev:'warn', h:'观察', t:'Tick #3：<code>FAC007</code> 产能 <code>-38%</code>，总体态势「需求攻击势」可控性 medium，态势偏紧。'},
+  {at:4, sev:'err',  h:'风险', t:'Tick #4：<code>ORD012</code> 交付延迟 6 天，违约风险 <code>0.22 → 0.78</code>，Engineering signals 命中。'},
+  {at:6, sev:'err',  h:'失效规则', t:'Tick 推进后新发现失效规则：<code>合同到期即失效</code> 被 ORD012 违约触发（invalid_rule）。'}
+];
+const GOALS = [
+  {code:'G-01', name:'保障 ORD012 按期交付', w:'高', st:'at-risk'},
+  {code:'G-02', name:'将 FAC007 产能维持在 80% 以上', w:'中', st:'watch'}
+];
+const RULES = [
+  {n:'东北钢铁 断供 → 缺料', s:'fired',  at:1},
+  {n:'缺料 → 装配厂产能下降', s:'fired', at:2},
+  {n:'合同到期即失效', s:'new', at:6}
+];
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+function toast(m,k){const d=document.createElement('div');d.className='toast '+(k||'');d.textContent=m;$('#toasts').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},3600)}
+function hide(id){$('#'+id).classList.remove('on')}
+function show(id){$('#'+id).classList.add('on')}
+
+/* ═══════════ 时间轴 scrubber + timeline ═══════════ */
+function renderScrub(){
+  let h='';
+  for(let i=0;i<=MAXT;i++){
+    const done=i<tick, cur=i===tick;
+    const cp=checkpoints.some(c=>c.tick===i);
+    h+=`<div class="seg ${done?'done':''} ${cur?'cur':''}" onclick="setTick(${i})">${cp?'<span class="cp"></span>':''}<div class="bar"></div><span class="n">${i}</span></div>`;
+  }
+  $('#scrub').innerHTML=h;
+}
+function renderTimeline(){
+  const items=[{t:0,l:'克隆世界 · 基线快照',cp:1}];
+  OBS.forEach(o=>items.push({t:o.at,l:o.h+'：'+o.t.replace(/<[^>]+>/g,''),sev:o.sev}));
+  $('#timeline').innerHTML=items.map(x=>{
+    const done=x.t<=tick;
+    return `<div class="tli ${done?'done':''} ${x.t===tick?'cur':''}" onclick="setTick(${x.t})">
+      <span class="mono" style="color:var(--fg3)">T${x.t}</span> · ${x.l.length>26?x.l.slice(0,26)+'…':x.l}
+      ${x.cp?'<span class="cp"> ◆检查点</span>':''}</div>`;
+  }).join('');
+}
+function renderBranches(){
+  $('#branches').innerHTML=branches.map(b=>`<div class="brow ${b.sel?'sel':''}" onclick="togBranch('${b.id}')">
+    <span class="bd" style="background:${b.color}"></span><span style="flex:1">${b.name}</span><span class="mono" style="font-size:10px;color:var(--fg3)">T${b.tick}</span></div>`).join('');
+}
+
+/* ═══════════ 因果传播画布 ═══════════ */
+function ntype(id){const e=ENT[id];return e.kind==='event'?'event':(e.masked?'masked':'entity')}
+function nodeColor(id){const t=ntype(id);return t==='event'?'#b48ef0':t==='masked'?'#7b8ba4':'#4aa3ff'}
+function activeAt(a){return tick>=a}
+function renderCanvas(){
+  const svg=$('#canvas'); let g='';
+  g+=`<defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="rgba(140,192,255,.35)"/></marker>
+    <marker id="arh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="rgba(180,142,240,.9)"/></marker>
+  </defs><g transform="translate(0,20) scale(${zoomK})">`;
+  // edges
+  CAUSAL.forEach(e=>{
+    const a=ENT[e.f],b=ENT[e.t]; const on=activeAt(e.at)&&!e.weak;
+    const dim=e.weak&&tick<1;
+    const x1=a.x+ (ntype(e.f)==='event'?46:78), y1=a.y+22, x2=b.x+(ntype(e.t)==='event'?46:0), y2=b.y+22;
+    const mx=(x1+x2)/2,my=(y1+y2)/2;
+    const col=on?'rgba(180,142,240,.85)':'rgba(140,192,255,.18)';
+    g+=`<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${col}" stroke-width="${on?2:1.1}" stroke-dasharray="${e.weak?'4 4':'0'}" marker-end="url(#${on?'arh':'ar'})" opacity="${dim?.4:1}"/>`;
+    const wl=e.l.length*5.6+10;
+    g+=`<g><rect x="${mx-wl/2}" y="${my-20}" width="${wl}" height="13" rx="3.5" fill="rgba(7,17,31,.92)" stroke="${on?'rgba(180,142,240,.4)':'rgba(140,192,255,.14)'}"/>
+      <text x="${mx}" y="${my-10}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="${on?'#c9aaff':'#5a7a9a'}">${e.l}</text></g>`;
+  });
+  // nodes
+  Object.keys(ENT).forEach(id=>{
+    const e=ENT[id], t=ntype(id), on=(e.tick!==undefined?activeAt(e.tick):(e.risk!==undefined?activeAt(0):true));
+    const selc=selNode===id;
+    const col=nodeColor(id);
+    const w=t==='event'?92:156, h=t==='event'?44:46;
+    const pulse=on&&t!=='entity';
+    if(t==='event'){
+      const cx=e.x+46,cy=e.y+22;
+      g+=`<g class="n-box" onclick="pick('${id}')" transform="translate(${e.x},${e.y})">
+        <polygon points="46,0 92,22 46,44 0,22" fill="rgba(180,142,240,.16)" stroke="${selc?'#fff':col}" stroke-width="${selc?2.5:1.4}"/>
+        <text x="46" y="19" text-anchor="middle" font-size="10.5" font-weight="600" fill="#eadcff">${e.name}</text>
+        <text x="46" y="31" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="#b48ef0">SimEvent·T${e.tick}</text></g>`;
+    } else {
+      const rc=e.risk||0; const riskCol=rc>=.6?'#ff7b72':rc>=.35?'#f2b66d':'#4cc38a';
+      g+=`<g class="n-box" onclick="pick('${id}')" transform="translate(${e.x},${e.y})">
+        <rect width="${w}" height="${h}" rx="10" fill="${t==='masked'?'rgba(123,139,164,.14)':'rgba(74,163,255,.12)'}" stroke="${selc?'#fff':col}" stroke-width="${selc?2.5:1.3}"/>
+        <rect x="0" y="0" width="3.5" height="${h}" rx="2" fill="${col}"/>
+        <text x="12" y="18" font-size="11.5" font-weight="600" fill="#d6e9ff">${e.name}</text>
+        <text x="12" y="33" font-size="9" font-family="var(--mono)" fill="#8fa8c6">${id} · ${e.type}</text>
+        ${t==='masked'
+          ? `<text x="${w-10}" y="18" text-anchor="end" font-size="10" fill="#7b8ba4">🔒 脱敏</text>`
+          : `<circle cx="${w-14}" cy="15" r="5" fill="${riskCol}" opacity="${on?1:.35}"/><text x="${w-24}" y="18" text-anchor="end" font-size="9.5" font-family="var(--mono)" fill="${riskCol}">${rc.toFixed(2)}</text>`}
+      </g>`;
+    }
+  });
+  g+='</g>';
+  svg.innerHTML=g; svg.setAttribute('viewBox','0 0 960 460'); svg.setAttribute('preserveAspectRatio','xMidYMid meet');
+}
+function zoom(d){zoomK=Math.max(.6,Math.min(1.5,zoomK+d*.12));renderCanvas()}
+function fit(){zoomK=1;renderCanvas()}
+function pick(id){selNode=id;renderCanvas();renderDetail(id)}
+function renderDetail(id){
+  const e=ENT[id],box=$('#ndetail');
+  if(!e){box.classList.remove('on');return}
+  const t=ntype(id);
+  let h=`<h4><span style="width:9px;height:9px;border-radius:3px;background:${nodeColor(id)};display:inline-block"></span>${e.name} <span class="mono" style="font-size:10px;color:var(--fg3)">${id}</span></h4>`;
+  if(t==='masked'){
+    h+=`<div class="kvt"><span class="k">类型</span><span class="v">${e.type}</span></div>
+        <div class="kvt"><span class="k">视野/脱敏</span><span class="v" style="color:var(--err)">受限 🔒</span></div>
+        <div class="kvt"><span class="k">名称</span><span class="v">••••••</span></div>
+        <div class="kvt"><span class="k">风险评分</span><span class="v" style="color:var(--err)">无权查看</span></div>
+        <div class="kvt"><span class="k">来源表</span><span class="v">${e.table}</span></div>
+        <div style="font-size:10.5px;color:var(--fg3);margin-top:7px;line-height:1.6">该实体命中本体库<b style="color:var(--err)">脱敏策略</b>，当前角色无明文视野。施加行动将被门禁拒绝。</div>`;
+  } else if(t==='event'){
+    h+=`<div class="kvt"><span class="k">类型</span><span class="v">SimEvent</span></div>
+        <div class="kvt"><span class="k">触发于</span><span class="v">Tick ${e.tick}</span></div>
+        <div class="kvt"><span class="k">来源实体</span><span class="v">${e.from}</span></div>
+        <div class="kvt"><span class="k">runtime.SCHEMA</span><span class="v">invoke_action</span></div>`;
+  } else {
+    h+=`<div class="kvt"><span class="k">类型</span><span class="v">${e.type}</span></div>
+        <div class="kvt"><span class="k">风险评分</span><span class="v" style="color:${(e.risk||0)>=.6?'var(--err)':(e.risk||0)>=.35?'var(--amber)':'var(--ok)'}">${(e.risk||0).toFixed(2)}</span></div>
+        ${e.cap!==undefined?`<div class="kvt"><span class="k">产能</span><span class="v" style="color:${e.cap<80?'var(--err)':'var(--ok)'}">${e.cap}%</span></div>`:''}
+        <div class="kvt"><span class="k">来源（数据资产）</span><span class="v">${e.table}</span></div>
+        <div class="kvt"><span class="k">本体映射</span><span class="v">v3 · accepted</span></div>`;
+  }
+  h+=`<div style="display:flex;gap:6px;margin-top:9px"><button class="btn sm" style="flex:1" onclick="focusNode('${id}')">聚焦</button><button class="btn sm" style="flex:1" onclick="openActionFor('${id}')">施加行动</button></div>`;
+  box.innerHTML=h; box.classList.add('on');
+}
+function focusNode(id){toast('已聚焦 '+id+' 的因果邻域（原型示意）')}
+function closeDetail(){$('#ndetail').classList.remove('on');selNode=null;renderCanvas()}
+
+/* ═══════════ 传播过程面板（四 tab） ═══════════ */
+function renderTrace(){
+  const p=$('#tracePanel');
+  if(tview==='goal'){
+    if(tick===0 && !GOALS.length){p.innerHTML=emptyState('◎','尚未声明目标','在推演前设定业务目标，用于评估方案可信度');return}
+    p.innerHTML=`<div class="sub">已声明目标 · ${GOALS.length}</div>`+GOALS.map(g=>{
+      const st=g.st==='at-risk'?'err':g.st==='watch'?'warn':'ok';
+      return `<div class="obs ${g.st==='at-risk'?'err':g.st==='watch'?'':'info'}" style="border-left-color:${g.st==='at-risk'?'var(--err)':g.st==='watch'?'var(--amber)':'var(--ok)'}">
+        <div class="oh" style="color:inherit">🎯 ${g.code} · 权重${g.w} <span class="pill ${st}" style="margin-left:auto">${g.st==='at-risk'?'受威胁':g.st==='watch'?'观察中':'达成'}</span></div>${g.name}</div>`;
+    }).join('')+`<button class="btn sm" style="width:100%" onclick="toast('新增目标（demo）')">＋ 添加目标</button>`;
+  }
+  else if(tview==='trace'){
+    const entC=Object.keys(ENT).filter(k=>ENT[k].tick!==undefined&&tick>=ENT[k].tick).length + (tick>=1?2:0);
+    const relC=CAUSAL.filter(e=>!e.weak&&tick>=e.at).length;
+    const ruleC=RULES.filter(r=>tick>=r.at).length;
+    let h=`<div class="sub">传播过程 · Propagation Trace <span style="margin-left:auto;font-family:var(--mono);color:var(--fg3)">最近 Tick ${tick}</span></div>
+      <div class="impact-cnt">
+        <div class="icbox"><div class="k">实体</div><div class="v" style="color:var(--accent)">${entC}</div></div>
+        <div class="icbox"><div class="k">关系</div><div class="v" style="color:var(--purple)">${relC}</div></div>
+        <div class="icbox"><div class="k">规则</div><div class="v" style="color:var(--amber)">${ruleC}</div></div>
+      </div>`;
+    const obs=OBS.filter(o=>o.at<=tick);
+    h+= obs.length? obs.map(o=>`<div class="obs ${o.sev==='info'?'info':o.sev==='err'?'err':''}"><div class="oh">${o.sev==='err'?'⚠':o.sev==='warn'?'◑':'◷'} ${o.h}</div>${o.t}</div>`).join('')
+      : emptyState('◷','尚无传播记录','推进 Tick 或对世界施加行动后，因果链影响将在此逐条展开');
+    h+=`<button class="btn sm" style="width:100%;margin-top:6px" onclick="toast('展开完整传播链：SUP006→缺料→FAC007→延迟→ORD012（demo）')">查看传播详情</button>`;
+    p.innerHTML=h;
+  }
+  else if(tview==='future'){
+    const fut=OBS.filter(o=>o.at>tick);
+    p.innerHTML=`<div class="sub">未来事件预测 · 基于世界模型</div>`+ (fut.length
+      ? fut.map(o=>`<div class="obs info"><div class="oh">◷ 预测 Tick ${o.at}</div>${o.t}</div>`).join('')
+      : emptyState('🔮','无待发生的预测事件','当前 Tick 已推进至已知因果链末端，或尚未施加会产生未来的行动'));
+  }
+  else {
+    p.innerHTML=`<div class="sub">规则系统 · 本体派生/失效规则</div>`+RULES.map(r=>{
+      const fired=tick>=r.at;
+      return `<div class="crow" style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px dashed var(--divider);font-size:11.5px">
+        <span style="flex:1;color:${fired?'var(--fg)':'var(--fg3)'}">${r.n}</span>
+        <span class="pill ${r.s==='new'&&fired?'err':fired?'ok':''}">${fired?(r.s==='new'?'新发现':'已触发'):'待命中'}</span></div>`;
+    }).join('')+`<div class="obs info" style="margin-top:10px"><div class="oh">◷ 规则发现</div>Tick 推进后新发现失效规则会在「传播过程」与「观察」中提示，用于判断方案是否可信。</div>`;
+  }
+}
+function emptyState(ic,t,s){return `<div class="empty"><div class="ic">${ic}</div><div style="color:var(--fg2);font-weight:600;margin-bottom:3px">${t}</div>${s}</div>`}
+
+/* ═══════════ AI 顾问台（三 tab） ═══════════ */
+const CHAT=[
+  {who:'u',t:'05:55:55',html:'SUP006 已断供的前提下，推进 2 个 Tick，解释风险如何从 <em>SUP006</em> 传到 <em>FAC007</em> 再到 <em>ORD012</em>'},
+  {who:'a',t:'05:55:59',run:true,html:'<div class="bh"><span class="who">Agent</span> <span class="run">（推理中…）</span></div>我需要分析 SUP006 断供后风险如何传播到 FAC007 再到 ORD012，让我按步骤进行：',tool:'query_world · 读取沙箱世界快照 Tick 0'}
+];
+function renderAdvisor(){
+  const w=$('#advisor');
+  if(aview==='chat'){
+    w.innerHTML=`<div class="chat"><div class="msgs" id="msgs">${CHAT.map(bubble).join('')}</div>
+      <div class="cmdchips">
+        <span class="cmdchip" onclick="advance(1);toast('已由顾问推进 1 Tick','ok')">推进这个 Tick</span>
+        <span class="cmdchip" onclick="toast('风险最高实体：SUP018 西北电子加工 0.71（但视野受限）')">查看风险最高实体</span>
+        <span class="cmdchip" onclick="explainPath()">解释传播路径</span>
+      </div>
+      <div class="chatbox">
+        <select class="msel"><option>qwen-plus</option><option>deepseek-r1</option></select>
+        <input class="inp" id="cin" placeholder="输入消息…（Enter 发送）" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn pri sm" onclick="sendChat()">发送</button>
+        <button class="btn sm danger" onclick="toast('已终止当前推演回合','warn')">终止</button>
+      </div></div>`;
+    const m=$('#msgs'); if(m)m.scrollTop=m.scrollHeight;
+  } else if(aview==='audit'){
+    w.innerHTML=`<div class="sub">行动审计 · 本沙箱内</div>`+
+      (checkpoints.length>1||tick>0? OBS.filter(o=>o.at<=tick).map(o=>`<div class="obs ${o.sev==='err'?'err':o.sev==='warn'?'':'info'}"><div class="oh">T${o.at} · ${o.h}</div>${o.t}</div>`).join('') : emptyState('📋','暂无行动记录','施加行动或推进 Tick 后，所有对世界状态的改变都会在此留痕，可回放审计'))+
+      `<div class="obs info" style="margin-top:4px"><div class="oh">隔离声明</div>沙箱世界为生产本体的克隆快照，所有行动写入沙箱代理键 <code>proxy_key</code>，不回写生产。</div>`;
+  } else {
+    w.innerHTML=`<div class="sub">推荐问答 · 基于当前场景</div>`+
+      ['若对 SUP006 断供，FAC007 多久会受影响？','采取应急调拨能否保住 ORD012 交期？','哪条传播链对目标 G-01 威胁最大？','对比「未干预」与「应急调拨」两个分支的结果差异'].map(q=>
+      `<div class="scard" style="cursor:pointer" onclick="toast('提问：${q}')"><div class="sh"><span class="tag p">Q</span><b style="white-space:normal">${q}</b></div></div>`).join('');
+  }
+}
+function bubble(b){return `<div class="bub ${b.who}"><div class="bh"><span class="who">${b.who==='u'?'用户':'Agent'}</span> ${b.t}${b.run?' <span class="run">（进行中）</span>':''}</div>${b.html}${b.tool?`<div class="tool">🔧 ${b.tool}</div>`:''}</div>`}
+function sendChat(){
+  const v=$('#cin').value.trim(); if(!v)return;
+  CHAT.push({who:'u',t:now(),html:v}); renderAdvisor();
+  setTimeout(()=>{CHAT.push({who:'a',t:now(),run:true,html:'正在读取世界快照并按因果链推演…',tool:'propagation_trace · depth≤4'});renderAdvisor();
+    setTimeout(()=>{CHAT[CHAT.length-1].run=false;CHAT[CHAT.length-1].html='传播路径：<em>SUP006</em> —PRODUCES→ 缺料 —MODIFIES→ <em>FAC007</em>（产能 -38%）—CAUSES→ <em>ORD012</em>（违约风险 0.78）。建议在 Tick #2 前对 FAC007 施加应急调拨以缓解。';renderAdvisor();toast('顾问已返回因果解释','ok')},1400);
+  },400);
+  $('#cin').value='';
+}
+function explainPath(){toast('已高亮因果链：SUP006→缺料→FAC007→延迟→ORD012');setTick(4)}
+
+/* ═══════════ 时钟 / 行动 / 检查点 ═══════════ */
+function now(){const d=new Date();return d.toTimeString().slice(0,8)}
+function render(){renderScrub();renderTimeline();renderCanvas();renderTrace();$('#tickNow').textContent=tick;$('#kpiTick')&&($('#kpiTick').textContent='Tick '+tick);updateKPI()}
+function updateKPI(){
+  $('#kHealth').textContent=tick>=4?'预警 C':tick>=2?'关注 B':'健康 A';
+  $('#kHealth').style.color=tick>=4?'var(--err)':tick>=2?'var(--amber)':'var(--ok)';
+  $('#kCtrl').textContent=tick>=4?'low':tick>=2?'medium':'high';
+  $('#kCtrl').style.color=tick>=4?'var(--err)':tick>=2?'var(--amber)':'var(--ok)';
+  const r=$('#r1'); if(r){const v=(0.64+tick*0.02).toFixed(2);r.textContent=v;r.style.background=v>=.6?'var(--err-soft)':'var(--warn-soft)';r.style.color=v>=.6?'var(--err)':'var(--warn)'}
+  const f=ENT.FAC007; f.cap=Math.max(52,100-tick*8);
+}
+function setTick(t){tick=Math.max(0,Math.min(MAXT,t));render()}
+function advance(n){
+  withLoading(()=>{ tick=Math.min(MAXT,tick+n); render();
+    if(tick>=MAXT&&autoTimer){toggleAuto()}
+    const miss=tick>12;
+    toast(n>1?`批量推进 +${n} Tick → 当前 T${tick}（世界状态已重算）`:`推进至 Tick ${tick}`, tick>=4?'warn':'ok');
+  });
+}
+function withLoading(fn){const v=$('#veil');v.classList.add('on');setTimeout(()=>{fn();v.classList.remove('on')},520)}
+function toggleAuto(){
+  if(autoTimer){clearInterval(autoTimer);autoTimer=null;$('#autoBtn').textContent='▶ 自动推进';toast('已暂停自动推进')}
+  else{$('#autoBtn').textContent='⏸ 暂停';autoTimer=setInterval(()=>{if(tick>=MAXT){toggleAuto();return}tick++;render()},900);toast('自动推进中…每 0.9s 一个 Tick')}
+}
+function playProp(){
+  toast('回放因果传播…');let s=0;const iv=setInterval(()=>{setTick(s);s++;if(s>5){clearInterval(iv)}},650);
+}
+function refreshState(){withLoading(()=>{render();toast('已刷新世界状态：实体 5 · 关系 6 · 活动规则 '+RULES.filter(r=>tick>=r.at).length,'ok')})}
+function saveCheckpoint(){
+  if(checkpoints.length>=5){toast('检查点已达上限 5/5，无法再保存','err');return}
+  checkpoints.push({tick,label:'T'+tick+' 快照'});renderScrub();renderBranches();
+  $('#cpCnt').textContent='检查点 '+checkpoints.length+'/5';toast('已保存检查点 @ Tick '+tick,'ok');
+}
+function togBranch(id){const b=branches.find(x=>x.id===id);b.sel=!b.sel;renderBranches()}
+function compareBranch(){
+  const sel=branches.filter(b=>b.sel);
+  if(sel.length<2){toast('请至少选择 2 个分支进行对比','warn');return}
+  toast('分支对比：'+sel.map(b=>b.name).join(' vs ')+' → ORD012 违约风险 0.78 / 0.31（demo）','ok');
+}
+function pickScene(el,n){$$('.scard').forEach(s=>s.classList.remove('on'));el.classList.add('on');toast('切换场景：'+n+'（原型仅演示当前场景）')}
+
+/* 施加行动 */
+function openAction(){show('actMask');actTargetChange()}
+function openActionFor(id){if(!ENT[id]){return}$('#actTarget').value=(id in ENT)?id:'SUP006';show('actMask');actTargetChange()}
+function actTargetChange(){
+  const v=$('#actTarget').value, e=ENT[v], note=$('#actNote');
+  if(e&&e.masked){note.innerHTML='🔒 该实体命中脱敏策略，当前角色无明文视野，行动将被门禁拒绝';note.className='note lock'}
+  else{note.innerHTML='来源：数据资产 › '+(e?e.table:'—')+' · 本体映射 '+v;note.className='note'}
+}
+function closeAction(){hide('actMask')}
+function submitAction(){
+  const v=$('#actTarget').value, e=ENT[v], type=$('#actType').value;
+  if(e&&e.masked){toast('门禁拒绝：SUP018 视野受限，无权对其施加行动','err');closeAction();return}
+  closeAction();
+  withLoading(()=>{
+    tick=Math.min(MAXT,tick+1);
+    if(v==='SUP006'&&type==='断供'){EVcut_present()}
+    OBS.unshift({at:tick,sev:'warn',h:'行动',t:`Tick ${tick}：对 <code>${v}</code> 施加「${type}」，因果链开始传导。`});
+    render(); renderAdvisor();
+    toast(`已施加「${type}」→ ${v}，推进至 Tick ${tick}`,'ok');
+  });
+}
+function EVcut_present(){/* 断供已在因果模型内，推进即点亮 */}
+
+/* KPI / 删除 */
+function openKPI(){
+  const b=$('#kpiBody');
+  b.innerHTML=`<div class="impact-cnt" style="margin-bottom:12px">
+      <div class="icbox"><div class="k">目标达成度</div><div class="v" style="color:${tick>=4?'var(--err)':'var(--amber)'}">${Math.max(20,90-tick*7)}%</div></div>
+      <div class="icbox"><div class="k">最高实体风险</div><div class="v" style="color:var(--err)">${(0.64+tick*0.02).toFixed(2)}</div></div>
+      <div class="icbox"><div class="k">受影响订单</div><div class="v" style="color:var(--amber)">${tick>=4?1:0}</div></div>
+    </div>
+    <div class="sub" style="margin-top:0">关键指标</div>
+    <div class="kv"><span class="k">FAC007 产能</span><span class="v" style="color:${ENT.FAC007.cap<80?'var(--err)':'var(--ok)'}">${ENT.FAC007.cap}%</span></div>
+    <div class="kv"><span class="k">ORD012 违约风险</span><span class="v" style="color:${tick>=4?'var(--err)':'var(--fg)'}">${(0.22+Math.max(0,tick-3)*0.18).toFixed(2)}</span></div>
+    <div class="kv"><span class="k">已触发规则</span><span class="v">${RULES.filter(r=>tick>=r.at).length} / ${RULES.length}</span></div>
+    <div class="kv"><span class="k">行动窗口</span><span class="v" style="color:${tick>12?'var(--err)':'var(--accent)'}">Tick #0–#12${tick>12?' · 已错过':''}</span></div>`;
+  show('kpiMask');
+}
+function askDelete(){show('delMask')}
+function confirmDelete(){hide('delMask');toast('已删除推演沙盘「SUP006 断供风险传导」及 1 检查点 / 2 分支（demo，未真正移除）','warn')}
+
+/* ═══════════ 事件绑定 ═══════════ */
+$('#mnav').addEventListener('click',e=>{const b=e.target.closest('.mi');if(!b)return;$$('.mi').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  if(b.dataset.m!=='推演沙盘'){toast('原型聚焦「推演沙盘」，'+b.dataset.m+' 模块为示意占位')}else{b.classList.add('on')}});
+$('#cvTabs').addEventListener('click',e=>{const b=e.target.closest('.ptab');if(!b)return;$$('#cvTabs .ptab').forEach(x=>x.classList.remove('on'));b.classList.add('on');cview=b.dataset.c;
+  const hint={world:'世界概览：克隆自本体建模 v3 的完整子图快照',onto:'本体结构：对象/关系/规则类型层（非实例）',causal:'点击节点查看属性与来源 · 随 Tick 逐级点亮因果链',inst:'实例探索：按对象/关系筛选查看具体实例'}[cview];
+  $('#cvHint').textContent=hint;
+  if(cview!=='causal'){toast({world:'世界概览',onto:'本体结构视图',inst:'实例探索'}[cview]+'：原型以因果传播视图演示，此处为占位')}else{renderCanvas()}});
+$('#trTabs').addEventListener('click',e=>{const b=e.target.closest('.ptab');if(!b)return;$$('#trTabs .ptab').forEach(x=>x.classList.remove('on'));b.classList.add('on');tview=b.dataset.t;renderTrace()});
+$('#aiTabs').addEventListener('click',e=>{const b=e.target.closest('.ptab');if(!b)return;$$('#aiTabs .ptab').forEach(x=>x.classList.remove('on'));b.classList.add('on');aview=b.dataset.a;renderAdvisor()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDetail();hide('actMask');hide('delMask');hide('kpiMask')}});
+$('#canvasWrap').addEventListener('click',e=>{if(e.target.id==='canvas'||e.target.id==='canvasWrap')closeDetail()});
+
+/* ═══════════ 启动 ═══════════ */
+renderBranches();render();renderAdvisor();
+setTimeout(()=>toast('推演沙盘已就绪：世界克隆自「本体建模 › 汽车零部件供应链 v3」。施加行动或推进 Tick 观察因果传播','ok'),500);
+</script>
+</body>
+</html>

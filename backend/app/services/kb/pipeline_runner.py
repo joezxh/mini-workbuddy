@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 from agentscope.message import TextBlock
+from loguru import logger
 
 from app.services.kb.parser_selector import (
     guess_media_type,
@@ -120,6 +121,29 @@ class PipelinePlan:
 
 # ── 执行 ──────────────────────────────────────────────────────────────────
 
+def _strip_nul_sections(sections: list) -> tuple[list, int]:
+    """剔除文本中的 NUL（0x00），返回新 Sections 与被剔除字符数。
+
+    PDF 抽取（嵌入字体、扫描层、异常 ToUnicode 映射）可能吐出 ``\x00``；
+    PostgreSQL 的 ``text`` 类型**拒绝**该字符，写入 ``kms_segment`` 时会整批
+    失败（表现为 ``[vectorize] A string literal cannot contain NUL (0x00)
+    characters`` 且已嵌入的切片全部回滚）。故此处无条件清洗，与 clean 算子
+    无关、不可关闭：NUL 对检索与展示没有任何价值。DataBlock 原样透传。
+    """
+    removed = 0
+    out: list = []
+    for sec in sections:
+        text = getattr(getattr(sec, "content", None), "text", None)
+        if text is None or "\x00" not in text:
+            out.append(sec)
+            continue
+        removed += text.count("\x00")
+        out.append(
+            sec.model_copy(update={"content": TextBlock(text=text.replace("\x00", ""))})
+        )
+    return out, removed
+
+
 def _clean_sections(sections: list, clean_steps: list[str]) -> list:
     """按算子顺序清洗 Section 文本；DataBlock 段原样透传（D13）。"""
     if not clean_steps:
@@ -203,10 +227,21 @@ def run_pipeline(
         raise
     except Exception as exc:  # noqa: BLE001 - 归集为带步名的失败
         raise PipelineStepError("parse", exc) from exc
+    # parse 之后立即剔除 NUL：后续 clean/chunk/嵌入/落库都基于干净文本
+    try:
+        sections, nul_removed = _strip_nul_sections(sections)
+    except Exception as exc:  # noqa: BLE001 - 归集为解析产物异常
+        raise PipelineStepError("parse", exc) from exc
+    if nul_removed:
+        logger.warning(
+            f"[KB 管线] {filename} 解析产物含 {nul_removed} 个 NUL(0x00) 字符，"
+            f"已剔除（PostgreSQL text 不接受该字符）"
+        )
     steps.append({
         "step": "parse",
         "parser": type(parser).__name__,
         "sections": len(sections),
+        "nul_removed": nul_removed,
     })
 
     try:

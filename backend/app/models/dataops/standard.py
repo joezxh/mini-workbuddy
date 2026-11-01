@@ -4,7 +4,7 @@
 status=suggested|accepted|rejected），替代被砍掉的独立 annotations 表（spec §2.2）。
 """
 from sqlalchemy import (
-    BigInteger, Column, Float, ForeignKey, Index, Integer, String, Text,
+    BigInteger, CheckConstraint, Column, Float, ForeignKey, Index, Integer, String, Text,
     TIMESTAMP, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,6 +34,13 @@ class MetaStandard(Base, TenantMixin):
         String(32), nullable=False, server_default="draft", comment="状态: draft|published"
     )
     current_version = Column(Integer, nullable=False, server_default="1", comment="当前版本号")
+    # —— 本次新增（§3.1 变更表：meta_standard 只加 review_status/reviewed_by/at，不加 source）——
+    review_status = Column(
+        String(16), nullable=False, server_default="suggested",
+        comment="人审结论: suggested|accepted|rejected",
+    )
+    reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
+    reviewed_at = Column(TIMESTAMP, nullable=True, comment="评审时间")
 
     # 审计
     creator_id = Column(BigInteger, nullable=True, comment="创建者 ID")
@@ -45,6 +52,7 @@ class MetaStandard(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_meta_standard_code"),
+        CheckConstraint("review_status IN ('suggested','accepted','rejected')", name="ck_meta_standard_review"),
     )
 
 
@@ -90,8 +98,8 @@ class MetaColumnStandard(Base, TenantMixin):
         String(32), nullable=False, server_default="suggested",
         comment="评审状态: suggested|accepted|rejected",
     )
-    # rule | llm（保留取值，本阶段不实现）| human
-    source = Column(String(32), nullable=False, server_default="human", comment="来源: rule|llm|human")
+    # D3 rev.2：取值域由 rule|llm|human 收敛为 rule|human|llm_draft（llm 遗留值在本次消除，见迁移 CHECK）
+    source = Column(String(32), nullable=False, server_default="human", comment="来源: rule|human|llm_draft")
     confidence = Column(Float, nullable=True, comment="置信度（rule 通道产出）")
     evidence_json = Column(JSONB, nullable=True, comment="判定依据（命中规则等）")
     reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
@@ -106,6 +114,7 @@ class MetaColumnStandard(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint("column_id", name="uq_meta_column_standard_column"),
+        CheckConstraint("source IN ('rule','human','llm_draft')", name="ck_meta_column_standard_source"),
         # 条件性唯一（standard 每租户一份标准码，但绑定按租户行隔离即可，无需额外约束）
     )
 

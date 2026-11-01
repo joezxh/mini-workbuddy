@@ -1,6 +1,6 @@
 """Semantica Agent 工具：semantic_query / semantic_build / semantic_search。
 
-租户链路与 ``ontology_tools`` 一致：经 ``tool_context.get_tool_user()`` 取当前用户，
+租户链路与其它内置工具一致：经 ``tool_context.get_tool_user()`` 取当前用户，
 再补查 ``SysUser.tenant_id``（``ToolUserContext`` 不含租户字段）。取不到租户的调用
 返回 ``tenant_required`` 错误，**绝不落到 NULL 分区共享语义数据**。
 """

@@ -16,6 +16,9 @@ from app.models.wiki.wiki_knowledge import WikiKnowledge
 
 GRAPH_CONFIG_KEY = "graph"
 
+# 最近一次构建的运行元信息（不新增列，与 graph 配置并列存放）
+BUILD_META_KEY = "graph_build"
+
 DEFAULTS: dict[str, Any] = {
     # ── 抽取 ──
     "extractor_type": "llm",          # llm | rule（当前仅 llm）
@@ -125,3 +128,26 @@ def save_graph_config(db: Session, knowledge_id: int, patch: dict) -> dict:
     db.commit()
     db.refresh(kb)
     return current
+
+
+def get_build_meta(db: Session, knowledge_id: int) -> dict:
+    """读取最近一次图谱构建的运行元信息（无记录时返回空 dict）。"""
+    kb = db.get(WikiKnowledge, knowledge_id)
+    if kb is None:
+        return {}
+    cfg = getattr(kb, "pipeline_config", None) or {}
+    if not isinstance(cfg, dict):
+        return {}
+    meta = cfg.get(BUILD_META_KEY)
+    return meta if isinstance(meta, dict) else {}
+
+
+def save_build_meta(db: Session, knowledge_id: int, meta: dict) -> None:
+    """写入最近一次图谱构建的运行元信息（只动 ``graph_build`` 子键）。"""
+    kb = db.get(WikiKnowledge, knowledge_id)
+    if kb is None:
+        return
+    cfg = dict(getattr(kb, "pipeline_config", None) or {})
+    cfg[BUILD_META_KEY] = dict(meta or {})
+    kb.pipeline_config = cfg
+    db.commit()

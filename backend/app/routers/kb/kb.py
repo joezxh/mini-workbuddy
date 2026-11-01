@@ -14,7 +14,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import Integer, select
 from sqlalchemy.orm import Session
 
 from app.core.job_runner import run_in_background
@@ -91,7 +91,45 @@ def _serialize(doc: KbDocument) -> dict:
         "collection_id": doc.collection_id,
         "collection": doc.collection,
         "created_at": str(doc.created_at) if doc.created_at else None,
+        "updated_at": str(doc.updated_at) if doc.updated_at else None,
     }
+
+
+def _serialize_graph_stages(db: Session, docs: list) -> dict:
+    """按文档汇总图谱两阶段状态（仅 type=4 图谱库有意义）。
+
+    返回 ``{document_id: {structure, vector, failed, entities, relations}}``：
+    * ``structure`` 该文档切片的阶段 1 完成数
+    * ``vector``    阶段 2 完成数
+    * ``failed``    抽取失败（阶段 1 显式失败）的切片数
+    """
+    from sqlalchemy import func, select
+
+    from app.models.kb.kb_segment import KbSegment
+
+    out: dict = {}
+    if not docs:
+        return out
+    doc_ids = [d.uuid_code for d in docs]
+    rows = db.execute(
+        select(
+            KbSegment.document_id,
+            func.count(KbSegment.id),
+            func.sum(KbSegment.graph_structure_indexed.is_(True).cast(Integer)),
+            func.sum(KbSegment.graph_indexed.is_(True).cast(Integer)),
+            func.sum(KbSegment.graph_structure_indexed.is_(False).cast(Integer)),
+        )
+        .where(KbSegment.document_id.in_(doc_ids))
+        .group_by(KbSegment.document_id)
+    ).all()
+    for row in rows:
+        out[row[0]] = {
+            "segments": int(row[1] or 0),
+            "structure": int(row[2] or 0),
+            "vector": int(row[3] or 0),
+            "failed": int(row[4] or 0),
+        }
+    return out
 
 
 def _doc_collection_name(db: Session, doc: KbDocument) -> Optional[str]:
@@ -239,7 +277,18 @@ def list_documents(
             KbDocument.tenant_id == tenant_id, KbDocument.knowledge_id == kid
         ).order_by(KbDocument.id.desc())
     ).scalars().all()
-    return [_serialize(d) for d in rows]
+    items = [_serialize(d) for d in rows]
+    # 图谱库（type=4）：附带两阶段状态，前端文档 Tab 展示「结构✓ / 向量✓ / 失败」
+    from app.models.wiki.wiki_knowledge import KnowledgeType, WikiKnowledge
+
+    kb = db.get(WikiKnowledge, kid)
+    if kb is not None and kb.type == KnowledgeType.GRAPH_KB:
+        stages = _serialize_graph_stages(db, rows)
+        for item in items:
+            item["graph"] = stages.get(item["document_id"], {
+                "segments": 0, "structure": 0, "vector": 0, "failed": 0,
+            })
+    return items
 
 
 @router.delete("/documents/{uuid_code}")
@@ -293,6 +342,8 @@ class RetrieveBody(BaseModel):
     hybrid: bool = True
     score_threshold: Optional[float] = None
     metadata_filters: Optional[dict] = None
+    # 图谱库检索对比：False 可强制只用 chunk 通道（前端 "图谱 / 仅向量" 双跑）
+    use_graph: Optional[bool] = None
 
 
 def _retrieve_collection(
@@ -394,7 +445,7 @@ def retrieve_knowledge(
 
     # ── 图谱库（type=4）：追加图通道并 RRF 融合（spec §6.2）──────────────
     graph_enabled = False
-    if getattr(kb, "type", None) == KnowledgeType.GRAPH_KB:
+    if getattr(kb, "type", None) == KnowledgeType.GRAPH_KB and body.use_graph is not False:
         base_results, graph_enabled = _fuse_graph_channel(
             db, tenant_id, kid, base_results, body
         )
@@ -1796,9 +1847,15 @@ def pipeline_dry_run(
     pc: dict | None = None
     if pipeline_config:
         try:
-            from app.services.kb.pipeline_config import normalize_pipeline_config
+            from app.services.kb.pipeline_config import (
+                normalize_pipeline_config,
+                strip_extension_keys,
+            )
 
-            pc = normalize_pipeline_config(_json.loads(pipeline_config)) or {}
+            # 扩展段（graph / graph_build）不属于原生编排，预先剔除
+            pc = strip_extension_keys(
+                normalize_pipeline_config(_json.loads(pipeline_config))
+            ) or {}
         except (_json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=f"pipeline_config 非法: {exc}")
 

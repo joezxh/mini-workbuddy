@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_db, get_current_user
 from app.models.sys.sys_user import SysUser
 from app.models.kb.kb_category import KbCategory
+from app.models.kb.kb_document import KbDocument
 from app.models.wiki.wiki_article import WikiArticle
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.services.kb.kb_format import (
@@ -240,12 +241,24 @@ def list_knowledges(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
-    """知识库列表（附分类数 / 文章数统计）。"""
+    """知识库列表（附分类数 / 文章数统计）。
+
+    文章计数并入文档计数：type=1 Wiki 库内容在 kms_article，
+    type=2/3/4（通用/外部/图谱，含多模态、表格、问答）内容在 kms_document；
+    两类存储按库类型互斥，求和对所有类型均为正确口径。
+    此前只统计 kms_article，导致多模态/表格等有数据仍显示 0（左树徽标 bug）。
+    """
     kbs = db.execute(select(WikiKnowledge).order_by(WikiKnowledge.id)).scalars().all()
     art_rows = db.execute(
         select(WikiArticle.knowledge_id, func.count()).group_by(WikiArticle.knowledge_id)
     ).all()
-    art_counts = {kid: cnt for kid, cnt in art_rows if kid is not None}
+    doc_rows = db.execute(
+        select(KbDocument.knowledge_id, func.count()).group_by(KbDocument.knowledge_id)
+    ).all()
+    art_counts: dict = {kid: cnt for kid, cnt in art_rows if kid is not None}
+    for kid, cnt in doc_rows:
+        if kid is not None:
+            art_counts[kid] = art_counts.get(kid, 0) + cnt
     return [
         _knowledge_to_dict(kb, 0, art_counts.get(kb.id, 0))
         for kb in kbs

@@ -4,7 +4,7 @@
 1. 统一容器类型枚举与 type/kb_format 列的向后兼容默认值；
 2. kb_category 模型改造（表名/类名/冗余类型列）；
 3. 连接器实例层模型落位（此前路由 import 崩溃的 P0-2）；
-4. connectors / wiki_admin / ontology 三个路由已进注册清单（P0-2 / P0-6）；
+4. connectors / wiki_admin 两个路由已进注册清单（P0-2 / P0-6）；
 5. 版本 diff / 回滚服务语义（P0-1 的三个端点依赖）；
 6. job_runner 后台任务异常不回抛（P0-5）。
 """
@@ -67,10 +67,14 @@ def test_connector_instance_and_log_models_exist():
 
 @pytest.mark.parametrize(
     "module",
-    ["app.routers.connectors.connector", "app.routers.wiki.wiki_admin", "app.routers.ontology.ontology"],
+    ["app.routers.connectors.connector", "app.routers.wiki.wiki_admin"],
 )
 def test_routers_registered(module):
-    """此前三个模块未进清单 → 前端请求 404 / routerMissing。"""
+    """这两个模块此前未进清单 → 前端请求 404 / routerMissing。
+
+    `app.routers.ontology.ontology` 已随自研本体层（ontology_* 九表）下线，
+    语义/本体能力改由 `app.routers.semantica.semantica` 提供，故不再断言。
+    """
     assert any(spec.module == module and spec.enabled for spec in ROUTER_SPECS)
 
 

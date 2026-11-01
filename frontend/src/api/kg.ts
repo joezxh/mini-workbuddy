@@ -48,6 +48,10 @@ export interface KgRelation {
   status: KgRelationStatus
   properties: Record<string, unknown>
   evidence: Record<string, unknown> | null
+  /** 提及数（kg_triple_mention 聚合，列表接口批量回填） */
+  mention_count?: number
+  /** 抽取器：llm | manual（evidence/properties 推断） */
+  extractor?: string
   created_at: string | null
   updated_at: string | null
 }
@@ -62,6 +66,10 @@ export interface KgListResult<T> {
 export interface KgStats {
   entities: number
   relations: number
+  /** 提及总数（实体 mention_count 求和） */
+  mentions?: number
+  /** 待评审条数（suggested 实体 + suggested 关系） */
+  pending_review?: number
   by_type: Record<string, number>
   by_relation: Record<string, number>
 }
@@ -162,6 +170,16 @@ export interface KgBuildStatus {
   structure_done: number
   vector_done: number
   failed: number
+  /** 最近一次构建完成时间（ISO 字符串，未构建为 null） */
+  last_build_at?: string | null
+  /** 最近一次构建动作：build | rebuild | reconcile | clear_document */
+  last_build_action?: string | null
+  /** 最近一次构建耗时（秒） */
+  last_build_duration?: number | null
+  /** 失败环节：structure | vector | '' */
+  last_failed_step?: string
+  /** 失败切片数 */
+  last_failed_count?: number
 }
 
 export interface KgFailedSegment {
@@ -281,16 +299,40 @@ export function getSeedSubgraph(kid: number, seedIds: number[], depth = 2, limit
   })
 }
 
+/** 溯源切片（实体 / 关系共用） */
+export interface KgMentionSlice {
+  segment_id: number
+  chunk_index: number
+  document_id: string
+  content: string
+  evidence: unknown
+}
+
+/** 全库图（无种子）：后端按度数截断到 limit，返回仍是 {nodes, edges}。 */
+export function getFullGraph(
+  kid: number,
+  params?: { limit?: number; typeCode?: string; relationCode?: string },
+) {
+  return request.get<KgSubgraph>(`${BASE}/${kid}/graph/full`, {
+    params: {
+      limit: params?.limit,
+      type_code: params?.typeCode || undefined,
+      relation_code: params?.relationCode || undefined,
+    },
+  })
+}
+
 export function getEntityMentions(kid: number, entityId: number) {
   return request.get<{
-    items: {
-      segment_id: number
-      chunk_index: number
-      document_id: string
-      content: string
-      evidence: unknown
-    }[]
+    items: KgMentionSlice[]
   }>(`${BASE}/${kid}/graph/entities/${entityId}/mentions`)
+}
+
+/** 关系溯源：关系被哪些切片提及（与实体提及同构） */
+export function getRelationMentions(kid: number, relationId: number) {
+  return request.get<{
+    items: KgMentionSlice[]
+  }>(`${BASE}/${kid}/graph/relations/${relationId}/mentions`)
 }
 
 export function getNeighbors(kid: number, entityId: number, depth = 1, limit = 100) {
@@ -362,7 +404,11 @@ export interface KgRetrieveHit {
   metadata?: {
     fusion_sources?: string[]
     score_type?: string
-    graph_path?: unknown[]
+    /** 种子实体 → 命中切片的真实图路径（BFS 最短路径，可能缺省） */
+    graph_path?: {
+      nodes: { id: string; name: string; label: string; kind: string }[]
+      relations: string[]
+    } | null
     graph_seed_entities?: string[]
     [k: string]: unknown
   }
@@ -374,9 +420,16 @@ export interface KgRetrieveResponse {
   graph_enabled?: boolean
 }
 
-export function retrieveGraph(kid: number, query: string, topK = 10) {
+export function retrieveGraph(
+  kid: number,
+  query: string,
+  topK = 10,
+  options?: { useGraph?: boolean; scoreThreshold?: number },
+) {
   return request.post<KgRetrieveResponse>(`${BASE}/${kid}/retrieve`, {
     query,
     top_k: topK,
+    ...(options?.useGraph === undefined ? {} : { use_graph: options.useGraph }),
+    ...(options?.scoreThreshold === undefined ? {} : { score_threshold: options.scoreThreshold }),
   })
 }

@@ -127,6 +127,10 @@ class PgVectorStore(VectorStoreBase):
             meta = dict(rec.chunk.metadata or {})
             meta["tenant_id"] = self.tenant_id  # 深度防御：租户随行
             content = getattr(rec.chunk.content, "text", None)
+            if content and "\x00" in content:
+                # PostgreSQL text 不接受 NUL(0x00)：解析器残留时在写入口再兜一层，
+                # 否则整批 flush 失败并把已嵌入的切片一起回滚
+                content = content.replace("\x00", "")
             # 幂等：按 (collection, document_id, chunk_index) 先删后插
             self.session.execute(
                 sa_delete(KbSegment).where(

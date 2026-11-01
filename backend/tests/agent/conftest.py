@@ -1,4 +1,4 @@
-"""tests/agent 测试基础设施（per-schema 隔离，对齐 dataops/ontology）。
+"""tests/agent 测试基础设施（per-schema 隔离，对齐 dataops）。
 
 默认连 PostgreSQL 测试库 `minworkbuddy_test`（与生产方言一致，是验收目标）。
 若设置 ``MINWORKBUDDY_TEST_DB_URL`` 指向 SQLite，则退化为文件库，便于无 PG 环境

@@ -547,6 +547,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 整页白底 + 边框（浅色皮肤），与图谱知识库管理一致 */
+.src-mgr {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+:root[data-theme='light'] .src-mgr {
+  background: #ffffff;
+}
 .src-mgr__toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
 .muted { color: var(--fg-muted); }
 .imp-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

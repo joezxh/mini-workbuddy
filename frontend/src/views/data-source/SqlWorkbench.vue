@@ -114,5 +114,14 @@ onMounted(loadSources)
 </script>
 
 <style scoped>
+/* 整页白底 + 边框（浅色皮肤），与图谱知识库管理一致 */
+.sql-wb {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+:root[data-theme='light'] .sql-wb {
+  background: #ffffff;
+}
 .sql-wb__bar { display: flex; gap: 8px; margin: 8px 0; }
 </style>

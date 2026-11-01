@@ -30,7 +30,10 @@ _WS_RE = re.compile(r"\s+")
 # 三元组字段的同义拼写（不同抽取器/版本命名不一，统一收敛）
 _SUBJECT_KEYS = ("subject", "source", "src", "head", "from", "entity1", "s")
 _OBJECT_KEYS = ("object", "target", "tgt", "tail", "to", "entity2", "o")
-_PREDICATE_KEYS = ("predicate", "relation", "relationship", "type", "rel", "p")
+# ``relation_type`` 是 LLM 通道的约定字段名（prompt 里让模型这么输出），
+# 缺了它会把模型给的关系全部当成“无谓词”丢弃。
+_PREDICATE_KEYS = ("predicate", "relation", "relationship", "relation_type",
+                   "type", "rel", "p")
 _NAME_KEYS = ("name", "text", "entity", "value", "label_text")
 _LABEL_KEYS = ("label", "type", "category", "entity_type")
 
@@ -102,16 +105,36 @@ def build_schema_hint(
         from app.models.dataops.standard_cdm import (
             MetaObjectRelation,
             MetaObjectStandard,
+            MetaStandardCatalog,
         )
+
+        # 目录子树展开：选中父目录 = 约束其自身 + 所有子孙目录下的标准。
+        # 前端 CDM 目录已是树状下拉，若仍按单节点精确匹配，选父节点会
+        # 漏掉挂在子目录里的对象/关系标准——与树的直觉相悖，故取闭包。
+        scope_ids: Optional[list] = None
+        if catalog_id is not None:
+            children_map: dict = {}
+            cat_stmt = select(MetaStandardCatalog.id, MetaStandardCatalog.parent_id)
+            if tenant_id is not None:
+                cat_stmt = cat_stmt.where(MetaStandardCatalog.tenant_id == tenant_id)
+            for cid, pid in db.execute(cat_stmt).all():
+                children_map.setdefault(pid, []).append(cid)
+            seen, stack = {catalog_id}, [catalog_id]
+            while stack:
+                for child_id in children_map.get(stack.pop(), []):
+                    if child_id not in seen:
+                        seen.add(child_id)
+                        stack.append(child_id)
+            scope_ids = list(seen)
 
         obj_stmt = select(MetaObjectStandard.code, MetaObjectStandard.name)
         rel_stmt = select(MetaObjectRelation.code, MetaObjectRelation.name)
         if tenant_id is not None:
             obj_stmt = obj_stmt.where(MetaObjectStandard.tenant_id == tenant_id)
             rel_stmt = rel_stmt.where(MetaObjectRelation.tenant_id == tenant_id)
-        if catalog_id is not None:
-            obj_stmt = obj_stmt.where(MetaObjectStandard.catalog_id == catalog_id)
-            rel_stmt = rel_stmt.where(MetaObjectRelation.catalog_id == catalog_id)
+        if scope_ids is not None:
+            obj_stmt = obj_stmt.where(MetaObjectStandard.catalog_id.in_(scope_ids))
+            rel_stmt = rel_stmt.where(MetaObjectRelation.catalog_id.in_(scope_ids))
 
         objects = db.execute(obj_stmt.limit(limit)).all()
         relations = db.execute(rel_stmt.limit(limit)).all()
@@ -181,15 +204,36 @@ def extract(
     client=None,
     schema_hint: str = "",
     tenant_id: Optional[int] = None,
+    llm: Optional[Any] = None,
 ) -> ExtractionResult:
     """从一段文本抽取实体与关系。
 
-    :param client: 抽取客户端（默认 ``SemanticaClient``；测试可注入假实现）
+    两条通道共用下方同一套**规整层**（长度守卫 / 去重 / 悬空边丢弃），
+    避免「LLM 通道少校验一项」的隐性分叉：
+
+    * ``llm`` 不为空 → LLM 通道（:mod:`kg_llm_extractor`，中文长文本唯一可行解）；
+    * 否则          → semantica 规则/NER 通道（缺 spaCy 时为英文正则，**中文几乎零召回**）。
+
+    :param client: 规则通道的抽取客户端（默认 ``SemanticaClient``；测试可注入假实现）
+    :param llm: 可调用 ``(text, *, schema_hint="") -> (raw_entities, raw_triplets)``
     :return: :class:`ExtractionResult`（含丢弃计数与错误，绝不抛异常）
     """
     result = ExtractionResult()
     if not (text or "").strip():
         return result
+
+    raw_entities: list = []
+    raw_triplets: list = []
+
+    if llm is not None:
+        try:
+            raw_entities, raw_triplets = llm(text, schema_hint=schema_hint)
+        except Exception as exc:  # noqa: BLE001 - 单切片失败不中断整批
+            # **不回落规则通道**：回落会产出一堆 related_to 全连接弱关系，
+            # 比空结果更难发现（前端看起来“抽取成功”）。直接失败 → 阶段标记置
+            # False → 模型恢复后可断点续跑。
+            result.errors.append(f"LLM 抽取失败: {type(exc).__name__}: {exc}")
+        return _assemble(result, raw_entities, raw_triplets)
 
     if client is None:
         try:
@@ -202,8 +246,6 @@ def extract(
             result.errors.append(f"抽取器初始化失败: {exc}")
             return result
 
-    raw_entities: list = []
-    raw_triplets: list = []
     try:
         # 类型约束作为抽取选项注入；抽取器不接受该选项时降级为无约束重试
         # （semantica / 自建抽取器的入参约定不一，失败不能让整段文本颗粒无收）
@@ -223,6 +265,13 @@ def extract(
     except Exception as exc:  # noqa: BLE001
         result.errors.append(f"关系抽取失败: {type(exc).__name__}: {exc}")
 
+    return _assemble(result, raw_entities, raw_triplets)
+
+
+def _assemble(
+    result: ExtractionResult, raw_entities: list, raw_triplets: list
+) -> ExtractionResult:
+    """两条通道共用的规整层：去重 + 长度守卫 + 悬空边丢弃。"""
     # ── 实体：去重 + 长度守卫 ──
     seen: dict[str, dict] = {}
     for raw in raw_entities:

@@ -56,8 +56,13 @@ def _entity_out(e: KgEntity, mention_count: Optional[int] = None) -> dict:
     }
 
 
-def _relation_out(t: KgTriple, names: Optional[Dict[int, str]] = None) -> dict:
-    names = names or {}
+def _relation_out(
+    t: KgTriple,
+    names: Optional[Dict[int, str]] = None,
+    mention_count: int = 0,
+) -> dict:
+    # 抽取器：手动录入与图谱抽取的区分（evidence 存在即视为抽取产物）
+    extractor = (t.properties or {}).get("extractor") or ("llm" if t.evidence else "manual")
     return {
         "id": t.id,
         "relation_code": t.relation_code,
@@ -70,9 +75,28 @@ def _relation_out(t: KgTriple, names: Optional[Dict[int, str]] = None) -> dict:
         "status": t.status,
         "properties": t.properties or {},
         "evidence": t.evidence,
+        "mention_count": mention_count,
+        "extractor": extractor,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
     }
+
+
+def _triple_mention_counts(db: Session, triples: List[KgTriple]) -> Dict[int, int]:
+    """批量统计关系提及数（避免逐条 count 查询）。"""
+    from sqlalchemy import func, select
+
+    from app.models.kb.kg_triple_mention import KgTripleMention
+
+    ids = [t.id for t in triples if t.id is not None]
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(KgTripleMention.kg_triple_id, func.count(KgTripleMention.id))
+        .where(KgTripleMention.kg_triple_id.in_(ids))
+        .group_by(KgTripleMention.kg_triple_id)
+    ).all()
+    return {int(rid): int(cnt) for rid, cnt in rows}
 
 
 def _entity_names(svc: KgService, triples: List[KgTriple]) -> Dict[int, str]:
@@ -258,8 +282,11 @@ def list_relations(
         from_entity_id=from_entity_id, to_entity_id=to_entity_id,
     )
     names = _entity_names(svc, items)
+    mentions = _triple_mention_counts(db, items)
     return {
-        "items": [_relation_out(t, names) for t in items],
+        "items": [
+            _relation_out(t, names, mentions.get(int(t.id), 0)) for t in items
+        ],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -296,12 +323,15 @@ def get_relation(
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_VIEW)),
 ):
-    """关系详情。"""
+    """关系详情（含两端实体名 / 提及数 / 抽取器，供检视面板）。"""
     svc = _svc(db, current_user, kid)
     triple = svc.get_triple(relation_id)
     if triple is None:
         raise HTTPException(status_code=404, detail="关系不存在")
-    return _relation_out(triple, _entity_names(svc, [triple]))
+    mentions = _triple_mention_counts(db, [triple])
+    return _relation_out(
+        triple, _entity_names(svc, [triple]), mentions.get(int(triple.id), 0)
+    )
 
 
 @router.delete("/{kid}/graph/relations/{relation_id}")
@@ -399,10 +429,36 @@ def rebuild_document_graph(
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_ADMIN)),
 ):
-    """仅对指定文档重抽图谱：先撤销其贡献，再重建（后台执行）。"""
-    from app.services.kb.kg.kg_build_service import submit_build
+    """仅对指定文档重抽图谱：先撤销其贡献，再重建（后台执行）。
+
+    图谱是从**切片**抽的：文档摄取失败时 ``kms_segment`` 为空，后台任务会
+    扫到 0 个切片并"成功"结束（entities=0），前端却拿到 200 被误导——
+    故此处对「无切片」直接 409，把「先重试解析」显式交回用户。
+    """
+    from sqlalchemy import select
+
+    from app.models.kb.kb_document import KbDocument
+    from app.services.kb.kg.kg_build_service import KgBuildService, submit_build
 
     tenant_id = _tenant_id(current_user)
+    if KgBuildService(db, tenant_id, kid).count_segments(body.document_uuid) == 0:
+        doc = db.execute(
+            select(KbDocument).where(
+                KbDocument.uuid_code == body.document_uuid,
+                KbDocument.knowledge_id == kid,
+                KbDocument.tenant_id == tenant_id,
+            )
+        ).scalar_one_or_none()
+        reason = (doc.error_detail if doc is not None else None) or (
+            "文档仍在解析中" if doc is not None and doc.status == "processing"
+            else "文档尚无切片"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"该文档没有可抽取的切片（{reason}）；"
+                   "请先在「文档」面板重试解析，解析成功后再抽取图谱",
+        )
+
     out = submit_build(
         tenant_id=tenant_id, knowledge_id=kid, action="rebuild",
         document_uuid=body.document_uuid,
@@ -476,6 +532,22 @@ def graph_subgraph(
     return _svc(db, current_user, kid).subgraph(ids, depth=depth, limit=limit)
 
 
+@router.get("/{kid}/graph/full")
+def graph_full(
+    kid: int,
+    limit: int = Query(200, ge=1, le=2000),
+    type_code: Optional[str] = Query(None, description="只保留该类型的实体"),
+    relation_code: Optional[str] = Query(None, description="只保留该关系类型的边"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """全库图（无种子）：节点按度数截断到 limit，返回 {nodes, edges}。"""
+    return _svc(db, current_user, kid).full_graph(
+        limit=limit, type_code=type_code, relation_code=relation_code,
+    )
+
+
 @router.get("/{kid}/graph/subgraph/seed")
 def graph_seed_subgraph(
     kid: int,
@@ -518,6 +590,21 @@ def graph_entity_mentions(
     if svc.get_entity(entity_id) is None:
         raise HTTPException(status_code=404, detail="实体不存在")
     return {"items": svc.entity_mentions(entity_id)}
+
+
+@router.get("/{kid}/graph/relations/{relation_id}/mentions")
+def graph_relation_mentions(
+    kid: int,
+    relation_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """关系溯源：它被哪些切片提及（与实体提及同契约）。"""
+    svc = _svc(db, current_user, kid)
+    if svc.get_triple(relation_id) is None:
+        raise HTTPException(status_code=404, detail="关系不存在")
+    return {"items": svc.triple_mentions(relation_id)}
 
 
 class PathsBody(BaseModel):
@@ -677,6 +764,7 @@ def graph_build_status(
 
     from app.models.kb.kb_segment import KbSegment
     from app.services.kb.kg import kg_build_service, kg_neo4j_store
+    from app.services.kb.kg.kg_config import get_build_meta
 
     tenant_id = _tenant_id(current_user)
     total = db.execute(
@@ -721,6 +809,14 @@ def graph_build_status(
     else:
         state = "not_built"
 
+    # 最近一次构建的运行元信息（时间/耗时/失败环节），供概览「上次构建」展示
+    meta = get_build_meta(db, kid)
+    failed_step = ""
+    if int(meta.get("structure_failed") or 0) > 0:
+        failed_step = "structure"
+    elif int(meta.get("vector_failed") or 0) > 0:
+        failed_step = "vector"
+
     return {
         "state": state,
         "running": running,
@@ -729,4 +825,10 @@ def graph_build_status(
         "structure_done": structure_done,
         "vector_done": vector_done,
         "failed": failed,
+        "last_build_at": meta.get("finished_at"),
+        "last_build_action": meta.get("action"),
+        "last_build_duration": meta.get("duration_seconds"),
+        "last_failed_step": failed_step,
+        "last_failed_count": int(meta.get("structure_failed") or 0)
+        + int(meta.get("vector_failed") or 0),
     }

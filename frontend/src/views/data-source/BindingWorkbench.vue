@@ -97,7 +97,19 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.binding-wb { display: flex; flex-direction: column; gap: 12px; }
+/* 整个 tab 白底 + 边框（浅色皮肤），与图谱知识库管理一致 */
+.binding-wb {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+:root[data-theme='light'] .binding-wb,
+:root[data-theme='light'] .binding-wb__col {
+  background: #ffffff;
+}
 .binding-wb__filters { display: flex; gap: 10px; flex-wrap: wrap; }
 .binding-wb__cols { display: flex; gap: 16px; }
 .binding-wb__col { flex: 1; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; }

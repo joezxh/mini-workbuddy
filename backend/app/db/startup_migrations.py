@@ -257,6 +257,63 @@ def create_performance_indexes(engine: Engine) -> None:
                 logger.warning(f"索引创建跳过（不影响正确性）: {exc}")
 
 
+# ── 图谱实体半精度向量列（幂等；模型后加列的运行库兼底）────────────────
+def ensure_kg_entity_half_column(engine: Engine) -> None:
+    """确保 ``kg_entity.embedding_half``（halfvec 生成列）与 HNSW 索引存在。
+
+    背景：该列是模型侧后加的 ``Computed("embedding::halfvec")``，而 kg_entity
+    的建表走 ``Base.metadata.create_all``（表已存在则整表跳过，**不会补列**），
+    于是模型与运行库漂移；ORM 的 SELECT 会展开映射表全部列，直接
+    ``column kg_entity.embedding_half does not exist`` 抛 500
+    （症状：/graph/cdm-check、/graph/entities、/graph/relations 全 500）。
+
+    维度取自 ``embedding`` 列的真实 typmod（而非配置默认值），
+    避免两列维度失配导致生成列表达式校验失败。
+    """
+    if "kg_entity" not in inspect(engine).get_table_names():
+        return
+
+    with engine.begin() as conn:
+        if conn.execute(text(
+            "SELECT 1 FROM pg_type WHERE typname = 'halfvec'"
+        )).first() is None:
+            logger.warning(
+                "pgvector 未提供 halfvec 类型（< 0.7），跳过 kg_entity.embedding_half；"
+                "该列仅用于 ANN 索引，缺失不影响正确性"
+            )
+            return
+
+        has_col = conn.execute(text(
+            "SELECT 1 FROM pg_attribute "
+            "WHERE attrelid = 'kg_entity'::regclass "
+            "AND attname = 'embedding_half' AND NOT attisdropped"
+        )).first()
+        if has_col is None:
+            dim = conn.execute(text(
+                "SELECT a.atttypmod FROM pg_attribute a "
+                "WHERE a.attrelid = 'kg_entity'::regclass AND a.attname = 'embedding'"
+            )).scalar()
+            if not dim or int(dim) <= 0:
+                from app.config import settings
+                dim = int(settings.EMBEDDING_DIMENSION)
+            conn.execute(text(
+                f"ALTER TABLE kg_entity ADD COLUMN embedding_half halfvec({int(dim)}) "
+                "GENERATED ALWAYS AS (embedding::halfvec) STORED"
+            ))
+            logger.info(
+                f"kg_entity.embedding_half 已补齐（halfvec({int(dim)}) 生成列）"
+            )
+
+        try:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_kg_entity_embedding_half_hnsw "
+                "ON kg_entity USING hnsw (embedding_half halfvec_cosine_ops) "
+                "WITH (m = 16, ef_construction = 64)"
+            ))
+        except Exception as exc:  # noqa: BLE001 - 索引失败不阻断启动
+            logger.warning(f"kg_entity 半精度 HNSW 索引创建跳过（不影响正确性）: {exc}")
+
+
 # ── 向量列维度对齐（幂等，仅空表自动执行）────────────────────────────────────
 def align_vector_dimensions(engine: Engine) -> None:
     """把 ``kms_segment.embedding`` 维度对齐到当前生效的嵌入配置。

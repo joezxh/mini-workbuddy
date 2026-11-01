@@ -151,6 +151,81 @@ class KgRetriever:
             logger.debug(f"[kg] PPR 计算失败: {exc}")
             return {}
 
+    def _graph_path(self, subgraph: dict, seed_ids: list, chunk_id: str) -> Optional[dict]:
+        """在已取回的子图上用 BFS 找「种子实体 → 命中切片」的最短路径。
+
+        路径只用于前端面包屑展示（解释「为什么召回这条切片」），
+        不参与打分；取不到时返回 None，前端降级为只显示种子实体。
+        """
+        nodes = subgraph.get("nodes") or []
+        edges = subgraph.get("edges") or []
+        if not nodes or not edges:
+            return None
+
+        by_id = {n.get("id"): n for n in nodes if n.get("id")}
+        if chunk_id not in by_id:
+            return None
+
+        adj: dict = {}
+        rel_of: dict = {}
+        for e in edges:
+            a, b = e.get("from"), e.get("to")
+            if not a or not b:
+                continue
+            label = e.get("relation_type") or ""
+            adj.setdefault(a, []).append(b)
+            adj.setdefault(b, []).append(a)
+            rel_of[(a, b)] = label
+            rel_of[(b, a)] = label
+
+        # 从种子反向 BFS：第一层就是最近的种子实体
+        seeds = [s for s in seed_ids if s in by_id]
+        if not seeds:
+            return None
+        prev: dict = {}
+        queue: list = []
+        for s in seeds:
+            prev[s] = None
+            queue.append(s)
+        head = 0
+        found = False
+        while head < len(queue):
+            cur = queue[head]
+            head += 1
+            if cur == chunk_id:
+                found = True
+                break
+            for nxt in adj.get(cur, []):
+                if nxt in prev:
+                    continue
+                prev[nxt] = cur
+                queue.append(nxt)
+        if not found:
+            return None
+
+        chain: list = []
+        cur: Optional[str] = chunk_id
+        while cur is not None:
+            chain.append(cur)
+            cur = prev.get(cur)
+        chain.reverse()
+
+        path_nodes = []
+        relations = []
+        for idx, nid in enumerate(chain):
+            node = by_id.get(nid) or {}
+            path_nodes.append(
+                {
+                    "id": nid,
+                    "name": node.get("name") or "",
+                    "label": node.get("label") or "",
+                    "kind": node.get("kind") or "",
+                }
+            )
+            if idx > 0:
+                relations.append(rel_of.get((chain[idx - 1], nid), ""))
+        return {"nodes": path_nodes, "relations": relations}
+
     def _hydrate(self, chunk_ids: set) -> dict:
         """按 Neo4j chunk_id 取 PG 切片正文与定位信息。
 
@@ -236,6 +311,7 @@ class KgRetriever:
                         "fusion_sources": ["graph"],
                         "score_type": "graph",
                         "graph_seed_entities": [e.name for e in entities[:5]],
+                        "graph_path": self._graph_path(subgraph, seed_ids, cid),
                     },
                 }
             )

@@ -87,6 +87,7 @@
           v-else-if="selectedKbType === 4 && selectedId"
           :knowledge-id="selectedId"
           :knowledge-name="selectedKbName"
+          :knowledge-description="selectedKbDescription"
         />
         <a-empty v-else :description="t('kbMgmt.selectKbFirst')" />
       </a-col>
@@ -150,6 +151,16 @@
         <a-form-item v-if="form.type === 4" :label="t('kbMgmt.kbFormat')">
           <a-input :value="t('kbMgmt.fmtGraph')" disabled />
           <div class="kb-manager__tip">{{ t('kbMgmt.graphFormatTip') }}</div>
+        </a-form-item>
+        <!-- 知识图谱库：索引模式强制高质量（经济模式不产向量，实体无法召回） -->
+        <a-form-item v-if="form.type === 4" :label="t('kbMgmt.indexMode')">
+          <a-input :value="t('kbMgmt.highQuality')" disabled />
+          <div class="kb-manager__tip">{{ t('kbMgmt.graphIndexModeTip') }}</div>
+        </a-form-item>
+        <!-- 知识图谱库：不支持多模态开关 -->
+        <a-form-item v-if="form.type === 4" :label="t('kbMgmt.multimodal')">
+          <a-input :value="t('kbMgmt.notApplicable')" disabled />
+          <div class="kb-manager__tip">{{ t('kbMgmt.graphMultimodalTip') }}</div>
         </a-form-item>
         <!-- 外部知识库：以 Tab 切换两种接入方式（spec 知识库管理） -->
         <a-tabs v-if="form.type === 3" v-model:activeKey="externalTab">
@@ -603,6 +614,12 @@ const selectedKbType = computed<number | null>(() => {
 const selectedKbName = computed(() => {
   const kb = knowledges.value.find((k) => k.id === selectedId.value)
   return kb?.name || ''
+})
+
+/** 当前选中知识库备注：图谱面板副标题展示（为空则不显示） */
+const selectedKbDescription = computed(() => {
+  const kb = knowledges.value.find((k) => k.id === selectedId.value)
+  return kb?.description || ''
 })
 
 /** 左侧类别树：类别为父节点，知识库作为叶子挂到所属类别下 */
@@ -1191,7 +1208,9 @@ onMounted(() => {
   flex-direction: column;
 }
 
-/* 主体两栏：与 Wiki 左树一致（侧栏流式宽 240–320px，主窗体自适应） */
+/* 主体两栏：与 Wiki 左树一致（侧栏流式宽 240–320px，主窗体自适应）。
+   外层作为带边框 + 圆角的工作台容器（与 kg 原型 .workbench 一致）：
+   边框/圆角/溢出裁剪包住两栏，中间留白由容器底色填充。 */
 .kb-manager__body {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;
@@ -1199,6 +1218,10 @@ onMounted(() => {
   align-items: stretch;
   flex: 1;
   min-height: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 .kb-manager__side {
   display: flex;
@@ -1207,6 +1230,9 @@ onMounted(() => {
   min-width: 0;
   height: 100%;
   min-height: 0;
+  padding: 12px;
+  /* 与 kg 原型 .wb-side 一致：左栏右侧分隔线 */
+  border-right: 1px solid var(--border);
 }
 .kb-manager__tree-head {
   display: flex;
@@ -1274,6 +1300,8 @@ onMounted(() => {
 .kb-manager__main {
   min-height: 0;
   overflow: auto;
+  /* 与 kg 原型 .wb-main 一致：主窗体内边距，避免内容贴边 */
+  padding: 16px;
 }
 
 /* 类别树：内容超出时纵向 + 横向滚动，树内浅色背景 */
@@ -1292,6 +1320,34 @@ onMounted(() => {
 }
 .kb-manager__tree :deep(.ant-tree-node-content-wrapper) {
   white-space: nowrap;
+}
+/* 选中项：AntD 的 controlItemBgActive 由未解析的 CSS 变量派生，浅色皮肤下会
+   退化成语义不明的低对比底色，深色文字压在上面读不清；这里用皮肤令牌显式覆写。 */
+.kb-manager__tree :deep(.ant-tree-node-content-wrapper.ant-tree-node-selected) {
+  background: var(--bg-active, rgba(59, 130, 246, 0.12));
+  color: var(--accent-hover, #2563eb);
+  border-radius: 6px;
+  font-weight: 500;
+}
+/* 选中节点内的数量徽标同步主色，避免灰底灰字叠在选中底色上 */
+.kb-manager__tree :deep(.ant-tree-node-selected .kb-node-count) {
+  color: var(--accent, #3b82f6);
+  background: var(--accent-soft, rgba(59, 130, 246, 0.12));
+}
+
+/* 浅色皮肤：左侧知识库菜单树（含全部知识库标题）与右侧主窗体改为纯白背景 */
+:root[data-theme='light'] .kb-manager__tree :deep(.ant-card-body) {
+  background: #ffffff;
+}
+:root[data-theme='light'] .kb-manager__main {
+  background: #ffffff;
+}
+/* 浅色皮肤：树节点（含标题）悬停/选中均保持白底，仅用主色文字/描边区分，避免灰底叠色 */
+:root[data-theme='light'] .kb-manager__tree :deep(.ant-tree-node-content-wrapper:hover) {
+  background: #ffffff;
+}
+:root[data-theme='light'] .kb-manager__tree :deep(.ant-tree-node-content-wrapper.ant-tree-node-selected) {
+  background: var(--bg-active, rgba(59, 130, 246, 0.12));
 }
 
 .kb-manager__tip {

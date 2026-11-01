@@ -13,10 +13,10 @@
 			"path": "../github/Yuxi"
 		},
 		{
-			"path": "../../work/zipper-robots"
+			"path": "../Omni-Interaction-Agent"
 		},
 		{
-			"path": "../Omni-Interaction-Agent"
+			"path": "../github/EvoOntology"
 		}
 	],
 	"settings": {}

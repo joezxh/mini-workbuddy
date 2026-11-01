@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  10 种主流 Agent 设计模式 —— AgentScope Java 版的独立构建文件。
+
+  本目录同时存放 Python 示例（*.py），因此 pom 文件命名为 pom-java.xml
+  而不是 pom.xml，避免与 Python 侧目录语义混淆。
+
+  用法（需要 JDK 17+）：
+    export DASHSCOPE_API_KEY=sk-xxxx
+    mvn -f pom-java.xml compile
+    mvn -f pom-java.xml exec:java -Dexec.mainClass=io.agentscope.examples.patterns.Pattern01ReAct
+
+  说明：agentscope.version 默认取 Maven Central 的 GA 版本；若与本地
+  agentscope-java 源码（2.1.0-SNAPSHOT）对照学习，可在 agentscope-java
+  仓库执行 `mvn install -DskipTests` 后把版本改为 2.1.0-SNAPSHOT。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.agentscope.examples</groupId>
+  <artifactId>architecture-patterns-java</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <name>AgentScope Java Architecture Patterns</name>
+  <description>10 mainstream agent design patterns implemented with AgentScope Java 2.0</description>
+
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <agentscope.version>2.0.3</agentscope.version>
+  </properties>
+
+  <dependencies>
+    <!-- 核心：ReActAgent / Toolkit / Msg / 事件流 -->
+    <dependency>
+      <groupId>io.agentscope</groupId>
+      <artifactId>agentscope-core</artifactId>
+      <version>${agentscope.version}</version>
+    </dependency>
+    <!-- 让 "dashscope:qwen-plus" 字符串可被 ModelRegistry 解析 -->
+    <dependency>
+      <groupId>io.agentscope</groupId>
+      <artifactId>agentscope-extensions-model-dashscope</artifactId>
+      <version>${agentscope.version}</version>
+    </dependency>
+    <!-- 可选：切换 "openai:" 前缀（OpenAI 兼容端点） -->
+    <dependency>
+      <groupId>io.agentscope</groupId>
+      <artifactId>agentscope-extensions-model-openai</artifactId>
+      <version>${agentscope.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>2.0.13</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- 源码与 pom 同目录（本目录下 *.java 即全部示例） -->
+    <sourceDirectory>${project.basedir}</sourceDirectory>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.1.0</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

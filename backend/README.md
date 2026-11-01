@@ -82,7 +82,9 @@ alembic upgrade head
 ### 运行开发服务器
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# --reload-dir app：只监听生产代码目录，改 tests/ 下的文件不会触发服务重启
+# （Windows 下每次 reload 都要 spawn 子进程并重新执行全量 import，代价不低）
+uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 ```
 
 访问 API 文档：http://localhost:8000/docs

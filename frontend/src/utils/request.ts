@@ -3,6 +3,7 @@ import { message } from 'ant-design-vue'
 import { getToken, removeToken } from './auth'
 import router from '@/router'
 import { getApiBase, onApiBaseChange } from './apiBase'
+import { resolveApiError } from './apiErrorCodes'
 
 // 创建 axios 实例
 // 开发环境使用空 baseURL，所有 /api 请求走 Vite proxy 代理，避免 CORS 问题
@@ -55,13 +56,27 @@ service.interceptors.response.use(
 
     if (error.response) {
       const status = error.response.status
-      
+
+      // 401 认证失效优先处理（即便响应体带 code 也要跳转登录）
+      if (status === 401) {
+        message.error('登录已过期，请重新登录')
+        removeToken()
+        router.push('/login')
+        return Promise.reject(error)
+      }
+
+      // R3 错误契约：本体端点返回 {code,message,detail?}，优先按 code 映射文案，
+      // 覆盖 404/409/500/503 等通用分支；既有 47 端点无 code，走下方回落逻辑。
+      const data = error.response.data as Record<string, any>
+      if (data && typeof data.code === 'string') {
+        const codeText = resolveApiError(data)
+        if (codeText) {
+          message.error(codeText)
+          return Promise.reject(error)
+        }
+      }
+
       switch (status) {
-        case 401:
-          message.error('登录已过期，请重新登录')
-          removeToken()
-          router.push('/login')
-          break
         case 403:
           message.error('没有权限访问该资源')
           break
@@ -73,11 +88,7 @@ service.interceptors.response.use(
           break
         default: {
           // 优先展示后端返回的详细错误信息（detail / message）
-          const respData = (error.response?.data || {}) as Record<string, any>
-          const detail = respData.detail || respData.message || respData.msg
-          const text = typeof detail === 'string'
-            ? detail
-            : (detail && detail.msg) || error.message || '请求失败'
+          const text = resolveApiError(data) || error.message || '请求失败'
           message.error(text)
         }
       }

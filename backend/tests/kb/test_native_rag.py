@@ -13,10 +13,12 @@ from agentscope.rag import (
     VectorStoreBase,
 )
 from agentscope.message import TextBlock
+from sqlalchemy import select as sa_select
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 from app.models.kb.kb_collection import KbCollection
+from app.models.kb.kb_segment import KbSegment
 from app.services.kb.rag import chunker_factory
 from app.services.kb.rag.pg_vector_store import PgVectorStore
 
@@ -95,6 +97,23 @@ async def test_search_score_larger_is_better_and_metadata_filter(factory, collec
         filtered = await store.search("kb_native", _vec(0.1), top_k=5,
                                       metadata_filter={"tag": "y"})
         assert len(filtered) == 1 and filtered[0].chunk.content.text == "另一段"
+
+
+@pytest.mark.asyncio
+async def test_insert_strips_nul_characters(factory, collection):
+    """兜底：解析残留的 NUL(0x00) 在写入口剔除，不整批回滚。"""
+    async with PgVectorStore(factory, tenant_id=100, dimensions=DIM) as store:
+        await store.insert("kb_native", [_record("doc-nul", 0, "前\x00中\x00后")])
+
+    with factory() as s:
+        row = s.execute(
+            sa_select(KbSegment).where(
+                KbSegment.tenant_id == 100,
+                KbSegment.collection == "kb_native",
+                KbSegment.document_id == "doc-nul",
+            )
+        ).scalar_one()
+        assert row.content == "前中后"
 
 
 @pytest.mark.asyncio

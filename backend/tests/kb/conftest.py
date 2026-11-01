@@ -20,6 +20,7 @@ from app.db.database import Base
 # 2026-09-27 统一化：kb_collection.knowledge_id → kms_knowledge.id，
 # 测试 schema 建表时必须一并创建被引用表，否则 create_all 抛 NoReferencedTableError
 from app.models.wiki.wiki_knowledge import WikiKnowledge  # noqa: F401
+from app.models.wiki.wiki_article import WikiArticle  # noqa: F401
 from app.models.kb.kb_collection import KbCollection
 from app.models.kb.kb_document import KbDocument  # noqa: F401
 from app.models.kb.kb_segment import KbSegment
@@ -60,7 +61,8 @@ TEST_DB_URL = _test_db_url()
 IS_POSTGRES = make_url(TEST_DB_URL).get_backend_name() == "postgresql"
 
 KB_TABLES = [
-    WikiKnowledge.__table__, KbCollection.__table__, KbDocument.__table__,
+    WikiKnowledge.__table__, WikiArticle.__table__,
+    KbCollection.__table__, KbDocument.__table__,
     KbSegment.__table__, KbRef.__table__,
     KgEntity.__table__, KgEntityMention.__table__,
     KgTriple.__table__, KgTripleMention.__table__,

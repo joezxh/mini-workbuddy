@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.models.kb.kg_entity import KgEntity
 from app.models.kb.kg_entity_mention import KgEntityMention
 from app.models.kb.kg_triple import KgTriple
+from app.models.kb.kg_triple_mention import KgTripleMention
 from app.models.kb.kb_segment import KbSegment
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 from app.services.kb.kb_format import GRAPH_KB_TYPE
@@ -589,6 +590,62 @@ class KgService:
         """单实体的邻接子图（检视面板「相邻关系」用）。"""
         return self.subgraph([entity_id], depth=depth, limit=limit)
 
+    def full_graph(
+        self,
+        *,
+        limit: int = 200,
+        type_code: Optional[str] = None,
+        relation_code: Optional[str] = None,
+    ) -> dict:
+        """全库图（无种子）：全量取数后按度数截断。
+
+        截断用「度数优先」而非 id 顺序：限流后仍是枢纽骨架，而不是按 id
+        截出来的碎片；被保留节点之间的边才进入结果，避免悬挂边。
+        """
+        self._guard()
+        cap = max(1, min(2000, int(limit)))
+        ent_stmt = self._entity_stmt()
+        if type_code:
+            ent_stmt = ent_stmt.where(KgEntity.type_code == type_code)
+        entities = list(self.db.execute(ent_stmt).scalars().all())
+        if not entities:
+            return {"nodes": [], "edges": []}
+
+        ids = [e.id for e in entities]
+        tri_stmt = self._triple_stmt().where(
+            KgTriple.from_entity_id.in_(ids),
+            KgTriple.to_entity_id.in_(ids),
+        )
+        if relation_code:
+            tri_stmt = tri_stmt.where(KgTriple.relation_code == relation_code)
+        triples = list(self.db.execute(tri_stmt).scalars().all())
+
+        degree: dict = {}
+        for t in triples:
+            degree[t.from_entity_id] = degree.get(t.from_entity_id, 0) + 1
+            degree[t.to_entity_id] = degree.get(t.to_entity_id, 0) + 1
+
+        keep = sorted(entities, key=lambda e: (-degree.get(e.id, 0), e.id))[:cap]
+        keep_ids = {e.id for e in keep}
+        return {
+            "nodes": [
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "code": e.type_code or "",
+                    "type_code": e.type_code or "",
+                    "entity_key": e.entity_key,
+                    "status": e.status,
+                }
+                for e in keep
+            ],
+            "edges": [
+                self._edge_dict(t)
+                for t in triples
+                if t.from_entity_id in keep_ids and t.to_entity_id in keep_ids
+            ],
+        }
+
     def paths(
         self, from_entity_id: int, to_entity_id: int, *, max_depth: int = 2,
         limit: int = 20,
@@ -670,6 +727,33 @@ class KgService:
             )
         return out
 
+    def triple_mentions(self, triple_id: int) -> list:
+        """关系提及的切片清单（溯源：这条关系出现在哪些切片里）。
+
+        与 :meth:`entity_mentions` 同契约：内容取自 PG（可见性权威），
+        切片已删除的提及自动跳过。
+        """
+        mentions = self.db.execute(
+            select(KgTripleMention).where(KgTripleMention.kg_triple_id == triple_id)
+        ).scalars().all()
+        out: list = []
+        for m in mentions:
+            seg = None
+            if m.segment_id is not None:
+                seg = self.db.get(KbSegment, m.segment_id)
+            if seg is None:
+                continue  # 切片已删 -> 提及不再可见
+            out.append(
+                {
+                    "segment_id": seg.id,
+                    "chunk_index": seg.chunk_index,
+                    "document_id": seg.document_id,
+                    "content": (seg.content or "")[:500],
+                    "evidence": m.evidence,
+                }
+            )
+        return out
+
     def labels(self) -> list:
         """实体类型分布（对齐 Yuxi /graph/labels）。"""
         stmt = select(KgEntity.type_code, func.count(KgEntity.id)).where(
@@ -704,9 +788,33 @@ class KgService:
         total_relations = self.db.execute(
             self._triple_stmt().with_only_columns(func.count(KgTriple.id))
         ).scalar_one()
+        # 提及总数：kg_entity_mention 的行数（概览 8 卡之一）。
+        # 提及是独立关联表（实体 × 切片，唯一约束去重），实体表本身不存计数字段；
+        # 手工 CRUD 写入的 source_segment_ids 不产生提及行，故此处只数真实提及记录。
+        mention_stmt = (
+            select(func.count(KgEntityMention.id))
+            .join(KgEntity, KgEntity.id == KgEntityMention.kg_entity_id)
+            .where(KgEntity.knowledge_id == self.knowledge_id)
+        )
+        if self.tenant_id is not None:
+            mention_stmt = mention_stmt.where(KgEntity.tenant_id == self.tenant_id)
+        total_mentions = self.db.execute(mention_stmt).scalar_one()
+        # 待评审：suggested 的实体 + suggested 的关系（概览 8 卡之一）
+        pending_entities = self.db.execute(
+            self._entity_stmt()
+            .where(KgEntity.status == "suggested")
+            .with_only_columns(func.count(KgEntity.id))
+        ).scalar_one()
+        pending_relations = self.db.execute(
+            self._triple_stmt()
+            .where(KgTriple.status == "suggested")
+            .with_only_columns(func.count(KgTriple.id))
+        ).scalar_one()
         return {
             "entities": int(total_entities or 0),
             "relations": int(total_relations or 0),
+            "mentions": int(total_mentions or 0),
+            "pending_review": int(pending_entities or 0) + int(pending_relations or 0),
             "by_type": {(code or ""): int(n) for code, n in entity_rows},
             "by_relation": {(code or ""): int(n) for code, n in relation_rows},
         }

@@ -326,9 +326,6 @@ def test_error_recovery_with_reconnection(setup_providers: None):
             assert "timeout" in frame["data"].get("message", "").lower() or \
                    frame["data"].get("code") == "CONNECTION_TIMEOUT"
         ws.disconnect(1000)
-    except Exception:
-        # 超时异常可接受
-        pass
 
 
 def test_concurrent_sessions_isolation(setup_providers: None):

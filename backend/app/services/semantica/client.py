@@ -37,6 +37,74 @@ def _as_dict(obj: Any) -> Any:
     return getattr(obj, "__dict__", obj)
 
 
+def _entity_type():
+    from semantica.semantic_extract.types import Entity
+
+    return Entity
+
+
+def _to_entities(values: Any) -> Any:
+    """实体入参归一：``list[dict]`` → ``list[Entity]``；已是对象则原样返回。
+
+    :meth:`SemanticaClient.extract_entities` 的产物是 **dict**（``_as_dict``），
+    而 ``RelationExtractor`` / ``TripletExtractor`` 内部按 ``entity.text`` / ``.label``
+    取属性。dict 原样透传会抛 ``AttributeError: 'dict' object has no attribute
+    'text'``，关系抽取因此**整批失败**（表现为抽取成功但 relations 恒为 0）。
+    偏移量缺失时以 0 兜底：抽取器只用 ``text``/``label`` 组三元组，坐标不参与语义。
+    """
+    if not values or not isinstance(values, (list, tuple)):
+        return values
+    if not any(isinstance(v, dict) for v in values):
+        return list(values)
+    Entity = _entity_type()
+    out: List[Any] = []
+    for v in values:
+        if isinstance(v, Entity):
+            out.append(v)
+            continue
+        if not isinstance(v, dict):
+            # 字符串形态：只带名字，类型未知
+            out.append(Entity(
+                text=str(v), label="", start_char=0, end_char=len(str(v)),
+            ))
+            continue
+        text = str(v.get("text") or v.get("name") or v.get("entity") or "")
+        if not text:
+            continue
+        out.append(Entity(
+            text=text,
+            label=str(v.get("label") or v.get("type") or ""),
+            start_char=int(v.get("start_char") or 0),
+            end_char=int(v.get("end_char") or 0),
+            confidence=v.get("confidence"),
+            metadata=v.get("metadata") or {},
+        ))
+    return out
+
+
+def _to_relations(values: Any) -> Any:
+    """关系入参归一：其 subject/object 同样可能是 dict。"""
+    if not values or not isinstance(values, (list, tuple)):
+        return values
+    Entity = _entity_type()
+    out: List[Any] = []
+    for v in values:
+        if not isinstance(v, dict):
+            out.append(v)
+            continue
+        row = dict(v)
+        for key in ("subject", "object"):
+            val = row.get(key)
+            if isinstance(val, dict):
+                row[key] = _to_entities([val])[0]
+            elif isinstance(val, str):
+                row[key] = Entity(
+                    text=val, label="", start_char=0, end_char=len(val),
+                )
+        out.append(row)
+    return out
+
+
 class SemanticaClient:
     """semantica 能力的统一入口。
 
@@ -64,14 +132,17 @@ class SemanticaClient:
 
     def extract_relations(self, text, entities, **kwargs) -> List[dict]:
         rel = _import("semantica.semantic_extract.relation_extractor").RelationExtractor()
-        return [_as_dict(r) for r in rel.extract(text, entities, **kwargs)]
+        return [_as_dict(r) for r in rel.extract(text, _to_entities(entities), **kwargs)]
 
     def extract_triplets(self, text, entities=None, relations=None, **kwargs) -> List[dict]:
         te = _import("semantica.semantic_extract.triplet_extractor").TripletExtractor()
         return [
             _as_dict(t)
             for t in te.extract_triplets(
-                text, entities=entities, relations=relations, **kwargs
+                text,
+                entities=_to_entities(entities),
+                relations=_to_relations(relations),
+                **kwargs,
             )
         ]
 

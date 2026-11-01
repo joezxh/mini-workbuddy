@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图谱知识库 · 前端功能原型</title>
+<style>
+  :root{
+    --primary:#3371fc; --primary-hover:#2b5fd9;
+    --bg:#f5f7fa; --card:#ffffff; --subtle:#f7f9fc;
+    --text:#1f2329; --text-2:#646a73; --text-3:#8f959e;
+    --border:#e5e6eb; --border-2:#d0d5dd;
+    --tint:#e6f0ff;
+    --success:#52c41a; --success-bg:#f6ffed; --success-br:#b7eb8f;
+    --error:#ff4d4f; --error-bg:#fff2f0; --error-br:#ffccc7;
+    --warn:#faad14; --warn-bg:#fffbe6; --warn-br:#ffe58f;
+    --info:#3371fc; --info-bg:#f0f6ff;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow:0 4px 12px rgba(16,24,40,.08);
+    --r:8px; --r-sm:6px;
+    --t:0.18s cubic-bezier(.4,0,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+
+  /* ── 预览页头 ── */
+  .preview-header{
+    position:sticky;top:0;z-index:60;
+    background:linear-gradient(135deg,#1b2a4a 0%,#24365e 55%,#2b4a86 100%);
+    color:#fff;padding:18px 28px;box-shadow:0 2px 14px rgba(16,24,40,.18);
+  }
+  .preview-header h1{font-size:17px;font-weight:600;letter-spacing:.2px}
+  .preview-header p{font-size:12.5px;opacity:.82;margin-top:3px}
+  .preview-actions{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
+  .pa{height:30px;padding:0 13px;border-radius:var(--r-sm);border:1px solid rgba(255,255,255,.28);
+      background:rgba(255,255,255,.1);color:#fff;cursor:pointer;transition:all var(--t);font-size:12.5px}
+  .pa:hover{background:rgba(255,255,255,.22)}
+  .pa.on{background:#fff;color:#24365e;font-weight:600;border-color:#fff}
+
+  .stage{padding:22px 28px 60px;max-width:1560px;margin:0 auto;position:relative}
+  .stage-title{font-size:15px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .stage-title .tag-ver{font-size:11px;font-weight:500;color:var(--primary);background:var(--tint);padding:2px 8px;border-radius:20px}
+  .stage-desc{font-size:12.5px;color:var(--text-2);margin-bottom:14px}
+
+  /* ── 按钮 ── */
+  .btn{display:inline-flex;align-items:center;gap:6px;justify-content:center;height:32px;padding:0 15px;
+       border-radius:var(--r-sm);border:1px solid var(--border-2);background:#fff;color:var(--text);
+       cursor:pointer;transition:all var(--t);font-weight:500;white-space:nowrap}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+  .btn-text{border-color:transparent;background:transparent;color:var(--primary)}
+  .btn-text:hover{background:var(--tint);border-color:transparent}
+  .btn-sm{height:27px;padding:0 10px;font-size:12px}
+  .btn-danger{color:var(--error);border-color:var(--error-br)}
+  .btn-danger:hover{background:var(--error);border-color:var(--error);color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ── 两栏工作台 ── */
+  .workbench{display:grid;grid-template-columns:264px 1fr;gap:16px;background:var(--card);
+             border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-sm);
+             overflow:hidden;height:820px}
+  .wb-side{border-right:1px solid var(--border);background:var(--subtle);padding:12px;display:flex;flex-direction:column;gap:10px}
+  .wb-side-head{display:flex;justify-content:flex-end;gap:6px}
+  .wb-icon-btn{width:26px;height:26px;border-radius:var(--r-sm);border:1px solid var(--border-2);background:#fff;
+               cursor:pointer;color:var(--text-2);transition:all var(--t);display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .wb-icon-btn:hover{color:var(--primary);border-color:var(--primary)}
+  .wb-tree{flex:1;background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;overflow:auto}
+  .wb-tree-h{font-size:11px;color:var(--text-3);letter-spacing:.6px;padding:4px 6px 8px}
+  .tnode{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--r-sm);cursor:pointer;
+         transition:background var(--t);font-size:12.5px;user-select:none}
+  .tnode:hover{background:var(--tint)}
+  .tnode.active{background:var(--tint);color:var(--primary);font-weight:500}
+  .tnode.folder{font-weight:500;color:var(--text)}
+  .tnode .caret{width:11px;font-size:9px;color:var(--text-3);transition:transform .18s;flex-shrink:0}
+  .tnode.open .caret{transform:rotate(90deg)}
+  .tnode .ti{width:15px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+  .ic-wiki{color:var(--primary)} .ic-gen{color:#52c41a} .ic-ext{color:#fa8c16}
+  .ic-graph{color:#722ed1} .ic-folder{color:#8f959e}
+  .tnode .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tnode .cnt{font-size:11px;color:var(--text-3);background:var(--bg);padding:0 6px;border-radius:10px;flex-shrink:0}
+  .tnode .newtag{font-size:10px;color:#722ed1;background:#f9f0ff;border:1px solid #efdbff;padding:0 5px;border-radius:4px;flex-shrink:0}
+
+  .wb-main{overflow:auto;padding:16px;background:#fff;display:flex;flex-direction:column;min-width:0}
+
+  /* ── 面板头 ── */
+  .pane-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .pane-head h2{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .pane-sub{font-size:12px;color:var(--text-2);margin-top:2px}
+  .pane-ops{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ── 构建状态徽标 ── */
+  .badge{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;border-radius:20px;
+         font-size:12px;font-weight:500;border:1px solid}
+  .badge .pulse{width:7px;height:7px;border-radius:50%;background:currentColor;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .badge-ready{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .badge-run{background:var(--info-bg);color:var(--primary);border-color:#bcd8ff}
+  .badge-warn{background:var(--warn-bg);color:#874d00;border-color:var(--warn-br)}
+  .badge-err{background:var(--error-bg);color:#cf1322;border-color:var(--error-br)}
+  .badge-idle{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+
+  /* ── Tab 条 ── */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto}
+  .tab{height:34px;padding:0 14px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-2);
+       border-bottom:2px solid transparent;transition:all var(--t);white-space:nowrap;display:flex;align-items:center;gap:5px}
+  .tab:hover{color:var(--primary)}
+  .tab.on{color:var(--primary);font-weight:600;border-bottom-color:var(--primary)}
+  .tab .cnt{font-size:11px;background:var(--bg);border-radius:9px;padding:0 6px;color:var(--text-3)}
+  .tab.on .cnt{background:var(--tint);color:var(--primary)}
+
+  /* ── 统计卡 ── */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  .stat{border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;background:var(--card);transition:all var(--t)}
+  .stat:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+  .stat .k{font-size:11.5px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+  .stat .v{font-size:20px;font-weight:600;line-height:1.3;margin-top:2px}
+  .stat.p .v{color:var(--primary)} .stat.s .v{color:var(--success)}
+  .stat.d .v{color:var(--text-2)} .stat.e .v{color:var(--error)} .stat.w .v{color:var(--warn)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot.p{background:var(--primary)} .dot.s{background:var(--success)}
+  .dot.d{background:var(--border-2)} .dot.e{background:var(--error)} .dot.w{background:var(--warn)}
+
+  /* ── 卡片 ── */
+  .card{border:1px solid var(--border);border-radius:var(--r);background:var(--card);margin-bottom:12px}
+  .card-h{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+          justify-content:space-between;gap:10px;font-weight:600;font-size:13px}
+  .card-b{padding:14px}
+  .card-b.tight{padding:10px 14px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+
+  /* ── 分段控件 ── */
+  .seg{display:inline-flex;border:1px solid var(--border-2);border-radius:var(--r-sm);overflow:hidden}
+  .seg button{height:28px;padding:0 14px;border:none;background:#fff;cursor:pointer;font-size:12.5px;
+              border-right:1px solid var(--border);transition:all var(--t)}
+  .seg button:last-child{border-right:none}
+  .seg button:hover{color:var(--primary)}
+  .seg button.on{background:var(--primary);color:#fff;font-weight:500}
+  .seg button.on:hover{color:#fff}
+
+  /* ── 工具栏 ── */
+  .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .toolbar-l,.toolbar-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .search{height:30px;padding:0 11px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;width:230px;transition:all var(--t)}
+  .search:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.12)}
+  select.sel,input.num{height:30px;padding:0 10px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;
+    cursor:pointer;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%238f959e' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 9px center;padding-right:26px}
+  input.num{background-image:none;padding-right:10px;width:62px;cursor:text}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--primary);width:14px;height:14px;cursor:pointer}
+
+  /* ── 表格 ── */
+  table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+  .tbl thead th{text-align:left;padding:9px 12px;background:var(--subtle);color:var(--text-2);font-weight:500;
+                font-size:11.5px;letter-spacing:.3px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .tbl thead th:first-child{border-top-left-radius:var(--r-sm)}
+  .tbl thead th:last-child{border-top-right-radius:var(--r-sm)}
+  .tbl tbody td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .tbl tbody tr{transition:background var(--t)}
+  .tbl tbody tr:hover{background:var(--subtle)}
+  .tbl tbody tr.sel{background:var(--tint)}
+  .tbl .nm{display:flex;align-items:center;gap:7px;font-weight:500}
+  .tbl .muted{color:var(--text-3);font-size:11.5px}
+  .tbl td.acts{white-space:nowrap}
+  .tbl td.acts .btn-text{padding:0 6px}
+
+  /* ── 标签 ── */
+  .tag{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 8px;border-radius:4px;
+       font-size:11px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+  .tag-ok{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .tag-run{background:var(--info-bg);color:var(--primary);border-color:#bcd8ff}
+  .tag-err{background:var(--error-bg);color:#cf1322;border-color:var(--error-br)}
+  .tag-idle{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+  .tag-warn{background:var(--warn-bg);color:#874d00;border-color:var(--warn-br)}
+  .tag-draft{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+  .tag-src{background:#f9f0ff;color:#722ed1;border-color:#efdbff}
+  .tag-g{background:#f9f0ff;color:#722ed1;border-color:#efdbff}
+  .tag-c{background:#e6fffb;color:#08979c;border-color:#87e8de}
+  .tag-p{background:var(--tint);color:#0958d9;border-color:#bcd8ff}
+  .tag-s{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .tag-o{background:#fff7e6;color:#d46b08;border-color:#ffd591}
+  .tag-w{background:#f9f0ff;color:#531dab;border-color:#efdbff}
+  .tag-link{background:var(--tint);color:var(--primary);border-color:#bcd8ff;font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  /* ── 进度条 ── */
+  .bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:5px}
+  .bar>i{display:block;height:100%;border-radius:3px;background:var(--primary);transition:width .4s}
+  .bar>i.s{background:var(--success)} .bar>i.w{background:var(--warn)} .bar>i.e{background:var(--error)}
+  .distrow{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px}
+  .distrow .lbl{width:78px;flex-shrink:0;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .distrow .bar{flex:1;margin:0}
+  .distrow .val{width:40px;text-align:right;color:var(--text-3);font-size:11.5px;flex-shrink:0}
+
+  /* ── 空态 ── */
+  .empty{padding:64px 20px;text-align:center;color:var(--text-3)}
+  .empty .ei{font-size:40px;opacity:.45;margin-bottom:10px}
+  .empty .et{font-size:13.5px;color:var(--text-2);font-weight:500;margin-bottom:3px}
+  .empty p{font-size:12.5px;margin-bottom:15px}
+
+  /* ── 提示条 ── */
+  .alert{display:flex;gap:8px;padding:9px 12px;border-radius:var(--r-sm);font-size:12.5px;border:1px solid;
+         margin-bottom:12px;align-items:flex-start;line-height:1.55}
+  .alert .ai{flex-shrink:0;font-size:13px;line-height:1.4}
+  .alert.info{background:var(--info-bg);border-color:#bcd8ff;color:#0958d9}
+  .alert.ok{background:var(--success-bg);border-color:var(--success-br);color:#237804}
+  .alert.warn{background:var(--warn-bg);border-color:var(--warn-br);color:#874d00}
+  .alert.err{background:var(--error-bg);border-color:var(--error-br);color:#cf1322}
+
+  .note{font-size:11.5px;color:var(--text-3);margin-top:12px;line-height:1.65}
+  code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:11.5px;
+       font-family:ui-monospace,Menlo,Consolas,monospace;color:#c7254e}
+
+  /* ── 分页 ── */
+  .pager{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text-2)}
+  .pg{min-width:28px;height:28px;padding:0 7px;border:1px solid var(--border-2);border-radius:var(--r-sm);
+      background:#fff;cursor:pointer;transition:all var(--t)}
+  .pg:hover{border-color:var(--primary);color:var(--primary)}
+  .pg.on{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  /* ── 图谱工作区 ── */
+  .kg-wrap{display:grid;grid-template-columns:1fr 306px;gap:12px;align-items:start}
+  .kg-canvas{position:relative;border:1px solid var(--border);border-radius:var(--r);background:
+             radial-gradient(circle at 1px 1px, #eceff3 1px, transparent 0) 0 0/22px 22px, #fff;overflow:hidden}
+  .kg-canvas svg{display:block;width:100%;height:auto}
+  .kg-legend{position:absolute;left:12px;bottom:12px;background:rgba(255,255,255,.94);border:1px solid var(--border);
+             border-radius:var(--r-sm);padding:8px 10px;font-size:11.5px;color:var(--text-2);display:flex;gap:12px;flex-wrap:wrap;
+             max-width:calc(100% - 24px);box-shadow:var(--shadow-sm)}
+  .kg-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .kg-hint{position:absolute;right:12px;top:12px;font-size:11.5px;color:var(--text-3);background:rgba(255,255,255,.9);
+           border:1px solid var(--border);border-radius:20px;padding:2px 10px}
+  .n circle{cursor:pointer;transition:all .2s;stroke:#fff;stroke-width:2}
+  .n:hover circle{stroke:var(--primary);stroke-width:3}
+  .n.on circle{stroke:var(--primary);stroke-width:3.5}
+  .n text{pointer-events:none;user-select:none}
+  .n .nm{font-size:11.5px;fill:var(--text);font-weight:500;paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round}
+  .n .ty{font-size:10px;fill:var(--text-3);paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+  .e path{fill:none;stroke:#c9d1dc;stroke-width:1.4;transition:all .2s}
+  .e.hl path{stroke:var(--primary);stroke-width:2.2}
+  .e text{font-size:10px;fill:var(--text-3);paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+  .e.on text{fill:var(--primary);font-weight:600}
+
+  /* ── 检视面板 ── */
+  .insp{border:1px solid var(--border);border-radius:var(--r);background:var(--card);overflow:hidden;position:sticky;top:0}
+  .insp-h{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+          justify-content:space-between;gap:8px;font-weight:600;font-size:13px}
+  .insp-b{padding:12px;max-height:640px;overflow:auto}
+  .kv{display:grid;grid-template-columns:76px 1fr;gap:4px 8px;font-size:12px;margin-bottom:10px}
+  .kv dt{color:var(--text-3)}
+  .kv dd{color:var(--text);word-break:break-all}
+  .sec-t{font-size:11.5px;color:var(--text-2);font-weight:600;margin:12px 0 6px;display:flex;align-items:center;gap:6px}
+  .sec-t::after{content:'';flex:1;height:1px;background:var(--border)}
+  .mini{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:var(--r-sm);font-size:12px;
+        cursor:pointer;transition:background var(--t)}
+  .mini:hover{background:var(--subtle)}
+  .mini .ar{color:var(--text-3);font-size:11px}
+  .kvlist{border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+  .kvlist .row{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)}
+  .kvlist .row:last-child{border-bottom:none}
+  .kvlist .row .k{color:var(--text-2)}
+  .kvlist .row .v{font-weight:500;text-align:right;word-break:break-all}
+  .wbar{display:inline-block;width:44px;height:6px;border-radius:3px;background:var(--border);position:relative;vertical-align:middle;margin-right:6px}
+  .wbar>i{position:absolute;left:0;top:0;height:100%;border-radius:3px}
+
+  /* ── 检索结果 ── */
+  .hit{border:1px solid var(--border);border-radius:var(--r);padding:11px 13px;margin-bottom:9px;transition:all var(--t)}
+  .hit:hover{box-shadow:var(--shadow-sm);border-color:var(--border-2)}
+  .hit-h{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+  .hit-h .sc{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--primary);background:var(--tint);
+             padding:1px 7px;border-radius:4px}
+  .hit-b{font-size:12.5px;color:var(--text-2);line-height:1.6}
+  .path{margin-top:8px;padding:9px 11px;background:var(--subtle);border-radius:var(--r-sm);font-size:11.5px;
+        display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:var(--text-2)}
+  .path .pe{font-weight:600;color:var(--text)}
+  .path .pr{color:var(--primary);font-weight:500}
+  .path .ar{color:var(--text-3)}
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .cmp-col{border:1px solid var(--border);border-radius:var(--r);padding:12px}
+  .cmp-col h4{font-size:12.5px;margin-bottom:9px;color:var(--text-2);font-weight:600}
+  .cmp-item{padding:7px 9px;border-radius:var(--r-sm);background:var(--subtle);margin-bottom:6px;font-size:12px}
+  .cmp-item.g{background:var(--tint)}
+
+  /* ── 表单 ── */
+  .frm{display:grid;grid-template-columns:112px 1fr;gap:11px 14px;align-items:start}
+  .frm label{font-size:12.5px;color:var(--text-2);padding-top:6px;text-align:right}
+  .frm .hint{font-size:11.5px;color:var(--text-3);margin-top:4px;line-height:1.55}
+  .inp{height:30px;padding:0 10px;border:1px solid var(--border-2);border-radius:var(--r-sm);outline:none;width:100%;max-width:340px}
+  .inp:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.12)}
+  textarea.inp{height:auto;min-height:70px;padding:8px 10px;resize:vertical;line-height:1.6}
+  .inp:disabled{background:var(--subtle);color:var(--text-3);cursor:not-allowed}
+  .rd{display:flex;gap:14px;flex-wrap:wrap}
+  .rd label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;color:var(--text)}
+  .rd input{accent-color:var(--primary)}
+
+  /* ── 向导弹窗 ── */
+  /* 向导遮罩仅覆盖工作台区域，顶部场景切换栏保持可点（原型导航需要） */
+  .mask{position:absolute;inset:0;background:rgba(16,24,40,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px}
+  .modal{background:#fff;border-radius:var(--r);box-shadow:0 12px 40px rgba(16,24,40,.22);width:600px;max-width:100%;
+         max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal-h{padding:15px 20px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px}
+  .modal-b{padding:18px 20px;overflow:auto}
+  .modal-f{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--subtle)}
+
+  /* ── Toast ── */
+  #toast{position:fixed;right:22px;bottom:22px;z-index:99;display:flex;flex-direction:column;gap:8px}
+  .tst{background:#1f2329;color:#fff;padding:9px 15px;border-radius:var(--r-sm);font-size:12.5px;
+       box-shadow:0 4px 16px rgba(16,24,40,.28);animation:tin .22s ease}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="preview-header">
+  <h1>图谱知识库 · 前端功能原型</h1>
+  <p>独立知识库类型 type=4（kb_format=graph）· 面板结构：工具栏 + 8 Tab + 右侧检视面板 · 图谱视图由原生 SVG 渲染（零外部依赖）</p>
+  <div class="preview-actions" id="sceneBar">
+    <button class="pa" data-s="graph">图谱视图</button>
+    <button class="pa" data-s="overview">概览</button>
+    <button class="pa" data-s="doc">文档</button>
+    <button class="pa" data-s="entity">实体</button>
+    <button class="pa" data-s="triple">关系</button>
+    <button class="pa" data-s="prov">溯源</button>
+    <button class="pa" data-s="search">检索测试</button>
+    <button class="pa" data-s="config">配置</button>
+    <button class="pa" data-s="degraded">降级态</button>
+    <button class="pa" data-s="empty">未构建空态</button>
+    <button class="pa" data-s="wizard">新建向导</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="stage-title">图谱知识库管理面板 <span class="tag-ver">KbGraphPane.vue</span></div>
+  <div class="stage-desc">
+    左树中「图谱知识库」为独立类型节点（紫色图标）；右侧面板按 §4.4 设计实现 —— 概览 / 文档 / 图谱 / 实体 / 关系 / 溯源 / 检索测试 / 配置 八个 Tab，
+    检视面板独立承载节点与边的详情并支持下钻。
+  </div>
+
+  <div class="workbench">
+    <!-- ── 左树 ── -->
+    <div class="wb-side">
+      <div class="wb-side-head">
+        <button class="wb-icon-btn" title="新建分类" onclick="toast('打开新建分类')">＋</button>
+        <button class="wb-icon-btn" title="新建知识库" onclick="toast('打开新建知识库向导')">📘</button>
+      </div>
+      <div class="wb-tree">
+        <div class="wb-tree-h">全部知识库</div>
+
+        <div class="tnode folder open"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">供应链域</span><span class="cnt">3</span></div>
+        <div style="padding-left:14px">
+          <div class="tnode active" data-k="graph"><span class="caret"></span><span class="ti ic-graph">🕸️</span><span class="nm">供应链图谱</span><span class="cnt">214</span><span class="newtag">type=4</span></div>
+          <div class="tnode" data-k="gen"><span class="caret"></span><span class="ti ic-gen">📘</span><span class="nm">通用知识库-制度</span><span class="cnt">12</span></div>
+        </div>
+
+        <div class="tnode folder open"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">研发中心</span><span class="cnt">2</span></div>
+        <div style="padding-left:14px">
+          <div class="tnode" data-k="wiki"><span class="caret"></span><span class="ti ic-wiki">📖</span><span class="nm">团队 Wiki</span><span class="cnt">48</span></div>
+          <div class="tnode" data-k="ext"><span class="caret"></span><span class="ti ic-ext">🔗</span><span class="nm">外部知识库-研发</span><span class="cnt">5</span></div>
+        </div>
+
+        <div class="tnode folder"><span class="caret">▶</span><span class="ti ic-folder">📁</span><span class="nm">未分类</span><span class="cnt">1</span></div>
+        <div style="padding-left:14px;display:none">
+          <div class="tnode"><span class="caret"></span><span class="ti ic-graph">🕸️</span><span class="nm">图谱知识库-草稿</span><span class="cnt">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 右侧主区 ── -->
+    <div class="wb-main" id="pane"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   数据（实体 / 关系 / 文档 / 提及）—— 图视图、检视面板、实体表、关系表共用同一份
+   ═══════════════════════════════════════════════════════════════ */
+const TYPES = {
+  '部门':   {color:'#3371fc', tag:'tag-p', code:'OBJ_DEPT'},
+  '供应商': {color:'#52c41a', tag:'tag-s', code:'OBJ_SUPPLIER'},
+  '产品':   {color:'#fa8c16', tag:'tag-o', code:'OBJ_PRODUCT'},
+  '仓库':   {color:'#722ed1', tag:'tag-w', code:'OBJ_WAREHOUSE'},
+  '客户':   {color:'#08979c', tag:'tag-c', code:'OBJ_CUSTOMER'},
+};
+
+const ENTITIES = [
+  {id:'e1', name:'采购部',   label:'部门',   norm:'采购部',   aliases:['采购中心'],        attrs:{'负责人':'王建国','编制':'12 人'}, mentions:4, status:'accepted', vec:'done', deg:4, x:95,  y:95},
+  {id:'e2', name:'销售部',   label:'部门',   norm:'销售部',   aliases:[],                  attrs:{'负责人':'李慧'},                 mentions:4, status:'accepted', vec:'done', deg:4, x:95,  y:400},
+  {id:'e3', name:'华创制造', label:'供应商', norm:'华创制造', aliases:['华创','Huachuang'],  attrs:{'统一社会信用代码':'9131****','合作年限':'6 年'}, mentions:3, status:'accepted', vec:'done', deg:3, x:285, y:55},
+  {id:'e4', name:'启明电子', label:'供应商', norm:'启明电子', aliases:['启明','Qiming'],      attrs:{'统一社会信用代码':'9144****','等级':'A'},     mentions:4, status:'accepted', vec:'done', deg:4, x:285, y:195},
+  {id:'e5', name:'恒信科技', label:'供应商', norm:'恒信科技', aliases:[],                  attrs:{'等级':'B'},                       mentions:2, status:'suggested', vec:'done', deg:2, x:285, y:330},
+  {id:'e6', name:'天枢服务器',label:'产品',  norm:'天枢服务器',aliases:['天枢','Tianshu'],   attrs:{'型号':'TS-9000','单价':'¥ 68,000'}, mentions:4, status:'accepted', vec:'done', deg:4, x:480, y:95},
+  {id:'e7', name:'智联数码', label:'产品',   norm:'智联数码', aliases:['智联'],              attrs:{'型号':'ZL-200','单价':'¥ 12,400'},  mentions:4, status:'accepted', vec:'done', deg:4, x:480, y:290},
+  {id:'e8', name:'联影工作站',label:'产品',  norm:'联影工作站',aliases:[],                 attrs:{'型号':'LY-30'},                    mentions:2, status:'suggested', vec:'pending', deg:2, x:480, y:410},
+  {id:'e9', name:'北京仓',   label:'仓库',   norm:'北京仓',   aliases:['京仓','华北仓'],     attrs:{'面积':'8,200 ㎡','库位':'420'},       mentions:1, status:'accepted', vec:'done', deg:1, x:670, y:55},
+  {id:'e10',name:'上海仓',   label:'仓库',   norm:'上海仓',   aliases:['沪仓'],              attrs:{'面积':'11,600 ㎡','库位':'610'},      mentions:3, status:'accepted', vec:'done', deg:3, x:670, y:195},
+  {id:'e11',name:'星海科技', label:'客户',   norm:'星海科技', aliases:['星海'],              attrs:{'行业':'互联网','信用等级':'AAA'},      mentions:2, status:'accepted', vec:'done', deg:2, x:670, y:330},
+  {id:'e12',name:'远航贸易', label:'客户',   norm:'远航贸易', aliases:[],                   attrs:{'行业':'批发','信用等级':'AA'},        mentions:2, status:'suggested', vec:'done', deg:2, x:670, y:430},
+];
+
+const TRIPLES = [
+  {id:'t1', from:'e1', to:'e3', type:'供应', weight:0.92, status:'accepted', extractor:'llm',     mentions:2, evidence:'采购部与华创制造签订年度框架采购协议，华创制造为采购部持续供应电子元器件。'},
+  {id:'t2', from:'e1', to:'e4', type:'供应', weight:0.95, status:'accepted', extractor:'llm',     mentions:2, evidence:'启明电子为采购部主力供应商，季度供货协议覆盖 8 类物料。'},
+  {id:'t3', from:'e1', to:'e5', type:'供应', weight:0.71, status:'suggested', extractor:'llm',    mentions:1, evidence:'恒信科技向采购部交付过两批试产物料。'},
+  {id:'t4', from:'e3', to:'e6', type:'生产', weight:0.93, status:'accepted', extractor:'llm',     mentions:2, evidence:'华创制造生产天枢服务器，整机组装与固件烧录均在自有产线完成。'},
+  {id:'t5', from:'e4', to:'e7', type:'生产', weight:0.94, status:'accepted', extractor:'llm',     mentions:2, evidence:'启明电子生产智联数码系列产品。'},
+  {id:'t6', from:'e5', to:'e8', type:'生产', weight:0.68, status:'suggested', extractor:'semantica', mentions:1, evidence:'恒信科技可生产联影工作站系列机型。'},
+  {id:'t7', from:'e6', to:'e9', type:'库存', weight:0.90, status:'accepted', extractor:'llm',     mentions:1, evidence:'天枢服务器在北京仓常备库存 120 台。'},
+  {id:'t8', from:'e6', to:'e10',type:'库存', weight:0.91, status:'accepted', extractor:'llm',     mentions:1, evidence:'天枢服务器在上海仓设前置库存点。'},
+  {id:'t9', from:'e7', to:'e10',type:'库存', weight:0.89, status:'accepted', extractor:'llm',     mentions:1, evidence:'智联数码主要存放于上海仓。'},
+  {id:'t10',from:'e2', to:'e11',type:'签约', weight:0.96, status:'accepted', extractor:'llm',     mentions:1, evidence:'销售部与星海科技签署年度框架销售合同。'},
+  {id:'t11',from:'e2', to:'e12',type:'签约', weight:0.78, status:'suggested', extractor:'llm',    mentions:1, evidence:'销售部与远航贸易完成首单签约。'},
+  {id:'t12',from:'e11',to:'e7', type:'采购', weight:0.93, status:'accepted', extractor:'llm',     mentions:1, evidence:'星海科技采购智联数码 500 台，用于其园区改造项目。'},
+  {id:'t13',from:'e12',to:'e6', type:'采购', weight:0.74, status:'suggested', extractor:'llm',    mentions:1, evidence:'远航贸易采购天枢服务器 20 台。'},
+  {id:'t14',from:'e7', to:'e8', type:'配套', weight:0.81, status:'accepted', extractor:'llm',     mentions:1, evidence:'智联数码与联影工作站通常配套销售。'},
+  {id:'t15',from:'e4', to:'e3', type:'代理', weight:0.72, status:'suggested', extractor:'semantica', mentions:1, evidence:'启明电子代理华创制造的部分产线产能。'},
+  {id:'t16',from:'e2', to:'e1', type:'协作', weight:0.85, status:'accepted', extractor:'llm',     mentions:1, evidence:'销售部与采购部在缺货订单上按季度联合评审。'},
+];
+
+const DOCUMENTS = [
+  {name:'2026年度供应商框架协议.pdf', size:'4.8 MB', type:'PDF', status:'completed', segs:86, graph:'done',   updated:'10-28 14:20'},
+  {name:'产品目录与规格书-v9.md',    size:'312 KB', type:'Markdown', status:'completed', segs:124, graph:'done', updated:'10-27 09:05'},
+  {name:'仓储作业规范.docx',        size:'640 KB', type:'Word', status:'completed', segs:41, graph:'done', updated:'10-26 16:48'},
+  {name:'重点客户合作纪要.md',       size:'86 KB',  type:'Markdown', status:'completed', segs:33, graph:'done', updated:'10-25 11:12'},
+  {name:'供应链风险评估报告.pdf',    size:'2.1 MB', type:'PDF', status:'failed', segs:0, graph:'none', updated:'10-24 20:41'},
+  {name:'采购流程说明.md',           size:'44 KB',  type:'Markdown', status:'processing', segs:0, graph:'none', updated:'10-29 10:02'},
+];
+
+const MENTIONS = [
+  {tripleId:'t12', seg:18, doc:'2026年度供应商框架协议.pdf', text:'星海科技本次采购智联数码 500 台…'},
+  {tripleId:'t12', seg:41, doc:'产品目录与规格书-v9.md',    text:'智联数码 ZL-200 适用于园区改造场景…'},
+  {tripleId:'t10', seg:7,  doc:'重点客户合作纪要.md',       text:'销售部与星海科技签署年度框架销售合同…'},
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   状态
+   ═══════════════════════════════════════════════════════════════ */
+const TABS = [
+  {id:'overview', label:'概览'}, {id:'doc', label:'文档', cnt:6}, {id:'graph', label:'图谱'},
+  {id:'entity', label:'实体', cnt:12}, {id:'triple', label:'关系', cnt:16},
+  {id:'prov', label:'溯源'}, {id:'search', label:'检索测试'}, {id:'config', label:'配置'},
+];
+const state = {tab:'graph', degraded:false, empty:false, sel:{kind:'node', id:'e4'}, scene:'graph'};
+
+/* ═══════════════════════════════════════════════════════════════
+   工具
+   ═══════════════════════════════════════════════════════════════ */
+const $ = s => document.querySelector(s);
+const entById = id => ENTITIES.find(e => e.id === id);
+const triById = id => TRIPLES.find(t => t.id === id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(msg){
+  const el = document.createElement('div');
+  el.className = 'tst'; el.textContent = msg;
+  $('#toast').appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+function statusTag(s){
+  const map = {accepted:['tag-ok','已采纳'], suggested:['tag-warn','待评审'], rejected:['tag-err','已驳回'], done:['tag-ok','已索引'], pending:['tag-idle','待索引'], failed:['tag-err','索引失败']};
+  const m = map[s] || ['tag-idle', s];
+  return `<span class="tag ${m[0]}">${m[1]}</span>`;
+}
+function typeTag(label){
+  const t = TYPES[label] || {tag:'tag-idle'};
+  return `<span class="tag ${t.tag}">${label}</span>`;
+}
+function weightCell(w){
+  const c = w >= 0.8 ? 'var(--success)' : w >= 0.5 ? 'var(--warn)' : 'var(--error)';
+  return `<span class="wbar"><i style="width:${Math.round(w*100)}%;background:${c}"></i></span><span class="muted">${w.toFixed(2)}</span>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   图谱 SVG 渲染（力导向布局的静态化呈现，交互与真实实现一致）
+   ═══════════════════════════════════════════════════════════════ */
+function renderGraphSVG(){
+  const W = 790, H = 490;
+  const sel = state.sel;
+  const adj = sel && sel.kind === 'node'
+    ? TRIPLES.filter(t => t.from === sel.id || t.to === sel.id).map(t => t.from === sel.id ? t.to : t.from)
+    : [];
+  const hl = new Set(adj);
+  const selTrip = sel && sel.kind === 'edge' ? triById(sel.id) : null;
+
+  let edges = '', nodes = '';
+  TRIPLES.forEach(t => {
+    const a = entById(t.from), b = entById(t.to);
+    if (!a || !b) return;
+    const on = selTrip && selTrip.id === t.id;
+    const near = sel && sel.kind === 'node' && (t.from === sel.id || t.to === sel.id);
+    const cls = 'e' + (on ? ' on' : (near ? ' hl' : ''));
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const cx = mx - dy * 0.12, cy = my + dx * 0.12;
+    const lx = 0.25*a.x + 0.5*cx + 0.25*b.x, ly = 0.25*a.y + 0.5*cy + 0.25*b.y;
+    edges += `<g class="${cls}">
+      <path d="M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}"></path>
+      <text x="${lx}" y="${ly}" text-anchor="middle">${esc(t.type)}</text>
+    </g>`;
+  });
+
+  ENTITIES.forEach(e => {
+    const t = TYPES[e.label] || {color:'#8f959e'};
+    const r = 15 + e.deg * 4.2;
+    const dim = (sel && sel.kind === 'node' && sel.id !== e.id && !hl.has(e.id));
+    const on = sel && sel.kind === 'node' && sel.id === e.id;
+    nodes += `<g class="n${on ? ' on' : ''}" onclick="pick('node','${e.id}')" style="opacity:${dim ? .35 : 1}">
+      <circle cx="${e.x}" cy="${e.y}" r="${r}" fill="${t.color}"></circle>
+      <text class="nm" x="${e.x}" y="${e.y + r + 21}" text-anchor="middle">${esc(e.name)}</text>
+      <text class="ty" x="${e.x}" y="${e.y + r + 33}" text-anchor="middle" style="fill:${t.color}">${esc(e.label)}</text>
+    </g>`;
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    <g>${edges}</g><g>${nodes}</g>
+  </svg>`;
+}
+
+function legendHTML(){
+  return Object.keys(TYPES).map(k =>
+    `<span><i style="background:${TYPES[k].color}"></i>${k}</span>`).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   检视面板
+   ═══════════════════════════════════════════════════════════════ */
+function inspectorHTML(){
+  if (!state.sel) {
+    return `<div class="insp"><div class="insp-h">检视面板</div>
+      <div class="empty" style="padding:38px 12px"><div class="ei">🔍</div>
+      <div class="et">未选中任何对象</div><p>点击图上的节点或边查看详情</p></div></div>`;
+  }
+  const {kind, id} = state.sel;
+  if (kind === 'node') {
+    const e = entById(id); if (!e) return '';
+    const t = TYPES[e.label] || {code:'—'};
+    const adj = TRIPLES.filter(x => x.from === id || x.to === id);
+    const attrRows = Object.keys(e.attrs).map(k =>
+      `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(e.attrs[k])}</span></div>`).join('');
+    return `<div class="insp">
+      <div class="insp-h"><span>实体详情</span>
+        <span style="display:flex;gap:4px">
+          <button class="btn btn-sm" onclick="toast('打开实体编辑弹窗：${esc(e.name)}')">编辑</button>
+          <button class="btn btn-sm btn-danger" onclick="toast('删除实体需二次确认')">删除</button>
+        </span>
+      </div>
+      <div class="insp-b">
+        <div class="kv">
+          <dt>名称</dt><dd style="font-weight:600">${esc(e.name)}</dd>
+          <dt>类型</dt><dd>${typeTag(e.label)} <span class="muted">${esc(t.code)}</span></dd>
+          <dt>归一名</dt><dd><code>${esc(e.norm)}</code></dd>
+          <dt>别名</dt><dd>${e.aliases.length ? e.aliases.map(a=>`<span class="tag tag-idle">${esc(a)}</span>`).join(' ') : '<span class="muted">—</span>'}</dd>
+          <dt>提及数</dt><dd>${e.mentions} 个切片</dd>
+          <dt>状态</dt><dd>${statusTag(e.status)}</dd>
+          <dt>向量</dt><dd>${statusTag(e.vec)}</dd>
+        </div>
+        <div class="sec-t">属性实例</div>
+        <div class="kvlist">${attrRows || '<div class="row"><span class="muted">无属性</span></div>'}</div>
+        <div class="sec-t">邻接关系（${adj.length}）</div>
+        <div>${adj.map(x => {
+          const other = entById(x.from === id ? x.to : x.from);
+          const dir = x.from === id ? '→' : '←';
+          return `<div class="mini" onclick="pick('edge','${x.id}')">
+            <span class="tag tag-g">${esc(x.type)}</span>
+            <span class="ar">${dir}</span><span style="font-weight:500">${esc(other.name)}</span>
+            <span class="muted" style="margin-left:auto">${x.weight.toFixed(2)}</span>
+          </div>`;
+        }).join('')}</div>
+        <div class="sec-t">操作</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="toast('跳到溯源 Tab 并定位 ${esc(e.name)}')">溯源下钻</button>
+          <button class="btn btn-sm" onclick="toast('在图谱中定位并高亮该节点')">在图中定位</button>
+          <button class="btn btn-sm" onclick="toast('跳转标准中心对象标准 ${esc(t.code)}')">标准中心</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  const x = triById(id); if (!x) return '';
+  const a = entById(x.from), b = entById(x.to);
+  const ms = MENTIONS.filter(m => m.tripleId === x.id);
+  return `<div class="insp">
+    <div class="insp-h"><span>关系详情</span>
+      <span style="display:flex;gap:4px">
+        <button class="btn btn-sm" onclick="toast('接受该关系（评审流转 suggested → accepted）')">接受</button>
+        <button class="btn btn-sm btn-danger" onclick="toast('驳回该关系')">驳回</button>
+      </span>
+    </div>
+    <div class="insp-b">
+      <div class="kv">
+        <dt>源实体</dt><dd style="font-weight:600">${esc(a.name)}</dd>
+        <dt>目标实体</dt><dd style="font-weight:600">${esc(b.name)}</dd>
+        <dt>关系类型</dt><dd><span class="tag tag-g">${esc(x.type)}</span></dd>
+        <dt>权重</dt><dd>${weightCell(x.weight)}</dd>
+        <dt>状态</dt><dd>${statusTag(x.status)}</dd>
+        <dt>抽取器</dt><dd><code>${esc(x.extractor)}</code></dd>
+        <dt>提及数</dt><dd>${x.mentions} 个切片</dd>
+      </div>
+      <div class="sec-t">抽取依据</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.65;border-left:2px solid var(--border-2);padding-left:9px">${esc(x.evidence)}</div>
+      <div class="sec-t">溯源切片（${ms.length}）</div>
+      <div>${ms.length ? ms.map(m => `<div class="mini" onclick="toast('打开切片 #${m.seg}：${esc(m.doc)}')">
+          <span class="tag tag-idle">#${m.seg}</span><span>${esc(m.doc)}</span>
+        </div>`).join('') : '<div class="muted" style="font-size:12px">无直接切片提及</div>'}</div>
+      <div class="sec-t">操作</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" onclick="toast('跳到溯源 Tab 并定位该关系')">溯源下钻</button>
+        <button class="btn btn-sm" onclick="toast('在图谱中定位并高亮该边')">在图中定位</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   各 Tab 内容
+   ═══════════════════════════════════════════════════════════════ */
+function tabOverview(){
+  const dist = Object.keys(TYPES).map(k => ({k, n: ENTITIES.filter(e => e.label === k).length}));
+  const relDist = {};
+  TRIPLES.forEach(t => relDist[t.type] = (relDist[t.type] || 0) + 1);
+  const relRows = Object.keys(relDist).map(k => ({k, n: relDist[k]})).sort((a,b)=>b.n-a.n);
+  const maxE = Math.max(...dist.map(d=>d.n)), maxR = Math.max(...relRows.map(r=>r.n));
+
+  return `
+  <div class="stats">
+    <div class="stat p"><div class="k"><span class="dot p"></span>实体总数</div><div class="v">12</div></div>
+    <div class="stat s"><div class="k"><span class="dot s"></span>关系总数</div><div class="v">16</div></div>
+    <div class="stat d"><div class="k"><span class="dot d"></span>实体类型</div><div class="v">5</div></div>
+    <div class="stat d"><div class="k"><span class="dot d"></span>关系类型</div><div class="v">8</div></div>
+    <div class="stat s"><div class="k"><span class="dot s"></span>已索引切片</div><div class="v">214</div></div>
+    <div class="stat e"><div class="k"><span class="dot e"></span>失败切片</div><div class="v">2</div></div>
+    <div class="stat p"><div class="k"><span class="dot p"></span>提及总数</div><div class="v">38</div></div>
+    <div class="stat w"><div class="k"><span class="dot w"></span>待评审</div><div class="v">5</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h">实体类型分布 <span class="muted" style="font-weight:400;font-size:11.5px">按 label 统计</span></div>
+      <div class="card-b">
+        ${dist.map(d => `<div class="distrow"><span class="lbl">${d.k}</span>
+          <span class="bar"><i style="width:${Math.round(d.n/maxE*100)}%;background:${TYPES[d.k].color}"></i></span>
+          <span class="val">${d.n}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">关系类型分布 <span class="muted" style="font-weight:400;font-size:11.5px">按 relation_type 统计</span></div>
+      <div class="card-b">
+        ${relRows.map(d => `<div class="distrow"><span class="lbl">${d.k}</span>
+          <span class="bar"><i style="width:${Math.round(d.n/maxR*100)}%;background:var(--primary)"></i></span>
+          <span class="val">${d.n}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h">构建状态 <span class="badge badge-ready" style="height:22px"><span class="pulse"></span>就绪</span></div>
+      <div class="card-b">
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px">阶段 1 · 结构写入（PG + Neo4j 投影） <b style="color:var(--text)">214 / 214</b></div>
+        <div class="bar"><i class="s" style="width:100%"></i></div>
+        <div style="font-size:12px;color:var(--text-2);margin:12px 0 4px">阶段 2 · 向量索引（pgvector） <b style="color:var(--text)">206 / 214</b></div>
+        <div class="bar"><i class="w" style="width:96%"></i></div>
+        <div class="note">最近构建 10-29 10:04 · 耗时 3 分 12 秒 · 失败步骤：<code>graph_extract</code>（2 个切片）</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h">CDM 一致性校验 <span class="muted" style="font-weight:400;font-size:11.5px">图谱实例 × 标准关系</span></div>
+      <div class="card-b">
+        <div class="distrow"><span class="lbl" style="width:96px">hit 一致</span><span class="bar"><i class="s" style="width:70%"></i></span><span class="val">7</span></div>
+        <div class="distrow"><span class="lbl" style="width:96px">missing 缺失</span><span class="bar"><i class="w" style="width:20%"></i></span><span class="val">2</span></div>
+        <div class="distrow"><span class="lbl" style="width:96px">conflict 冲突</span><span class="bar"><i class="e" style="width:10%"></i></span><span class="val">1</span></div>
+        <div class="note">「冲突」指图谱实例违反标准关系基数约束（如声明 <code>1:1</code> 却出现多边）。</div>
+        <button class="btn btn-sm" style="margin-top:10px" onclick="toast('跳转标准中心对应关系标准')">在标准中心查看</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function tabDoc(){
+  const gtag = s => s==='done' ? '<span class="tag tag-g">✓ 已抽取</span>'
+                  : s==='none' ? '<span class="tag tag-idle">— 未抽取</span>' : '<span class="tag tag-run">◐ 抽取中</span>';
+  return `
+  <div class="alert info"><span class="ai">ℹ️</span><div>文档是图谱的<b>唯一来源</b>：上传并完成切片后需触发一次「构建图谱」，才会产出实体与关系。文档本身仍可独立用于向量检索。</div></div>
+  <table class="tbl">
+    <thead><tr><th style="width:30%">文档</th><th style="width:11%">摄取状态</th><th style="width:11%">图谱阶段</th><th style="width:9%">分段</th><th style="width:13%">更新时间</th><th>操作</th></tr></thead>
+    <tbody>
+      ${DOCUMENTS.map(d => `<tr>
+        <td><div class="nm">📄 ${esc(d.name)}</div><div class="muted">${esc(d.size)} · ${esc(d.type)}</div></td>
+        <td>${d.status==='completed'?'<span class="tag tag-ok">completed</span>':d.status==='failed'?'<span class="tag tag-err">failed</span>':'<span class="tag tag-run">processing…</span>'}</td>
+        <td>${gtag(d.graph)}</td>
+        <td class="muted">${d.segs||'—'}</td>
+        <td class="muted">${esc(d.updated)}</td>
+        <td class="acts">
+          <button class="btn btn-text btn-sm" onclick="toast('查看分段')">分段</button>
+          <button class="btn btn-text btn-sm" onclick="toast('查看流程：parse → clean → chunk → vectorize → graph_extract')">流程</button>
+          <button class="btn btn-text btn-sm" onclick="toast('仅对本文档重新抽取图谱')">重新抽取</button>
+          <button class="btn btn-text btn-sm" onclick="toast('删除文档并联动撤销其图谱贡献')">删除</button>
+        </td></tr>`).join('')}
+    </tbody>
+  </table>
+  <div class="note">「流程」抽屉在既有 parse → clean → chunk → vectorize 之后追加 <code>graph_extract</code> 节点；图谱抽取失败<b>不回滚</b>文档摄取（降级但显式标记）。</div>`;
+}
+
+function tabGraph(){
+  if (state.empty) {
+    return `<div class="empty" style="padding:70px 20px">
+      <div class="ei">🕸️</div>
+      <div class="et">该图谱知识库尚未构建</div>
+      <p>上传文档后触发一次「构建图谱」，系统将抽取实体与关系并写入 Neo4j 图结构</p>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn btn-primary" onclick="toast('跳到配置 Tab')">去配置构建参数</button>
+        <button class="btn" onclick="toast('跳到文档 Tab 上传文档')">上传文档</button>
+      </div>
+    </div>`;
+  }
+  const degraded = state.degraded;
+  return `
+  ${degraded ? `<div class="alert warn"><span class="ai">⚠️</span><div><b>图结构存储不可用</b>：Neo4j 连接失败（<code>bolt://…:7687</code> 超时），图谱投影与多跳检索已降级为纯向量召回。文档与切片检索不受影响。</div></div>` : ''}
+  <div class="toolbar">
+    <div class="toolbar-l">
+      <div class="seg" id="gseg">
+        <button class="on" onclick="seg2(this,'gseg')">全库图</button>
+        <button onclick="seg2(this,'gseg')">按类型过滤</button>
+        <button onclick="seg2(this,'gseg')">种子子图</button>
+      </div>
+      <select class="sel"><option>实体类型：全部</option><option>客户</option><option>产品</option><option>供应商</option><option>仓库</option><option>部门</option></select>
+      <select class="sel"><option>关系类型：全部</option><option>供应</option><option>生产</option><option>库存</option><option>签约</option><option>采购</option></select>
+      <select class="sel"><option>跳数：2</option><option>1</option><option>2</option><option>3</option></select>
+      <input class="num" value="200" title="节点上限">
+      <label class="chk"><input type="checkbox" checked> 隐藏 Chunk 节点</label>
+    </div>
+    <div class="toolbar-r">
+      <span class="muted" style="font-size:11.5px">12 节点 · 16 边</span>
+      <button class="btn btn-sm" onclick="toast('以选中节点为种子扩展子图')">以此为种子扩展</button>
+      <button class="btn btn-sm" onclick="toast('导出子图（JSON / GraphML / RDF）')">导出</button>
+    </div>
+  </div>
+  <div class="kg-wrap">
+    <div class="kg-canvas">
+      ${renderGraphSVG()}
+      <div class="kg-hint">点击节点或边查看详情</div>
+      <div class="kg-legend">${legendHTML()}<span style="color:var(--text-3)">节点大小 = 度数</span></div>
+    </div>
+    ${inspectorHTML()}
+  </div>`;
+}
+
+function tabEntity(){
+  return `
+  <div class="toolbar">
+    <div class="toolbar-l">
+      <input class="search" placeholder="搜索实体名称 / 别名">
+      <select class="sel"><option>类型：全部</option><option>客户</option><option>产品</option><option>供应商</option><option>仓库</option><option>部门</option></select>
+      <select class="sel"><option>状态：全部</option><option>已采纳</option><option>待评审</option></select>
+      <label class="chk"><input type="checkbox"> 仅看待评审</label>
+    </div>
+    <div class="toolbar-r">
+      <span class="muted" style="font-size:11.5px">已选 0 项</span>
+      <button class="btn btn-sm" onclick="toast('批量接受所选实体（suggested → accepted）')">批量接受</button>
+      <button class="btn btn-sm" onclick="toast('批量修改实体类型')">批量改类型</button>
+      <button class="btn btn-sm btn-danger" onclick="toast('批量删除需二次确认')">批量删除</button>
+      <button class="btn btn-primary btn-sm" onclick="toast('打开新建实体弹窗：类型可选 CDM 下拉或自由输入')">＋ 新建实体</button>
+    </div>
+  </div>
+  <table class="tbl">
+    <thead><tr><th style="width:22%">实体</th><th style="width:11%">类型</th><th style="width:18%">别名</th><th style="width:20%">属性摘要</th><th style="width:8%">提及</th><th style="width:9%">状态</th><th style="width:8%">向量</th><th>操作</th></tr></thead>
+    <tbody>
+      ${ENTITIES.map(e => {
+        const attr = Object.keys(e.attrs).slice(0,2).map(k=>`${k}:${e.attrs[k]}`).join('　');
+        const more = Object.keys(e.attrs).length > 2 ? `　+${Object.keys(e.attrs).length-2}` : '';
+        const on = state.sel && state.sel.kind==='node' && state.sel.id===e.id;
+        return `<tr class="${on?'sel':''}">
+          <td><div class="nm">${esc(e.name)}</div><div class="muted"><code>${esc(e.norm)}</code></div></td>
+          <td>${typeTag(e.label)}</td>
+          <td class="muted">${e.aliases.length? esc(e.aliases.join('、')) : '—'}</td>
+          <td class="muted">${esc(attr)}${more}</td>
+          <td class="muted">${e.mentions}</td>
+          <td>${statusTag(e.status)}</td>
+          <td>${statusTag(e.vec)}</td>
+          <td class="acts">
+            <button class="btn btn-text btn-sm" onclick="pick('node','${e.id}')">检视</button>
+            <button class="btn btn-text btn-sm" onclick="toast('打开实体编辑弹窗')">编辑</button>
+            <button class="btn btn-text btn-sm" onclick="toast('跳到溯源 Tab 并定位')">溯源</button>
+            <button class="btn btn-text btn-sm" style="color:var(--error)" onclick="toast('删除实体需二次确认')">删除</button>
+          </td></tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div class="pager"><span>共 12 条</span><button class="pg">‹</button><button class="pg on">1</button><button class="pg">›</button></div>`;
+}
+
+function tabTriple(){
+  return `
+  <div class="toolbar">
+    <div class="toolbar-l">
+      <select class="sel"><option>关系类型：全部</option><option>供应</option><option>生产</option><option>库存</option><option>签约</option><option>采购</option><option>配套</option><option>代理</option><option>协作</option></select>
+      <select class="sel"><option>状态：全部</option><option>已采纳</option><option>待评审</option></select>
+      <select class="sel"><option>权重：全部</option><option>≥ 0.8</option><option>0.5 – 0.8</option><option>&lt; 0.5</option></select>
+    </div>
+    <div class="toolbar-r">
+      <button class="btn btn-sm" onclick="toast('批量接受所选关系')">批量接受</button>
+      <button class="btn btn-primary btn-sm" onclick="toast('打开新建关系弹窗：源/目标实体 + 关系类型')">＋ 新建关系</button>
+    </div>
+  </div>
+  <table class="tbl">
+    <thead><tr><th style="width:16%">源实体</th><th style="width:10%">关系类型</th><th style="width:16%">目标实体</th><th style="width:13%">权重</th><th style="width:9%">状态</th><th style="width:9%">抽取器</th><th style="width:7%">提及</th><th>操作</th></tr></thead>
+    <tbody>
+      ${TRIPLES.map(x => {
+        const a = entById(x.from), b = entById(x.to);
+        const on = state.sel && state.sel.kind==='edge' && state.sel.id===x.id;
+        return `<tr class="${on?'sel':''}">
+          <td><div class="nm">${esc(a.name)}</div><div class="muted">${esc(a.label)}</div></td>
+          <td><span class="tag tag-g">${esc(x.type)}</span></td>
+          <td><div class="nm">${esc(b.name)}</div><div class="muted">${esc(b.label)}</div></td>
+          <td>${weightCell(x.weight)}</td>
+          <td>${statusTag(x.status)}</td>
+          <td class="muted"><code>${esc(x.extractor)}</code></td>
+          <td class="muted">${x.mentions}</td>
+          <td class="acts">
+            <button class="btn btn-text btn-sm" onclick="pick('edge','${x.id}')">检视</button>
+            <button class="btn btn-text btn-sm" onclick="toast('评审流转：suggested → accepted')">评审</button>
+            <button class="btn btn-text btn-sm" onclick="toast('跳到溯源 Tab 并定位')">溯源</button>
+            <button class="btn btn-text btn-sm" style="color:var(--error)" onclick="toast('删除关系需二次确认')">删除</button>
+          </td></tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <div class="note">权重（抽取置信度）三色标记：<span style="color:var(--success)">≥ 0.8</span> / <span style="color:var(--warn)">0.5 – 0.8</span> / <span style="color:var(--error)">&lt; 0.5</span>。</div>`;
+}
+
+function tabProv(){
+  const e = entById('e4');
+  return `
+  <div class="grid2">
+    <div class="card">
+      <div class="card-h">实体 / 关系 → 切片</div>
+      <div class="card-b">
+        <input class="inp" placeholder="搜索实体或关系…" style="max-width:100%">
+        <div style="margin-top:10px">
+          <div class="mini" onclick="pick('node','e4')"><span class="tag tag-s">供应商</span><span style="font-weight:500">启明电子</span><span class="muted" style="margin-left:auto">4 个切片</span></div>
+          <div class="mini" onclick="pick('node','e7')"><span class="tag tag-o">产品</span><span style="font-weight:500">智联数码</span><span class="muted" style="margin-left:auto">4 个切片</span></div>
+          <div class="mini" onclick="pick('edge','t12')"><span class="tag tag-g">采购</span><span style="font-weight:500">星海科技 → 智联数码</span><span class="muted" style="margin-left:auto">2 个切片</span></div>
+        </div>
+        <div class="sec-t">源切片（以「启明电子」为例）</div>
+        <div class="kvlist">
+          <div class="row"><span class="k">#18</span><span class="v">2026年度供应商框架协议.pdf</span></div>
+          <div class="row"><span class="k">#52</span><span class="v">产品目录与规格书-v9.md</span></div>
+          <div class="row"><span class="k">#77</span><span class="v">仓储作业规范.docx</span></div>
+          <div class="row"><span class="k">#96</span><span class="v">采购流程说明.md</span></div>
+        </div>
+        <div class="note">点击切片可打开既有的分段详情抽屉（<code>SegmentDetail.vue</code>，零改动复用）。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">文档 → 实体 / 关系</div>
+      <div class="card-b">
+        <select class="sel" style="max-width:100%"><option>2026年度供应商框架协议.pdf</option><option>产品目录与规格书-v9.md</option><option>仓储作业规范.docx</option></select>
+        <div class="sec-t">本文档贡献（7 个实体 · 9 条关系）</div>
+        <div class="mini"><span class="tag tag-s">供应商</span>华创制造<span class="muted" style="margin-left:auto">3 提及</span></div>
+        <div class="mini"><span class="tag tag-s">供应商</span>启明电子<span class="muted" style="margin-left:auto">4 提及</span></div>
+        <div class="mini"><span class="tag tag-o">产品</span>天枢服务器<span class="muted" style="margin-left:auto">4 提及</span></div>
+        <div class="mini"><span class="tag tag-c">客户</span>星海科技<span class="muted" style="margin-left:auto">2 提及</span></div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <button class="btn btn-sm" onclick="toast('撤销本文档贡献的图谱数据（clear_document）')">撤销本文档贡献</button>
+        </div>
+        <div class="sec-t">失败切片（2）</div>
+        <div class="kvlist">
+          <div class="row"><span class="k">供应链风险评估报告.pdf</span><span class="v"><span class="tag tag-err">graph_extract 超时</span></span></div>
+          <div class="row"><span class="k">采购流程说明.md</span><span class="v"><span class="tag tag-run">抽取中</span></span></div>
+        </div>
+        <button class="btn btn-sm" style="margin-top:10px" onclick="toast('重试失败切片的图谱抽取')">重试失败抽取</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function tabSearch(){
+  return `
+  <div class="toolbar">
+    <div class="toolbar-l">
+      <input class="search" style="width:320px" value="智联数码的供应商是谁，货物从哪个仓出" placeholder="输入检索问题">
+      <input class="num" value="10" title="top_k">
+      <label class="chk"><input type="checkbox" checked> 图谱通道</label>
+      <label class="chk"><input type="checkbox"> 对比模式</label>
+      <button class="btn btn-primary btn-sm" onclick="toast('执行检索：向量召回 + Neo4j 多跳 + PPR + RRF 融合')">检索</button>
+    </div>
+    <div class="toolbar-r">
+      <span class="tag tag-run">fusion</span>
+      <span class="muted" style="font-size:11.5px">rrf_k = 60 · graph_weight = 1.0 · ppr_damping = 0.85</span>
+    </div>
+  </div>
+
+  <div class="hit">
+    <div class="hit-h">
+      <span class="sc">score 0.0321</span>
+      <span class="tag tag-g">graph</span><span class="tag tag-p">chunk</span>
+      <span class="muted">2026年度供应商框架协议.pdf · #41</span>
+    </div>
+    <div class="hit-b">智联数码 ZL-200 由启明电子生产，常备库存于上海仓，面向星海科技园区改造项目交付。</div>
+    <div class="path">
+      <span class="pe">启明电子</span><span class="ar">──</span><span class="pr">生产</span><span class="ar">──▶</span>
+      <span class="pe">智联数码</span><span class="ar">──</span><span class="pr">库存</span><span class="ar">──▶</span>
+      <span class="pe">上海仓</span><span class="ar">──</span><span class="pr">提及</span><span class="ar">──▶</span>
+      <span class="muted">命中切片 #41</span>
+    </div>
+  </div>
+
+  <div class="hit">
+    <div class="hit-h">
+      <span class="sc">score 0.0248</span>
+      <span class="tag tag-g">graph</span>
+      <span class="muted">产品目录与规格书-v9.md · #52</span>
+    </div>
+    <div class="hit-b">智联数码 ZL-200 系列规格说明：适用于园区改造与智慧园区场景，供应商启明电子。</div>
+    <div class="path">
+      <span class="pe">启明电子</span><span class="ar">──</span><span class="pr">生产</span><span class="ar">──▶</span>
+      <span class="pe">智联数码</span><span class="ar">──</span><span class="pr">提及</span><span class="ar">──▶</span>
+      <span class="muted">命中切片 #52</span>
+    </div>
+  </div>
+
+  <div class="hit">
+    <div class="hit-h">
+      <span class="sc">score 0.0175</span>
+      <span class="tag tag-p">chunk</span>
+      <span class="muted">仓储作业规范.docx · #77</span>
+    </div>
+    <div class="hit-b">上海仓库位管理与出库作业规范：出库需校验库存记录与预占状态。</div>
+  </div>
+
+  <div class="note">响应契约保持不变：<code>score</code> 仍为融合分（越大越相关），新增字段全部落在 <code>metadata</code> 内且可选（<code>fusion_sources</code> / <code>score_type</code> / <code>graph_path</code>），Agent 与既有客户端零改动。</div>`;
+}
+
+function tabConfig(){
+  return `
+  <div class="card">
+    <div class="card-h">抽取器</div>
+    <div class="card-b">
+      <div class="frm">
+        <label>抽取类型</label>
+        <div><select class="inp"><option>LLM 抽取（semantica extract_triplets）</option></select>
+          <div class="hint">抽取 / 归一 / 去重 / 冲突检测由 semantica 提供；落图使用本仓自有 Cypher 模板层以保证租户 label 隔离与幂等 MERGE。</div></div>
+        <label>抽取模型</label>
+        <div><select class="inp"><option>qwen3-32b（模型管理 · 默认）</option><option>deepseek-v4-flash</option></select>
+          <div class="hint">与模型管理的默认模型保持同源，避免多套模型配置。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">Schema 约束 <span class="muted" style="font-weight:400;font-size:11.5px">抑制类型漂移（相对纯 LLM 抽取的净增益）</span></div>
+    <div class="card-b">
+      <div class="frm">
+        <label>约束来源</label>
+        <div class="rd">
+          <label><input type="radio" name="ss" checked> 不使用</label>
+          <label><input type="radio" name="ss"> CDM 目录</label>
+          <label><input type="radio" name="ss"> 自由文本</label>
+        </div>
+        <label>目录 / 场景</label>
+        <div>
+          <select class="inp" disabled><option>供应链域 / 采购与供应（catalog_id = 12）</option></select>
+          <div class="hint">从 <code>meta_object_standard</code>（对象标准=实体类型）与 <code>meta_object_relation</code>（关系标准=关系类型）取约束；选择 CDM 目录后上方单选切到「CDM 目录」即生效。</div>
+        </div>
+        <label>自由文本约束</label>
+        <div><textarea class="inp" placeholder="描述实体类型、关系类型和属性约束" disabled></textarea>
+          <div class="hint">与 Yuxi 的 schema 提示同构；两种来源互斥，CDM 优先。</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">抽取参数</div>
+    <div class="card-b">
+      <div class="frm">
+        <label>并发数</label><div><input class="inp" value="8"><div class="hint">1 – 1000</div></div>
+        <label>超时（秒）</label><div><input class="inp" value="60"><div class="hint">0 – 600</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">检索参数 <span class="muted" style="font-weight:400;font-size:11.5px">写入 pipeline_config.graph</span></div>
+    <div class="card-b">
+      <div class="frm">
+        <label>启用图谱召回</label><div><label class="chk"><input type="checkbox" checked> use_graph_retrieval</label></div>
+        <label>实体召回数</label><div><input class="inp" value="10"><div class="hint">graph_entity_top_k</div></div>
+        <label>三元组召回数</label><div><input class="inp" value="10"><div class="hint">graph_triple_top_k</div></div>
+        <label>最大节点数</label><div><input class="inp" value="10000"><div class="hint">graph_max_nodes（PPR 在 Python 侧计算时的规模上限）</div></div>
+        <label>图通道权重</label><div><input class="inp" value="1.0"><div class="hint">graph_weight，参与 RRF 加权</div></div>
+        <label>PPR 阻尼</label><div><input class="inp" value="0.85"><div class="hint">ppr_damping，钳制区间 [0.1, 0.99]</div></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="toast('已保存到 pipeline_config.graph')">保存配置</button>
+        <button class="btn btn-sm" onclick="toast('已恢复默认值')">恢复默认</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   面板组装
+   ═══════════════════════════════════════════════════════════════ */
+const RENDER = {overview:tabOverview, doc:tabDoc, graph:tabGraph, entity:tabEntity,
+                triple:tabTriple, prov:tabProv, search:tabSearch, config:tabConfig};
+
+function badgeHTML(){
+  if (state.empty) return '<span class="badge badge-idle">○ 未构建</span>';
+  if (state.degraded) return '<span class="badge badge-warn">⚠ 已降级 · Neo4j 不可用</span>';
+  return '<span class="badge badge-ready"><span class="pulse"></span>就绪 · 12 实体 / 16 关系</span>';
+}
+
+function shell(){
+  const tab = state.tab;
+  const tabsHTML = TABS.map(t => {
+    const on = t.id === tab && !state.empty && !state.degraded ? ' on' : '';
+    const dis = (state.empty && ['graph','entity','triple','prov'].includes(t.id)) ? ' style="opacity:.4"' : '';
+    return `<button class="tab${on}" onclick="go('${t.id}')"${dis}>${t.label}${t.cnt?`<span class="cnt">${t.cnt}</span>`:''}</button>`;
+  }).join('');
+
+  let body;
+  if (state.empty && ['graph','entity','triple','prov'].includes(tab)) body = tabGraph();
+  else body = (RENDER[tab] || tabGraph)();
+
+  return `
+  <div class="pane-head">
+    <div>
+      <h2>🕸️ 供应链图谱</h2>
+      <div class="pane-sub">图谱知识库 · 图谱形态 · 高质量索引 · 共 6 个文档 / 214 个切片</div>
+    </div>
+    <div class="pane-ops">
+      ${badgeHTML()}
+      <button class="btn btn-sm" onclick="toast('已提交全量重建任务（单库互斥：已有任务时返回 409）')">重建</button>
+      <button class="btn btn-sm" onclick="toast('已提交对账任务：比对 PG 事实与 Neo4j 投影差异')">对账</button>
+      <button class="btn btn-primary btn-sm" onclick="toast('已提交图谱构建任务，后台异步执行')">▶ 构建图谱</button>
+    </div>
+  </div>
+  <div class="tabs">${tabsHTML}</div>
+  ${body}`;
+}
+
+function wizardHTML(){
+  return `
+  <div class="mask" onclick="if(event.target===this)go('graph')">
+    <div class="modal">
+      <div class="modal-h">新建知识库</div>
+      <div class="modal-b">
+        <div class="frm">
+          <label>名称</label><div><input class="inp" value="供应链图谱"></div>
+          <label>类型</label>
+          <div><select class="inp"><option>知识图谱（type=4）</option><option>LLM Wiki（type=1）</option><option>通用知识库（type=2）</option><option>外部知识库（type=3）</option></select>
+            <div class="hint">图知识库为<b>独立类型</b>；创建后类型不可切换（与既有约束一致）。</div></div>
+          <label>数据源形态</label>
+          <div><input class="inp" value="图谱（graph）" disabled>
+            <div class="hint">type=4 时形态固定为 <code>graph</code>，不可选择。</div></div>
+          <label>索引模式</label>
+          <div><input class="inp" value="高质量（high_quality）" disabled>
+            <div class="hint">图谱类型强制高质量索引 —— 经济模式不产向量，实体无法召回。</div></div>
+          <label>多模态</label>
+          <div><input class="inp" value="不适用" disabled>
+            <div class="hint">type=4 不支持多模态开关。</div></div>
+          <label>所属类别</label>
+          <div><select class="inp"><option>供应链域</option><option>研发中心</option><option>未分类</option></select></div>
+        </div>
+      </div>
+      <div class="modal-f">
+        <button class="btn" onclick="go('graph')">取消</button>
+        <button class="btn btn-primary" onclick="toast('已创建图谱知识库「供应链图谱」');go('graph')">创建</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   渲染与交互
+   ═══════════════════════════════════════════════════════════════ */
+function paint(){
+  $('#pane').innerHTML = state.scene === 'wizard' ? wizardHTML() : shell();
+  $('#pane').scrollTop = 0;
+  document.querySelectorAll('#sceneBar .pa').forEach(b => b.classList.toggle('on', b.dataset.s === state.scene));
+  document.querySelectorAll('.tnode[data-k]').forEach(n => n.classList.toggle('active', n.dataset.k === 'graph'));
+}
+function go(tab){
+  state.tab = tab; state.scene = tab; state.degraded = false; state.empty = false;
+  paint();
+}
+function pick(kind, id){ state.sel = {kind, id}; paint(); }
+function seg2(btn, id){
+  btn.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+document.querySelectorAll('#sceneBar .pa').forEach(b => {
+  b.addEventListener('click', () => {
+    const s = b.dataset.s;
+    if (s === 'degraded') { state.tab = 'graph'; state.scene = 'degraded'; state.degraded = true; state.empty = false; }
+    else if (s === 'empty') { state.tab = 'graph'; state.scene = 'empty'; state.empty = true; state.degraded = false; }
+    else if (s === 'wizard') { state.scene = 'wizard'; }
+    else { state.tab = s; state.scene = s; state.degraded = false; state.empty = false; }
+    paint();
+  });
+});
+document.querySelectorAll('.tnode[data-k]').forEach(n => {
+  n.addEventListener('click', () => { state.tab = 'graph'; state.scene = 'graph'; state.degraded = false; state.empty = false; paint(); });
+});
+
+paint();
+</script>
+</body>
+</html>

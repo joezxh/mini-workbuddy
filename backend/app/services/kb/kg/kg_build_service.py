@@ -141,6 +141,8 @@ class KgBuildService:
         self.knowledge_id = knowledge_id
         self._embed_fn = embed_fn
         self._extractor = extractor
+        # LLM 通道是否被降级到规则抽取（由 _build_llm 置位，供阶段 1 判定用）
+        self._llm_degraded = False
 
     # ── 服务与配置 ──────────────────────────────────────────────────────
     def _svc(self):
@@ -165,7 +167,8 @@ class KgBuildService:
             tenant_id=self.tenant_id,
         )
 
-    def _segments(self, document_uuid: Optional[str] = None, limit: int = 10000):
+    def _segment_query(self, document_uuid: Optional[str] = None):
+        """切片查询条件（构建扫描与前置校验共用，避免两处口径漂移）。"""
         stmt = select(KbSegment).where(
             KbSegment.collection == f"kb_{self.knowledge_id}"
         )
@@ -173,33 +176,115 @@ class KgBuildService:
             stmt = stmt.where(KbSegment.tenant_id == self.tenant_id)
         if document_uuid:
             stmt = stmt.where(KbSegment.document_id == document_uuid)
-        return list(self.db.execute(stmt.limit(limit)).scalars().all())
+        return stmt
+
+    def _segments(self, document_uuid: Optional[str] = None, limit: int = 10000):
+        stmt = self._segment_query(document_uuid).limit(limit)
+        return list(self.db.execute(stmt).scalars().all())
+
+    def count_segments(self, document_uuid: Optional[str] = None) -> int:
+        """切片数量（不加载行）：路由据此在提交前判断「有没有可抽内容」。"""
+        from sqlalchemy import func
+
+        stmt = select(func.count()).select_from(
+            self._segment_query(document_uuid).order_by(None).subquery()
+        )
+        return int(self.db.execute(stmt).scalar() or 0)
 
     # ── 阶段 1：结构写入 ─────────────────────────────────────────────────
+    def _build_llm(self, cfg: dict, report: BuildReport):
+        """按图谱配置构造 LLM 抽取通道；不可用返回 ``None`` 并**显式**记下降级原因。
+
+        静默退回规则通道会让前端看到「构建成功、 0 实体」（本轮就这么错过去一次），
+        所以降级原因一定写进报告。已注入 ``extractor``（测试）时不构造：
+        走哪条通道由注入方负责。``extractor_type=rule`` 是用户**显式选择**的通道，
+        不属于降级，不记告警。
+        """
+        from app.services.kb.kg import kg_llm_extractor
+
+        if (cfg.get("extractor_type") or "llm") == "rule":
+            return None
+
+        llm, note = kg_llm_extractor.build_llm_extractor(self.db, cfg)
+        if llm is None:
+            self._llm_degraded = True
+            msg = f"LLM 抽取通道不可用，本次降级为规则抽取: {note}"
+            logger.warning(f"[kg] kb={self.knowledge_id} {msg}")
+            report.errors.append(msg)
+            return None
+        logger.info(f"[kg] kb={self.knowledge_id} LLM 抽取通道: {llm.model_desc}")
+        return llm
+
+    def _extract_concurrently(self, segments, extract, hint, llm, cfg: dict) -> list:
+        """只并发**抽取**（纯外部调用），返回 ``[(seg, result|None, exc|None, ms)]``。
+
+        落库仍在主线程串行：SQLAlchemy Session 不是线程安全的，并发写会直接把
+        构建带崩。抽取是最贵的一段（逐切片等 LLM），所以并发只包这一层，
+        ``concurrency_count`` 在此真正生效。``pool.map`` 保证结果与输入同序。
+        """
+        jobs = [(seg, seg.content or "") for seg in segments]
+        if not jobs:
+            return []
+
+        def _one(job):
+            seg, text = job
+            started = time.time()
+            kwargs: dict = {"schema_hint": hint, "tenant_id": self.tenant_id}
+            if llm is not None:
+                kwargs["llm"] = llm
+            try:
+                return seg, extract(text, **kwargs), None, _ms(started)
+            except Exception as exc:  # noqa: BLE001 - 单切片失败不中断整批
+                return seg, None, exc, _ms(started)
+
+        workers = max(1, int(cfg.get("concurrency_count") or 1))
+        if workers == 1 or len(jobs) == 1:
+            return [_one(j) for j in jobs]
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(jobs)), thread_name_prefix="kg-extract"
+        ) as pool:
+            return list(pool.map(_one, jobs))
+
     def _run_structure(self, segments, cfg: dict, report: BuildReport) -> None:
         from app.services.kb.kg import kg_extractor, kg_graph_store
 
         svc = self._svc()
         hint = self._schema_hint(cfg)
         extract = self._extractor or kg_extractor.extract
+        llm = None if self._extractor is not None else self._build_llm(cfg, report)
 
-        for seg in segments:
-            if seg.graph_structure_indexed is True:
-                continue  # 已完成阶段：跳过，不重复抽取
-            started = time.time()
-            try:
-                result = extract(
-                    seg.content or "", schema_hint=hint, tenant_id=self.tenant_id
-                )
-            except Exception as exc:  # noqa: BLE001 - 单切片失败不中断整批
+        pending = [s for s in segments if s.graph_structure_indexed is not True]
+        for seg, result, exc, elapsed_ms in self._extract_concurrently(
+            pending, extract, hint, llm, cfg
+        ):
+            if exc is not None:
                 seg.graph_structure_indexed = False
                 seg.graph_extraction_details = {
                     "error": f"{type(exc).__name__}: {exc}",
-                    "elapsed_ms": int((time.time() - started) * 1000),
+                    "elapsed_ms": elapsed_ms,
                 }
                 self.db.commit()
                 report.structure_failed += 1
                 report.errors.append(f"segment={seg.id} 抽取失败: {exc}")
+                continue
+            if (result.errors or self._llm_degraded) and not (
+                result.entities or result.relations
+            ):
+                # 抽取器报错、或 LLM 通道被降级后零产出（规则通道对中文几乎无召回）
+                # → 该切片归为**失败**（标志置 False）。
+                # 否则切片会停在「已抽取但空」的真状态里永不重试——前端看起来
+                # 像成功，这正是本轮最难发现的那类静默降级；配好模型后能续跑。
+                seg.graph_structure_indexed = False
+                seg.graph_extraction_details = result.as_details(elapsed_ms)
+                self.db.commit()
+                report.structure_failed += 1
+                reason = (
+                    result.errors[0] if result.errors
+                    else "规则抽取零产出（LLM 通道已降级）"
+                )
+                report.errors.append(f"segment={seg.id} 抽取失败: {reason}")
                 continue
 
             entity_ids: dict[str, int] = {}
@@ -238,7 +323,11 @@ class KgBuildService:
                 except Exception as exc:  # noqa: BLE001
                     report.errors.append(f"关系落库失败 {rel}: {exc}")
                     continue
-                self._add_mention(KgTripleMention, "kg_triple_id", triple.id, seg)
+                self._add_mention(
+                    KgTripleMention, "kg_triple_id", triple.id, seg,
+                    # 提及带上原文依据：评审时可就地核对，不必回到切片重找
+                    evidence=({"text": rel["text"]} if rel.get("text") else None),
+                )
 
             # Chunk → Entity 的图投影（检索 PPR 需要 Chunk 节点）
             for eid in entity_ids.values():
@@ -253,16 +342,17 @@ class KgBuildService:
                     )
 
             seg.graph_structure_indexed = True
-            seg.graph_extraction_details = result.as_details(
-                int((time.time() - started) * 1000)
-            )
+            seg.graph_extraction_details = result.as_details(elapsed_ms)
             self.db.commit()
             report.structure_done += 1
             report.entities += len(result.entities)
             report.relations += len(result.relations)
 
-    def _add_mention(self, model, fk_name: str, fk_value: int, seg: KbSegment) -> None:
-        """写入提及（幂等：唯一约束冲突即忽略）。"""
+    def _add_mention(
+        self, model, fk_name: str, fk_value: int, seg: KbSegment,
+        *, evidence: Optional[dict] = None,
+    ) -> None:
+        """写入提及（幂等：已存在即跳过）。"""
         try:
             exists = self.db.execute(
                 select(model.id).where(
@@ -277,6 +367,7 @@ class KgBuildService:
                 **{fk_name: fk_value},
                 segment_id=seg.id,
                 document_id=seg.document_id,
+                evidence=evidence,
             )
             self.db.add(row)
             self.db.flush()
@@ -358,29 +449,64 @@ class KgBuildService:
     ) -> BuildReport:
         """同步执行一次构建动作（后台任务与测试都走这里）。"""
         report = BuildReport(action=action)
+        started = time.time()
         cfg = self._config()
 
-        if action == "clear_document":
-            self.clear_document(document_uuid)
+        try:
+            if action == "clear_document":
+                self.clear_document(document_uuid)
+                return report
+            if action == "rebuild":
+                if document_uuid:
+                    # 单文档重抽 = 撤销本文档贡献（引用计数归零才删实体/边）后重抽。
+                    # 不得走全库 ``rebuild()``：那会把整库实例层清空并把**所有**
+                    # 切片的 graph_* 标志置 None，表现在前端就是「点一个文档，其余
+                    # 全部变成未抽取」。
+                    self.clear_document(document_uuid)
+                else:
+                    self.rebuild()
+            elif action == "reconcile":
+                from app.services.kb.kg import kg_graph_store
+
+                kg_graph_store.reconcile(self.db, self.knowledge_id, self.tenant_id)
+                return report
+
+            segments = self._segments(document_uuid=document_uuid, limit=limit)
+            report.segments_scanned = len(segments)
+            self._run_structure(segments, cfg, report)
+            self._run_vectors(segments, report)
+
+            # 失败可观测：写文档的 error_detail（形如 [graph_extract] …），
+            # 但**不改文档状态**（切片已可用，仅图谱未就绪）
+            if report.structure_failed or report.vector_failed:
+                self._mark_document_error(document_uuid, report)
             return report
-        if action == "rebuild":
-            self.rebuild()
-        elif action == "reconcile":
-            from app.services.kb.kg import kg_graph_store
+        finally:
+            # 概览卡的「最近构建 / 耗时 / 失败步骤」来源于此（不新增列）
+            self._save_build_meta(report, started)
 
-            kg_graph_store.reconcile(self.db, self.knowledge_id, self.tenant_id)
-            return report
+    def _save_build_meta(self, report: BuildReport, started: float) -> None:
+        """记录最近一次构建的时间与耗时；失败不影响主流程。"""
+        from datetime import datetime
 
-        segments = self._segments(document_uuid=document_uuid, limit=limit)
-        report.segments_scanned = len(segments)
-        self._run_structure(segments, cfg, report)
-        self._run_vectors(segments, report)
+        from app.services.kb.kg.kg_config import save_build_meta
 
-        # 失败可观测：写文档的 error_detail（形如 [graph_extract] …），
-        # 但**不改文档状态**（切片已可用，仅图谱未就绪）
-        if report.structure_failed or report.vector_failed:
-            self._mark_document_error(document_uuid, report)
-        return report
+        try:
+            save_build_meta(
+                self.db,
+                self.knowledge_id,
+                {
+                    "action": report.action,
+                    "finished_at": datetime.now().isoformat(timespec="seconds"),
+                    "duration_seconds": round(time.time() - started, 1),
+                    "structure_failed": report.structure_failed,
+                    "vector_failed": report.vector_failed,
+                    "entities": report.entities,
+                    "relations": report.relations,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - 元信息落库失败不应对构建报错
+            logger.warning(f"[kg] 构建元信息写入失败 kb={self.knowledge_id}: {exc}")
 
     def _mark_document_error(self, document_uuid: Optional[str], report: BuildReport):
         if not document_uuid:
@@ -501,6 +627,11 @@ def _norm(name: str) -> str:
     from app.services.kb.kg.kg_extractor import normalize_entity_name
 
     return normalize_entity_name(name)
+
+
+def _ms(started: float) -> int:
+    """自 ``started`` 起的毫秒耗时（抽取详情与报告共用同一计时口径）。"""
+    return int((time.time() - started) * 1000)
 
 
 # ── 后台提交（job_runner + 单库互斥）────────────────────────────────────

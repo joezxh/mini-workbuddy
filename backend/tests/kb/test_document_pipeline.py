@@ -91,6 +91,17 @@ def test_pipeline_calls_native_insert_document(db: Session, doc: KbDocument):
     assert fresh.status == "completed" and fresh.segment_count == count
 
 
+def test_embed_failure_keeps_storage_errors_verbatim():
+    """落库类错误（PG 拒绝 NUL 字符）不得被误标成「嵌入服务不可达」。"""
+    from app.services.kb.document_pipeline import _embed_failure
+
+    exc = RuntimeError(
+        "PendingRollbackError: This Session's transaction has been rolled back. "
+        "Original exception was: A string literal cannot contain NUL (0x00) characters."
+    )
+    assert _embed_failure(exc) is exc
+
+
 def test_pipeline_failure_marks_failed(db: Session, doc: KbDocument):
     with pytest.raises(ValueError):
         run_document_ingest(

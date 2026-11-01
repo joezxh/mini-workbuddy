@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>孪生应用 · MinWorkBuddy 原型</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   设计基线：与 modeling-workbench / simulation-sandbox 同源
+   （frontend/src/styles/tokens.css · dark skin）—— 数字孪生工作台
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --bg-base:#07111f; --bg-page:#0b1322;
+  --bg-surface:rgba(9,18,32,.84); --bg-elevated:rgba(11,22,38,.92);
+  --bg-hover:rgba(74,163,255,.08); --bg-active:rgba(74,163,255,.14);
+  --bg-input:rgba(3,8,14,.55); --bg-subtle:rgba(255,255,255,.05);
+  --fg:#ebf3ff; --fg2:#8fa8c6; --fg3:#5a7a9a; --fg-inv:#050b15;
+  --border:rgba(140,192,255,.14); --border-strong:rgba(140,192,255,.26);
+  --divider:rgba(140,192,255,.1);
+  --accent:#4aa3ff; --accent-hover:#7fd0ff; --accent-soft:rgba(74,163,255,.12);
+  --cyan:#39d3c4; --cyan-soft:rgba(57,211,196,.12);
+  --amber:#f2b66d; --amber-soft:rgba(242,182,109,.12);
+  --ok:#4cc38a; --ok-soft:rgba(76,195,138,.12);
+  --warn:#f2b66d; --warn-soft:rgba(242,182,109,.12);
+  --err:#ff7b72; --err-soft:rgba(255,123,114,.12);
+  --purple:#b48ef0; --purple-soft:rgba(180,142,240,.14);
+  --r:14px; --r-sm:10px; --r-lg:20px;
+  --sh:0 18px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.04);
+  --sh-sm:0 1px 3px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+  --t:200ms cubic-bezier(.4,0,.2,1);
+  --mono:'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg-base); color:var(--fg);
+  font-family:'IBM Plex Sans','Space Grotesk','HarmonyOS Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 20% -12%, rgba(74,163,255,.12), transparent 40%),
+                   radial-gradient(circle at 85% -8%, rgba(57,211,196,.07), transparent 34%);
+  overflow:hidden;
+}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(140,192,255,.18);border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:rgba(140,192,255,.32)}
+code,.mono{font-family:var(--mono)}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 1.5s infinite;flex:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.28}}
+
+/* ── 顶栏 · 模块导航 ───────────────────────────────────── */
+.top{height:52px;display:flex;align-items:center;gap:14px;padding:0 14px;background:linear-gradient(180deg,rgba(13,22,38,.94),rgba(11,19,32,.86));border-bottom:1px solid var(--border);backdrop-filter:blur(14px);position:relative;z-index:30}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.brand small{color:var(--fg3);font-weight:400;font-size:11px}
+.mnav{display:flex;gap:1px;margin-left:4px}
+.mi{padding:6px 11px;border-radius:9px;border:0;background:transparent;color:var(--fg3);cursor:pointer;font-size:12px;white-space:nowrap;transition:all var(--t)}
+.mi:hover{color:var(--fg2);background:var(--bg-hover)}
+.mi.on{color:var(--accent-hover);background:var(--accent-soft);box-shadow:inset 0 0 0 1px rgba(74,163,255,.28)}
+.spacer{flex:1}
+.search{display:flex;align-items:center;gap:6px;background:var(--bg-input);border:1px solid var(--border);border-radius:999px;padding:4px 11px;color:var(--fg3);font-size:11.5px}
+.search input{background:transparent;border:0;outline:none;width:110px;color:var(--fg)}
+.runstate{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg2);padding:4px 10px;border-radius:999px;background:var(--ok-soft);border:1px solid rgba(76,195,138,.3)}
+.ava{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#2f7fd4,#39d3c4);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff}
+
+/* ── 通用按钮 ──────────────────────────────────────────── */
+.btn{padding:5px 12px;border-radius:var(--r-sm);border:1px solid var(--border-strong);background:var(--bg-elevated);color:var(--fg2);cursor:pointer;transition:all var(--t);font-size:12px;white-space:nowrap}
+.btn:hover{color:var(--fg);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btn.blue{background:linear-gradient(135deg,#2f7fd4,#3f9bf0);border-color:transparent;color:#fff;font-weight:500}
+.btn.blue:hover{box-shadow:0 0 0 3px rgba(74,163,255,.28)}
+.btn.danger{color:var(--err);border-color:rgba(255,123,114,.35)}
+.btn.danger:hover{background:var(--err);color:#fff;border-color:var(--err);box-shadow:none}
+.btn.sm{padding:3px 9px;font-size:11px;border-radius:8px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── 上下文栏 · 卡片面包屑 + 页面 tab + 模式 + 发布 ───── */
+.ctxbar{height:42px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--bg-page);border-bottom:1px solid var(--border);position:relative;z-index:20}
+.back{color:var(--fg3);cursor:pointer;font-size:12px}
+.back:hover{color:var(--fg)}
+.crumb{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--fg2)}
+.crumb b{color:var(--fg);font-weight:600}
+.crumb .mono{color:var(--accent);font-size:11px}
+.atabs{display:flex;gap:2px;margin-left:6px}
+.atab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;font-size:12px;color:var(--fg3);cursor:pointer;border:1px solid transparent}
+.atab:hover{color:var(--fg2)}
+.atab.on{color:var(--fg);background:var(--bg-surface);border-color:var(--border)}
+.modesw{display:flex;background:var(--bg-input);border:1px solid var(--border);border-radius:999px;padding:2px}
+.modesw button{padding:3px 12px;border:0;background:transparent;color:var(--fg3);border-radius:999px;cursor:pointer;font-size:11.5px;transition:all var(--t)}
+.modesw button.on{background:var(--accent-soft);color:var(--accent-hover)}
+.ctx-sep{width:1px;height:20px;background:var(--divider)}
+
+/* ── 主体三列 ──────────────────────────────────────────── */
+.main{display:grid;grid-template-columns:238px 1fr 336px;height:calc(100vh - 52px - 42px - 30px)}
+.col{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.col+.col{border-left:1px solid var(--border)}
+.ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--divider);font-size:11px;letter-spacing:.7px;color:var(--fg3);font-weight:600;flex:none}
+.ph .spacer{flex:1}
+.pb{flex:1;overflow:auto;padding:10px 12px}
+.sub{font-size:10px;letter-spacing:.7px;color:var(--fg3);font-weight:600;margin:13px 0 6px;display:flex;align-items:center;gap:6px}
+.sub:first-child{margin-top:2px}
+.sub::after{content:'';flex:1;height:1px;background:var(--divider)}
+.mini{padding:2px 8px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--fg3);font-size:10.5px;cursor:pointer;transition:all var(--t)}
+.mini:hover{color:var(--accent);border-color:var(--accent)}
+.tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:6px;font-size:10px;border:1px solid var(--border);color:var(--fg2);background:var(--bg-subtle)}
+.tag.b{color:var(--accent);border-color:rgba(74,163,255,.3);background:var(--accent-soft)}
+.tag.g{color:var(--ok);border-color:rgba(76,195,138,.3);background:var(--ok-soft)}
+.tag.a{color:var(--amber);border-color:rgba(242,182,109,.3);background:var(--amber-soft)}
+.tag.r{color:var(--err);border-color:rgba(255,123,114,.3);background:var(--err-soft)}
+.tag.p{color:var(--purple);border-color:rgba(180,142,240,.3);background:var(--purple-soft)}
+.tag.c{color:var(--cyan);border-color:rgba(57,211,196,.3);background:var(--cyan-soft)}
+.pill{padding:1px 7px;border-radius:6px;font-size:10px;border:1px solid var(--border);color:var(--fg3);background:var(--bg-subtle);white-space:nowrap}
+
+/* 左：孪生卡片列表 */
+.carditem{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:12px;color:var(--fg2);transition:all var(--t);border:1px solid transparent;margin-bottom:3px}
+.carditem:hover{background:var(--bg-hover);color:var(--fg)}
+.carditem.on{background:var(--accent-soft);color:var(--fg);border-color:rgba(74,163,255,.35)}
+.carditem .ic{width:16px;text-align:center;opacity:.8}
+.carditem .st{margin-left:auto;font-size:9px;color:var(--fg3)}
+.modrow{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:8px;font-size:11.5px;color:var(--fg2);cursor:grab;transition:all var(--t);border:1px solid transparent}
+.modrow:hover{background:var(--bg-hover);border-color:var(--border)}
+.modrow .grip{color:var(--fg3)}
+.modrow .mn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modrow .ops{display:flex;gap:3px;opacity:0;transition:opacity var(--t)}
+.modrow:hover .ops{opacity:1}
+body.run .edit-only{display:none!important}
+
+/* 中：画布工具栏 */
+.cbar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--divider);flex:none}
+.cbar .title{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.seg{display:flex;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{padding:3px 11px;border:0;background:transparent;color:var(--fg3);border-radius:6px;cursor:pointer;font-size:11.5px}
+.seg button.on{background:var(--accent-soft);color:var(--accent-hover)}
+.canvas-scroll{flex:1;overflow:auto;padding:12px}
+
+/* 场景 */
+.scene{position:relative;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:radial-gradient(ellipse at 50% 30%,rgba(74,163,255,.10),transparent 60%),linear-gradient(180deg,#0a1524,#070f1a);margin-bottom:12px}
+.scene svg{display:block;width:100%;height:auto}
+.mk{cursor:pointer}
+.mk circle.ring{transition:all var(--t)}
+.mk:hover circle.ring{filter:brightness(1.3)}
+.scene-tag{position:absolute;left:12px;top:10px;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--fg2);background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:4px 9px;z-index:4}
+.pop{position:absolute;width:216px;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:11px 12px;box-shadow:var(--sh);z-index:6;display:none}
+.pop.on{display:block;animation:tin .2s ease}
+.pop h4{font-size:12.5px;display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.pop .kvt{font-size:11px;display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed var(--divider)}
+.pop .kvt:last-of-type{border-bottom:0}
+.pop .kvt .k{color:var(--fg3)} .pop .kvt .v{color:var(--fg);font-family:var(--mono)}
+.pop .row{display:flex;gap:6px;margin-top:9px}
+
+/* 组件网格 */
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.widget{border:1px solid var(--border);border-radius:var(--r);background:var(--bg-surface);padding:11px 12px;transition:all var(--t);position:relative;overflow:hidden}
+.widget:hover{border-color:var(--border-strong);box-shadow:var(--sh-sm)}
+.widget.span2{grid-column:span 2}
+.widget.span4{grid-column:span 4}
+.widget.ai{border-color:rgba(57,211,196,.4);box-shadow:0 0 0 1px rgba(57,211,196,.15)}
+.wh{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.wh .wt{font-size:12px;font-weight:600}
+.wh .bind{font-size:9.5px;color:var(--fg3);font-family:var(--mono);background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:1px 6px;cursor:pointer;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wh .bind:hover{color:var(--accent);border-color:var(--accent)}
+.wh .upd{font-size:9px;color:var(--fg3);font-family:var(--mono);margin-left:auto}
+.wops{display:none;gap:4px}
+body.edit .wops{display:flex}
+.kpis{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.kpi .k{font-size:10px;color:var(--fg3)}
+.kpi .v{font-size:20px;font-weight:600;font-family:var(--mono);line-height:1.2}
+.kpi .v small{font-size:10px;color:var(--fg3);font-weight:400}
+.chart{width:100%;height:auto;display:block}
+.legend2{display:flex;gap:12px;font-size:9.5px;color:var(--fg3);margin-top:5px}
+.legend2 i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
+table.al{width:100%;border-collapse:collapse;font-size:11px}
+table.al th{text-align:left;color:var(--fg3);font-weight:600;font-size:10px;padding:3px 5px;border-bottom:1px solid var(--divider)}
+table.al td{padding:4px 5px;border-bottom:1px dashed var(--divider);cursor:pointer}
+table.al tr:hover td{background:var(--bg-hover)}
+.lv{padding:0 6px;border-radius:5px;font-size:9.5px;font-weight:600}
+.lv.h{background:var(--err-soft);color:var(--err)} .lv.m{background:var(--warn-soft);color:var(--warn)} .lv.l{background:var(--accent-soft);color:var(--accent)}
+.donutwrap{display:flex;align-items:center;gap:12px}
+.rates{font-size:11px;display:flex;flex-direction:column;gap:5px}
+.rates .r{display:flex;align-items:center;gap:6px;color:var(--fg2)}
+.rates .r b{font-family:var(--mono);color:var(--fg);margin-left:auto}
+/* 空 / 错误 / 权限态 */
+.wempty{text-align:center;color:var(--fg3);font-size:11px;padding:14px 6px;border:1px dashed var(--border);border-radius:9px;background:var(--bg-subtle)}
+.werr{display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:11.5px;color:var(--err);background:var(--err-soft);border:1px solid rgba(255,123,114,.3);border-radius:9px;padding:10px}
+.locked{color:var(--fg3)}
+.skel{position:relative;overflow:hidden}
+.skel::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(140,192,255,.14),transparent);transform:translateX(-100%);animation:sh 1.1s infinite}
+@keyframes sh{to{transform:translateX(100%)}}
+body.loading .widget .chart,body.loading .widget .kpis{opacity:.25}
+
+/* 右：AI 助手 */
+.chat{display:flex;flex-direction:column;gap:9px;height:100%}
+.msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:9px;padding-bottom:4px}
+.bub{border-radius:var(--r-sm);padding:8px 11px;font-size:11.5px;line-height:1.6;max-width:96%}
+.bub.u{align-self:flex-end;background:var(--accent-soft);border:1px solid rgba(74,163,255,.26);color:var(--fg)}
+.bub.a{align-self:flex-start;background:var(--bg-surface);border:1px solid var(--border);color:var(--fg2)}
+.bub .bh{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--fg3);margin-bottom:4px;font-family:var(--mono)}
+.bub .bh .who{color:var(--cyan);font-weight:600}.bub.u .bh .who{color:var(--accent)}
+.bub em{color:var(--fg);font-style:normal;font-weight:500}
+.bub ul{margin:5px 0 0 16px;color:var(--fg2)}.bub li{margin:2px 0}
+.embedcard{border:1px solid rgba(57,211,196,.4);border-radius:9px;padding:8px 10px;margin-top:6px;background:var(--cyan-soft)}
+.embedcard .t{font-size:11px;font-weight:600;color:var(--cyan);margin-bottom:4px}
+.cmdchips{display:flex;gap:5px;flex-wrap:wrap}
+.cmdchip{padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:var(--bg-subtle);color:var(--fg2);font-size:10.5px;cursor:pointer;transition:all var(--t)}
+.cmdchip:hover{border-color:var(--cyan);color:var(--cyan)}
+.chatbox{display:flex;gap:6px;padding-top:9px;border-top:1px solid var(--divider);align-items:center}
+.chatbox .inp{flex:1;min-width:0;padding:6px 10px;border-radius:9px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg);outline:none}
+.chatbox .inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.msel{padding:5px 7px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg2);font-size:11px;outline:none;cursor:pointer}
+
+/* 状态栏 */
+.statusbar{height:30px;display:flex;align-items:center;gap:14px;padding:0 14px;background:var(--bg-page);border-top:1px solid var(--border);font-size:11px;color:var(--fg3);position:relative;z-index:20}
+.statusbar .mono{color:var(--fg2)}
+.statusbar .spacer{flex:1}
+
+/* 模态 / 抽屉 */
+.mask{position:fixed;inset:0;background:rgba(3,8,14,.62);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:90}
+.mask.on{display:flex}
+.modal{width:460px;max-width:92vw;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;animation:tin .24s cubic-bezier(.2,.9,.3,1)}
+@keyframes tin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.modal .mh{padding:13px 16px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px}
+.modal .mh .spacer{flex:1}
+.modal .mb{padding:16px}
+.modal .mf{padding:12px 16px;border-top:1px solid var(--divider);display:flex;gap:8px;justify-content:flex-end}
+.field{margin-bottom:12px}.field label{display:block;font-size:10.5px;color:var(--fg3);margin-bottom:5px;letter-spacing:.4px}
+.field select,.field input{width:100%;padding:7px 9px;border-radius:9px;border:1px solid var(--border);background:var(--bg-input);color:var(--fg);outline:none;font-size:12px}
+.linkbox{display:flex;gap:6px;align-items:center;background:var(--bg-input);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--accent-hover)}
+.drawer-mask{position:fixed;inset:0;background:rgba(3,8,14,.5);display:none;z-index:80}
+.drawer-mask.on{display:block}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:420px;max-width:92vw;background:var(--bg-elevated);border-left:1px solid var(--border-strong);box-shadow:var(--sh);z-index:85;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dh{padding:14px 16px;border-bottom:1px solid var(--divider);display:flex;align-items:center;gap:8px;font-weight:600}
+.drawer .dh .spacer{flex:1}
+.drawer .dbody{flex:1;overflow:auto;padding:14px 16px}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:11.5px;border-bottom:1px dashed var(--divider)}
+.kv:last-child{border-bottom:0}.kv .k{color:var(--fg3)}.kv .v{color:var(--fg);text-align:right;font-family:var(--mono);font-size:11px}
+
+/* toast */
+.toasts{position:fixed;right:16px;bottom:44px;display:flex;flex-direction:column;gap:8px;z-index:99}
+.toast{padding:9px 14px;border-radius:var(--r-sm);font-size:12px;background:var(--bg-elevated);border:1px solid var(--border-strong);color:var(--fg);box-shadow:var(--sh);animation:tin .28s cubic-bezier(.2,.9,.3,1);max-width:440px}
+.toast.ok{border-color:rgba(76,195,138,.45)}.toast.warn{border-color:rgba(242,182,109,.45)}.toast.err{border-color:rgba(255,123,114,.45)}
+</style>
+</head>
+<body class="edit">
+
+<!-- ══════════════ 顶栏 ══════════════ -->
+<div class="top">
+  <div class="brand"><span class="dot"></span>MinWorkBuddy <small>· 孪生应用</small></div>
+  <div class="mnav" id="mnav">
+    <button class="mi" data-m="探索">探索</button>
+    <button class="mi" data-m="智能体">智能体</button>
+    <button class="mi" data-m="数据资产">数据资产</button>
+    <button class="mi" data-m="本体建模">本体建模</button>
+    <button class="mi" data-m="推演沙盘">推演沙盘</button>
+    <button class="mi on" data-m="孪生应用">孪生应用</button>
+    <button class="mi" data-m="图可视化">图可视化</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="search">🔍<input placeholder="搜索孪生卡片 / 组件"></div>
+  <div class="runstate"><span class="pulse"></span>运行中 · 数据刷新 10s</div>
+  <div class="ava">运</div>
+</div>
+
+<!-- ══════════════ 上下文栏 ══════════════ -->
+<div class="ctxbar">
+  <span class="back" onclick="toast('返回孪生卡片列表')">‹ 返回</span>
+  <div class="crumb">孪生卡片：<b>智慧工厂产线</b> · <span class="mono">FAC007 华东装配厂</span></div>
+  <div class="atabs" id="ptabs">
+    <div class="atab on" data-p="首页">首页</div>
+    <div class="atab" data-p="设备健康">设备健康 ▾</div>
+    <div class="atab" data-p="能耗管理">能耗管理 ▾</div>
+    <div class="atab" data-p="生产分析">生产分析 ▾</div>
+    <div class="atab" data-p="告警中心">告警中心 ▾</div>
+    <div class="atab edit-only" onclick="toast('新增页面（demo）')">＋</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="modesw" id="modesw">
+    <button class="on" data-mode="edit" onclick="setMode('edit')">编辑</button>
+    <button data-mode="run" onclick="setMode('run')">运行</button>
+  </div>
+  <div class="ctx-sep"></div>
+  <button class="btn sm" onclick="toast('已保存草稿 · 自动保存开启','ok')">保存</button>
+  <button class="btn sm" onclick="setMode('run')">预览</button>
+  <button class="btn sm blue" onclick="show('pubMask')">🚀 发布</button>
+</div>
+
+<!-- ══════════════ 主体三列 ══════════════ -->
+<div class="main">
+
+  <!-- ① 生管理 -->
+  <div class="col">
+    <div class="ph"><span>孪生管理</span><div class="spacer"></div><span class="edit-only" style="cursor:pointer;color:var(--accent)" onclick="toast('收起面板')">✕</span></div>
+    <div class="pb">
+      <button class="btn sm blue edit-only" style="width:100%;margin-bottom:9px" onclick="toast('新建孪生卡片：选择本体库应用作为功能来源')">＋ 新建孪生卡片</button>
+      <div class="search" style="margin-bottom:8px">🔍<input placeholder="搜索孪生卡片" style="width:100%"></div>
+      <div class="sub">我的卡片</div>
+      <div id="myCards"></div>
+      <div class="sub">共享给我的</div>
+      <div class="carditem" onclick="pickCard(this,'产线A数字孪生','lineA')"><span class="ic"></span>产线A数字孪生<span class="st">只读</span></div>
+      <div class="carditem" onclick="pickCard(this,'园区安防孪生','park')"><span class="ic">🔒</span>园区安防孪生<span class="st">受限</span></div>
+      <div class="sub">模板中心</div>
+      <div class="carditem" onclick="toast('从模板创建：设备健康驾驶舱')"><span class="ic">📐</span>设备健康驾驶舱</div>
+      <div class="carditem" onclick="toast('从模板创建：能耗环比看板')"><span class="ic">📐</span>能耗环比看板</div>
+      <div class="sub">本页面模块</div>
+      <div id="modList"></div>
+    </div>
+  </div>
+
+  <!-- ② 画布 -->
+  <div class="col">
+    <div class="cbar">
+      <div class="title"><span id="sceneTitle">🏭 智慧工厂产线 · 3D 场景</span> <span class="tag b">场景视图</span></div>
+      <div class="spacer"></div>
+      <div class="seg" id="dimSw"><button data-d="2D" onclick="setDim('2D')">2D</button><button class="on" data-d="3D" onclick="setDim('3D')">3D</button></div>
+      <button class="btn sm" onclick="setDim(document.documentElement.dataset.dim==='3D'?'2D':'3D')">🔄</button>
+      <button class="btn sm edit-only" onclick="toast('自动布局：按网格重排组件')">⌗ 自动布局</button>
+      <button class="btn sm blue edit-only" onclick="openAdd()">＋ 添加模块</button>
+    </div>
+    <div class="canvas-scroll" id="canvasScroll">
+      <!-- 场景 -->
+      <div class="scene" id="scene">
+        <div class="scene-tag"><span class="pulse"></span><span id="sceneTag">实时孪生 · 12 台设备在线 · FAC007 产线A</span></div>
+        <svg id="sceneSvg" viewBox="0 0 900 460"></svg>
+        <div class="pop" id="pop"></div>
+      </div>
+      <!-- 组件网格 -->
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+
+  <!-- ③ AI 助手 -->
+  <div class="col">
+    <div class="ph"><span>🤖 AI 助手</span><div class="spacer"></div><span style="font-size:10px;color:var(--fg3)">自然语言改布局</span></div>
+    <div class="pb" style="display:flex;flex-direction:column">
+      <div class="chat"><div class="msgs" id="msgs"></div>
+        <div class="cmdchips" style="margin-bottom:8px">
+          <span class="cmdchip" onclick="aiCmd('把设备状态监控移到左上')">移动组件</span>
+          <span class="cmdchip" onclick="aiCmd('添加能耗环比分析图表')">加环比图</span>
+          <span class="cmdchip" onclick="aiCmd('将告警列表改为表格样式')">改表格</span>
+        </div>
+        <div class="edit-only" style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn sm" onclick="toast('编辑 AI 生成的布局（demo）')">✎ 编辑</button>
+          <button class="btn sm" onclick="toast('已重做上一步布局调整','ok')">↷ 重做</button>
+          <button class="btn sm blue" style="flex:1" onclick="toast('已将 AI 建议应用到页面布局','ok')">应用到页面</button>
+        </div>
+        <div class="chatbox">
+          <select class="msel"><option>qwen-plus</option><option>deepseek-r1</option></select>
+          <input class="inp" id="cin" placeholder="请输入你的需求…（Enter 发送）" onkeydown="if(event.key==='Enter')sendAI()">
+          <button class="btn sm blue" onclick="sendAI()">发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ 状态栏 ══════════════ -->
+<div class="statusbar">
+  <span>页面信息</span>
+  <span class="mono" id="saveTs">自动保存成功 11:22:30</span>
+  <div class="spacer"></div>
+  <span>数据刷新：<select class="msel" style="padding:1px 5px" onchange="toast('刷新周期：'+this.value)"><option>10秒</option><option>30秒</option><option>关闭</option></select></span>
+  <span>主题：深色 ▾</span>
+  <span style="cursor:pointer" onclick="toast('进入全屏驾驶舱模式（demo）')">⛶ 全屏</span>
+</div>
+
+<!-- ══════════════ 发布模态 ══════════════ -->
+<div class="mask" id="pubMask">
+  <div class="modal">
+    <div class="mh">🚀 发布为独立页面 <div class="spacer"></div><span class="pill">孪生卡片 · 智慧工厂产线</span></div>
+    <div class="mb">
+      <div class="field"><label>访问权限</label><select><option>组织内可见</option><option>指定角色（运营/管理层）</option><option>公开链接</option></select></div>
+      <div class="field"><label>独立页面链接（一键发布）</label>
+        <div class="linkbox">https://minwb.app/twin/fac007-line-a<span class="mini" style="margin-left:auto" onclick="toast('链接已复制','ok')">复制</span></div>
+      </div>
+      <div class="kv"><span class="k">功能来源</span><span class="v">本体库 › 汽车零部件供应链 v3</span></div>
+      <div class="kv"><span class="k">组件绑定查询</span><span class="v">6 个 · 实时刷新 10s</span></div>
+      <div class="kv"><span class="k">下游可嵌入</span><span class="v" style="color:var(--accent)">探索 · 智能体 · 门户/OA</span></div>
+      <div style="font-size:10.5px;color:var(--fg3);margin-top:10px;line-height:1.7">发布后该页只读运行；组件仍绑定本体查询，数据变化即时反映。可在「智能体」中挂载此页作为业务助手入口。</div>
+    </div>
+    <div class="mf"><button class="btn" onclick="hide('pubMask')">取消</button><button class="btn blue" onclick="hide('pubMask');toast('已发布为独立页面，链接可嵌入门户/OA','ok')">确认发布</button></div>
+  </div>
+</div>
+
+<!-- ══════════════ 添加模块模态 ══════════════ -->
+<div class="mask" id="addMask">
+  <div class="modal" style="width:400px">
+    <div class="mh">＋ 添加模块到页面</div>
+    <div class="mb">
+      <div class="field"><label>模块类型</label><select id="addType"><option>趋势图（折线）</option><option>柱状对比</option><option>KPI 指标卡</option><option>告警表</option><option>环形仪表</option></select></div>
+      <div class="field"><label>绑定本体查询（组件直接绑定，数据即时反映）</label>
+        <select id="addBind"><option>FAC007.设备OEE</option><option>FAC007.今日产量</option><option>FAC007.实时功率</option><option>Equipment.告警流</option><option>（暂不绑定）</option></select>
+      </div>
+    </div>
+    <div class="mf"><button class="btn" onclick="hide('addMask')">取消</button><button class="btn blue" onclick="addModule()">添加</button></div>
+  </div>
+</div>
+
+<!-- ══════════════ 下钻抽屉 ══════════════ -->
+<div class="drawer-mask" id="drMask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dh"><span id="drTitle">详情</span><div class="spacer"></div><button class="btn sm" onclick="closeDrawer()">✕</button></div>
+  <div class="dbody" id="drBody"></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   孪生应用 · Mock：数字孪生看板构建器 + 运行驾驶舱
+   功能来源 = 本体库「汽车零部件供应链 v3」；组件绑定本体查询
+   场景 = 推演沙盘中的 FAC007 华东装配厂 产线A
+   ═══════════════════════════════════════════════════════════════ */
+let mode='edit', dim='3D', refreshTick=0, currentScene='factory';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+function toast(m,k){const d=document.createElement('div');d.className='toast '+(k||'');d.textContent=m;$('#toasts').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},3600)}
+function show(id){$('#'+id).classList.add('on')} function hide(id){$('#'+id).classList.remove('on')}
+function now(){return new Date().toTimeString().slice(0,8)}
+function rnd(n,base,amp){let a=[],v=base;for(let i=0;i<n;i++){v+=(Math.random()-.5)*amp;v=Math.max(3,v);a.push(v)}return a}
+
+/* ── 孪生卡片 & 模块清单 ── */
+const CARDS=[
+  {n:'智慧工厂产线',ic:'🏭',on:true,st:'运行中',sid:'factory'},
+  {n:'智慧园区能源中心',ic:'⚡',st:'运行中',sid:'energy'},
+  {n:'智能仓储系统',ic:'📦',st:'草稿',sid:'warehouse'},
+  {n:'城市轨道交通枢纽',ic:'🚇',st:'运行中',sid:'transit'}
+];
+const MODULES=[
+  {ic:'🧊',n:'产线3D场景',t:'场景视图'},{ic:'📟',n:'设备状态监控',t:'实时监控'},
+  {ic:'📊',n:'产能统计',t:'热点查询'},{ic:'🔋',n:'能耗分析',t:'实时监控'},
+  {ic:'🚨',n:'告警列表',t:'实时监控'},{ic:'🕸',n:'设备关系图谱',t:'图谱'}
+];
+function renderCards(){$('#myCards').innerHTML=CARDS.map(c=>`<div class="carditem ${c.on?'on':''}" onclick="pickCard(this,'${c.n}','${c.sid}')"><span class="ic">${c.ic}</span>${c.n}<span class="st">${c.st}</span></div>`).join('')}
+function renderModules(){$('#modList').innerHTML=MODULES.map(m=>`<div class="modrow" draggable="true"><span class="grip">⠿</span><span class="ic">${m.ic}</span><span class="mn">${m.n}</span><span class="ops"><span class="mini" onclick="event.stopPropagation();toast('编辑 ${m.n}')">✎</span><span class="mini" onclick="event.stopPropagation();toast('复制 ${m.n}')">⧉</span><span class="mini" onclick="event.stopPropagation();toast('已从页面移除 ${m.n}','warn')">🗑</span></span></div>`).join('')}
+function pickCard(el,n,sid){$$('.carditem').forEach(c=>c.classList.remove('on'));el.classList.add('on');currentScene=sid||currentScene;loading(()=>{renderScene();const S=SCENES[currentScene];toast('已切换到孪生卡片：'+n+(S&&S.restricted?'（受限视图 · 敏感画面已脱敏）':'（数据加载→实时刷新）'),'ok');if(S&&S.restricted)showPerm()})}
+
+/* ── 图表助手（纯内联 SVG） ── */
+function line(vals,w,h,col,fill){
+  const mx=Math.max(...vals),mn=Math.min(...vals),rg=(mx-mn)||1;
+  const pts=vals.map((v,i)=>[i*(w/(vals.length-1)),h-((v-mn)/rg)*(h-6)-3]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  let s='';if(fill)s=`<path d="${d} L${w},${h} L0,${h} Z" fill="${col}" opacity=".12"/>`;
+  return s+`<path d="${d}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round"/>`+`<circle cx="${pts[pts.length-1][0]}" cy="${pts[pts.length-1][1]}" r="2.6" fill="${col}"/>`;
+}
+function bars(vals,w,h,col){const mx=Math.max(...vals)||1,bw=w/vals.length*0.62,gap=w/vals.length;
+  return vals.map((v,i)=>{const bh=(v/mx)*(h-4);return `<rect x="${(i*gap+gap*0.19).toFixed(1)}" y="${(h-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${col}" opacity="${0.55+0.45*v/mx}"/>`}).join('')}
+function donut(pct,size,col){const r=size/2-6,c=2*Math.PI*r,off=c*(1-pct/100);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(140,192,255,.12)" stroke-width="9"/><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="9" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 ${size/2} ${size/2})"/><text x="50%" y="47%" text-anchor="middle" font-size="17" font-weight="600" fill="#ebf3ff" font-family="monospace">${pct}%</text><text x="50%" y="63%" text-anchor="middle" font-size="8.5" fill="#5a7a9a">综合OEE</text></svg>`}
+
+/* ── 组件模型 ── */
+let WIDGETS=[
+  {id:'status',t:'设备状态监控',badge:['c','实时监控'],bind:'FAC007.设备状态',upd:'刚刚'},
+  {id:'output',t:'产能统计',badge:['b','热点查询'],bind:'FAC007.今日产量',upd:'3s前'},
+  {id:'energy',t:'能耗分析',badge:['c','实时监控'],bind:'FAC007.功率/能耗',upd:'刚刚',masked:true},
+  {id:'alerts',t:'告警列表',badge:['r','实时监控'],bind:'Equipment.告警流',upd:'刚刚'},
+  {id:'oee',t:'设备OEE分析',badge:['p','AI 新增'],bind:'Equipment.OEE',upd:'刚刚',ai:true,span:2},
+  {id:'sensor',t:'环境传感流',badge:['c','实时监控'],bind:'getSensorStream',upd:'—',err:true},
+  {id:'ratio',t:'环比分析',badge:['a','待绑定'],bind:'（未绑定本体查询）',upd:'—',empty:true,span:2},
+  {id:'graph',t:'设备关系图谱',badge:['p','图谱'],bind:'本体结构 › 产线A 子图',upd:'10s前',span:4}
+];
+function widgetBody(w){
+  if(w.err) return `<div class="werr">⚠ 数据源接口 <code style="font-family:var(--mono)">getSensorStream</code> 超时（5s）<button class="btn sm" onclick="loading(()=>toast('重试成功：环境传感流已恢复','ok'))">↻ 重试</button></div>`;
+  if(w.empty) return `<div class="wempty">◎ 组件尚未绑定本体查询<br><button class="btn sm blue" style="margin-top:8px" onclick="openBind('${w.id}')">绑定本体查询</button></div>`;
+  if(w.id==='status') return `<div class="kpis"><div class="kpi"><div class="k">运行设备</div><div class="v">128<small> 台</small></div></div><div class="kpi"><div class="k">运行中</div><div class="v" style="color:var(--ok)">102</div></div><div class="kpi"><div class="k">告警中</div><div class="v" style="color:var(--err)">5</div></div><div class="kpi"><div class="k">离线</div><div class="v" style="color:var(--fg3)">21</div></div></div><svg class="chart" viewBox="0 0 300 60" preserveAspectRatio="none">${line(rnd(24,60,14),300,60,'#4cc38a',1)}${line(rnd(24,20,8),300,60,'#ff7b72')}</svg><div class="legend2"><span><i style="background:#4cc38a"></i>运行中</span><span><i style="background:#ff7b72"></i>告警中</span></div>`;
+  if(w.id==='output') return `<div class="kpis"><div class="kpi"><div class="k">今日产量</div><div class="v">12,458<small> 件</small></div></div><div class="kpi"><div class="k">目标达成率</div><div class="v" style="color:var(--amber)">83.6%</div></div></div><svg class="chart" viewBox="0 0 300 60" preserveAspectRatio="none">${bars(rnd(14,50,30),300,60,'#4aa3ff')}</svg><div class="legend2"><span><i style="background:#4aa3ff"></i>实际产量</span><span style="color:var(--fg3)">— 目标 15,000</span></div>`;
+  if(w.id==='energy') return `<div class="kpis"><div class="kpi"><div class="k">实时功率</div><div class="v">1,258<small> kW</small></div></div><div class="kpi"><div class="k">今日能耗</div><div class="v">28,560<small> kWh</small></div></div><div class="kpi"><div class="k">电费成本</div><div class="v locked">🔒 脱敏</div></div></div><svg class="chart" viewBox="0 0 300 56" preserveAspectRatio="none">${line(rnd(24,50,16),300,56,'#39d3c4',1)}</svg>`;
+  if(w.id==='alerts'){const rows=[['h','机器人_02 温度超限','11:21:30'],['m','机床_01 震动异常','11:18:22'],['m','检测设备_03 通讯延迟','11:17:05'],['l','传送带_05 负载偏高','11:15:46'],['l','环境温度湿度异常','11:14:33']];
+    return `<table class="al"><thead><tr><th>级别</th><th>告警信息</th><th>时间</th></tr></thead><tbody>${rows.map(r=>`<tr onclick="drillAlert('${r[1]}')"><td><span class="lv ${r[0]}">${r[0]==='h'?'高':r[0]==='m'?'中':'低'}</span></td><td>${r[1]}</td><td class="mono" style="color:var(--fg3)">${r[2]}</td></tr>`).join('')}</tbody></table><div style="font-size:10px;color:var(--fg3);margin-top:5px;text-align:right">共 5 条 · 点击查看下钻</div>`}
+  if(w.id==='oee') return `<div class="donutwrap">${donut(85.6,96,'#39d3c4')}<div class="rates"><div class="r"><i style="width:8px;height:8px;border-radius:2px;background:#4aa3ff;display:inline-block"></i>可用率<b>90.2%</b></div><div class="r"><i style="width:8px;height:8px;border-radius:2px;background:#39d3c4;display:inline-block"></i>性能率<b>86.1%</b></div><div class="r"><i style="width:8px;height:8px;border-radius:2px;background:#4cc38a;display:inline-block"></i>良品率<b>93.6%</b></div></div><div style="flex:1"></div><div style="width:120px"><svg class="chart" viewBox="0 0 120 70" preserveAspectRatio="none">${bars(rnd(8,60,26),120,70,'#39d3c4')}</svg><div class="legend2"><span>OEE 趋势</span></div></div></div>`;
+  if(w.id==='graph') return `<svg class="chart" viewBox="0 0 860 150" style="height:150px">${graphSvg()}</svg>`;
+  return '';
+}
+function renderGrid(){
+  $('#grid').innerHTML=WIDGETS.map(w=>`<div class="widget ${w.ai?'ai':''} ${w.span?('span'+w.span):''}" data-id="${w.id}">
+    <div class="wh"><span class="wt">${w.t}</span><span class="tag ${w.badge[0]}">${w.badge[1]}</span><span class="bind" title="绑定本体查询" onclick="openBind('${w.id}')">⛓ ${w.bind}</span><span class="upd">${w.err?'':('● '+w.upd)}</span><span class="wops"><span class="mini" onclick="toast('编辑 ${w.t}')">✎</span><span class="mini" onclick="delWidget('${w.id}')">🗑</span></span></div>
+    ${widgetBody(w)}</div>`).join('');
+}
+function delWidget(id){WIDGETS=WIDGETS.filter(w=>w.id!==id);renderGrid();toast('已移除组件','warn')}
+function openBind(id){openDrawer('绑定本体查询','<div class="kv"><span class="k">组件</span><span class="v">'+id+'</span></div><div class="sub" style="margin-top:0">功能来源：本体库 › 汽车零部件供应链 v3</div><div class="field"><label>选择本体查询（OntoQL）</label><select><option>FAC007.设备状态 — 运行/告警/离线 计数</option><option>FAC007.今日产量 — sum(produced) group by shift</option><option>Equipment.OEE — avg(oee) where line=A</option></select></div><div class="field"><label>刷新策略</label><select><option>实时（10s 推送）</option><option>变更触发</option><option>手动</option></select></div><div style="font-size:11px;color:var(--fg3);line-height:1.7">绑定后组件直接读取本体运行状态，<b style="color:var(--fg2)">数据变化即时反映到画面</b>；同一查询亦可被探索/智能体复用。</div><button class="btn blue" style="width:100%;margin-top:10px" onclick="closeDrawer();toast(\'已绑定本体查询，组件进入实时刷新\',\'ok\')">确认绑定</button>')}
+
+/* ── 设备关系图谱 ── */
+function graphSvg(){
+  const C={x:430,y:78}; const ns=[{n:'机床_01',x:150,y:34,c:'#4aa3ff',l:'包含'},{n:'机器人_02',x:300,y:20,c:'#ff7b72',l:'包含'},{n:'传感器_02',x:600,y:30,c:'#b48ef0',l:'驱动'},{n:'质检表_02',x:120,y:120,c:'#b48ef0',l:'控制'},{n:'PLC_01',x:300,y:135,c:'#4aa3ff',l:'控制'},{n:'传送带_01',x:470,y:140,c:'#4aa3ff',l:'监测'},{n:'检测设备_03',x:700,y:110,c:'#4cc38a',l:'监测'}];
+  let s='';ns.forEach(n=>{s+=`<line x1="${C.x}" y1="${C.y}" x2="${n.x}" y2="${n.y}" stroke="rgba(140,192,255,.22)" stroke-width="1.1"/><text x="${(C.x+n.x)/2}" y="${(C.y+n.y)/2-3}" text-anchor="middle" font-size="8" fill="#5a7a9a" font-family="monospace">${n.l}</text>`});
+  ns.forEach(n=>{s+=`<g class="mk" onclick="drillEntity('${n.n}')"><circle cx="${n.x}" cy="${n.y}" r="15" fill="${n.c}" opacity=".16"/><circle cx="${n.x}" cy="${n.y}" r="15" fill="none" stroke="${n.c}" stroke-width="1.3"/><text x="${n.x}" y="${n.y+3}" text-anchor="middle" font-size="8" fill="${n.c}">⚙</text><text x="${n.x}" y="${n.y+30}" text-anchor="middle" font-size="9.5" fill="#8fa8c6">${n.n}</text></g>`});
+  s+=`<circle cx="${C.x}" cy="${C.y}" r="26" fill="rgba(74,163,255,.16)" stroke="#4aa3ff" stroke-width="1.6"/><text x="${C.x}" y="${C.y+4}" text-anchor="middle" font-size="11" font-weight="600" fill="#d6e9ff">产线A</text>`;
+  return s;
+}
+
+/* ════ 等距 3D 场景引擎（iso 投影 · 纯 SVG · 零依赖）· 多孪生卡片场景切换 ════ */
+function iso(x,y,z){return [450+(x-y), 250+(x+y)*0.5 - z]}
+function box(x,y,w,d,h,col){
+  col=col||['#2a4a74','#1c3557','#132741'];
+  const A=iso(x,y,h),B=iso(x+w,y,h),C=iso(x+w,y+d,h),D=iso(x,y+d,h),E=iso(x+w,y,0),F=iso(x+w,y+d,0),G=iso(x,y+d,0);
+  const P=(o,c)=>`<polygon points="${o.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" fill="${c}" opacity=".95" stroke="rgba(140,192,255,.18)" stroke-width=".6"/>`;
+  return P([A,B,C,D],col[0])+P([B,C,F,E],col[1])+P([D,C,F,G],col[2]);
+}
+function cyl(cx,cy,r,h,col){
+  col=col||'#2a4a74';const t=iso(cx,cy,h),b=iso(cx,cy,0),rx=r,ry=r*0.5;
+  return `<path d="M${(t[0]-rx).toFixed(1)},${t[1].toFixed(1)} L${(b[0]-rx).toFixed(1)},${b[1].toFixed(1)} A${rx},${ry} 0 0 0 ${(b[0]+rx).toFixed(1)},${b[1].toFixed(1)} L${(t[0]+rx).toFixed(1)},${t[1].toFixed(1)}" fill="${col}" opacity=".9" stroke="rgba(140,192,255,.18)" stroke-width=".6"/><ellipse cx="${t[0].toFixed(1)}" cy="${t[1].toFixed(1)}" rx="${rx}" ry="${ry}" fill="${col}" stroke="rgba(140,192,255,.3)" stroke-width=".6"/>`;
+}
+function stColor(s){return s==='ok'?'#4cc38a':s==='warn'?'#f2b66d':s==='err'?'#ff7b72':s==='maint'?'#b48ef0':'#5a7a9a'}
+const SCENES={
+  factory:{icon:'🏭',title:'智慧工厂产线',loc:'FAC007 产线A',live:'12 台设备在线',ground:'line',entity:'Equipment',src:'dwd_equipment_run',
+    props:[{x:-200,y:120,w:400,d:26,h:10,col:['#24506f','#183a56','#0f2942']}],
+    ent:[
+      {id:'机床_01',x:-150,y:-60,w:54,d:54,h:46,st:'ok',type:'数控机床',pos:'工位03',iface:'getCncStatus',stats:[['OEE','91.2%'],['温度','42.1°C']]},
+      {id:'机器人_02',x:-30,y:-95,w:54,d:54,h:70,st:'err',type:'工业机器人',pos:'工位12',iface:'getRobotStatusStream',stats:[['OEE','85.6%'],['温度','56.8°C','#ff7b72']]},
+      {id:'检测设备_03',x:90,y:-55,w:54,d:54,h:46,st:'warn',type:'视觉检测',pos:'工位21',iface:'getVisionResult',stats:[['帧率','12fps','#f2b66d'],['延迟','860ms']]},
+      {id:'机械臂_06',x:-20,y:30,w:50,d:50,h:54,st:'maint',type:'六轴机械臂',pos:'工位08',iface:'getArmStatus',stats:[['状态','保养窗口','#b48ef0']]},
+      {id:'PLC_01',x:120,y:55,w:44,d:44,h:40,st:'off',type:'控制器',pos:'电控柜',iface:'getPLCHeartbeat',stats:[['心跳','失联','#5a7a9a']]}
+    ]},
+  energy:{icon:'⚡',title:'智慧园区能源中心',loc:'EPK001 能源中心',live:'光伏在线 · 6 单元',ground:'grid',entity:'EnergyUnit',src:'dwd_energy_meter',
+    ent:[
+      {id:'光伏阵列_A',x:-180,y:-90,w:120,d:56,h:8,st:'ok',type:'光伏板阵',pos:'西屋顶',c:['#1f5f5a','#17463f','#0f332e'],iface:'getSolarArray',stats:[['功率','320 kW'],['效率','18.6%']]},
+      {id:'光伏阵列_B',x:-180,y:20,w:120,d:56,h:8,st:'ok',type:'光伏板阵',pos:'东屋顶',c:['#1f5f5a','#17463f','#0f332e'],iface:'getSolarArray',stats:[['功率','286 kW'],['效率','17.9%']]},
+      {id:'储能柜组',x:50,y:-95,w:60,d:60,h:50,st:'ok',type:'储能电池柜',pos:'储能间',iface:'getStorageRack',stats:[['SOC','68%'],['循环','1,240 次']]},
+      {id:'变压器_T1',x:30,y:20,w:52,d:52,h:44,st:'warn',type:'主变压器',pos:'变电站',iface:'getTransformer',stats:[['温度','63°C','#f2b66d'],['负载率','81%']]},
+      {id:'冷却塔',x:160,y:-30,shape:'cyl',r:30,h:70,st:'ok',type:'冷却塔',pos:'制冷区',c:['#2b5580'],iface:'getCoolingTower',stats:[['出水温','24.1°C'],['风机','3/4 运行']]},
+      {id:'变电站主控',x:-30,y:110,w:90,d:50,h:38,st:'ok',type:'配电主控',pos:'中控室',iface:'getSubstation',stats:[['负载率','58%'],['功率因数','0.96']]}
+    ]},
+  warehouse:{icon:'📦',title:'智能仓储系统',loc:'WH003 华东仓',live:'1,240 托盘在库',ground:'aisle',entity:'StorageBin',src:'dwd_wh_stock',
+    ent:[
+      {id:'货架排_A',x:-175,y:-95,w:36,d:150,h:60,st:'ok',type:'立体货架',pos:'A 区通道',c:['#33517a','#24405f','#173049'],iface:'getRackRow',stats:[['库位占用','86%'],['SKU','1,820']]},
+      {id:'货架排_B',x:-115,y:-95,w:36,d:150,h:60,st:'ok',type:'立体货架',pos:'B 区通道',c:['#33517a','#24405f','#173049'],iface:'getRackRow',stats:[['库位占用','79%'],['SKU','1,540']]},
+      {id:'货架排_C',x:-55,y:-95,w:36,d:150,h:60,st:'warn',type:'立体货架',pos:'C 区通道',c:['#5a4a2a','#46381f','#332815'],iface:'getRackRow',stats:[['通道','阻塞','#f2b66d'],['占用','94%']]},
+      {id:'AGV-01',x:30,y:20,w:34,d:34,h:24,st:'ok',type:'搬运机器人',pos:'主通道',iface:'getAgvFleet',stats:[['电量','78%'],['任务','拣选×12']]},
+      {id:'AGV-02',x:95,y:-40,w:34,d:34,h:24,st:'err',type:'搬运机器人',pos:'东侧',iface:'getAgvFleet',stats:[['状态','离线','#ff7b72'],['故障','激光雷达']]},
+      {id:'入库站台',x:120,y:70,w:70,d:50,h:28,st:'ok',type:'卸货月台',pos:'收货口',iface:'getInboundDock',stats:[['吞吐','120 托/h'],['排队','3']]},
+      {id:'垛位区',x:-140,y:80,w:80,d:56,h:18,st:'ok',type:'暂存垛位',pos:'发货缓冲',iface:'getPalletZone',stats:[['空余','22 位'],['在库','140']]}
+    ]},
+  transit:{icon:'🚇',title:'城市轨道交通枢纽',loc:'L2 换乘枢纽',live:'3 线路 · 42 列车',ground:'rail',entity:'TransitLine',src:'dwd_transit_flow',
+    ent:[
+      {id:'站台北',x:-150,y:-40,w:120,d:40,h:24,st:'ok',type:'侧式站台',pos:'2F 站厅',iface:'getPlatform',stats:[['实时客流','1,260'],['候车','4 min']]},
+      {id:'列车_02',x:-40,y:-100,w:150,d:26,h:30,st:'ok',type:'运营列车',pos:'上行区间',c:['#2a5a8a','#1f4670','#143250'],iface:'getTrainTelemetry',stats:[['满载率','63%'],['晚点','0s']]},
+      {id:'换乘大厅',x:10,y:20,w:90,d:70,h:50,st:'warn',type:'中转大厅',pos:'B1 换乘',iface:'getConcourse',stats:[['拥堵指数','7.2','#f2b66d'],['客流','3,480']]},
+      {id:'出入口_A',x:-160,y:90,w:40,d:40,h:26,st:'ok',type:'闸机入口',pos:'A 口',iface:'getGateFlow',stats:[['进站','213/min']]},
+      {id:'出入口_B',x:130,y:90,w:40,d:40,h:26,st:'off',type:'闸机入口',pos:'B 口',iface:'getGateFlow',stats:[['状态','关闭','#5a7a9a']]},
+      {id:'列车_05',x:70,y:-55,w:150,d:26,h:30,st:'maint',type:'检修列车',pos:'车辆段',c:['#4a4170','#3a3358','#28233f'],iface:'getTrainTelemetry',stats:[['状态','检修','#b48ef0']]}
+    ]},
+  park:{icon:'🛡',title:'园区安防孪生',loc:'中央商务园区 A 区',live:'受限视图 · 30 路摄像头 · 18 栋建筑',ground:'perimeter',restricted:true,depth:true,entity:'SecurityDevice',src:'dwd_security_event',
+    props:[
+      {x:-81,y:-150,w:22,d:318,col:['#12202f','#0d1826','#0d1826']},
+      {x:74,y:-150,w:22,d:318,col:['#12202f','#0d1826','#0d1826']},
+      {x:-224,y:-91,w:452,d:22,col:['#12202f','#0d1826','#0d1826']},
+      {x:-224,y:21,w:452,d:28,col:['#14263a','#0e1c2c','#0e1c2c']},
+      {x:-224,y:-150,w:452,d:14,col:['#101d2b','#0c1622','#0c1622']},
+      {x:-224,y:152,w:452,d:14,col:['#101d2b','#0c1622','#0c1622']},
+      {x:-224,y:-150,w:14,d:316,col:['#101d2b','#0c1622','#0c1622']},
+      {x:210,y:-150,w:14,d:316,col:['#101d2b','#0c1622','#0c1622']},
+      {x:-42,y:10,w:98,d:46,col:['#17293d','#11202f','#11202f']},
+      {x:-30,y:22,w:66,d:8,col:['#1a2d42','#14222f','#14222f']},
+      {x:-42,y:-52,w:98,d:60,h:18,col:['#33506f','#274058','#1b2f43']},
+      {x:-150,y:-56,w:122,d:14,col:['#1a2d42','#14222f','#14222f']},
+      {x:-232,y:-160,w:148,d:8,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:-52,y:-160,w:288,d:8,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:-232,y:160,w:148,d:8,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:-52,y:160,w:288,d:8,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:-232,y:-160,w:8,d:330,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:226,y:-160,w:8,d:184,h:8,col:['#2b3c52','#213041','#1a2534']},
+      {x:226,y:48,w:8,d:112,h:8,col:['#2b3c52','#213041','#1a2534']}
+    ],
+    ent:[
+      {id:'写字楼A栋',x:112,y:-52,w:44,d:50,h:132,st:'ok',type:'高层写字楼·33F',pos:'东区·塔群',c:['#38628f','#2a4c70','#1d3a57'],iface:'getBuildingSensor',stats:[['楼层','33F'],['入驻率','92%'],['门禁在线','18/18']]},
+      {id:'写字楼B栋',x:160,y:-52,w:40,d:50,h:104,st:'ok',type:'高层写字楼·26F',pos:'东区·塔群',c:['#38628f','#2a4c70','#1d3a57'],iface:'getBuildingSensor',stats:[['楼层','26F'],['入驻率','88%'],['门禁在线','12/12']]},
+      {id:'写字楼C栋',x:-44,y:64,w:40,d:48,h:96,st:'ok',type:'高层写字楼·24F',pos:'中区·南塔',c:['#38628f','#2a4c70','#1d3a57'],iface:'getBuildingSensor',stats:[['楼层','24F'],['入驻率','81%'],['能耗','620 kW']]},
+      {id:'写字楼D栋',x:2,y:64,w:40,d:48,h:122,st:'maint',type:'高层写字楼·30F',pos:'中区·南塔',c:['#38628f','#2a4c70','#1d3a57'],iface:'getBuildingSensor',stats:[['楼层','30F'],['状态','幕墙检修','#b48ef0'],['门禁在线','16/16']]},
+      {id:'购物中心',x:-28,y:-42,w:64,d:40,h:52,st:'ok',type:'购物综合体·5F',pos:'中央广场',c:['#41618c','#31506f','#223c56'],iface:'getMallOccupancy',stats:[['今日客流','4,820'],['在营商铺','186/192'],['车位占用','78%']]},
+      {id:'连廊',x:-92,y:-50,w:50,d:16,h:34,st:'ok',type:'人行空中连廊',pos:'西块↔中央',c:['#2f4d70','#24405c','#1a3049'],iface:'getSkybridgeFlow',stats:[['通行状态','正常'],['瞬时人流','140/min']]},
+      {id:'办公楼①',x:-196,y:-130,w:48,d:32,h:40,st:'ok',type:'低层写字楼',pos:'西北区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','8/8'],['今日进出','320']]},
+      {id:'办公楼②',x:-142,y:-130,w:46,d:32,h:44,st:'ok',type:'低层写字楼',pos:'西北区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','6/6'],['今日进出','210']]},
+      {id:'独栋办公③',x:2,y:-130,w:44,d:32,h:36,st:'ok',type:'独栋办公楼',pos:'北区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','4/4']]},
+      {id:'独栋办公④',x:152,y:-130,w:44,d:32,h:46,st:'ok',type:'独栋办公楼',pos:'东北区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','5/5'],['今日进出','160']]},
+      {id:'办公楼⑤',x:-198,y:-55,w:52,d:60,h:36,st:'ok',type:'低层写字楼',pos:'西区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','9/9'],['入驻率','76%']]},
+      {id:'办公楼⑥',x:-140,y:-55,w:48,d:60,h:44,st:'warn',type:'独栋办公楼',pos:'西区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁','1 处离线','#f2b66d'],['今日进出','280']]},
+      {id:'办公楼⑦',x:-130,y:64,w:40,d:48,h:34,st:'ok',type:'独栋办公楼',pos:'西南区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','4/4']]},
+      {id:'办公楼⑧',x:112,y:110,w:56,d:26,h:30,st:'ok',type:'独栋办公楼',pos:'东南区',c:['#2a4a74','#1c3557','#132741'],iface:'getAccessLog',stats:[['门禁在线','3/3']]},
+      {id:'员工食堂',x:-198,y:66,w:60,d:44,h:26,st:'ok',type:'生活配套·餐饮',pos:'西南区',c:['#3c4a5e','#2d3847','#212b38'],iface:'getCanteenFlow',stats:[['在座','120/240'],['供餐','午市']]},
+      {id:'便利店',x:52,y:-128,w:20,d:24,h:16,st:'ok',type:'生活配套·零售',pos:'北区',c:['#3c4a5e','#2d3847','#212b38'],iface:'getRetailPos',stats:[['营业','正常'],['客流','48/h']]},
+      {id:'地下车库入口A',x:-46,y:-128,w:36,d:26,h:14,st:'ok',type:'车库出入口',pos:'北区',c:['#3a4658','#2b3444','#202836'],iface:'getGarageBarrier',stats:[['剩余车位','42'],['入口','抬杆']]},
+      {id:'地下车库入口B',x:110,y:-128,w:36,d:26,h:14,st:'ok',type:'车库出入口',pos:'东北区',c:['#3a4658','#2b3444','#202836'],iface:'getGarageBarrier',stats:[['剩余车位','17'],['入口','抬杆']]},
+      {id:'地下车库入口C',x:-170,y:112,w:40,d:24,h:14,st:'off',type:'车库出入口',pos:'西南区',c:['#3a4658','#2b3444','#202836'],iface:'getGarageBarrier',stats:[['状态','维护关闭','#5a7a9a']]},
+      {id:'车行闸机·北门',x:-84,y:-152,w:28,d:16,h:10,st:'ok',masked:true,type:'车行闸机',pos:'北门',iface:'getBarrierCamera'},
+      {id:'车行闸机·南门',x:-84,y:150,w:28,d:16,h:10,st:'ok',type:'车行闸机',pos:'南门',iface:'getBarrierLog',stats:[['今日车流','1,840'],['识别率','99.4%']]},
+      {id:'人行闸机·东门',x:200,y:24,w:18,d:22,h:8,st:'ok',masked:true,type:'人行闸机',pos:'东门',iface:'getGateFlow'},
+      {id:'保安亭',x:-112,y:-146,w:22,d:20,h:22,st:'ok',type:'安防岗亭',pos:'北门内侧',c:['#3f4a5c','#313a48','#242b36'],iface:'getGuardPost',stats:[['在岗','2 人'],['对讲','正常']]},
+      {id:'消防站',x:112,y:66,w:56,d:40,h:28,st:'ok',type:'微型消防站',pos:'东南区',c:['#5a2b31','#452127','#31181d'],iface:'getFireStation',stats:[['值守','6 人'],['器材','齐备'],['出动车辆','1']]},
+      {id:'摄像头01',x:-228,y:-90,w:10,d:10,h:34,st:'ok',masked:true,type:'枪机摄像头',pos:'西围栏',c:['#465064','#363e4c','#2a313c'],iface:'getCameraStream'},
+      {id:'摄像头02',x:222,y:-30,w:10,d:10,h:34,st:'ok',masked:true,type:'枪机摄像头',pos:'东围栏',c:['#465064','#363e4c','#2a313c'],iface:'getCameraStream'},
+      {id:'摄像头03',x:-20,y:-164,w:10,d:10,h:34,st:'warn',masked:true,type:'球机摄像头',pos:'北围栏',c:['#465064','#363e4c','#2a313c'],iface:'getCameraStream'},
+      {id:'摄像头04',x:40,y:166,w:10,d:10,h:34,st:'ok',masked:true,type:'枪机摄像头',pos:'南围栏',c:['#465064','#363e4c','#2a313c'],iface:'getCameraStream'},
+      {id:'摄像头05',x:64,y:30,w:10,d:10,h:34,st:'err',masked:true,type:'广场半球',pos:'中央广场',c:['#465064','#363e4c','#2a313c'],iface:'getCameraStream'},
+      {id:'周界红外·西',x:-230,y:40,w:8,d:8,h:18,st:'ok',type:'周界红外',pos:'西围栏',c:['#465064','#363e4c','#2a313c'],iface:'getPerimeterSensor',stats:[['状态','布防正常']]},
+      {id:'周界红外·东',x:222,y:96,w:8,d:8,h:18,st:'err',type:'周界红外',pos:'东围栏',c:['#465064','#363e4c','#2a313c'],iface:'getPerimeterSensor',stats:[['告警','攀爬触碰','#ff7b72'],['联动','摄像头02']]},
+      {id:'周界红外·南',x:-120,y:166,w:8,d:8,h:18,st:'ok',type:'周界红外',pos:'南围栏',c:['#465064','#363e4c','#2a313c'],iface:'getPerimeterSensor',stats:[['状态','布防正常']]}
+    ]},
+  lineA:{icon:'🏭',title:'产线A数字孪生',loc:'FAC007 产线A',live:'只读共享 · 9 工位',ground:'line',entity:'WorkStation',src:'dwd_station_cycle',
+    props:[{x:-200,y:120,w:380,d:24,h:10,col:['#24506f','#183a56','#0f2942']}],
+    ent:[
+      {id:'冲压工位_01',x:-160,y:-70,w:54,d:54,h:46,st:'ok',type:'冲压工位',pos:'产线A·OP10',iface:'getStationCycle',stats:[['节拍','42s'],['合格率','99.1%']]},
+      {id:'焊装工位_02',x:-40,y:-95,w:54,d:54,h:60,st:'ok',type:'焊装工位',pos:'产线A·OP20',iface:'getWeldStation',stats:[['焊点','1,280'],['合格率','98.6%']]},
+      {id:'涂装工位_03',x:90,y:-55,w:54,d:54,h:50,st:'warn',type:'涂装工位',pos:'产线A·OP30',iface:'getPaintBooth',stats:[['VOC','临界','#f2b66d'],['温湿度','异常']]},
+      {id:'总装工位_04',x:-120,y:20,w:60,d:60,h:44,st:'ok',type:'总装工位',pos:'产线A·OP40',iface:'getAssemblyStation',stats:[['装配数','320'],['节拍','55s']]},
+      {id:'质检工位_05',x:60,y:30,w:54,d:54,h:40,st:'ok',type:'终检工位',pos:'产线A·OP50',iface:'getQcStation',stats:[['一次合格率','96.2%']]}
+    ]}
+};
+function anchor(e){return e.shape==='cyl'?iso(e.x,e.y,e.h+18):iso(e.x+e.w/2,e.y+e.d/2,e.h+18)}
+function marker(e){const p=anchor(e),col=stColor(e.st),x=p[0].toFixed(1),y=p[1].toFixed(1);
+  const blink=e.st==='err'?`<animate attributeName="opacity" values="1;.4;1" dur="1.2s" repeatCount="indefinite"/>`:'';
+  return `<g class="mk" onclick="popEnt('${e.id}',${x},${y})"><line x1="${x}" y1="${y}" x2="${x}" y2="${(p[1]+16).toFixed(1)}" stroke="${col}" stroke-width="1"/>${blink}<circle class="ring" cx="${x}" cy="${y}" r="7" fill="${col}" opacity=".22"/><circle cx="${x}" cy="${y}" r="4" fill="${col}"/><text x="${(p[0]+11).toFixed(1)}" y="${(p[1]+3.5).toFixed(1)}" font-size="9.5" fill="#cfe1ff">${e.id}</text></g>`;}
+function drawGround(kind){
+  let g='';
+  for(let i=-5;i<=5;i++){const a=iso(i*40,-200,0),b=iso(i*40,200,0);g+=`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="rgba(140,192,255,.06)"/>`;const c=iso(-200,i*40,0),d=iso(200,i*40,0);g+=`<line x1="${c[0].toFixed(1)}" y1="${c[1].toFixed(1)}" x2="${d[0].toFixed(1)}" y2="${d[1].toFixed(1)}" stroke="rgba(140,192,255,.06)"/>`}
+  const poly=(pts,fill,stroke,dash)=>`<polygon points="${pts.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="1.2"${dash?' stroke-dasharray="6 5"':''}/>`;
+  if(kind==='perimeter')g+=poly([iso(-236,-164,0),iso(236,-164,0),iso(236,172,0),iso(-236,172,0)],'rgba(180,142,240,.04)','rgba(180,142,240,.32)',1);
+  if(kind==='rail'){
+    [[-70,-30],[0,40]].forEach(r=>{g+=poly([iso(-210,r[0],2),iso(210,r[0],2),iso(210,r[1],2),iso(-210,r[1],2)],'rgba(74,163,255,.06)','rgba(74,163,255,.18)',0)});
+    [-60,-40].forEach(ry=>{const a=iso(-215,ry,8),b=iso(215,ry,8);g+=`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="rgba(127,208,255,.5)" stroke-width="2"/>`});
+    [-30,-10].forEach(ry=>{const a=iso(-215,ry,8),b=iso(215,ry,8);g+=`<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="rgba(127,208,255,.5)" stroke-width="2"/>`});
+  }
+  if(kind==='aisle')g+=poly([iso(-190,-30,1),iso(160,-30,1),iso(160,30,1),iso(-190,30,1)],'rgba(242,182,109,.05)','rgba(242,182,109,.16)',1);
+  return g;
+}
+function centerDepth(e){return e.shape==='cyl'?e.x+e.y:(e.x+(e.w||0)/2)+(e.y+(e.d||0)/2)}
+function renderScene(){
+  const S=SCENES[currentScene]||SCENES.factory;
+  $('#sceneTitle').textContent=S.icon+' '+S.title+' · 3D 场景';
+  $('#sceneTag').textContent=(S.restricted?'受限视图 · 敏感画面已脱敏 · ':'实时孪生 · ')+S.live+' · '+S.loc;
+  let g=drawGround(S.ground);
+  (S.props||[]).forEach(pr=>{g+=box(pr.x,pr.y,pr.w,pr.d,pr.h,pr.col)});
+  const ents=S.depth?[...S.ent].sort((a,b)=>centerDepth(a)-centerDepth(b)):S.ent;
+  ents.forEach(e=>{g+= e.shape==='cyl'?cyl(e.x,e.y,e.r,e.h,e.c&&e.c[0]):box(e.x,e.y,e.w,e.d,e.h,e.c); g+=marker(e)});
+  $('#sceneSvg').innerHTML=g;
+}
+function popEnt(id,sx,sy){const S=SCENES[currentScene];const e=S.ent.find(x=>x.id===id);if(!e)return;const pop=$('#pop');
+  const stName={ok:'运行中',warn:'延迟',err:'告警',off:'离线',maint:'维护'}[e.st]||'运行中';
+  const stTag={err:'r',warn:'a',off:'g',maint:'p',ok:'g'}[e.st]||'g';
+  const rows=(e.stats||[]).map(kv=>`<div class="kvt"><span class="k">${kv[0]}</span><span class="v"${kv[2]?` style="color:${kv[2]}"`:''}>${kv[1]}</span></div>`).join('');
+  pop.innerHTML=`<h4><span style="width:8px;height:8px;border-radius:50%;background:${stColor(e.st)};display:inline-block"></span>${id} <span class="tag ${stTag}" style="margin-left:auto">${stName}</span></h4>
+    <div class="kvt"><span class="k">类型</span><span class="v">${e.type}</span></div>
+    <div class="kvt"><span class="k">位置</span><span class="v">${e.pos}</span></div>${rows}
+    <div class="kvt"><span class="k">接口</span><span class="v">${e.masked?'🔒 脱敏受限':e.iface}</span></div>
+    <div class="row"><button class="btn sm" style="flex:1" onclick="drillEntity('${id}')">查看详情</button><button class="btn sm blue" style="flex:1" onclick="drillEntity('${id}')">关联分析</button></div>`;
+  const sc=$('#scene').getBoundingClientRect();let left=sx/900*sc.width+12,top=sy/460*sc.height-10;
+  left=Math.min(left,sc.width-228);pop.style.left=left+'px';pop.style.top=Math.max(8,top)+'px';pop.classList.add('on');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.mk')&&!e.target.closest('.pop'))$('#pop').classList.remove('on')});
+
+/* ── 下钻抽屉 ── */
+function openDrawer(t,h){$('#drTitle').textContent=t;$('#drBody').innerHTML=h;$('#drawer').classList.add('on');$('#drMask').classList.add('on')}
+function closeDrawer(){$('#drawer').classList.remove('on');$('#drMask').classList.remove('on')}
+function drillEntity(id){const S=SCENES[currentScene];const e=S.ent.find(x=>x.id===id)||{type:'—',pos:'—',iface:'—',stats:[],masked:S.restricted};
+  const rows=(e.stats||[]).map(kv=>`<div class="kv"><span class="k">${kv[0]}</span><span class="v"${kv[2]?` style="color:${kv[2]}"`:''}>${kv[1]}</span></div>`).join('');
+  openDrawer('下钻 · '+id,`${rows}<div class="kv"><span class="k">类型</span><span class="v">${e.type}</span></div><div class="kv"><span class="k">位置</span><span class="v">${e.pos}</span></div><div class="kv"><span class="k">绑定接口</span><span class="v">${e.masked?'🔒 受限':e.iface}</span></div>
+    <div class="sub">BI 下钻 · 近 8 小时趋势</div><svg class="chart" viewBox="0 0 340 70" preserveAspectRatio="none">${bars(rnd(8,60,24),340,70,'#4aa3ff')}</svg>
+    <div class="sub">关联本体</div><div class="kv"><span class="k">本体映射</span><span class="v">v3 · ${S.entity}</span></div><div class="kv"><span class="k">来源表</span><span class="v">${S.src}</span></div>${e.masked?'<div class="werr" style="margin-top:10px">🔒 该实体受本体库视野/脱敏策略限制，画面与轨迹已隐去</div>':''}
+    <button class="btn blue" style="width:100%;margin-top:12px" onclick="closeDrawer();toast('跳转推演沙盘：查看该场景的因果推演（承接板块六）')">在推演沙盘中推演</button>`)}
+function drillAlert(name){openDrawer('告警下钻 · '+name,`<div class="werr" style="margin-bottom:12px">⚠ ${name}</div><div class="kv"><span class="k">触发时间</span><span class="v">11:21:30</span></div><div class="kv"><span class="k">规则</span><span class="v">温度阈值 &gt; 55°C</span></div><div class="kv"><span class="k">影响目标</span><span class="v" style="color:var(--err)">G-01 保障交付</span></div><div class="sub">建议行动</div><div class="kv"><span class="k">缓解</span><span class="v">降速 / 切换备用工位</span></div><button class="btn blue" style="width:100%;margin-top:12px" onclick="closeDrawer();toast('已转推演沙盘验证缓解行动效果','ok')">推演缓解方案</button>`)}
+function showPerm(){openDrawer('访问受限','<div class="werr">🔒 该孪生卡片受本体库脱敏/视野策略限制</div><div class="kv"><span class="k">受限内容</span><span class="v">摄像头画面 · 能耗成本</span></div><div class="kv"><span class="k">所需角色</span><span class="v">安防管理员</span></div><button class="btn" style="width:100%;margin-top:12px" onclick="closeDrawer();toast(\'已提交权限申请\',\'ok\')">申请访问权限</button>')}
+
+/* ── 交互 ── */
+function setMode(m){mode=m;document.body.classList.toggle('edit',m==='edit');document.body.classList.toggle('run',m==='run');$$('#modesw button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));toast(m==='edit'?'编辑模式：可拖拽组件、绑定查询、AI 改布局':'运行模式：只读驾驶舱，支持智能问数与 BI 下钻')}
+function setDim(d){dim=d;document.documentElement.dataset.dim=d;$$('#dimSw button').forEach(b=>b.classList.toggle('on',b.dataset.d===d));toast(d==='3D'?'切换到 3D 等距场景':'切换到 2D 平面布局');renderScene()}
+function loading(fn){document.body.classList.add('loading');setTimeout(()=>{fn&&fn();document.body.classList.remove('loading')},700)}
+function refreshAll(){loading(()=>{refreshTick++;renderGrid();$('#saveTs').textContent='数据刷新成功 '+now();toast('已按本体查询刷新全部组件数据','ok')})}
+function openAdd(){show('addMask')}
+function addModule(){const t=$('#addType').value,b=$('#addBind').value;WIDGETS.unshift({id:'new'+Date.now(),t:t.split('（')[0],badge:['b','新模块'],bind:b,upd:'刚刚',span:2});renderGrid();hide('addMask');toast('已添加模块：'+t+' → 绑定 '+b,'ok')}
+function aiCmd(m){pushAI(m)}
+function sendAI(){const v=$('#cin').value.trim();if(!v)return;pushAI(v);$('#cin').value=''}
+function pushAI(q){const msgs=$('#msgs');msgs.insertAdjacentHTML('beforeend',`<div class="bub u"><div class="bh"><span class="who">用户</span> ${now()}</div>${q}</div>`);
+  setTimeout(()=>{let extra='';if(/OEE|环形|仪表/.test(q)){extra=`<div class="embedcard"><div class="t">＋ 已生成组件：设备OEE分析</div><div style="font-size:10.5px;color:var(--fg2)">绑定 Equipment.OEE · 综合 85.6%</div></div>`;WIDGETS.find(w=>w.id==='oee')||WIDGETS.push({id:'oee',t:'设备OEE分析',badge:['p','AI 新增'],bind:'Equipment.OEE',upd:'刚刚',ai:true,span:2});renderGrid()}
+    msgs.insertAdjacentHTML('beforeend',`<div class="bub a"><div class="bh"><span class="who">AI 助手</span> ${now()}</div>已按需求调整页面布局与组件配置。${extra}</div>`);msgs.scrollTop=msgs.scrollHeight},500);
+  msgs.scrollTop=msgs.scrollHeight}
+
+/* ── AI 初始对话 ── */
+function seedAI(){$('#msgs').innerHTML=`
+  <div class="bub a"><div class="bh"><span class="who">AI 助手</span></div>你好，我是 MinWorkBuddy 孪生 AI 助手，你可以对页面内容进行编辑调整、添加或删除，例如：<ul><li>调整设备状态监控的位置</li><li>添加能耗环比分析图表</li><li>将告警列表改为表格样式</li><li>增加设备 OEE 分析模块</li></ul>我会根据你的需求自动调整页面布局和组件配置。</div>
+  <div class="bub u"><div class="bh"><span class="who">用户</span> 11:22</div>请在右下角增加一个设备 OEE 分析模块</div>
+  <div class="bub a"><div class="bh"><span class="who">AI 助手</span> 11:22</div>已为你添加 <em>设备OEE分析</em> 模块到右下角。<div class="embedcard"><div class="t">＋ 设备OEE分析</div><div style="font-size:10.5px;color:var(--fg2)">绑定 Equipment.OEE · 综合 85.6% · 可用90.2 / 性能86.1 / 良品93.6</div></div></div>`}
+
+/* ── 事件绑定 ── */
+$('#mnav').addEventListener('click',e=>{const b=e.target.closest('.mi');if(!b)return;$$('.mi').forEach(x=>x.classList.remove('on'));b.classList.add('on');if(b.dataset.m!=='孪生应用')toast('原型聚焦「孪生应用」，'+b.dataset.m+' 为示意占位');else b.classList.add('on')});
+$('#ptabs').addEventListener('click',e=>{const b=e.target.closest('.atab');if(!b||!b.dataset.p)return;$$('#ptabs .atab').forEach(x=>x.classList.remove('on'));b.classList.add('on');loading(()=>toast('已切换到页面：'+b.dataset.p,'ok'))});
+setInterval(()=>{if(mode==='run'){refreshTick++;const u=$$('#grid .upd');if(u.length)u[u.length-1].textContent='● 刚刚'}},10000);
+
+/* ── 启动 ── */
+renderCards();renderModules();renderScene();renderGrid();seedAI();
+setTimeout(()=>toast('孪生看板已就绪：组件绑定本体库 v3 查询，FAC007 产线A 实时运行中。切「运行」看驾驶舱','ok'),500);
+</script>
+</body>
+</html>

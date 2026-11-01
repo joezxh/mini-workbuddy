@@ -1,0 +1,2774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>本体能力工作台 · 前端功能原型</title>
+<style>
+  :root{
+    --primary:#3371fc; --primary-hover:#2b5fd9;
+    --bg:#f5f7fa; --card:#ffffff; --subtle:#f7f9fc;
+    --text:#1f2329; --text-2:#646a73; --text-3:#8f959e;
+    --border:#e5e6eb; --border-2:#d0d5dd;
+    --tint:#e6f0ff;
+    --success:#52c41a; --success-bg:#f6ffed; --success-br:#b7eb8f;
+    --error:#ff4d4f; --error-bg:#fff2f0; --error-br:#ffccc7;
+    --warn:#faad14; --warn-bg:#fffbe6; --warn-br:#ffe58f;
+    --purple:#722ed1; --purple-bg:#f9f0ff; --purple-br:#efdbff;
+    --info:#3371fc; --info-bg:#f0f6ff;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --shadow:0 4px 12px rgba(16,24,40,.08);
+    --r:8px; --r-sm:6px;
+    --t:0.18s cubic-bezier(.4,0,.2,1);
+    --mono:'JetBrains Mono','SFMono-Regular',Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Outfit',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    background:var(--bg);color:var(--text);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  }
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+
+  /* ── 预览页头 ── */
+  .preview-header{
+    background:linear-gradient(135deg,#141d33 0%,#1e2c4d 48%,#2a3f6e 100%);
+    color:#fff;padding:16px 26px;display:flex;align-items:flex-start;
+    justify-content:space-between;gap:20px;flex-wrap:wrap;
+  }
+  .ph-l{display:flex;flex-direction:column;gap:3px}
+  .ph-kicker{display:flex;align-items:center;gap:8px}
+  .ph-tag{font-size:10.5px;letter-spacing:.8px;padding:1px 7px;border-radius:4px;
+          background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22)}
+  .ph-kicker h1{font-size:16px;font-weight:600;letter-spacing:.2px}
+  .ph-l p{font-size:12px;opacity:.72}
+  .ph-l code{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.12);
+             padding:1px 5px;border-radius:3px}
+  .ph-r{display:flex;gap:6px;flex-wrap:wrap;align-items:center;max-width:560px}
+  .dec{font-size:11px;padding:3px 9px;border-radius:20px;background:rgba(255,255,255,.08);
+       border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.9);white-space:nowrap}
+  .dec b{color:#8fc0ff;font-weight:600}
+
+  /* ── 主框架 ── */
+  .shell{display:grid;grid-template-columns:262px 1fr;gap:0;height:calc(100vh - 78px);min-height:640px}
+
+  /* ── 侧栏：本体注册表 ── */
+  .side{background:var(--subtle);border-right:1px solid var(--border);
+        display:flex;flex-direction:column;overflow:hidden}
+  .side-h{padding:12px 14px 8px;display:flex;align-items:center;justify-content:space-between}
+  .side-h span{font-size:11px;letter-spacing:.9px;color:var(--text-3);font-weight:600}
+  .icon-btn{width:24px;height:24px;border-radius:var(--r-sm);border:1px solid var(--border-2);
+            background:#fff;cursor:pointer;color:var(--text-2);display:inline-flex;
+            align-items:center;justify-content:center;font-size:13px;transition:all var(--t)}
+  .icon-btn:hover{color:var(--primary);border-color:var(--primary)}
+  .side-list{flex:1;overflow:auto;padding:0 10px 10px;display:flex;flex-direction:column;gap:6px}
+  .ont-card{background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);
+            padding:9px 10px;cursor:pointer;transition:all var(--t);position:relative}
+  .ont-card:hover{border-color:#bcd8ff;box-shadow:var(--shadow-sm)}
+  .ont-card.on{border-color:var(--primary);background:var(--tint);
+               box-shadow:0 0 0 2px rgba(51,113,252,.09)}
+  .oc-top{display:flex;align-items:center;gap:6px}
+  .oc-name{font-size:12.5px;font-weight:600;flex:1;overflow:hidden;
+           text-overflow:ellipsis;white-space:nowrap}
+  .oc-code{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;
+           display:flex;align-items:center;gap:6px}
+  .oc-meta{display:flex;gap:8px;margin-top:5px;font-size:10.5px;color:var(--text-2)}
+  .oc-meta i{font-style:normal;color:var(--text-3)}
+  .side-foot{border-top:1px solid var(--border);padding:10px 14px 12px;
+             display:flex;flex-direction:column;gap:5px}
+  .sf-row{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--text-3)}
+  .sf-row code{font-family:var(--mono);font-size:10.5px;color:var(--text-2)}
+
+  /* ── 主区 ── */
+  .main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+  .ont-head{padding:14px 22px 0;display:flex;align-items:flex-start;
+            justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .oh-l h2{font-size:16px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .oh-sub{font-size:11.5px;color:var(--text-2);margin-top:4px;display:flex;
+          align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono)}
+  .oh-sub span{display:inline-flex;align-items:center;gap:4px}
+  .oh-r{display:flex;gap:7px;flex-wrap:wrap}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);
+        padding:0 22px;margin-top:12px;overflow-x:auto;background:var(--card);
+        border-top:1px solid var(--border)}
+  .tab{height:38px;padding:0 14px;border:none;background:none;cursor:pointer;
+       font-size:12.5px;color:var(--text-2);border-bottom:2px solid transparent;
+       transition:all var(--t);white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .tab:hover{color:var(--primary)}
+  .tab.on{color:var(--primary);font-weight:600;border-bottom-color:var(--primary)}
+  .tab .cnt{font-size:10.5px;background:var(--bg);border-radius:9px;padding:0 6px;color:var(--text-3)}
+  .tab.on .cnt{background:var(--tint);color:var(--primary)}
+  .tab .cnt.alert{background:var(--warn-bg);color:#874d00}
+  .views{flex:1;overflow:auto;padding:16px 22px 40px}
+  .view{display:none;animation:fade .2s ease}
+  .view.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+
+  /* ── 按钮 ── */
+  .btn{display:inline-flex;align-items:center;gap:6px;justify-content:center;height:31px;
+       padding:0 14px;border-radius:var(--r-sm);border:1px solid var(--border-2);
+       background:#fff;color:var(--text);cursor:pointer;transition:all var(--t);
+       font-weight:500;white-space:nowrap;font-size:12.5px}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-hover);border-color:var(--primary-hover);color:#fff}
+  .btn-text{border-color:transparent;background:transparent;color:var(--primary);padding:0 8px}
+  .btn-text:hover{background:var(--tint)}
+  .btn-sm{height:26px;padding:0 9px;font-size:11.5px}
+  .btn-danger{color:var(--error);border-color:var(--error-br)}
+  .btn-danger:hover{background:var(--error);border-color:var(--error);color:#fff}
+  .btn:disabled{opacity:.42;cursor:not-allowed;transform:none}
+  .btn:disabled:hover{border-color:var(--border-2);color:var(--text)}
+
+  /* ── 徽标 ── */
+  .badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;
+         border-radius:20px;font-size:11px;font-weight:500;border:1px solid;white-space:nowrap}
+  .badge .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.22}}
+  .b-ok{background:var(--success-bg);color:#389e0d;border-color:var(--success-br)}
+  .b-run{background:var(--info-bg);color:var(--primary);border-color:#bcd8ff}
+  .b-warn{background:var(--warn-bg);color:#874d00;border-color:var(--warn-br)}
+  .b-err{background:var(--error-bg);color:#cf1322;border-color:var(--error-br)}
+  .b-idle{background:#fafafa;color:var(--text-2);border-color:var(--border)}
+  .b-ai{background:var(--purple-bg);color:var(--purple);border-color:var(--purple-br)}
+  .b-sm{height:19px;padding:0 7px;font-size:10.5px}
+  .tag-rule{background:#f2f3f5;color:var(--text-2);border:1px solid var(--border);font-size:10.5px;
+            padding:1px 6px;border-radius:4px;font-family:var(--mono)}
+  .tag-llm{background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-br);font-size:10.5px;
+           padding:1px 6px;border-radius:4px;font-family:var(--mono);font-weight:600}
+  .pill-warn{background:var(--error-bg);color:#cf1322;border:1px solid var(--error-br);font-size:10.5px;
+             padding:1px 6px;border-radius:4px}
+
+  /* ── 统计卡 ── */
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+  .stat{border:1px solid var(--border);border-radius:var(--r);padding:10px 13px;
+        background:var(--card);transition:all var(--t)}
+  .stat:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+  .stat .k{font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+  .stat .v{font-size:21px;font-weight:600;line-height:1.28;margin-top:1px;font-variant-numeric:tabular-nums}
+  .stat .x{font-size:10.5px;color:var(--text-3);margin-top:1px}
+  .stat.p .v{color:var(--primary)} .stat.s .v{color:var(--success)}
+  .stat.w .v{color:var(--warn)} .stat.e .v{color:var(--error)} .stat.d .v{color:var(--text-2)}
+  .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+  .dot.p{background:var(--primary)} .dot.s{background:var(--success)}
+  .dot.w{background:var(--warn)} .dot.e{background:var(--error)} .dot.d{background:var(--border-2)}
+
+  /* ── 卡片 ── */
+  .card{border:1px solid var(--border);border-radius:var(--r);background:var(--card);margin-bottom:12px}
+  .card-h{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;
+          align-items:center;justify-content:space-between;gap:10px;font-weight:600;font-size:12.5px}
+  .card-h .hl{display:flex;align-items:center;gap:7px}
+  .card-h .hs{font-weight:400;font-size:11px;color:var(--text-3)}
+  .card-b{padding:14px}
+  .card-b.tight{padding:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  .grid-3-1{display:grid;grid-template-columns:1fr 344px;gap:12px;align-items:start}
+
+  /* ── 横幅 ── */
+  .banner{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-radius:var(--r-sm);
+          font-size:12px;margin-bottom:12px;border:1px solid;line-height:1.55}
+  .banner i{font-style:normal;font-size:13px;line-height:1.4}
+  .bn-info{background:var(--info-bg);border-color:#bcd8ff;color:#1d4ed8}
+  .bn-warn{background:var(--warn-bg);border-color:var(--warn-br);color:#874d00}
+  .bn-err{background:var(--error-bg);border-color:var(--error-br);color:#cf1322}
+  .bn-ok{background:var(--success-bg);border-color:var(--success-br);color:#389e0d}
+  .banner b{font-weight:600}
+  .banner code{font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.045);
+               padding:1px 4px;border-radius:3px}
+
+  /* ── 流水线阶段条 ── */
+  .phases{display:flex;align-items:center;gap:0;margin:2px 0 4px}
+  .ph{flex:1;display:flex;flex-direction:column;gap:5px;position:relative}
+  .ph-bar{height:5px;border-radius:3px;background:var(--border);overflow:hidden;transition:background var(--t)}
+  .ph-bar span{display:block;height:100%;width:0;background:var(--primary);
+               border-radius:3px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .ph.done .ph-bar{background:#d9ebff} .ph.done .ph-bar span{width:100%;background:var(--success)}
+  .ph.active .ph-bar span{width:100%;background:var(--primary)}
+  .ph.queued .ph-bar span{width:0}
+  .ph-lbl{font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:5px;padding-right:8px}
+  .ph.active .ph-lbl{color:var(--primary);font-weight:600}
+  .ph.done .ph-lbl{color:#389e0d}
+  .ph-lbl code{font-family:var(--mono);font-size:10px}
+
+  /* ── 表单 ── */
+  .frow{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+  .frow > label{width:74px;flex-shrink:0;font-size:12px;color:var(--text-2);text-align:right}
+  .fctl{flex:1;min-width:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input[type=text]{height:30px;padding:0 10px;border:1px solid var(--border-2);
+    border-radius:var(--r-sm);background:#fff;outline:none;transition:all var(--t);min-width:130px}
+  select:focus,input[type=text]:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(51,113,252,.1)}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;
+        border-radius:13px;background:var(--tint);color:var(--primary);font-size:11.5px;
+        border:1px solid #c7dcff;font-family:var(--mono)}
+  .chip .x{cursor:pointer;opacity:.55;font-size:12px}
+  .chip .x:hover{opacity:1}
+  .seg{display:inline-flex;border:1px solid var(--border-2);border-radius:var(--r-sm);overflow:hidden}
+  .seg button{height:28px;padding:0 13px;border:none;background:#fff;cursor:pointer;
+              font-size:12px;border-right:1px solid var(--border);transition:all var(--t)}
+  .seg button:last-child{border-right:none}
+  .seg button:hover{color:var(--primary)}
+  .seg button.on{background:var(--primary);color:#fff;font-weight:500}
+  .hint{font-size:11px;color:var(--text-3);font-family:var(--mono)}
+
+  /* ── 表格 ── */
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead th{text-align:left;font-weight:600;font-size:11px;color:var(--text-2);
+           background:var(--subtle);padding:8px 10px;border-bottom:1px solid var(--border);
+           white-space:nowrap;position:sticky;top:0;z-index:2}
+  tbody td{padding:8px 10px;border-bottom:1px solid #f0f1f3;vertical-align:middle}
+  tbody tr:hover{background:#fafbfd}
+  tbody tr.sel{background:var(--info-bg)}
+  tbody tr.detail-row:hover{background:#fcfcfd}
+  td.detail-cell{padding:0;background:#fbfcfe}
+  .mono{font-family:var(--mono);font-size:11.5px}
+  .muted{color:var(--text-3)}
+  .c-num{text-align:right;font-variant-numeric:tabular-nums}
+  .nowrap{white-space:nowrap}
+
+  /* ── 置信度 ── */
+  .conf{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px}
+  .conf .bar{width:38px;height:4px;border-radius:2px;background:#eceef1;overflow:hidden;flex-shrink:0}
+  .conf .bar i{display:block;height:100%;border-radius:2px}
+  .conf.hi .bar i{background:var(--success)} .conf.mid .bar i{background:var(--warn)}
+  .conf.lo .bar i{background:var(--error)}
+
+  /* ── 折叠详情 ── */
+  .dt{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+      gap:10px 20px;padding:12px 16px 14px;border-left:3px solid var(--primary);margin:2px 0 2px 0}
+  .dt-k{font-size:10.5px;letter-spacing:.5px;color:var(--text-3);margin-bottom:2px}
+  .dt-v{font-size:12px;word-break:break-all}
+  .dt-v code{font-family:var(--mono);font-size:11px;background:#eef2f9;padding:1px 5px;border-radius:3px}
+  .evi{display:flex;flex-direction:column;gap:5px;grid-column:1/-1}
+  .evi-row{display:flex;align-items:center;gap:8px;font-size:11.5px;
+           background:#fff;border:1px solid var(--border);border-radius:var(--r-sm);padding:5px 10px}
+  .evi-row .ek{font-family:var(--mono);font-size:10.5px;color:var(--purple);
+               background:var(--purple-bg);padding:1px 6px;border-radius:4px;flex-shrink:0}
+  .evi-row .ed{flex:1;color:var(--text-2)}
+
+  /* ── 日志流 ── */
+  .logbox{background:#161b22;border-radius:var(--r-sm);padding:10px 12px;
+          font-family:var(--mono);font-size:11.5px;line-height:1.72;color:#c9d1d9;
+          height:196px;overflow:auto}
+  .logline{display:flex;gap:9px}
+  .logline .ts{color:#6e7681;flex-shrink:0}
+  .logline .lv{flex-shrink:0;width:44px;font-weight:600}
+  .lv.i{color:#58a6ff} .lv.w{color:#d29922} .lv.e{color:#f85149} .lv.d{color:#3fb950}
+  .logline .ms{flex:1;word-break:break-word}
+  .logline .ms code{color:#7ee787;background:rgba(110,231,135,.09);padding:0 4px;border-radius:3px}
+
+  /* ── 进度条 ── */
+  .prog{height:6px;border-radius:3px;background:#e8eaee;overflow:hidden;margin:8px 0 6px}
+  .prog i{display:block;height:100%;background:linear-gradient(90deg,#3371fc,#5b93ff);
+          border-radius:3px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+
+  /* ── 图谱 ── */
+  .graph-wrap{background:
+      radial-gradient(circle at 1px 1px, #e2e6ec 1px, transparent 0) 0 0/22px 22px,
+      #fff;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;position:relative;height:474px}
+  .graph-wrap svg{width:100%;height:100%;display:block}
+  .gn{cursor:pointer}
+  .gn rect{transition:all var(--t)}
+  .gn:hover rect{filter:brightness(1.03)}
+  .gn.sel rect{stroke-width:2.6}
+  .gedge{transition:all var(--t);cursor:pointer}
+  .gedge:hover .elabel{opacity:1}
+  .glabel-t{font-size:11.5px;font-weight:600;fill:#1f2329;font-family:inherit}
+  .glabel-s{font-size:9.5px;fill:#8f959e;font-family:var(--mono)}
+  .elabel{font-size:9.5px;fill:#646a73;font-family:var(--mono);opacity:.72;transition:opacity var(--t)}
+  .gnum{font-size:9.5px;fill:#646a73;font-family:var(--mono)}
+  .graph-legend{position:absolute;left:12px;bottom:10px;display:flex;gap:12px;
+                font-size:10.5px;color:var(--text-2);background:rgba(255,255,255,.92);
+                padding:5px 10px;border-radius:var(--r-sm);border:1px solid var(--border)}
+  .graph-legend span{display:inline-flex;align-items:center;gap:5px}
+  .lg-line{width:16px;height:0;border-top:2px solid currentColor}
+  .graph-tools{position:absolute;right:10px;top:10px;display:flex;gap:5px}
+
+  /* ── 检视面板 ── */
+  .insp{border:1px solid var(--border);border-radius:var(--r);background:var(--card);
+        display:flex;flex-direction:column;max-height:474px;overflow:hidden}
+  .insp-h{padding:10px 13px;border-bottom:1px solid var(--border);display:flex;
+          align-items:center;justify-content:space-between;gap:8px}
+  .insp-h .nm{font-size:13px;font-weight:600}
+  .insp-h .cd{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .insp-b{overflow:auto;padding:12px 13px;flex:1;scrollbar-width:thin}
+  .insp-b::-webkit-scrollbar{width:6px}
+  .insp-b::-webkit-scrollbar-thumb{background:#d0d5dd;border-radius:3px}
+  .insp-b::-webkit-scrollbar-track{background:transparent}
+  .insp-sec{margin-bottom:14px}
+  .insp-sec:last-child{margin-bottom:0}
+  .insp-sec h4{font-size:10.5px;letter-spacing:.7px;color:var(--text-3);
+               font-weight:600;margin-bottom:7px;display:flex;
+               align-items:center;justify-content:space-between}
+  .kv{display:grid;grid-template-columns:76px 1fr;gap:4px 8px;font-size:11.5px;margin-bottom:9px}
+  .kv dt{color:var(--text-3)}
+  .kv dd{word-break:break-all}
+  .kv dd code{font-family:var(--mono);font-size:11px}
+  .pill-list{display:flex;flex-wrap:wrap;gap:4px}
+  .pill{font-family:var(--mono);font-size:10.5px;background:var(--subtle);
+        border:1px solid var(--border);padding:2px 7px;border-radius:4px;color:var(--text-2)}
+  .pill.pii{background:var(--error-bg);border-color:var(--error-br);color:#cf1322}
+  .pill.pk{background:var(--success-bg);border-color:var(--success-br);color:#389e0d}
+
+  /* ── 版本时间线 ── */
+  .tl{position:relative;padding-left:22px}
+  .tl:before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--border)}
+  .tl-item{position:relative;padding-bottom:16px}
+  .tl-item:last-child{padding-bottom:0}
+  .tl-dot{position:absolute;left:-21px;top:4px;width:10px;height:10px;border-radius:50%;
+          background:#fff;border:2px solid var(--border-2)}
+  .tl-item.cur .tl-dot{border-color:var(--primary);background:var(--primary);
+                       box-shadow:0 0 0 3px rgba(51,113,252,.15)}
+  .tl-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tl-ver{font-size:12.5px;font-weight:600;font-family:var(--mono)}
+  .tl-time{font-size:11px;color:var(--text-3);font-family:var(--mono)}
+  .tl-note{font-size:11.5px;color:var(--text-2);margin-top:3px}
+  .tl-diff{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+  .df{font-family:var(--mono);font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid}
+  .df.add{background:var(--success-bg);border-color:var(--success-br);color:#389e0d}
+  .df.del{background:var(--error-bg);border-color:var(--error-br);color:#cf1322}
+  .df.chg{background:var(--warn-bg);border-color:var(--warn-br);color:#874d00}
+  .df.reg{background:#fff1f0;border-color:#ffa39e;color:#cf1322;font-weight:600}
+
+  /* ── 门禁 ── */
+  .gate{display:flex;flex-direction:column;gap:8px}
+  .gate-item{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;
+             border:1px solid var(--border);border-radius:var(--r-sm);background:#fff}
+  .gate-item.pass{border-color:var(--success-br);background:var(--success-bg)}
+  .gate-item.fail{border-color:var(--error-br);background:var(--error-bg)}
+  .gate-item.warn{border-color:var(--warn-br);background:var(--warn-bg)}
+  .gi-ic{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;
+         justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;margin-top:1px}
+  .pass .gi-ic{background:var(--success)} .fail .gi-ic{background:var(--error)}
+  .warn .gi-ic{background:var(--warn)}
+  .gi-b{flex:1;min-width:0}
+  .gi-t{font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .gi-d{font-size:11px;color:var(--text-2);margin-top:2px}
+  .gi-d code{font-family:var(--mono);font-size:10.5px;background:rgba(0,0,0,.05);padding:1px 4px;border-radius:3px}
+
+  /* ── JSON ── */
+  .json{background:#161b22;color:#c9d1d9;border-radius:var(--r-sm);padding:11px 13px;
+        font-family:var(--mono);font-size:11.5px;line-height:1.7;overflow:auto;max-height:330px;
+        white-space:pre-wrap;word-break:break-word}
+  .json .k{color:#79c0ff} .json .s{color:#a5d6ff} .json .n{color:#f0883e}
+  .json .b{color:#ff7b72} .json .c{color:#6e7681}
+
+  /* ── Agent 工具卡 ── */
+  .tool{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--border);
+        border-radius:var(--r-sm);background:#fff;margin-bottom:8px;align-items:flex-start}
+  .tool .t-ic{width:26px;height:26px;border-radius:var(--r-sm);background:var(--purple-bg);
+              color:var(--purple);display:flex;align-items:center;justify-content:center;
+              font-size:12px;flex-shrink:0;font-family:var(--mono)}
+  .tool .t-b{flex:1;min-width:0}
+  .tool .t-n{font-family:var(--mono);font-size:12px;font-weight:600}
+  .tool .t-d{font-size:11px;color:var(--text-2);margin-top:1px}
+  .tool .t-lim{font-size:10.5px;color:var(--text-3);margin-top:3px;font-family:var(--mono)}
+
+  /* ── 约束条 ── */
+  .constraints{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+  .cst{border:1px dashed var(--border-2);border-radius:var(--r-sm);padding:9px 11px;background:#fcfdff}
+  .cst .ck{font-size:10px;letter-spacing:.6px;color:var(--text-3);font-weight:600}
+  .cst .cv{font-size:11.5px;color:var(--text-2);margin-top:3px;line-height:1.5}
+  .cst .cv code{font-family:var(--mono);font-size:10.5px;background:#eef2f9;padding:1px 4px;border-radius:3px}
+
+  /* ── 五步链路步骤条（AF-10/AF-12，§6.6） ── */
+  .pipe{display:flex;align-items:stretch;gap:0;margin:12px 22px 0;padding:10px 12px;
+        border:1px solid var(--border);border-radius:var(--r);background:var(--card);box-shadow:var(--shadow-sm)}
+  .pstep{flex:1;min-width:0;display:flex;gap:8px;align-items:flex-start;padding:2px 8px;
+         position:relative;cursor:pointer;border-radius:var(--r-sm);transition:all var(--t)}
+  .pstep:hover{background:var(--subtle)}
+  .pstep+.pstep:before{content:'';position:absolute;left:-9px;top:15px;width:12px;height:1px;background:var(--border-2)}
+  .pstep+.pstep:after{content:'▸';position:absolute;left:-13px;top:10px;font-size:9px;color:var(--border-2)}
+  .pn{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+      justify-content:center;font-size:10.5px;font-weight:700;border:1.5px solid var(--border-2);
+      background:#fff;color:var(--text-3);font-family:var(--mono)}
+  .pstep.done .pn{background:var(--success);border-color:var(--success);color:#fff}
+  .pstep.active .pn{background:var(--primary);border-color:var(--primary);color:#fff;
+                    box-shadow:0 0 0 3px rgba(51,113,252,.14)}
+  .pstep.blocked .pn{background:var(--error);border-color:var(--error);color:#fff}
+  .pb{min-width:0;flex:1}
+  .pt{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pstep.todo .pt{color:var(--text-3);font-weight:400}
+  .pd{font-size:10.5px;color:var(--text-3);font-family:var(--mono);margin-top:1px;white-space:nowrap}
+  .pipe-r{display:flex;align-items:center;gap:7px;padding-left:10px;border-left:1px solid var(--border);flex-shrink:0}
+
+  /* ── 作用域草稿（AF-08，§4.7/§6.5） ── */
+  .scope{border:1px solid #bcd8ff;border-radius:var(--r-sm);background:var(--info-bg);padding:10px 12px;margin-bottom:11px}
+  .scope-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px}
+  .scope-h .t{font-size:11.5px;font-weight:600;color:#1d4ed8}
+  .scope-h .sp{flex:1}
+  .origin{font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:9px;
+          background:#fff;border:1px solid #c7dcff;color:var(--primary)}
+  .stable{width:100%;border-collapse:collapse;font-size:11.5px;background:#fff;
+          border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+  .stable th{background:#fff;padding:5px 9px;font-size:10.5px;color:var(--text-3);text-align:left;
+             border-bottom:1px solid var(--border);position:static}
+  .stable td{padding:5px 9px;border-bottom:1px solid #f2f3f5}
+  .stable tr:last-child td{border-bottom:none}
+
+  /* ── 脱敏 / PII 列 ── */
+  .pii{font-family:var(--mono);font-size:10.5px;padding:1px 6px;border-radius:4px;border:1px solid;white-space:nowrap}
+  .pii.l0,.pii.l1{background:#fafafa;border-color:var(--border);color:var(--text-3)}
+  .pii.l2{background:var(--warn-bg);border-color:var(--warn-br);color:#874d00}
+  .pii.l3{background:var(--error-bg);border-color:var(--error-br);color:#cf1322;font-weight:600}
+  .maskok{font-size:10.5px;color:#389e0d;font-family:var(--mono)}
+  .maskno{font-size:10.5px;color:#cf1322;font-family:var(--mono);font-weight:600}
+  .exempt{font-size:10.5px;color:var(--text-3);font-family:var(--mono);text-decoration:line-through}
+
+  /* ── 发布登记卡（AF-17/18/22） ── */
+  .pubcard{border:1px solid var(--border);border-radius:var(--r);background:#fff;padding:11px 13px;
+           display:flex;flex-direction:column;gap:7px;transition:all var(--t)}
+  .pubcard:hover{border-color:#bcd8ff;box-shadow:var(--shadow-sm)}
+  .pubcard.dis{opacity:.6}
+  .pc-h{display:flex;align-items:center;gap:8px}
+  .pc-ic{width:26px;height:26px;border-radius:var(--r-sm);display:flex;align-items:center;
+         justify-content:center;font-family:var(--mono);font-size:11px;flex-shrink:0}
+  .pc-ic.skill{background:var(--purple-bg);color:var(--purple)}
+  .pc-ic.http{background:var(--info-bg);color:var(--primary)}
+  .pc-ic.mcp{background:#f2f3f5;color:var(--text-2)}
+  .pc-n{font-size:12.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pc-c{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .pc-d{font-size:11.5px;color:var(--text-2);line-height:1.55}
+  .pc-f{display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--border);padding-top:7px}
+  .pc-f .sp{flex:1}
+  .stale{font-size:10px;color:#cf1322;background:var(--error-bg);border:1px solid var(--error-br);
+         padding:0 5px;border-radius:3px;font-family:var(--mono)}
+
+  /* ── 助手 Dock（AF-16，§5.6） ── */
+  #dock{position:fixed;right:20px;bottom:20px;width:352px;background:#fff;border:1px solid var(--border);
+        border-radius:10px;box-shadow:0 12px 32px rgba(16,24,40,.16);z-index:70;overflow:hidden;
+        display:flex;flex-direction:column;max-height:min(560px,72vh);transition:all var(--t)}
+  #dock.min{width:190px;max-height:38px}
+  #dock.min .dk-body,#dock.min .dk-foot,#dock.min .dk-h .hintx{display:none}
+  .dk-h{padding:9px 12px;display:flex;align-items:center;gap:8px;cursor:pointer;
+        background:linear-gradient(135deg,#2a3f6e,#3371fc);color:#fff;flex-shrink:0}
+  .dk-h .ttl{font-size:12px;font-weight:600;flex:1}
+  .dk-h .mn{font-size:14px;opacity:.75}
+  .dk-h .mn:hover{opacity:1}
+  .dk-body{overflow:auto;padding:11px 12px;flex:1;display:flex;flex-direction:column;gap:9px}
+  .intent{display:flex;gap:5px;flex-wrap:wrap}
+  .ib{height:24px;padding:0 10px;border-radius:12px;border:1px solid var(--border-2);background:#fff;
+      font-size:11px;cursor:pointer;transition:all var(--t)}
+  .ib:hover{border-color:var(--primary);color:var(--primary)}
+  .ib.on{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+  .ib.off{opacity:.4;cursor:not-allowed;text-decoration:line-through}
+  .msg{font-size:11.5px;line-height:1.65;border-radius:var(--r-sm);padding:7px 10px;max-width:96%}
+  .msg.u{align-self:flex-end;background:var(--tint);color:#1d4ed8;border:1px solid #c7dcff}
+  .msg.a{align-self:flex-start;background:var(--subtle);border:1px solid var(--border)}
+  .msg.a code{font-family:var(--mono);font-size:10.5px;background:#e9edf4;padding:0 4px;border-radius:3px}
+  .msg .w{font-family:var(--mono);font-size:9.5px;color:var(--text-3);margin-top:4px;
+          border-top:1px dashed var(--border);padding-top:4px}
+  .dk-foot{border-top:1px solid var(--border);padding:9px 12px;display:flex;gap:7px;align-items:center;
+            flex-shrink:0;background:#fff}
+  .dk-foot input{flex:1;min-width:0;height:28px;padding:0 9px;border:1px solid var(--border-2);
+                 border-radius:var(--r-sm);outline:none;font-size:11.5px}
+  .dk-foot input:focus{border-color:var(--primary)}
+  .ctxchip{display:flex;gap:4px;flex-wrap:wrap}
+  .ctxchip span{font-family:var(--mono);font-size:9.5px;background:var(--purple-bg);color:var(--purple);
+                border:1px solid var(--purple-br);border-radius:4px;padding:1px 5px}
+  #dockFab{position:fixed;right:20px;bottom:20px;width:44px;height:44px;border-radius:50%;border:none;
+           background:linear-gradient(135deg,#722ed1,#3371fc);color:#fff;cursor:pointer;font-size:16px;
+           box-shadow:0 8px 20px rgba(51,113,252,.34);z-index:69;display:none}
+
+  /* ── Toast ── */
+  #toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:26px;display:flex;
+           flex-direction:column;gap:7px;z-index:95;align-items:center}
+  .toast{background:#1f2329;color:#fff;padding:8px 15px;border-radius:var(--r-sm);font-size:12px;
+         box-shadow:var(--shadow);animation:tin .2s ease;max-width:660px;border-left:3px solid var(--primary);
+         line-height:1.55}
+  .toast.err{border-left-color:var(--error)} .toast.ok{border-left-color:var(--success)}
+  .toast code{font-family:var(--mono);font-size:11px;background:rgba(255,255,255,.14);padding:0 4px;border-radius:3px}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .spacer{height:12px}
+  .sep{height:1px;background:var(--border);margin:12px 0}
+
+  /* ── 窄视口兜底（非产品形态，仅防止布局崩坏） ── */
+  @media (max-width:1180px){
+    .shell{grid-template-columns:1fr;height:auto}
+    .side{display:none}
+    .views{overflow:visible}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .grid2,.grid-3-1,.constraints{grid-template-columns:1fr}
+    .dt{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .graph-wrap{height:400px}
+    .insp{max-height:none}
+    .tabs{overflow-x:auto}
+  }
+</style>
+</head>
+<body>
+
+<header class="preview-header">
+  <div class="ph-l">
+    <div class="ph-kicker">
+      <span class="ph-tag">原型 · P0</span>
+      <h1>本体能力工作台</h1>
+    </div>
+    <p>对应设计 <code>2026-10-31-ontology-capability-design.md</code> · 方案 B：本体注册表 + catalog 归属 · 链路：资产发现 → 作用域圈定 → 规则候选 → 审阅 → 发布 → 图 / Agent / 应用</p>
+  </div>
+  <div class="ph-r">
+    <span class="dec"><b>D1</b> CDM 升格为模式层</span>
+    <span class="dec"><b>D2</b> 实例不落库</span>
+    <span class="dec"><b>D3 rev.2</b> LLM 可产结构候选 · 必人审</span>
+    <span class="dec"><b>D4</b> P0 可演示闭环</span>
+    <span class="dec"><a href="./ontology-asset-catalog-preview.html">← 资产目录原型（AF-01~08）</a></span>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- ═══ 侧栏：本体注册表 meta_ontology ═══ -->
+  <aside class="side">
+    <div class="side-h">
+      <span>本体注册表</span>
+      <button class="icon-btn" title="新建本体">＋</button>
+    </div>
+    <div class="side-list">
+
+      <div class="ont-card on">
+        <div class="oc-top">
+          <span class="oc-name">销售域本体</span>
+          <span class="badge b-ok b-sm">已发布</span>
+        </div>
+        <div class="oc-code">sales_ontology</div>
+        <div class="oc-meta"><i>v</i>3 <i>·</i>9 对象 <i>·</i>12 待审</div>
+      </div>
+
+      <div class="ont-card">
+        <div class="oc-top">
+          <span class="oc-name">供应链本体</span>
+          <span class="badge b-ok b-sm">已发布</span>
+        </div>
+        <div class="oc-code">supply_chain_ontology</div>
+        <div class="oc-meta"><i>v</i>1 <i>·</i>14 对象 <i>·</i>0 待审</div>
+      </div>
+
+      <div class="ont-card">
+        <div class="oc-top">
+          <span class="oc-name">人力域本体</span>
+          <span class="badge b-run b-sm">构建中</span>
+        </div>
+        <div class="oc-code">hr_ontology</div>
+        <div class="oc-meta"><i>v</i>0 <i>·</i>— 对象 <i>·</i>job #147</div>
+      </div>
+
+      <div class="ont-card">
+        <div class="oc-top">
+          <span class="oc-name">默认本体</span>
+          <span class="badge b-idle b-sm">草稿</span>
+        </div>
+        <div class="oc-code">default</div>
+        <div class="oc-meta"><i>v</i>0 <i>·</i>未归类元素</div>
+      </div>
+
+    </div>
+    <div class="side-foot">
+      <div class="sf-row"><span>命名空间</span><code>mwb_1024_sales</code></div>
+      <div class="sf-row"><span>目录归属</span><code>catalog.ontology_id</code></div>
+      <div class="sf-row"><span>模式层</span><code>meta_object_standard</code></div>
+    </div>
+  </aside>
+
+  <!-- ═══ 主区 ═══ -->
+  <main class="main">
+
+    <div class="ont-head">
+      <div class="oh-l">
+        <h2>
+          销售域本体
+          <span class="badge b-ok">published</span>
+        </h2>
+        <div class="oh-sub">
+          <span>code: sales_ontology</span>
+          <span>·</span>
+          <span>v3</span>
+          <span>·</span>
+          <span>urn:mwb:ontology:sales_ontology</span>
+        </div>
+      </div>
+      <div class="oh-r">
+        <button class="btn btn-sm" onclick="go('version')">版本 v3 ▾</button>
+        <button class="btn btn-sm" onclick="go('agent')">Agent 读面</button>
+        <button class="btn btn-sm btn-primary" onclick="go('build')">＋ 新建构建</button>
+      </div>
+    </div>
+
+    <!-- 五步链路步骤条（AF-10 / AF-12，§6.6） -->
+    <div class="pipe" id="pipeBar">
+      <div class="pstep done" onclick="pipeGoto('build')" title="计数源：meta_ontology.draft_scope_json.tables[]">
+        <div class="pn">✓</div>
+        <div class="pb"><div class="pt">① 数据源表</div><div class="pd">scope 6 表</div></div>
+      </div>
+      <div class="pstep done" onclick="pipeGoto('build')" title="数据处理以「规则 + 8 类机械校验」等价实现，不做编排画布">
+        <div class="pn">✓</div>
+        <div class="pb"><div class="pt">② 数据处理</div><div class="pd">job #142</div></div>
+      </div>
+      <div class="pstep active" onclick="pipeGoto('review')" title="计数源：build_item 按 status 分组">
+        <div class="pn">!</div>
+        <div class="pb"><div class="pt">③ 子图建模</div><div class="pd">12 待审</div></div>
+      </div>
+      <div class="pstep" onclick="pipeGoto('version')" title="current_version ≥ 1">
+        <div class="pn">4</div>
+        <div class="pb"><div class="pt">④ 本体库</div><div class="pd" id="pipeVer">v3 · 待发布 v4</div></div>
+      </div>
+      <div class="pstep" onclick="pipeGoto('publish')" title="meta_ontology_publish 中 status=enabled 计数">
+        <div class="pn">5</div>
+        <div class="pb"><div class="pt">⑤ 本体应用</div><div class="pd">2 个登记</div></div>
+      </div>
+      <div class="pipe-r">
+        <div class="seg" id="viewSeg">
+          <button class="on" data-view="workflow" onclick="setView('workflow')">工作流程视图</button>
+          <button data-view="architecture" onclick="setView('architecture')">架构视图</button>
+        </div>
+        <span class="hint" id="viewHint">?view=workflow</span>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab on" data-t="overview">概览</button>
+      <button class="tab" data-t="build">构建<span class="cnt">3</span></button>
+      <button class="tab" data-t="review">审阅队列<span class="cnt alert">12</span></button>
+      <button class="tab" data-t="graph">图谱</button>
+      <button class="tab" data-t="version">版本<span class="cnt">3</span></button>
+      <button class="tab" data-t="publish">本体应用<span class="cnt">2</span></button>
+      <button class="tab" data-t="agent">Agent</button>
+    </div>
+
+    <div class="views">
+
+      <!-- ══════════ 概览 ══════════ -->
+      <section class="view on" data-v="overview">
+
+        <div class="banner bn-info">
+          <i>◆</i>
+          <div>
+            <b>AI 语义补全已启用</b>　本次构建产出 <b>3</b> 条语义建议待采纳。规则结构置信度与 AI 建议置信度<b>分列展示</b>，
+            AI 建议<b>不会</b>自动计入 <code>review_status</code>，也不写入任何结构表 —— LLM 输出独立落在 <code>meta_ontology_semantic</code>。
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat p"><div class="k"><span class="dot p"></span>对象标准</div><div class="v">9</div><div class="x">accepted 7 · suggested 2</div></div>
+          <div class="stat p"><div class="k"><span class="dot p"></span>属性标准</div><div class="v">38</div><div class="x">其中 5 条待审</div></div>
+          <div class="stat s"><div class="k"><span class="dot s"></span>关系标准</div><div class="v">7</div><div class="x">N:1 ×5 · N:N ×2</div></div>
+          <div class="stat d"><div class="k"><span class="dot d"></span>映射</div><div class="v">14</div><div class="x">表→对象 9 · 列→属性 5</div></div>
+          <div class="stat w"><div class="k"><span class="dot w"></span>待审候选</div><div class="v">12</div><div class="x">对象 3 · 属性 5 · 关系 2 · 映射 2</div></div>
+        </div>
+
+        <div class="grid-3-1">
+
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">最近构建任务 <span class="hs">GET /ontologies/{id}/build-jobs</span></div>
+                <button class="btn btn-sm btn-text" onclick="go('build')">全部任务 →</button>
+              </div>
+              <div class="card-b tight">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width:66px">任务</th>
+                      <th style="width:110px">模式</th>
+                      <th>scope</th>
+                      <th style="width:82px">状态</th>
+                      <th style="width:66px" class="c-num">耗时</th>
+                      <th style="width:150px">统计</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono">#142</td>
+                      <td><span class="tag-rule">rules+semantic</span></td>
+                      <td class="mono muted">crm / sales</td>
+                      <td><span class="badge b-ok b-sm">succeeded</span></td>
+                      <td class="c-num mono">8.4s</td>
+                      <td class="mono muted" style="font-size:11px">obj 4↑2 → 38 属性 / 5 关系</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">#141</td>
+                      <td><span class="tag-rule">rules</span></td>
+                      <td class="mono muted">crm / sales</td>
+                      <td><span class="badge b-ok b-sm">succeeded</span></td>
+                      <td class="c-num mono">3.1s</td>
+                      <td class="mono muted" style="font-size:11px">obj 0↑9 / 0 关系（幂等命中）</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">#140</td>
+                      <td><span class="tag-rule">rules</span></td>
+                      <td class="mono muted">dwd / dw</td>
+                      <td><span class="badge b-err b-sm">failed</span></td>
+                      <td class="c-num mono">1.2s</td>
+                      <td class="mono" style="font-size:11px;color:var(--error)">BUILD_SCOPE_EMPTY</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">顶栏流水线阶段 <span class="hs">phase 单一真源，SSE 增量下发</span></div>
+              </div>
+              <div class="card-b">
+                <div class="phases">
+                  <div class="ph done"><div class="ph-bar"><span></span></div><div class="ph-lbl">extract <code>规则抽取</code></div></div>
+                  <div class="ph done"><div class="ph-bar"><span></span></div><div class="ph-lbl">align <code>code 归一</code></div></div>
+                  <div class="ph done"><div class="ph-bar"><span></span></div><div class="ph-lbl">judge <code>8 类校验</code></div></div>
+                  <div class="ph done"><div class="ph-bar"><span></span></div><div class="ph-lbl">merge <code>SAVEPOINT</code></div></div>
+                  <div class="ph done"><div class="ph-bar"><span></span></div><div class="ph-lbl">done</div></div>
+                </div>
+                <div class="hint" style="margin-top:10px">
+                  job #142 · mode=<b>rules+semantic</b> · 5/5 batch · progress 1.0 · degraded=false
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">两轴状态</div>
+              </div>
+              <div class="card-b" style="padding:12px 13px">
+                <div style="font-size:11.5px;line-height:1.75;color:var(--text-2)">
+                  <div style="margin-bottom:9px">
+                    <b style="color:var(--text)">review_status</b>（人审结论）<br>
+                    <code class="mono" style="font-size:10.5px;color:var(--purple)">suggested | accepted | rejected</code>
+                  </div>
+                  <div style="margin-bottom:9px">
+                    <b style="color:var(--text)">status</b>（生命周期 · 既有）<br>
+                    <code class="mono" style="font-size:10.5px;color:var(--primary)">draft | published</code>
+                  </div>
+                  <div style="padding:8px 10px;background:var(--subtle);border-radius:var(--r-sm);
+                              border-left:3px solid var(--primary);font-size:11px;color:var(--text-2)">
+                    发布门禁第 1 项：<code class="mono">review_status=accepted</code> 是 <code class="mono">status→published</code> 的必要条件。
+                    两轴正交，<b>既有标准中心与绑定链路零回归</b>。
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><div class="hl">消费面就绪度</div></div>
+              <div class="card-b" style="padding:10px 13px">
+                <div style="display:flex;flex-direction:column;gap:8px;font-size:11.5px">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>schema 图</span><span class="badge b-ok b-sm">就绪</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>映射下推采样</span><span class="badge b-warn b-sm">P1</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>Agent 只读导航</span><span class="badge b-ok b-sm">就绪</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>CQ 覆盖度</span><span class="badge b-ok b-sm">8 / 10 · 80%</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span>导出 turtle / jsonld</span><span class="badge b-warn b-sm">P1</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="constraints">
+          <div class="cst">
+            <div class="ck">D1 不重建九表</div>
+            <div class="cv">本体模式层 = CDM 三表，<code>ontology_*</code> 已于 2026-10-18 DROP 且不可回滚。</div>
+          </div>
+          <div class="cst">
+            <div class="ck">D2 实例不落库</div>
+            <div class="cv">本体只描述结构与映射，问数与图由映射下推源库，走 <code>sql_guard</code>。</div>
+          </div>
+          <div class="cst">
+            <div class="ck">D3 rev.2 source 三值域</div>
+            <div class="cv"><code>rule | human | llm_draft</code>（均带 CHECK）；<code>llm</code> 永远非法。LLM 结构候选只落 <code>build_item(origin='llm', status='suggested')</code>，发布前由三层防线收敛为 <code>rule|human</code>。</div>
+          </div>
+          <div class="cst">
+            <div class="ck">D4 最小消费面</div>
+            <div class="cv"><code>manifest</code> / <code>browse</code> / <code>resolve</code> 三只读工具，均带上限。</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══════════ 构建 ══════════ -->
+      <section class="view" data-v="build">
+        <div class="grid-3-1">
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">新建构建任务 <span class="hs">POST /ontologies/{id}/build-jobs</span></div>
+                <span class="badge b-idle b-sm" id="jobState">idle</span>
+              </div>
+              <div class="card-b">
+                <!-- OntScopePicker（AF-08，§4.7 / §6.5） -->
+                <div class="scope" id="scopePicker">
+                  <div class="scope-h">
+                    <span class="t">作用域草稿</span>
+                    <span class="origin" id="scopeOrigin">origin: asset_picker</span>
+                    <span class="badge b-ok b-sm" id="scopeCnt">6 表</span>
+                    <span class="sp"></span>
+                    <span class="hint">meta_ontology.draft_scope_json</span>
+                    <button class="btn btn-sm" onclick="location.href='./ontology-asset-catalog-preview.html'">去资产目录补选</button>
+                    <button class="btn btn-sm" onclick="clearScope()">清空</button>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+                    <div class="seg" id="scopeMode">
+                      <button class="on" data-sm="tables" onclick="setScopeMode('tables')">按表 tables</button>
+                      <button data-sm="tags" onclick="setScopeMode('tags')">按标签 tags</button>
+                      <button data-sm="catalog" onclick="setScopeMode('catalog')">按目录 catalog</button>
+                    </div>
+                    <span class="hint" id="scopeModeHint">mode=tables · 直接携带表名清单</span>
+                    <span class="badge b-warn b-sm" title="§4.7 约束 5">单源约束：一个作用域只能一个 source_id</span>
+                  </div>
+                  <table class="stable" id="scopeTable">
+                    <thead><tr><th style="width:190px">表名</th><th style="width:130px">来源</th><th>注释</th><th style="width:78px">PII</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">crm_customer</td><td class="mono muted">MySQL-20260224/sales</td><td>客户主数据</td><td><span class="pii l3">L3</span></td></tr>
+                      <tr><td class="mono">crm_customer_address</td><td class="mono muted">MySQL-20260224/sales</td><td>客户收货地址</td><td><span class="pii l2">L2</span></td></tr>
+                      <tr><td class="mono">sales_order</td><td class="mono muted">MySQL-20260224/sales</td><td>销售订单主表</td><td><span class="pii l1">L1</span></td></tr>
+                      <tr><td class="mono">sales_order_item</td><td class="mono muted">MySQL-20260224/sales</td><td>订单明细表</td><td><span class="pii l0">L0</span></td></tr>
+                      <tr><td class="mono">product</td><td class="mono muted">MySQL-20260224/sales</td><td>产品字典</td><td><span class="pii l0">L0</span></td></tr>
+                      <tr><td class="mono">region</td><td class="mono muted">MySQL-20260224/sales</td><td>行政区划维表</td><td><span class="pii l0">L0</span></td></tr>
+                    </tbody>
+                  </table>
+                  <div class="hint" style="margin-top:7px">
+                    送数<b>不写任何结构表</b>，仅覆盖草稿；离开页面后回来仍可继续构建。<span id="scopeEmpty" style="display:none;color:#cf1322">当前作用域为空，启动将返回 <code>BUILD_SCOPE_EMPTY</code></span>
+                  </div>
+                </div>
+
+                <div class="frow">
+                  <label>数据源</label>
+                  <div class="fctl">
+                    <select><option>MySQL-20260224（source_id=12）</option><option>PostgreSQL-dw（source_id=15）</option></select>
+                    <select><option>sales</option><option>sales_archive</option></select>
+                    <span class="hint">已由作用域草稿锁定，改源需先清空草稿</span>
+                  </div>
+                </div>
+                <div class="frow">
+                  <label>模式</label>
+                  <div class="fctl">
+                    <div class="seg" id="modeSeg">
+                      <button class="on" data-m="rules+semantic">rules + semantic</button>
+                      <button data-m="rules">rules only</button>
+                    </div>
+                    <span class="hint">mode 只决定「是否调用 LLM」，不影响 source 字段</span>
+                  </div>
+                </div>
+                <div class="frow">
+                  <label>幂等键</label>
+                  <div class="fctl">
+                    <input type="text" readonly value="a7f3c9e1…b42" style="flex:1;font-family:var(--mono);font-size:11.5px">
+                    <span class="hint">sha256(ontology + <b>解析后排序的</b> tables[] + mode)</span>
+                  </div>
+                </div>
+                <div class="banner bn-warn" style="margin:0 0 11px">
+                  <i>◆</i>
+                  <div><b>幂等陷阱</b>：<code>mode=tags|catalog</code> 必须在生成幂等键<b>之前</b>先解析为 <code>tables[]</code> 并排序，否则标签内容一变就破幂等（§4.7 约束 2）。</div>
+                </div>
+
+                <div class="sep"></div>
+
+                <div style="display:flex;gap:8px;align-items:center">
+                  <button class="btn btn-primary" id="btnBuild">开始构建</button>
+                  <button class="btn" id="btnCancel" disabled>取消</button>
+                  <span class="hint" id="buildHint">同 scope 当日重复构建将命中幂等，复用首个任务</span>
+                </div>
+
+                <div id="buildProgress" style="display:none;margin-top:14px">
+                  <div class="phases">
+                    <div class="ph queued" data-p="extract"><div class="ph-bar"><span></span></div><div class="ph-lbl">extract</div></div>
+                    <div class="ph queued" data-p="align"><div class="ph-bar"><span></span></div><div class="ph-lbl">align</div></div>
+                    <div class="ph queued" data-p="judge"><div class="ph-bar"><span></span></div><div class="ph-lbl">judge</div></div>
+                    <div class="ph queued" data-p="merge"><div class="ph-bar"><span></span></div><div class="ph-lbl">merge</div></div>
+                    <div class="ph queued" data-p="done"><div class="ph-bar"><span></span></div><div class="ph-lbl">done</div></div>
+                  </div>
+                  <div class="prog"><i id="progBar" style="width:0"></i></div>
+                  <div class="hint" id="progTxt">progress 0.00 · phase pending</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">SSE 事件流 <span class="hs">GET /build-jobs/{job_id}/stream · 心跳 15s</span></div>
+                <span class="hs" id="logCount">0 events</span>
+              </div>
+              <div class="card-b">
+                <div class="logbox" id="logBox">
+                  <div class="logline"><span class="ts">--:--:--</span><span class="lv d">ready</span><span class="ms">等待构建任务…</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h"><div class="hl">任务列表 <span class="hs">刷新即存</span></div></div>
+              <div class="card-b tight">
+                <table>
+                  <thead><tr><th style="width:58px">任务</th><th>阶段</th><th style="width:76px">状态</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">#142</td><td class="mono muted" style="font-size:11px">done · 8.4s</td><td><span class="badge b-ok b-sm">succeeded</span></td></tr>
+                    <tr><td class="mono">#143</td><td class="mono muted" style="font-size:11px">merge · 0.61</td><td><span class="badge b-run b-sm"><span class="pulse"></span>running</span></td></tr>
+                    <tr><td class="mono">#141</td><td class="mono muted" style="font-size:11px">done · 3.1s</td><td><span class="badge b-ok b-sm">succeeded</span></td></tr>
+                    <tr><td class="mono">#140</td><td class="mono" style="font-size:11px;color:var(--error)">BUILD_SCOPE_EMPTY</td><td><span class="badge b-err b-sm">failed</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><div class="hl">最近任务统计</div></div>
+              <div class="card-b" style="padding:11px 13px">
+                <dl class="kv">
+                  <dt>tables</dt><dd class="mono">6</dd>
+                  <dt>objects</dt><dd class="mono">4 新建 · 2 更新</dd>
+                  <dt>properties</dt><dd class="mono">38</dd>
+                  <dt>relations</dt><dd class="mono">5</dd>
+                  <dt>mappings</dt><dd class="mono">12</dd>
+                  <dt>rejected</dt><dd class="mono">3 <span class="muted">（已落库可复盘）</span></dd>
+                  <dt>dropped</dt><dd class="mono">2 <span class="muted">（&lt;0.65 分档）</span></dd>
+                  <dt>llm</dt><dd class="mono">3 次 · 6,120 tok</dd>
+                  <dt>overlap</dt><dd class="mono">skipped 1 <span class="muted">（记为缺省票）</span></dd>
+                </dl>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><div class="hl">异常路径</div></div>
+              <div class="card-b" style="padding:11px 13px;font-size:11.5px;color:var(--text-2);line-height:1.7">
+                <div style="margin-bottom:7px">
+                  <b style="color:var(--text)">失败：</b><code class="mono" style="font-size:10.5px">rollback()</code> 后再写 <code class="mono" style="font-size:10.5px">failed</code>，
+                  否则 <code class="mono" style="font-size:10.5px">PendingRollbackError</code> 逃出线程 → 永久 running。
+                </div>
+                <div style="margin-bottom:7px">
+                  <b style="color:var(--text)">超时：</b>running 且 <code class="mono" style="font-size:10.5px">started_at</code> &gt; 30min → 标
+                  <code class="mono" style="font-size:10.5px">JOB_TIMEOUT</code>。
+                </div>
+                <div>
+                  <b style="color:var(--text)">LLM 不可用：</b>任务仍 succeeded，置 <code class="mono" style="font-size:10.5px">degraded=true</code>，
+                  审阅台顶部出降级横幅。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ 审阅队列 ══════════ -->
+      <section class="view" data-v="review">
+
+        <div class="banner bn-warn" id="degradeBanner" style="display:none">
+          <i>▲</i>
+          <div>
+            <b>降级运行</b>　<code>degraded=true</code> · <code>SEMANTIC_UNAVAILABLE</code> ——
+            AI 语义补全不可用，本次候选<b>全部来自规则</b>，结构不受影响；已成功的语义建议仍保留为 <code>suggested</code>，可单条重试。
+          </div>
+        </div>
+
+        <div class="banner bn-info">
+          <i>◆</i>
+          <div>
+           四类元素<b>同台审阅</b>：对象 / 属性 / 关系 / 映射。置信度分档为 <b>≥0.85</b> 自动采纳 · <b>0.65~0.85</b> 待审 · <b>&lt;0.65</b> 自动驳回。
+            AI 建议以紫色徽标标注，<b>不参与</b> review_status 计算。
+            <br><b style="color:#874d00">现状修正（§8.1-F23）</b>：阈值目前在 <code>app/ai/dataops/rule_engine.py:25,29</code> 与
+            <code>app/services/dataops/rule_engine.py:15,19</code> <b>两处重复定义</b>，所称「单一真源」当前不成立；P0-3 需先合并。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div class="hl">
+              待审队列
+              <span class="hs">GET /ontologies/{id}/review-queue · 统一分页</span>
+            </div>
+            <div style="display:flex;gap:7px;align-items:center">
+              <span class="badge b-warn b-sm" id="reviewCount">12 条待审</span>
+            </div>
+          </div>
+
+          <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;
+                      align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <div class="seg" id="kindSeg">
+                <button class="on" data-k="all">全部 <span class="muted">12</span></button>
+                <button data-k="object">对象 <span class="muted">3</span></button>
+                <button data-k="property">属性 <span class="muted">5</span></button>
+                <button data-k="relation">关系 <span class="muted">2</span></button>
+                <button data-k="mapping">映射 <span class="muted">2</span></button>
+              </div>
+              <div class="seg" id="originSeg" title="§5.7 代价清单最后一行：审阅台需区分两种候选来源">
+                <button class="on" data-o="all">全部来源</button>
+                <button data-o="rule">rule <span class="muted" id="cntRule">12</span></button>
+                <button data-o="llm">llm <span class="muted" id="cntLlm">0</span></button>
+              </div>
+              <input type="text" placeholder="搜索 code / 名称…" style="width:180px" id="rvSearch">
+            </div>
+            <div style="display:flex;gap:7px;align-items:center">
+              <span class="hint" id="selInfo">已选 0 条</span>
+              <button class="btn btn-sm" id="btnReject">批量驳回</button>
+              <button class="btn btn-sm btn-primary" id="btnAccept">批量采纳</button>
+            </div>
+          </div>
+
+          <div style="overflow:auto;max-height:none">
+            <table id="reviewTable">
+              <thead>
+                <tr>
+                  <th style="width:34px"><input type="checkbox" id="ckAll"></th>
+                  <th style="width:62px">类型</th>
+                  <th style="width:210px">元素</th>
+                  <th>建议名称 / 定义</th>
+                  <th style="width:104px">规则置信度</th>
+                  <th style="width:196px">AI 语义建议</th>
+                  <th style="width:150px">映射 / 归属</th>
+                  <th style="width:150px">PII / 脱敏</th>
+                  <th style="width:112px">状态</th>
+                </tr>
+              </thead>
+              <tbody id="reviewBody"></tbody>
+            </table>
+          </div>
+
+          <div style="padding:9px 14px;border-top:1px solid var(--border);display:flex;
+                      align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <span class="hint">
+              另有 <b>3</b> 条自动驳回（&lt;0.65）与 <b>2</b> 条 dropped —— 全部落 <code>build_item</code>，可在任务详情复盘（不再丢失）
+            </span>
+            <div style="display:flex;gap:7px">
+              <button class="btn btn-sm" onclick="toggleDegraded()">切换降级状态</button>
+              <button class="btn btn-sm" onclick="go('version')">前往发布 →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-h"><div class="hl">证据链示例 <span class="hs">meta_ontology_evidence</span></div></div>
+            <div class="card-b" style="padding:11px 13px">
+              <div style="font-size:11.5px;color:var(--text-2);margin-bottom:8px">
+                关系 <code class="mono" style="font-size:10.5px">rel_order_of_customer</code> 的可复核依据
+              </div>
+              <div class="evi" style="grid-column:auto">
+                <div class="evi-row"><span class="ek">naming</span><span class="ed">sales_order.customer_id 命中 <code>_id</code> 词干 · 对方列名 <code>customer_id</code>（形如 &lt;表&gt;_id）</span><span class="mono">0.85</span></div>
+                <div class="evi-row"><span class="ek">comment</span><span class="ed">列注释「客户ID」→ 对象别名 <code>客户</code> 命中</span><span class="mono">0.65</span></div>
+                <div class="evi-row"><span class="ek">overlap</span><span class="ed">采样 500 行，<code>customer_id</code> 值域重叠率 100%</span><span class="mono">1.00</span></div>
+                <div class="evi-row"><span class="ek">binding</span><span class="ed">表 <code>crm.sales_order</code> 已绑定对象 <code>obj_order</code></span><span class="mono">—</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><div class="hl">批量操作契约</div></div>
+            <div class="card-b" style="padding:11px 13px;font-size:11.5px;color:var(--text-2);line-height:1.8">
+              <div style="margin-bottom:6px"><code class="mono" style="font-size:10.5px;color:var(--primary)">POST /ontologies/{id}/review</code></div>
+              <div>请求体：<code class="mono" style="font-size:10.5px">{items[], accept_all, reject_all, note}</code></div>
+              <div style="margin-top:8px;padding:8px 10px;background:var(--subtle);border-radius:var(--r-sm);border-left:3px solid var(--warn);font-size:11px">
+                跨本体的 item id 一律返回 <code class="mono" style="font-size:10.5px">REVIEW_ITEM_NOT_FOUND</code>；
+                <code class="mono" style="font-size:10.5px">accept_all</code> 的返回计数必须与列表可见条数一致（修 OntoMind R10 的 UI/接口错位）。
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══════════ 图谱 ══════════ -->
+      <section class="view" data-v="graph">
+        <div class="banner bn-info">
+          <i>◆</i>
+          <div>
+            <b>schema 图</b>　节点 <code>id = element code</code>（修 OntoMind R14 的无意义 id），<b>不渲染实例行</b>（D2）。
+            上方链路条右侧的 <b>双视图切换</b> 即 AF-12 的轻量等价物：同一份 <code>nodes/edges</code>，仅布局与过滤条件不同。
+            本页为<b>草稿态预览</b>：suggested / rejected 以虚线标注；<b>发布态</b>（导出、Agent 导航、问数上下文）一律只含 <code>review_status=accepted</code>。
+          </div>
+        </div>
+
+        <div class="grid-3-1">
+          <div>
+            <div class="graph-wrap" id="graphWrap">
+              <div class="graph-tools">
+                <button class="btn btn-sm" onclick="go('review')">＋ 补全候选</button>
+                <button class="btn btn-sm">导出 SVG</button>
+              </div>
+              <svg id="graphSvg" viewBox="0 0 940 470" preserveAspectRatio="xMidYMid meet"></svg>
+              <div class="graph-legend">
+                <span style="color:#3371fc"><span class="lg-line"></span>已采纳关系</span>
+                <span style="color:#faad14" id="legendSug"><span class="lg-line"></span>待审关系</span>
+                <span style="color:#ff4d4f" id="legendRej"><span class="lg-line" style="border-top-style:dashed"></span>已驳回</span>
+                <span class="muted">上方小灰胶囊 = 源表（仅 workflow）</span>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:12px">
+              <div class="card-h">
+                <div class="hl">映射下推预览 <span class="hs">POST /ontologies/{id}/sample · LIMIT ≤ 100</span></div>
+                <button class="btn btn-sm" disabled>P1 交付</button>
+              </div>
+              <div class="card-b">
+                <div class="json" style="max-height:180px"><span class="c">// 由 meta_table_standard.accepted + meta_column_standard.accepted 生成，
+// 经 sql_guard 校验后下推源库；本体不复制任何业务行</span>
+<span class="k">SELECT</span> c.customer_id, c.customer_name, c.customer_level, r.region_name
+<span class="k">FROM</span>   crm.customer c
+<span class="k">LEFT JOIN</span> crm.region r <span class="k">ON</span> r.region_code = c.region_code
+<span class="k">LIMIT</span>  <span class="n">100</span>;</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="insp" id="insp">
+            <div class="insp-h">
+              <div>
+                <div class="nm" id="inspName">客户</div>
+                <div class="cd" id="inspCode">obj_customer</div>
+              </div>
+              <span class="badge b-ok b-sm" id="inspBadge">accepted</span>
+            </div>
+            <div class="insp-b" id="inspBody"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ 版本 ══════════ -->
+      <section class="view" data-v="version">
+
+        <div class="banner bn-err" id="gateBanner">
+          <i>▲</i>
+          <div>
+            <b>发布被阻断</b>　<code>PUBLISH_BLOCKED_PENDING_REVIEW</code> · <code>PUBLISH_BLOCKED_MASK_COVERAGE</code> —— 仍有 <b>12</b> 条候选处于
+            <code>suggested</code>，且 <b>1</b> 列敏感属性无脱敏覆盖。门禁只拦「发布」，不拦「编辑」；可显式勾选「忽略 N 条待审，仅发布已采纳」，该动作写入
+            <code>gate_json.override</code> 留痕。
+          </div>
+        </div>
+
+        <div class="grid-3-1">
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">发布门禁 <span class="hs">POST /ontologies/{id}/publish</span></div>
+                <span class="badge b-warn b-sm" id="gateSummary">3 / 5 通过</span>
+              </div>
+              <div class="card-b">
+                <div class="gate" id="gateList">
+                  <div class="gate-item fail">
+                    <div class="gi-ic">!</div>
+                    <div class="gi-b">
+                      <div class="gi-t"><span>无未决候选</span><span class="mono" style="font-size:11px">12 / 0</span></div>
+                      <div class="gi-d"><code>review_status='suggested'</code> 必须为 0 · 对象 3 / 属性 5 / 关系 2 / 映射 2</div>
+                    </div>
+                  </div>
+                  <div class="gate-item pass">
+                    <div class="gi-ic">✓</div>
+                    <div class="gi-b">
+                      <div class="gi-t"><span>结构完整性</span><span class="mono" style="font-size:11px">0 异常</span></div>
+                      <div class="gi-d">关系两端对象存在且 accepted · 属性归属对象存在 · 映射的表/列在 <code>meta_table/column</code> 中真实存在</div>
+                    </div>
+                  </div>
+                  <div class="gate-item warn">
+                    <div class="gi-ic">!</div>
+                    <div class="gi-b">
+                      <div class="gi-t"><span>无回归</span><span class="mono" style="font-size:11px">1 项关注</span></div>
+                      <div class="gi-d">对比 v2：<code>obj_payment</code> 已失去全部表绑定（<code>payment</code> 表未出现在本次 scope）—— 未被关系引用，判 <b>warn</b> 不阻断</div>
+                    </div>
+                  </div>
+                  <div class="gate-item pass">
+                    <div class="gi-ic">✓</div>
+                    <div class="gi-b">
+                      <div class="gi-t"><span>CQ 覆盖度下限</span><span class="mono" style="font-size:11px">80% ≥ 60%</span></div>
+                      <div class="gi-d">10 条 CQ 中 8 条 <code>verify_status=passed</code>（可达性 ≤3 跳 + 映射覆盖率）</div>
+                    </div>
+                  </div>
+                  <div class="gate-item fail" id="gate5">
+                    <div class="gi-ic">!</div>
+                    <div class="gi-b">
+                      <div class="gi-t"><span>敏感列脱敏覆盖 <span class="badge b-ai b-sm">本次新增·第 5 项</span></span><span class="mono" style="font-size:11px" id="gate5Cnt">1 列未覆盖</span></div>
+                      <div class="gi-d">
+                        所有已映射且 <code>pii_level&gt;=L2</code> 或 <code>security_level&gt;=L2</code> 的列，必须满足三选一：
+                        ① 绑定标准项且 <code>mask_rule</code> 非空；② <code>security_level_override</code> 显式降级至 &lt;L2；③ 审阅台人工 <code>mask_exempt=true</code>（必留痕）。
+                        <span id="gate5State"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sep"></div>
+
+                <div class="frow" style="margin-bottom:9px">
+                  <label>变更说明</label>
+                  <div class="fctl">
+                    <input type="text" style="flex:1" value="补齐订单明细与区域对象，修正客户→区域基数" id="chgNote">
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <button class="btn btn-primary" id="btnPublish" disabled>发布 v4</button>
+                  <label style="display:flex;gap:6px;align-items:center;font-size:11.5px;color:var(--text-2);cursor:pointer">
+                    <input type="checkbox" id="ckOverride"> 忽略 <span id="ovPending">12</span> 条待审，仅发布已采纳
+                  </label>
+                </div>
+                <div class="hint" id="publishHint" style="margin-top:8px">门禁 1、门禁 5 未通过 —— 勾选忽略或先清空待审队列，并补上敏感列脱敏</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">结构化 diff <span class="hs">v2 → v3 · diff_json 含明细</span></div>
+                <button class="btn btn-sm btn-text">GET /ontologies/{id}/diff</button>
+              </div>
+              <div class="card-b tight">
+                <table>
+                  <thead><tr><th style="width:76px">类型</th><th style="width:64px">变更</th><th>元素</th><th style="width:150px">说明</th></tr></thead>
+                  <tbody>
+                    <tr><td><span class="badge b-idle b-sm">对象</span></td><td><span class="df add">added</span></td><td class="mono">obj_order_item</td><td class="muted" style="font-size:11px">新对象 · 0.72</td></tr>
+                    <tr><td><span class="badge b-idle b-sm">对象</span></td><td><span class="df add">added</span></td><td class="mono">obj_region</td><td class="muted" style="font-size:11px">新对象 · 0.66</td></tr>
+                    <tr><td><span class="badge b-idle b-sm">属性</span></td><td><span class="df add">added</span></td><td class="mono">obj_customer.mobile</td><td class="muted" style="font-size:11px">PII L3 · 脱敏规则继承</td></tr>
+                    <tr><td><span class="badge b-idle b-sm">关系</span></td><td><span class="df chg">changed</span></td><td class="mono">rel_region_of_customer</td><td class="muted" style="font-size:11px">基数 1:N → N:1</td></tr>
+                    <tr><td><span class="badge b-idle b-sm">关系</span></td><td><span class="df del">removed</span></td><td class="mono">rel_payment_of_order</td><td class="muted" style="font-size:11px">两端对象均不再绑定</td></tr>
+                    <tr style="background:#fff8f8"><td><span class="badge b-idle b-sm">对象</span></td><td><span class="df reg">regression</span></td><td class="mono">obj_payment</td><td style="font-size:11px;color:#cf1322">失去全部映射（未阻断 · warn）</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h"><div class="hl">版本时间线 <span class="hs">meta_ontology_version</span></div></div>
+              <div class="card-b">
+                <div class="tl">
+                  <div class="tl-item cur">
+                    <div class="tl-dot"></div>
+                    <div class="tl-head">
+                      <span class="tl-ver">v3</span>
+                      <span class="badge b-ok b-sm">current</span>
+                      <span class="tl-time">2026-10-24 15:02</span>
+                    </div>
+                    <div class="tl-note">补齐订单明细与区域对象</div>
+                    <div class="tl-diff">
+                      <span class="df add">+2 对象</span>
+                      <span class="df add">+1 属性</span>
+                      <span class="df chg">~1 关系</span>
+                      <span class="df del">−1 关系</span>
+                    </div>
+                    <div class="hint" style="margin-top:5px">gate: passed · cq 80% · author 张工</div>
+                  </div>
+                  <div class="tl-item">
+                    <div class="tl-dot"></div>
+                    <div class="tl-head">
+                      <span class="tl-ver">v2</span>
+                      <span class="tl-time">2026-10-12 09:41</span>
+                    </div>
+                    <div class="tl-note">首次纳入客户/订单/产品三对象</div>
+                    <div class="tl-diff">
+                      <span class="df add">+3 对象</span>
+                      <span class="df add">+12 属性</span>
+                      <span class="df add">+3 关系</span>
+                    </div>
+                    <div class="hint" style="margin-top:5px">gate: passed · author 张工</div>
+                  </div>
+                  <div class="tl-item">
+                    <div class="tl-dot"></div>
+                    <div class="tl-head">
+                      <span class="tl-ver">v1</span>
+                      <span class="tl-time">2026-09-30 17:28</span>
+                    </div>
+                    <div class="tl-note">初始发布（回填既有 published 元素）</div>
+                    <div class="tl-diff"><span class="df add">+1 对象</span></div>
+                    <div class="hint" style="margin-top:5px">gate: warn · 无 CQ</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><div class="hl">快照内容 <span class="hs">snapshot_json</span></div></div>
+              <div class="card-b" style="padding:11px 13px">
+                <dl class="kv">
+                  <dt>对象</dt><dd class="mono">7 <span class="muted">（仅 accepted）</span></dd>
+                  <dt>属性</dt><dd class="mono">33</dd>
+                  <dt>关系</dt><dd class="mono">6</dd>
+                  <dt>映射</dt><dd class="mono">12</dd>
+                  <dt>CQ</dt><dd class="mono">10 <span class="muted">（passed 8）</span></dd>
+                  <dt>冻结</dt><dd class="mono">2026-10-24T15:02:11+08</dd>
+                </dl>
+                <div style="padding:8px 10px;background:var(--subtle);border-radius:var(--r-sm);
+                            border-left:3px solid var(--primary);font-size:11px;color:var(--text-2)">
+                  先写快照再改指针：<b>存在快照的版本号才能成为 <code class="mono" style="font-size:10.5px">current_version</code></b>。
+                  回滚 = 用旧快照生成<b>新版本</b>，不删历史。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ 本体应用（OntPublishPanel、AF-17/18/22）══════════ -->
+      <section class="view" data-v="publish">
+
+        <div class="banner bn-info">
+          <i>◆</i>
+          <div>
+            <b>P0 只做登记，不做运行时</b>　<code>meta_ontology_publish</code> 回答“这个本体的哪个版本被发布成了什么”，
+            打通 Skill 运行时属 <b>P1</b>，MCP 属 <b>P2</b>（§1.2）。登记时<b>钉住</b> <code>version=current_version</code>；
+            一旦推出新版本，旧登记自动置 <code>stale</code>，<b>不隐式升级</b>。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h">
+            <div class="hl">发布登记 <span class="hs">GET/POST /ontologies/{id}/publishes</span></div>
+            <div style="display:flex;gap:7px;align-items:center">
+              <span class="badge b-ok b-sm" id="pubOn">2 启用</span>
+              <button class="btn btn-sm btn-primary" onclick="addPublish()">＋ 登记一个目标</button>
+            </div>
+          </div>
+          <div class="card-b">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:11px" id="pubList">
+
+              <div class="pubcard" data-pid="1">
+                <div class="pc-h">
+                  <div class="pc-ic skill">SK</div>
+                  <div style="min-width:0;flex:1">
+                    <div class="pc-n">销售订单问答 Skill</div>
+                    <div class="pc-c">target_type=skill · code=sales_order_qa</div>
+                  </div>
+                  <span class="badge b-ok b-sm st">enabled</span>
+                </div>
+                <div class="pc-d">钉在 <b>v3</b>。经 <code>payload_json.skill_code</code> 引用平台既有 <code>ai_skill</code> 体系（非本体侧重建）。</div>
+                <div class="pc-f">
+                  <span class="badge b-idle b-sm">v3</span>
+                  <span class="hint">2 Tool · 2026-10-24 15:20</span>
+                  <span class="sp"></span>
+                  <button class="btn btn-sm" onclick="togglePub(1)">停用</button>
+                </div>
+              </div>
+
+              <div class="pubcard" data-pid="2">
+                <div class="pc-h">
+                  <div class="pc-ic http">HT</div>
+                  <div style="min-width:0;flex:1">
+                    <div class="pc-n">语义导航只读接口</div>
+                    <div class="pc-c">target_type=http · code=manifest</div>
+                  </div>
+                  <span class="badge b-ok b-sm st">enabled</span>
+                </div>
+                <div class="pc-d"><code>GET /ontologies/{id}/manifest</code>（E24）· 单次 ≤2KB · 无版本返 <code>needs_build</code>。</div>
+                <div class="pc-f">
+                  <span class="badge b-idle b-sm">v3</span>
+                  <span class="hint">P0 主消费面</span>
+                  <span class="sp"></span>
+                  <button class="btn btn-sm" onclick="togglePub(2)">停用</button>
+                </div>
+              </div>
+
+              <div class="pubcard dis p2" data-pid="3">
+                <div class="pc-h">
+                  <div class="pc-ic mcp">MC</div>
+                  <div style="min-width:0;flex:1">
+                    <div class="pc-n">MCP Server（预留）</div>
+                    <div class="pc-c">target_type=mcp · code=sales_ontology_mcp</div>
+                  </div>
+                  <span class="badge b-idle b-sm st">P2</span>
+                </div>
+                <div class="pc-d">取值已在枚举中预留但本期 <code>POST /publishes</code> 会拒绝：返回 <code>PUBLISH_TARGET_NOT_FOUND</code>。</div>
+                <div class="pc-f">
+                  <span class="badge b-idle b-sm">—</span>
+                  <span class="hint">平台侧已有 <code>ai_mcp</code> 体系可接</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-h"><div class="hl">一次发布，多端消费（AF-22）</div></div>
+            <div class="card-b tight">
+              <table>
+                <thead><tr><th>消费端</th><th style="width:230px">入口</th><th style="width:96px">阶段</th></tr></thead>
+                <tbody>
+                  <tr><td>图</td><td class="mono" style="font-size:10.5px">GET /ontologies/{id}/graph</td><td><span class="badge b-ok b-sm">P0</span></td></tr>
+                  <tr><td>问数</td><td class="mono" style="font-size:10.5px">复用 query_service + sql_guard</td><td><span class="badge b-ok b-sm">P0</span></td></tr>
+                  <tr><td>Agent</td><td class="mono" style="font-size:10.5px">E24/E25/E26 三只读工具</td><td><span class="badge b-ok b-sm">P0</span></td></tr>
+                  <tr><td>导出</td><td class="mono" style="font-size:10.5px">GET /ontologies/{id}/export?fmt=</td><td><span class="badge b-idle b-sm">P1</span></td></tr>
+                  <tr><td>应用</td><td class="mono" style="font-size:10.5px">meta_ontology_publish（本页）</td><td><span class="badge b-warn b-sm">P0 登记 / P1 打通</span></td></tr>
+                  <tr><td>推演 / 孪生</td><td class="mono" style="font-size:10.5px">需实例物化，与 D2 冲突</td><td><span class="badge b-err b-sm">非目标</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><div class="hl">登记表结构 <span class="hs">meta_ontology_publish</span></div></div>
+            <div class="card-b" style="padding:11px 13px;font-size:11.5px;color:var(--text-2);line-height:1.8">
+              <div><code class="mono" style="font-size:10.5px">UniqueConstraint(tenant_id, target_type, code)</code></div>
+              <div><code class="mono" style="font-size:10.5px">Index(ontology_id, version)</code></div>
+              <div class="sep"></div>
+              <div>列：<code class="mono" style="font-size:10.5px">ontology_id / version / target_type(skill|http|mcp) / code / name / status / payload_json</code></div>
+              <div style="margin-top:7px;padding:8px 10px;background:var(--subtle);border-radius:var(--r-sm);
+                          border-left:3px solid var(--warn);font-size:11px">
+                <b>钉版本而非跟随最新</b>：登记后若发了 v4，本表行不会自动改 <code>version</code>，而是把 <code>stale=true</code> 透出到列表，
+                避免消费端无感知漂移（修 OntoMind R12）。
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ══════════ Agent ══════════ -->
+      <section class="view" data-v="agent">
+        <div class="banner bn-info">
+          <i>◆</i>
+          <div>
+            <b>P0 最小消费面</b>　三个<b>只读</b>工具注册进既有 <code>ai_tools</code> 体系，只读
+            <code>review_status=accepted</code> 的元素。未发布本体返回 <code>stage=draft</code> 标记，由 Agent 决定是否提示用户。
+            写操作一律不开放给 Agent。
+          </div>
+        </div>
+
+        <div class="grid-3-1">
+          <div>
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">工具注册 <span class="hs">app/ai/tools/ontology_tools.py</span></div>
+                <span class="badge b-ok b-sm">3 个只读工具</span>
+              </div>
+              <div class="card-b">
+                <div class="tool">
+                  <div class="t-ic">M</div>
+                  <div class="t-b">
+                    <div class="t-n">ontology_manifest</div>
+                    <div class="t-d">本体自述：版本 / 对象清单 / 关系统计 / CQ 通过率 / 用法提示</div>
+                    <div class="t-lim">出参 ≤ 2KB · 无版本时返回 needs_build</div>
+                  </div>
+                </div>
+                <div class="tool">
+                  <div class="t-ic">B</div>
+                  <div class="t-b">
+                    <div class="t-n">ontology_browse</div>
+                    <div class="t-d">按自然语言 query 模糊浏览对象与关系，避免 Agent 猜 code</div>
+                    <div class="t-lim">空 query 拒绝全量枚举 · 单次 ≤ 6 条</div>
+                  </div>
+                </div>
+                <div class="tool" style="margin-bottom:0">
+                  <div class="t-ic">R</div>
+                  <div class="t-b">
+                    <div class="t-n">ontology_resolve</div>
+                    <div class="t-d">定点解析：给定 code 返回对象 + 属性 + 关系 + 映射</div>
+                    <div class="t-lim">≤ 5 个 code · 越权 forbidden / 不存在 not_found</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h">
+                <div class="hl">调用演练</div>
+                <div class="seg" id="agentSeg">
+                  <button class="on" data-a="manifest">manifest</button>
+                  <button data-a="browse">browse</button>
+                  <button data-a="resolve">resolve</button>
+                </div>
+              </div>
+              <div class="card-b">
+                <div class="frow" style="margin-bottom:9px">
+                  <label>入参</label>
+                  <div class="fctl">
+                    <input type="text" id="agentInput" style="flex:1;font-family:var(--mono);font-size:11.5px"
+                           value='{"ontology_code":"sales_ontology"}' readonly>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:11px">
+                  <button class="btn btn-primary btn-sm" id="btnInvoke">调用工具</button>
+                  <span class="hint" id="agentLatency">—</span>
+                </div>
+                <div class="json" id="agentOut"><span class="c">// 点击「调用工具」查看返回</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-h"><div class="hl">消费口径</div></div>
+              <div class="card-b" style="padding:11px 13px">
+                <div style="display:flex;flex-direction:column;gap:9px;font-size:11.5px;color:var(--text-2)">
+                  <div>
+                    <b style="color:var(--text)">读什么</b><br>
+                    <code class="mono" style="font-size:10.5px">review_status = accepted</code>
+                    <span style="color:var(--text-3)">（status 仅在导出/发布判定中参与）</span>
+                  </div>
+                  <div>
+                    <b style="color:var(--text)">不读什么</b><br>
+                    suggested / rejected 元素、<code class="mono" style="font-size:10.5px">meta_ontology_semantic</code> 中未采纳的 AI 建议
+                  </div>
+                  <div>
+                    <b style="color:var(--text)">上限</b><br>
+                    browse ≤ 6 · resolve ≤ 5 · manifest ≤ 2KB
+                  </div>
+                  <div>
+                    <b style="color:var(--text)">越权</b><br>
+                    跨租户 / 跨本体 code 返回 <code class="mono" style="font-size:10.5px">forbidden</code>，不泄露存在性
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-h"><div class="hl">导出契约</div></div>
+              <div class="card-b" style="padding:11px 13px;font-size:11.5px;color:var(--text-2);line-height:1.75">
+                <div style="margin-bottom:7px">
+                  <code class="mono" style="font-size:10.5px;color:var(--primary)">GET /ontologies/{id}/export?fmt=turtle|jsonld|json</code>
+                </div>
+                <div style="margin-bottom:7px">
+                  已发布版本读 <code class="mono" style="font-size:10.5px">snapshot_json</code>；未发布读实时。
+                </div>
+                <div style="padding:8px 10px;background:var(--success-bg);border:1px solid var(--success-br);
+                            border-radius:var(--r-sm);font-size:11px;color:#389e0d">
+                  响应头必带 <code class="mono" style="font-size:10.5px">X-Ontology-Stage: draft|published</code>
+                  —— 导出口径一目了然（修 OntoMind R12）
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ═══════ 嵌入式建模助手 Dock（OntAssistantDock、AF-16、§5.6）═══════ -->
+<div id="dock">
+  <div class="dk-h" onclick="toggleDock()">
+    <span style="font-size:13px">✦</span>
+    <span class="ttl">建模助手</span>
+    <span class="hintx" style="font-size:10px;opacity:.72">四档白名单</span>
+    <span class="mn">▾</span>
+  </div>
+  <div class="dk-body" id="dockBody">
+    <div class="intent" id="intentBar">
+      <button class="ib on" data-i="ask" onclick="setIntent('ask')">Ask 查询检查</button>
+      <button class="ib" data-i="explain" onclick="setIntent('explain')">explain 解释证据</button>
+      <button class="ib" data-i="propose_scope" onclick="setIntent('propose_scope')">propose-scope 建议作用域</button>
+      <button class="ib" data-i="build" onclick="setIntent('build')" title="D3 rev.2：产出只进 build_item(origin=llm, status=suggested)，两步提交">Build 结构草拟</button>
+    </div>
+    <div class="ctxchip">
+      <span>上下文：销售域本体 v3</span><span>当前作用域 6 表</span><span>选中 obj_customer</span>
+    </div>
+    <div class="msg a">
+      我现在是<b>四档</b>助手。按 <b>D3 rev.2</b>：我可以经 <code>build</code> 档生成结构候选，
+      但候选<b>只能以未采纳态进审阅台</b>——我不自动采纳、不写结构表、不发布。
+      <div class="w">intent 白名单服务端硬校 · 未知值 → ASSISTANT_INTENT_UNSUPPORTED · build 未先预览 → ASSISTANT_BUILD_PREVIEW_STALE</div>
+    </div>
+  </div>
+  <div class="dk-foot">
+    <input type="text" id="dockInput" placeholder="向助手提问…" onkeydown="if(event.key==='Enter')askDock()">
+    <button class="btn btn-sm btn-primary" onclick="askDock()">发送</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   本体能力工作台 · 原型交互
+   数据均为演示用；结构、约束、错误码与设计文档 §3–§6 对齐
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Tab 切换 ── */
+function go(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.t===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on', v.dataset.v===name));
+  document.querySelector('.views').scrollTop = 0;
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>go(t.dataset.t));
+
+/* ── 审阅队列数据 ── */
+const KIND_LABEL = {object:'对象', property:'属性', relation:'关系', mapping:'映射'};
+const KIND_BADGE = {object:'b-idle', property:'b-idle', relation:'b-idle', mapping:'b-idle'};
+
+const REVIEW_ITEMS = [
+  { id:'o1', kind:'object', code:'obj_order_item', name:'订单明细',
+    def:'订单中的商品行项目，含数量与成交单价', conf:0.72, status:'suggested',
+    mapping:'sales_order_item → 表绑定',
+    ai:{t:'建议命名「订单行项目」，并显式声明与订单的 1:N 组成关系', c:0.81},
+    evi:[['naming','表名 sales_order_item 命中前缀 sales_ + 词干 order_item','0.72'],
+         ['comment','表注释「订单明细表」→ 别名「订单行」命中','0.68'],
+         ['profile','6 列 · 128 万行 · 复合主键 (order_id, item_id)','—']] },
+
+  { id:'o2', kind:'object', code:'obj_region', name:'区域',
+    def:'行政区划维度，用于客户归属与销售分区统计', conf:0.66, status:'suggested',
+    mapping:'region → 表绑定',
+    ai:{t:'⚠ 疑似维表（仅 4 行）· 作为一等对象可能不当，可考虑降为「客户.区域」枚举属性', c:0.74},
+    evi:[['naming','表名 region 为通用维表命名，未带域前缀','0.66'],
+         ['profile','4 行 · 3 列 · 无外键指向 · 疑似枚举维表','0.60']] },
+
+  { id:'o3', kind:'object', code:'obj_sales_channel', name:'销售渠道',
+    def:'订单来源渠道，如线上、门店、分销', conf:0.68, status:'suggested',
+    mapping:'sales_channel → 表绑定', ai:null,
+    evi:[['naming','表名 sales_channel 命中域前缀 sales_','0.68'],
+         ['comment','表注释「销售渠道字典」→ 别名命中','0.64']] },
+
+  { id:'p1', kind:'property', code:'obj_customer.mobile', name:'手机号',
+    def:'客户联系手机，用于触达与身份核验', conf:0.79, status:'suggested',
+    mapping:'customer.mobile → 列绑定',
+    ai:{t:'判定 semantic_type = phone · PII L3 · 建议继承 mask_rule 中间四位掩码', c:0.88},
+    evi:[['naming','列名 mobile 命中手机号规则','0.79'],
+         ['comment','列注释「手机号码」二次命中','0.86'],
+         ['profile','样本 500 行 · 11 位数字占比 98.4%','0.91']] },
+
+  { id:'p2', kind:'property', code:'obj_customer.customer_level', name:'客户等级',
+    def:'客户分层等级，取值 S/A/B/C', conf:0.70, status:'suggested',
+    mapping:'customer.level → 列绑定', ai:null,
+    evi:[['naming','列名 customer_level 命中 <对象>_level 模式','0.70'],
+         ['profile','基数 4 · 值域 {S,A,B,C} → 枚举','0.72']] },
+
+  { id:'p3', kind:'property', code:'obj_order.promotion_code', name:'促销码',
+    def:'订单使用的促销活动编码', conf:0.67, status:'suggested',
+    mapping:'sales_order.promo_code → 列绑定', ai:null,
+    evi:[['comment','列注释「促销活动编码」命中','0.67']] },
+
+  { id:'p4', kind:'property', code:'obj_product.unit_price', name:'单价',
+    def:'产品标准单价（不含税）', conf:0.74, status:'suggested',
+    mapping:'product.price → 列绑定', ai:null,
+    evi:[['naming','列名 price 命中金额规则 + 表上下文限定为产品','0.74'],
+         ['profile','decimal(10,2) · 均值 128.4 · 无负值','0.80']] },
+
+  { id:'p5', kind:'property', code:'obj_order_item.qty', name:'数量',
+    def:'行项目下单数量', conf:0.69, status:'suggested',
+    mapping:'sales_order_item.qty → 列绑定', ai:null,
+    evi:[['naming','列名 qty 命中数量规则','0.69']] },
+
+  { id:'r1', kind:'relation', code:'rel_product_of_item', name:'明细→产品',
+    def:'订单明细引用产品，N:1', conf:0.71, status:'suggested',
+    mapping:'两端对象均已绑定',
+    ai:{t:'建议命名「明细包含产品」，并补充「单价取自产品标准价」的语义说明', c:0.76},
+    evi:[['naming','sales_order_item.product_id → product.id，形如 <表>_id','0.85'],
+         ['overlap','采样 500 行 · 值域重叠率 96.2%','0.96'],
+         ['judge','基数仅由人工设定或留空，不从 distinct_ratio 推断','—']] },
+
+  { id:'r2', kind:'relation', code:'rel_region_of_customer', name:'客户→区域',
+    def:'客户归属区域，N:1', conf:0.66, status:'suggested',
+    mapping:'两端对象均已绑定', ai:null,
+    evi:[['naming','customer.region_code → region.region_code 非 _id 后缀','0.60'],
+         ['overlap','采样 500 行 · 值域重叠率 100%','1.00'],
+         ['judge','overlap 票触发，但 naming 票偏弱 → 综合 0.66','—']] },
+
+  { id:'m1', kind:'mapping', code:'map_region', name:'region → obj_region',
+    def:'表 region 整体映射为区域对象', conf:0.68, status:'suggested',
+    mapping:'crm.region', ai:null,
+    evi:[['binding','表结构与对象属性命中率 3/3','0.68'],
+         ['profile','唯一键 region_code 非空唯一','0.72']] },
+
+  { id:'m2', kind:'mapping', code:'map_sales_channel', name:'sales_channel → obj_sales_channel',
+    def:'表 sales_channel 整体映射为销售渠道对象', conf:0.70, status:'suggested',
+    mapping:'crm.sales_channel', ai:null,
+    evi:[['binding','表结构与对象属性命中率 3/3','0.70']] }
+];
+
+const state = { kind:'all', origin:'all', q:'', sel:new Set(), open:new Set(),
+  /* origin = 候选产出通道（rule | llm）；source = 采纳后写入结构表的值（§5.1 三值域） */
+  items: REVIEW_ITEMS.map(x=>({origin:'rule', source:'rule', ...x})) };
+
+/* PII / 脱敏覆盖：§4.5 门禁第 5 项的可观测来源
+   数据字段现状已核：meta_standard.security_level(L0-L3) / mask_rule String(200)、
+   meta_column.pii_level(L0-L3)，但当前无消费者（§8.1-F16）*/
+const PII_MAP = {
+  'obj_order_item':            { level:'L0' },
+  'obj_region':                { level:'L0' },
+  'obj_sales_channel':         { level:'L0' },
+  'obj_customer.mobile':       { level:'L3', mask:null },      // 未覆盖 → 门禁 5 阻断
+  'obj_customer.customer_level':{ level:'L1' },
+  'obj_order.promotion_code':  { level:'L0' },
+  'obj_product.unit_price':    { level:'L0', mask:'num_zero' },
+  'obj_order_item.qty':        { level:'L0' },
+  'rel_product_of_item':       null,
+  'rel_region_of_customer':    null,
+  'map_region':                { level:'L0' },
+  'map_sales_channel':         { level:'L0' },
+};
+
+function piiCell(it){
+  const p = PII_MAP[it.code];
+  if (!p) return '<span class="muted">—</span>';
+  const lv = '<span class="pii ' + p.level.toLowerCase() + '">' + p.level + '</span>';
+  if (p.level !== 'L2' && p.level !== 'L3') return lv + ' <span class="muted" style="font-size:10px">无需脱敏</span>';
+  if (it.exempt) return lv + ' <span class="exempt">豁免已留痕</span>';
+  if (p.mask)   return lv + ' <span class="maskok">mask_rule=' + p.mask + '</span>';
+  return lv + ' <button class="btn btn-sm btn-danger" style="height:20px;padding:0 7px;font-size:10.5px"'
+    + ' onclick="event.stopPropagation();markExempt(\'' + it.code + '\')">未覆盖·申请豁免</button>';
+}
+
+function markExempt(code){
+  const it = state.items.find(x=>x.code===code);
+  if (it){ it.exempt = true; renderReview(); }
+  toast('已写入 <code>gate_json.exemptions[]</code>（豁免必留痕）：' + code, 'ok');
+  recheckGate();
+}
+let ontVersion = 3;   // 与发布动作联动，避免底部 Agent 返回体与页头版本自相矛盾
+
+function confHtml(c){
+  const cls = c>=0.85?'hi':c>=0.65?'mid':'lo';
+  return '<span class="conf '+cls+'"><span class="bar"><i style="width:'+Math.round(c*100)+'%"></i></span>'+c.toFixed(2)+'</span>';
+}
+function statusBadge(s){
+  if(s==='accepted') return '<span class="badge b-ok b-sm">accepted</span>';
+  if(s==='rejected') return '<span class="badge b-err b-sm">rejected</span>';
+  return '<span class="badge b-warn b-sm">suggested</span>';
+}
+
+/* SOURCE 单元格：把 §5.7 三层防线的状态变成可看见的文本
+   origin=rule → 结构表写 rule；
+   origin=llm 且经「采纳」→ 防线② 改写为 human；
+   origin=llm 且被「直改 DB」绕过采纳 → 仍是 llm_draft → 防线③ 应当阻断发布 */
+function srcHtml(it){
+  if (it.origin !== 'llm')
+    return '<span class="tag-rule">rule</span> <span class="muted" style="font-size:10.5px">规则通道自动产出</span>';
+  if (it.status !== 'accepted')
+    return '<span class="tag-llm">llm_draft</span> <span class="muted" style="font-size:10.5px">待人审 · 采纳后改写为 human</span>';
+  if (it.source === 'llm_draft')
+    return '<span class="tag-llm">llm_draft</span> <span class="pill-warn">未经采纳改写·将被门禁阻断</span>';
+  return '<span class="tag-rule">human</span> <span class="muted" style="font-size:10.5px">防线②：采纳时由 llm_draft 改写</span>';
+}
+
+function visibleItems(){
+  const q = state.q.trim().toLowerCase();
+  return state.items.filter(it=>
+    (state.kind==='all' || it.kind===state.kind) &&
+    (state.origin==='all' || it.origin===state.origin) &&
+    (!q || it.code.toLowerCase().includes(q) || it.name.toLowerCase().includes(q) || it.def.toLowerCase().includes(q))
+  );
+}
+
+function renderReview(){
+  const body = document.getElementById('reviewBody');
+  const rows = visibleItems();
+  if(!rows.length){
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--text-3)">'
+      + '当前筛选下没有待审元素</td></tr>';
+  } else {
+    body.innerHTML = rows.map(it=>{
+      const open = state.open.has(it.id);
+      const detail = open ? `
+        <tr class="detail-row"><td colspan="9" class="detail-cell"><div class="dt">
+          <div><div class="dt-k">CODE</div><div class="dt-v"><code>${it.code}</code></div></div>
+          <div><div class="dt-k">建议定义</div><div class="dt-v">${it.def}</div></div>
+          <div><div class="dt-k">映射 / 归属</div><div class="dt-v"><code>${it.mapping}</code></div></div>
+          <div><div class="dt-k">SOURCE</div><div class="dt-v">${srcHtml(it)}</div></div>
+          <div class="evi">
+            <div class="dt-k" style="margin-bottom:2px">证据链 meta_ontology_evidence</div>
+            ${it.evi.map(e=>`<div class="evi-row"><span class="ek">${e[0]}</span><span class="ed">${e[1]}</span><span class="mono">${e[2]}</span></div>`).join('')}
+          </div>
+          <div style="grid-column:1/-1;display:flex;gap:7px;padding-top:4px">
+            ${it.status==='suggested'
+              ? `<button class="btn btn-sm btn-primary" onclick="act('${it.id}','accepted')">采纳</button>
+                 <button class="btn btn-sm btn-danger" onclick="act('${it.id}','rejected')">驳回</button>`
+              : `<span class="badge b-ok b-sm">已完成人审</span>
+                 <span class="hint">review_status 已锁定，如需改判走 PATCH 接口开新审计</span>`}
+            <button class="btn btn-sm">编辑定义</button>
+            ${it.ai?'<button class="btn btn-sm" onclick="adoptAi(\''+it.id+'\')">采纳 AI 建议</button>':''}
+            ${it.origin==='llm' && it.status==='suggested'
+              ? `<button class="btn btn-sm" style="border-style:dashed"
+                   onclick="event.stopPropagation();simulateBypass('${it.id}')"
+                   title="验证 §5.7 防线③：不经过采纳动作直改 review_status">直改 DB 置 accepted（跳过防线②）</button>`
+              : ''}
+          </div>
+        </div></td></tr>` : '';
+
+      return `
+      <tr class="rv-row ${state.sel.has(it.id)?'sel':''}" data-id="${it.id}">
+        <td><input type="checkbox" class="ck" data-id="${it.id}" ${state.sel.has(it.id)?'checked':''}></td>
+        <td><span class="badge b-idle b-sm">${KIND_LABEL[it.kind]}</span></td>
+        <td>
+          <div style="display:flex;align-items:flex-start;gap:6px">
+            <span style="cursor:pointer;color:var(--text-3);font-size:10px;line-height:1.9;user-select:none"
+                  onclick="toggleOpen('${it.id}')">${open?'▾':'▸'}</span>
+            <div style="min-width:0">
+              <div style="font-weight:500">${it.name}</div>
+              <div class="mono muted" style="font-size:10.5px;word-break:break-all">${it.code}</div>
+            </div>
+          </div>
+        </td>
+        <td style="font-size:11.5px;color:var(--text-2);max-width:300px">${it.def}</td>
+        <td>${it.origin==='llm'
+          ? '<span class="muted" style="font-size:10.5px">规则未命中</span>'
+          : confHtml(it.conf)}</td>
+        <td>${it.ai
+          ? '<div style="font-size:11px;line-height:1.5"><span class="badge b-ai b-sm">AI</span> '+it.ai.t
+            +'<div class="mono muted" style="font-size:10px;margin-top:2px">建议置信度 '+it.ai.c.toFixed(2)+' · 不参与 review_status</div></div>'
+          : '<span class="muted">—</span>'}</td>
+        <td class="mono" style="font-size:10.5px;color:var(--text-2)">${it.mapping}</td>
+        <td>${piiCell(it)}</td>
+        <td>${statusBadge(it.status)}</td>
+      </tr>${detail}`;
+    }).join('');
+  }
+
+  body.querySelectorAll('.ck').forEach(ck=>{
+    ck.onchange = ()=>{
+      const id = ck.dataset.id;
+      ck.checked ? state.sel.add(id) : state.sel.delete(id);
+      renderReview();
+    };
+  });
+  updateSelInfo();
+}
+
+function toggleOpen(id){
+  state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+  renderReview();
+}
+function updateSelInfo(){
+  document.getElementById('selInfo').textContent = '已选 ' + state.sel.size + ' 条';
+  const pending = state.items.filter(x=>x.status==='suggested').length;
+  document.getElementById('reviewCount').textContent = pending + ' 条待审';
+  const tabCnt = document.querySelector('.tab[data-t="review"] .cnt');
+  tabCnt.textContent = pending;
+  tabCnt.classList.toggle('alert', pending>0);
+  const ps = document.querySelector('#pipeBar .pstep:nth-child(3)');
+  if (ps) ps.querySelector('.pd').textContent = pending + ' 待审';
+  /* 来源徽记计数（§5.7：两路丢弃率/重叠率需分开统计） */
+  const cr = document.getElementById('cntRule');
+  const cl = document.getElementById('cntLlm');
+  if (cr) cr.textContent = state.items.filter(x=>x.origin==='rule').length;
+  if (cl) cl.textContent = state.items.filter(x=>x.origin==='llm').length;
+  /* 类型计数随 build 档入队同步，避免 chips 静态数字与实际不一致 */
+  document.querySelectorAll('#kindSeg button').forEach(b=>{
+    const sp = b.querySelector('.muted');
+    if (!sp) return;
+    sp.textContent = b.dataset.k==='all' ? state.items.length
+      : state.items.filter(x=>x.kind===b.dataset.k).length;
+  });
+  recheckGate();
+}
+
+/* 防线②：LLM 候选被人工采纳时，写入结构表的 source 必须改写为 human */
+function applyVerdict(it, status){
+  it.status = status;
+  if (it.origin === 'llm' && status === 'accepted') it.source = 'human';
+  if (status === 'suggested' && it.origin === 'llm') it.source = 'llm_draft';
+}
+
+function act(id, status){
+  const it = state.items.find(x=>x.id===id);
+  if (!it || it.status === status) return;   // 幂等：已出结论的行不重复触发重渲染
+  applyVerdict(it, status);
+  state.sel.delete(id);
+  renderReview();
+  if (it.origin === 'llm' && status === 'accepted'){
+    toast('防线② 已触发：<code>source: llm_draft → human</code>，该元素现在可以进入发布快照', 'ok', 4600);
+  }
+}
+
+/* 验证防线③：不经过任何服务层动作，假设有人直改 DB 把 review_status 拉成 accepted */
+function simulateBypass(id){
+  const it = state.items.find(x=>x.id===id);
+  if (!it) return;
+  it.status = 'accepted';
+  it.source = 'llm_draft';          // 没有走采纳分支，所以 source 不会被改写
+  renderReview();
+  toast('已模拟直改 DB：<code>review_status=accepted</code> 但 <code>source</code> 仍为 <code>llm_draft</code>。'
+    + '此时无论是否勾选 override，发布都应被 <code>PUBLISH_BLOCKED_UNREVIEWED_SOURCE</code> 阻断（防线③）', 'err', 7200);
+}
+function adoptAi(id){
+  const it = state.items.find(x=>x.id===id);
+  if(!it) return;
+  it.ai.adopted = true;
+  alert('已采纳 AI 建议 → 回写 display_name / definition。\n\n'
+    + '落地方式：meta_ontology_semantic.status = accepted，记录 adopted_by；\n'
+    + '结构表仍由人工采纳动作触发更新，source 保持 rule。');
+  renderReview();
+}
+function bulkAct(status){
+  if(!state.sel.size){ alert('请先勾选条目'); return; }
+  let llmRewritten = 0;
+  state.items.forEach(it=>{ if(state.sel.has(it.id)){ const wasLlm = (it.origin==='llm'); applyVerdict(it, status); if(wasLlm && status==='accepted') llmRewritten++; } });
+  const n = state.sel.size;
+  state.sel.clear();
+  const ckAll = document.getElementById('ckAll');
+  if(ckAll) ckAll.checked = false;
+  renderReview();
+  if (llmRewritten) toast('防线② 已触发：本批 <b>' + llmRewritten + '</b> 条 LLM 候选的 <code>source: llm_draft → human</code>，这些元素现在可以进入发布快照', 'ok', 4600);
+  console.log('POST /ontologies/{id}/review', {items:[], accept_all:false, rejected:n});
+}
+document.getElementById('btnAccept').onclick = ()=>bulkAct('accepted');
+document.getElementById('btnReject').onclick = ()=>bulkAct('rejected');
+document.getElementById('ckAll').onchange = e=>{
+  const rows = visibleItems();
+  state.sel.clear();
+  if(e.target.checked) rows.forEach(it=>state.sel.add(it.id));
+  renderReview();
+};
+document.querySelectorAll('#kindSeg button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#kindSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.kind = b.dataset.k;
+    renderReview();
+  };
+});
+document.querySelectorAll('#originSeg button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#originSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.origin = b.dataset.o;
+    renderReview();
+  };
+});
+document.getElementById('rvSearch').oninput = e=>{ state.q = e.target.value; renderReview(); };
+
+function toggleDegraded(){
+  const b = document.getElementById('degradeBanner');
+  b.style.display = b.style.display==='none' ? 'flex' : 'none';
+}
+
+/* ── 构建模拟 ── */
+const PHASES = ['extract','align','judge','merge','done'];
+const LOG_SCRIPT = [
+  [0.02,'i','收到任务 <code>#143</code> · mode=rules+semantic · scope=crm/sales(6 表)'],
+  [0.06,'i','幂等键未命中，创建新任务；worker 已领取'],
+  [0.12,'i','phase=extract · 剥离域前缀 sales_ → 归一 code'],
+  [0.20,'i','表 <code>customer</code> → 对象 <code>obj_customer</code> · 12 列 → 属性'],
+  [0.28,'w','表 <code>region</code> 仅 4 行且无外键 → 对象置信度降级 0.66'],
+  [0.34,'i','phase=align · 别名合并 3 组 · parent 校验通过'],
+  [0.42,'i','phase=judge · 8 类机械校验 · 结构完整性 0 异常'],
+  [0.48,'w','overlap 票缺省（采样接口超时）→ 记为缺省票，不按 0 处理'],
+  [0.56,'i','phase=merge · batch 3/5 · SAVEPOINT 内 upsert'],
+  [0.64,'i','对象 <code>obj_order_item</code> → action=insert · confidence 0.72'],
+  [0.70,'d','语义补全：3 条 AI 建议写入 <code>meta_ontology_semantic</code>（status=suggested）'],
+  [0.78,'i','phase=merge · batch 5/5 · 映射 upsert 12 条（按 code 幂等）'],
+  [0.86,'i','已 accepted 元素判定 action=skip → 不覆盖人工结论'],
+  [0.93,'i','stats: obj 4 新建 / 2 更新 · 属性 38 · 关系 5 · 映射 12'],
+  [1.00,'d','status=succeeded · phase=done · duration 8.4s · degraded=false']
+];
+let buildTimer = null;
+
+function logLine(ts, lv, msg){
+  const box = document.getElementById('logBox');
+  const d = document.createElement('div');
+  d.className = 'logline';
+  d.innerHTML = '<span class="ts">'+ts+'</span><span class="lv '+lv+'">'+lv.toUpperCase()+'</span><span class="ms">'+msg+'</span>';
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('logCount').textContent = (box.querySelectorAll('.logline').length-0) + ' events';
+}
+
+function setPhase(name){
+  document.querySelectorAll('#buildProgress .ph').forEach(ph=>{
+    const i = PHASES.indexOf(ph.dataset.p);
+    const c = PHASES.indexOf(name);
+    ph.className = 'ph ' + (i<c ? 'done' : i===c ? 'active' : 'queued');
+  });
+}
+
+function startBuild(){
+  if(buildTimer) return;
+  const btn = document.getElementById('btnBuild');
+  btn.disabled = true;
+  document.getElementById('btnCancel').disabled = false;
+  document.getElementById('buildProgress').style.display = 'block';
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('logCount').textContent = '0 events';
+  document.getElementById('jobState').className = 'badge b-run b-sm';
+  document.getElementById('jobState').innerHTML = '<span class="pulse"></span>running';
+
+  let idx = 0;
+  const t0 = Date.now();
+  buildTimer = setInterval(()=>{
+    const now = Date.now();
+    const ts = new Date(now).toTimeString().slice(0,8);
+
+    if(idx < LOG_SCRIPT.length && LOG_SCRIPT[idx][0] <= (now-t0)/9200){
+      const [p, lv, msg] = LOG_SCRIPT[idx++];
+      const phase = PHASES[Math.min(PHASES.length-1, Math.floor(p*5))];
+      setPhase(phase);
+      document.getElementById('progBar').style.width = (p*100)+'%';
+      document.getElementById('progTxt').textContent = 'progress ' + p.toFixed(2) + ' · phase ' + phase;
+      logLine(ts, lv, msg);
+    }
+
+    if(idx >= LOG_SCRIPT.length && (now-t0) > 9300){
+      clearInterval(buildTimer); buildTimer = null;
+      setPhase('done');
+      document.getElementById('jobState').className = 'badge b-ok b-sm';
+      document.getElementById('jobState').textContent = 'succeeded';
+      document.getElementById('btnBuild').disabled = false;
+      document.getElementById('btnCancel').disabled = true;
+      document.getElementById('buildHint').innerHTML =
+        '<b style="color:#389e0d">构建完成</b> · 12 条新候选进入审阅队列 · '
+        + '<a href="javascript:go(\'review\')" style="color:var(--primary)">前往审阅 →</a>';
+
+      // 任务列表与页签计数同步
+      document.querySelectorAll('.view[data-v="build"] tbody tr').forEach(tr=>{
+        if(tr.children[0] && tr.children[0].textContent.trim()==='#143'){
+          tr.children[1].textContent = 'done · 8.4s';
+          tr.children[2].innerHTML = '<span class="badge b-ok b-sm">succeeded</span>';
+        }
+      });
+      const bcnt = document.querySelector('.tab[data-t="build"] .cnt');
+      if(bcnt) bcnt.textContent = '4';
+    }
+  }, 220);
+}
+
+document.getElementById('btnBuild').onclick = startBuild;
+document.getElementById('btnCancel').onclick = ()=>{
+  if(!buildTimer) return;
+  clearInterval(buildTimer); buildTimer = null;
+  const ts = new Date().toTimeString().slice(0,8);
+  logLine(ts,'w','用户取消 → status=cancelled（协作式检查点，1 个 batch 内生效）');
+  document.getElementById('jobState').className = 'badge b-idle b-sm';
+  document.getElementById('jobState').textContent = 'cancelled';
+  document.getElementById('btnBuild').disabled = false;
+  document.getElementById('btnCancel').disabled = true;
+};
+document.querySelectorAll('#modeSeg button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('buildHint').textContent =
+      b.dataset.m==='rules'
+        ? 'rules only：不调用 LLM，结构质量完全由规则决定'
+        : '同 scope 当日重复构建将命中幂等，复用首个任务';
+  };
+});
+
+/* ── 图谱 ── */
+const NODES = [
+  { code:'obj_customer', name:'客户', x:175, y:170, st:'accepted', conf:0.92, tables:['crm.customer','dwd.dim_customer'],
+    props:[['customer_id','bigint','PK'],['customer_name','varchar',''],['mobile','varchar','PII'],['customer_level','varchar',''],['region_code','varchar','']],
+    ai:null },
+  { code:'obj_order', name:'订单', x:440, y:92, st:'accepted', conf:0.90, tables:['crm.sales_order'],
+    props:[['order_id','bigint','PK'],['customer_id','bigint',''],['order_date','date',''],['total_amount','decimal',''],['promotion_code','varchar','']],
+    ai:null },
+  { code:'obj_order_item', name:'订单明细', x:440, y:300, st:'suggested', conf:0.72, tables:['crm.sales_order_item'],
+    props:[['order_id','bigint','PK'],['item_id','bigint','PK'],['product_id','bigint',''],['qty','int',''],['unit_price','decimal','']],
+    ai:{t:'建议命名「订单行项目」，并显式声明与订单的 1:N 组成关系', c:0.81} },
+  { code:'obj_product', name:'产品', x:705, y:92, st:'accepted', conf:0.88, tables:['crm.product'],
+    props:[['product_id','bigint','PK'],['product_name','varchar',''],['unit_price','decimal',''],['category_code','varchar','']],
+    ai:null },
+  { code:'obj_region', name:'区域', x:175, y:352, st:'suggested', conf:0.66, tables:['crm.region'],
+    props:[['region_code','varchar','PK'],['region_name','varchar',''],['parent_code','varchar','']],
+    ai:{t:'⚠ 疑似维表（仅 4 行）· 可考虑降为「客户.区域」枚举属性', c:0.74} },
+  { code:'obj_payment', name:'回款', x:705, y:300, st:'rejected', conf:0.41, tables:[],
+    props:[['payment_id','bigint','PK'],['order_id','bigint',''],['amount','decimal',''],['paid_at','datetime','']],
+    ai:null }
+];
+
+const EDGES = [
+  { from:'obj_order', to:'obj_customer', rel:'rel_order_of_customer', card:'N:1', st:'accepted', conf:0.89 },
+  { from:'obj_order_item', to:'obj_order', rel:'rel_item_of_order', card:'N:1', st:'accepted', conf:0.86 },
+  { from:'obj_order_item', to:'obj_product', rel:'rel_product_of_item', card:'N:1', st:'suggested', conf:0.71 },
+  { from:'obj_customer', to:'obj_region', rel:'rel_region_of_customer', card:'N:1', st:'suggested', conf:0.66 },
+  { from:'obj_payment', to:'obj_order', rel:'rel_payment_of_order', card:'N:1', st:'rejected', conf:0.41 }
+];
+
+const NODE_W = 146, NODE_H = 54;
+let selNode = 'obj_customer';
+let gView = 'workflow';   // §6.6 双视图：workflow | architecture（共用同一份 nodes/edges）
+
+function nodeByCode(c){ return NODES.find(n=>n.code===c); }
+
+/* 双视图切换（AF-12 轻量等价物：仅布局与过滤条件不同，不新建第二套图组件） */
+function setView(v){
+  gView = v;
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  document.getElementById('viewHint').textContent = '?view=' + v;
+  const b1 = document.getElementById('legendSug'), b2 = document.getElementById('legendRej');
+  if(b1) b1.style.display = v==='workflow' ? '' : 'none';
+  if(b2) b2.style.display = v==='workflow' ? '' : 'none';
+  renderGraph();
+  toast(v==='workflow'
+    ? '<code>view=workflow</code>：含 suggested/rejected 与源表→对象连线，回答“数据怎么走到对象”'
+    : '<code>view=architecture</code>：只留 <code>review_status=accepted</code>，回答“本体本身长什么样”', 'ok', 3200);
+}
+
+function pipeGoto(v){ go(v); }
+
+function clearScope(){
+  const tb = document.querySelector('#scopeTable tbody');
+  tb.innerHTML = '';
+  document.getElementById('scopeCnt').outerHTML = '<span class="badge b-warn b-sm" id="scopeCnt">0 表</span>';
+  document.getElementById('scopeEmpty').style.display = '';
+  document.getElementById('btnBuild').disabled = true;
+  toast('已清空作用域草稿：<code>DELETE /ontologies/{id}/draft-scope</code>；此时启动返回 <code>BUILD_SCOPE_EMPTY</code>', 'err');
+}
+
+function setScopeMode(m){
+  document.querySelectorAll('#scopeMode button').forEach(b=>b.classList.toggle('on', b.dataset.sm===m));
+  const hint = {
+    tables:'mode=tables · 直接携带表名清单（来自资产目录勾选）',
+    tags:'mode=tags · 先解析 <code>meta_asset_tag_binding</code> 为 tables[] 再生成幂等键',
+    catalog:'mode=catalog · 按 <code>meta_standard_catalog</code> 子树展开，= AF-19 选择性发布的前置',
+  }[m];
+  document.getElementById('scopeModeHint').innerHTML = hint;
+}
+
+function renderGraph(){
+  const svg = document.getElementById('graphSvg');
+  const parts = [];
+  const arch = gView === 'architecture';
+  const shown = NODES.filter(n=>!arch || n.st==='accepted');
+  const shownCodes = new Set(shown.map(n=>n.code));
+
+  // ① 源表 → 对象 连线（仅 workflow）
+  if(!arch){
+    shown.forEach(n=>{
+      if(!n.tables || !n.tables.length) return;
+      const px = n.x, py = n.y - 45;
+      const w = Math.min(158, 30 + n.tables[0].length*4.6);
+      parts.push(`
+        <g>
+          <line x1="${px}" y1="${py+9}" x2="${px}" y2="${n.y-NODE_H/2}" stroke="#c8cdd6" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <rect x="${px-w/2}" y="${py-9}" width="${w}" height="18" rx="4" fill="#f5f6f8" stroke="#d8dce3"/>
+          <text class="glabel-s" x="${px}" y="${py+4}" text-anchor="middle">${n.tables[0]}</text>
+        </g>`);
+    });
+  }
+
+  // ② 边
+  EDGES.forEach(e=>{
+    if(arch && e.st!=='accepted') return;
+    const a = nodeByCode(e.from), b = nodeByCode(e.to);
+    if(!a || !b || !shownCodes.has(e.from) || !shownCodes.has(e.to)) return;
+    const color = e.st==='accepted' ? '#3371fc' : e.st==='suggested' ? '#faad14' : '#ff4d4f';
+    const dash = e.st==='accepted' ? '' : 'stroke-dasharray="6 5"';
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    parts.push(`
+      <g class="gedge">
+        <line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
+              stroke="${color}" stroke-width="${e.st==='accepted'?1.9:1.5}"
+              ${dash} opacity="${e.st==='rejected'?0.72:0.95}"/>
+        <rect x="${mx-38}" y="${my-9}" width="76" height="17" rx="4"
+              fill="#fff" stroke="${color}" stroke-opacity=".38"/>
+        <text class="elabel" x="${mx}" y="${my+3}" text-anchor="middle">${e.card} · ${e.conf.toFixed(2)}</text>
+      </g>`);
+  });
+
+  // ③ 汇聚节点（仅 workflow）
+  if(!arch){
+    const mx = 878, my = 196;
+    NODES.filter(n=>n.st==='accepted').forEach(n=>{
+      parts.push(`<line x1="${n.x+NODE_W/2}" y1="${n.y}" x2="${mx-52}" y2="${my}" stroke="#d0d5dd" stroke-width="1.1" stroke-dasharray="4 4"/>`);
+    });
+    parts.push(`
+      <g>
+        <rect x="${mx-52}" y="${my-22}" width="104" height="44" rx="9" fill="#f2f3f5" stroke="#c8cdd6" stroke-dasharray="5 4"/>
+        <text class="glabel-t" x="${mx}" y="${my-2}" text-anchor="middle">本体库</text>
+        <text class="glabel-s" x="${mx}" y="${my+13}" text-anchor="middle">current_version=${ontVersion}</text>
+      </g>`);
+  }
+
+  // ④ 节点
+  shown.forEach(n=>{
+    const x = n.x-NODE_W/2, y = n.y-NODE_H/2;
+    const fill = n.st==='accepted' ? '#eef4ff' : n.st==='suggested' ? '#fffbe6' : '#fff2f0';
+    const stroke = n.st==='accepted' ? '#3371fc' : n.st==='suggested' ? '#faad14' : '#ff4d4f';
+    const dash = n.st==='accepted' ? '' : 'stroke-dasharray="5 4"';
+    const sel = n.code===selNode;
+    parts.push(`
+      <g class="gn ${sel?'sel':''}" onclick="pick('${n.code}')">
+        <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="9"
+              fill="${fill}" stroke="${stroke}" stroke-width="${sel?2.6:1.5}" ${dash}
+              ${sel?'filter="drop-shadow(0 3px 8px rgba(51,113,252,.22))"':''}/>
+        <text class="glabel-t" x="${n.x}" y="${n.y-3}" text-anchor="middle">${n.name}</text>
+        <text class="glabel-s" x="${n.x}" y="${n.y+12}" text-anchor="middle">${n.code}</text>
+        <text class="gnum" x="${x+9}" y="${y+16}">${n.conf.toFixed(2)}</text>
+        <circle cx="${x+NODE_W-12}" cy="${y+12}" r="4"
+                fill="${n.st==='accepted'?'#52c41a':n.st==='suggested'?'#faad14':'#ff4d4f'}"/>
+      </g>`);
+  });
+
+  svg.innerHTML = parts.join('');
+  renderInspector();
+}
+
+function pick(code){ selNode = code; renderGraph(); }
+
+function renderInspector(){
+  const n = nodeByCode(selNode);
+  if(!n) return;
+  document.getElementById('inspName').textContent = n.name;
+  document.getElementById('inspCode').textContent = n.code;
+  const badge = document.getElementById('inspBadge');
+  badge.className = 'badge b-sm ' + (n.st==='accepted'?'b-ok':n.st==='suggested'?'b-warn':'b-err');
+  badge.textContent = n.st;
+
+  const outs = EDGES.filter(e=>e.from===n.code);
+  const ins = EDGES.filter(e=>e.to===n.code);
+  const relRows = outs.concat(ins).map(e=>{
+    const other = e.from===n.code ? e.to : e.from;
+    const dir = e.from===n.code ? '出' : '入';
+    return `<div class="evi-row"><span class="ek">${dir} ${e.card}</span>
+      <span class="ed"><code>${e.rel}</code> → ${other}</span>
+      <span class="mono">${e.conf.toFixed(2)}</span></div>`;
+  }).join('') || '<div class="muted" style="font-size:11px">无关系</div>';
+
+  document.getElementById('inspBody').innerHTML = `
+    <div class="insp-sec">
+      <h4>基本信息</h4>
+      <dl class="kv">
+        <dt>review</dt><dd>${statusBadge(n.st)}</dd>
+        <dt>status</dt><dd>${n.st==='accepted'?'<span class="badge b-ok b-sm">published</span>':'<span class="badge b-idle b-sm">draft</span>'}</dd>
+        <dt>置信度</dt><dd>${confHtml(n.conf)}</dd>
+        <dt>source</dt><dd><span class="tag-rule">rule</span></dd>
+      </dl>
+    </div>
+    <div class="insp-sec">
+      <h4>属性 <span class="muted" style="font-weight:400">${n.props.length} 条</span></h4>
+      <div class="pill-list">${n.props.map(p=>
+        `<span class="pill ${p[2]==='PII'?'pii':p[2]==='PK'?'pk':''}">${p[0]}</span>`).join('')}</div>
+    </div>
+    <div class="insp-sec">
+      <h4>映射 <span class="muted" style="font-weight:400">表→对象</span></h4>
+      ${n.tables.length
+        ? n.tables.map(t=>`<div class="evi-row" style="margin-bottom:4px"><span class="ek">table</span><span class="ed mono">${t}</span></div>`).join('')
+        : '<div class="muted" style="font-size:11px">无表绑定 —— 发布门禁「无回归」将标记为 regression</div>'}
+    </div>
+    <div class="insp-sec">
+      <h4>关系 <span class="muted" style="font-weight:400">${outs.length+ins.length} 条</span></h4>
+      <div class="evi">${relRows}</div>
+    </div>
+    ${n.ai?`<div class="insp-sec">
+      <h4>AI 语义建议</h4>
+      <div style="padding:8px 10px;background:var(--purple-bg);border:1px solid var(--purple-br);
+                  border-radius:var(--r-sm);font-size:11.5px;line-height:1.6">
+        ${n.ai.t}
+        <div class="mono muted" style="font-size:10px;margin-top:4px">建议置信度 ${n.ai.c.toFixed(2)} · 采纳后回写，source 仍为 rule</div>
+      </div>
+    </div>`:''}
+  `;
+}
+
+/* ── 发布门禁（5 项 · §4.5）──
+   gate1 无未决候选、gate5 敏感列脱敏覆盖为动态项；
+   gate2 结构完整性 / gate3 无回归(warn 不阻断) / gate4 CQ 覆盖度 在本原型中恒为通过。
+   关键约束：gate5 不参与 override —— 勾选「忽略待审」只放宽 gate1。 */
+const gate = { g1:false, g5:false, gsrc:true, published:false };
+
+document.getElementById('ckOverride').onchange = ()=>recheckGate();
+
+document.getElementById('btnPublish').onclick = ()=>{
+  /* 防线③：附加强断言先跑，不参与 override */
+  const bad = state.items.filter(x=>x.origin==='llm' && x.status==='accepted' && x.source==='llm_draft');
+  if (bad.length){
+    toast('发布被拒：快照含 <code>source=llm_draft</code> 的元素（' + bad.map(b=>'<code>'+b.code+'</code>').join(' ')
+      + '）· 错误码 <code>PUBLISH_BLOCKED_UNREVIEWED_SOURCE</code>，不可 override', 'err', 8000);
+    recheckGate();
+    return;
+  }
+  const banner = document.getElementById('gateBanner');
+  banner.className = 'banner bn-ok';
+  banner.innerHTML = '<i>✓</i><div><b>发布成功 · v' + (ontVersion + 1) + '</b>　'
+    + '<code>meta_ontology_version</code> 已写入快照（7 对象 / 33 属性 / 6 关系 / 12 映射），'
+    + '元素 <code>status</code> 升为 <code>published</code>，<code>current_version</code> '
+    + ontVersion + ' → ' + (ontVersion + 1) + '。快照写入先于指针变更。</div>';
+
+  const pending = state.items.filter(x=>x.status==='suggested').length;
+  const first = document.querySelector('#gateList .gate-item');
+  if (pending > 0){
+    first.className = 'gate-item warn';
+    first.querySelector('.gi-ic').textContent = '!';
+    first.querySelector('.gi-t').innerHTML = '<span>无未决候选</span><span class="mono" style="font-size:11px">override</span>';
+    first.querySelector('.gi-d').innerHTML = '已显式忽略 <code>' + pending + '</code> 条待审，仅发布已采纳元素；该动作写入 <code>gate_json.override</code>';
+  }
+  const g5 = document.getElementById('gate5');
+  g5.className = 'gate-item pass';
+  g5.querySelector('.gi-ic').textContent = '✓';
+  document.getElementById('gate5Cnt').textContent = '0 列未覆盖';
+
+  gate.published = true;
+  document.getElementById('gateSummary').className = 'badge b-ok b-sm';
+  document.getElementById('gateSummary').textContent = '5 / 5 通过' + (pending > 0 ? '（含 override）' : '');
+  document.getElementById('publishHint').innerHTML =
+    '已发布 —— 门禁 5 独立记录 <code class="mono" style="font-size:10.5px">mask_coverage: passed</code>，豁免列写入 <code class="mono" style="font-size:10.5px">gate_json.exemptions[]</code> 供审计';
+  document.getElementById('btnPublish').disabled = true;
+  document.getElementById('ckOverride').disabled = true;
+  toast('发布成功 · <code>current_version</code> ' + ontVersion + ' → ' + (ontVersion+1) + '；发布门禁 <b>5 / 5</b>', 'ok');
+  go('version');
+
+  const tl = document.querySelector('.tl');
+
+  // 先清理旧版本的 current 标记（class + 徽标文本），避免双 current
+  tl.querySelectorAll('.tl-item').forEach(it=>{
+    it.classList.remove('cur');
+    const b = it.querySelector('.tl-head .badge');
+    if(b && b.textContent.trim()==='current'){
+      b.className = 'badge b-idle b-sm';
+      b.textContent = '历史';
+    }
+  });
+
+  const nextV = ontVersion + 1;
+  const node = document.createElement('div');
+  node.className = 'tl-item cur';
+  node.innerHTML = `<div class="tl-dot"></div>
+    <div class="tl-head"><span class="tl-ver">v${nextV}</span>
+      <span class="badge b-ok b-sm">current</span>
+      <span class="tl-time">刚刚</span></div>
+    <div class="tl-note">${document.getElementById('chgNote').value || '（无变更说明）'}</div>
+    <div class="tl-diff"><span class="df add">+2 对象</span><span class="df add">+1 属性</span>
+      <span class="df chg">~1 关系</span><span class="df del">−1 关系</span></div>
+    <div class="hint" style="margin-top:5px">${pending > 0
+      ? 'gate: override · ' + pending + ' 条待审被跳过'
+      : 'gate: passed · 五项门禁均通过'}</div>`;
+  tl.insertBefore(node, tl.firstChild);
+
+  // 全局版本号联动：副标题 / 右上按钮 / 页签计数 / 侧栏元信息 / 标题徽标
+  ontVersion = nextV;
+  document.querySelector('.oh-l h2 .badge').textContent = 'published v' + nextV;
+  document.querySelector('.oh-sub').innerHTML =
+    '<span>code: sales_ontology</span><span>·</span><span>v' + nextV + '</span>'
+    + '<span>·</span><span>urn:mwb:ontology:sales_ontology</span>';
+  const verBtn = document.querySelector('.oh-r .btn');
+  if(verBtn) verBtn.textContent = '版本 v' + nextV + ' ▾';
+  const vcnt = document.querySelector('.tab[data-t="version"] .cnt');
+  if(vcnt) vcnt.textContent = String(nextV);
+  const onCard = document.querySelector('.ont-card.on .oc-meta');
+  if(onCard) onCard.innerHTML = '<i>v</i>' + nextV + ' <i>·</i>9 对象 <i>·</i>' + pending + ' 待审';
+  const pv = document.getElementById('pipeVer');
+  if(pv) pv.textContent = 'v' + nextV + ' · 已发布';
+  renderGraph();
+};
+
+/* ── Agent 工具演练 ── */
+const AGENT_PAYLOADS = {
+  manifest: {
+    input: {ontology_code:'sales_ontology'},
+    out: {
+      ontology_code:'sales_ontology', version:3, stage:'published',
+      objects:[
+        {code:'obj_customer', name:'客户', properties:12},
+        {code:'obj_order', name:'订单', properties:9},
+        {code:'obj_product', name:'产品', properties:7},
+        {code:'obj_order_item', name:'订单明细', properties:5},
+        {code:'obj_region', name:'区域', properties:3}
+      ],
+      relations_count:6, cq_pass_rate:0.8,
+      usage_hint:'先 browse 定位对象 code，再 resolve 取属性与映射；写操作需人工在审阅台完成'
+    }
+  },
+  browse: {
+    input: {ontology_code:'sales_ontology', query:'客户相关的订单'},
+    out: {
+      query:'客户相关的订单', limited:6, total_matched:9,
+      objects:[
+        {code:'obj_customer', name:'客户', score:0.94, reason:'名称命中「客户」'},
+        {code:'obj_order', name:'订单', score:0.93, reason:'名称命中「订单」'}
+      ],
+      relations:[
+        {code:'rel_order_of_customer', from:'obj_order', to:'obj_customer', cardinality:'N:1',
+         confidence:0.89, reason:'匹配「客户相关订单」的关系语义'}
+      ],
+      note:'空 query 将被拒绝（防止全量枚举）；单次最多 6 条，已按 score 截断'
+    }
+  },
+  resolve: {
+    input: {ontology_code:'sales_ontology', codes:['obj_customer','rel_order_of_customer']},
+    out: {
+      objects:[{
+        code:'obj_customer', name:'客户', review_status:'accepted', status:'published',
+        properties:[
+          {code:'customer_id', type:'bigint', pk:true},
+          {code:'customer_name', type:'varchar'},
+          {code:'mobile', type:'varchar', pii:'L3', mask:'middle4'},
+          {code:'customer_level', type:'varchar', enum:['S','A','B','C']},
+          {code:'region_code', type:'varchar'}
+        ],
+        mappings:[{table:'crm.customer', columns:12}, {table:'dwd.dim_customer', columns:11}]
+      }],
+      relations:[{
+        code:'rel_order_of_customer', from:'obj_order', to:'obj_customer',
+        cardinality:'N:1', review_status:'accepted', confidence:0.89,
+        evidence_refs:['ev_9f2','ev_9f3','ev_9f4']
+      }],
+      limits:{max_codes:5, returned:2}
+    }
+  }
+};
+let agentMode = 'manifest';
+
+document.querySelectorAll('#agentSeg button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#agentSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    agentMode = b.dataset.a;
+    document.getElementById('agentInput').value = JSON.stringify(AGENT_PAYLOADS[agentMode].input);
+    document.getElementById('agentLatency').textContent = '—';
+    document.getElementById('agentOut').innerHTML =
+      '<span class="c">// 已切换到 ' + agentMode + '，点击「调用工具」查看返回</span>';
+  };
+});
+
+function hlJson(obj){
+  let s = JSON.stringify(obj, null, 2)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  s = s.replace(/("(?:\\.|[^"\\])*")(\s*:)?/g, (m, str, colon)=>{
+    return colon ? '<span class="k">'+str+'</span>'+colon : '<span class="s">'+str+'</span>';
+  });
+  s = s.replace(/\b(true|false|null)\b/g, '<span class="b">$1</span>');
+  s = s.replace(/(:\s)(-?\d+(?:\.\d+)?)/g, '$1<span class="n">$2</span>');
+  return s;
+}
+
+document.getElementById('btnInvoke').onclick = ()=>{
+  const p = AGENT_PAYLOADS[agentMode];
+  document.getElementById('agentLatency').textContent = '调用中…';
+  document.getElementById('agentOut').innerHTML = '<span class="c">// 请求已发出 POST /ontologies/{id}/semantics/'+agentMode+'</span>';
+  setTimeout(()=>{
+    const out = JSON.parse(JSON.stringify(p.out));
+    if(out.version !== undefined) out.version = ontVersion;
+    document.getElementById('agentOut').innerHTML = hlJson(out);
+    document.getElementById('agentLatency').textContent =
+      '耗时 ' + (18 + Math.floor(Math.random()*22)) + ' ms · 只读 · 未产生审计写';
+  }, 420);
+};
+
+/* ═══════ Toast（统一动作反馈，所有写操作均回显接口）═══════ */
+function toast(html, kind, ms){
+  const box = document.getElementById('toasts');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.innerHTML = html;
+  box.appendChild(el);
+  setTimeout(()=>{
+    el.style.transition = 'opacity .25s';
+    el.style.opacity = '0';
+    setTimeout(()=>el.remove(), 260);
+  }, ms || 4200);
+}
+
+/* ═══════ 发布门禁重算（§4.5 五项）═══════ */
+function maskUncovered(){
+  return Object.keys(PII_MAP).filter(code=>{
+    const p = PII_MAP[code];
+    if (!p || (p.level !== 'L2' && p.level !== 'L3')) return false;
+    if (p.mask) return false;
+    const it = state.items.find(x=>x.code === code);
+    return !(it && it.exempt);
+  });
+}
+
+function recheckGate(){
+  if (gate.published) return;
+  const pending = state.items.filter(x=>x.status === 'suggested').length;
+  gate.g1 = pending === 0;
+  const uncovered = maskUncovered();
+  gate.g5 = uncovered.length === 0;
+  /* 附加强断言（§4.5 / §5.7 防线③）：已采纳但 source 仍为 llm_draft 的元素不得进快照 */
+  const badSrc = state.items.filter(x=>x.origin==='llm' && x.status==='accepted' && x.source==='llm_draft');
+  gate.gsrc = badSrc.length === 0;
+
+  const g1El = document.querySelector('#gateList .gate-item');
+  if (g1El){
+    g1El.className = 'gate-item ' + (gate.g1 ? 'pass' : 'fail');
+    g1El.querySelector('.gi-ic').textContent = gate.g1 ? '✓' : '!';
+    g1El.querySelector('.gi-t').innerHTML = '<span>无未决候选</span>'
+      + '<span class="mono" style="font-size:11px">' + pending + ' / 0</span>';
+  }
+  const g5El = document.getElementById('gate5');
+  if (g5El){
+    g5El.className = 'gate-item ' + (gate.g5 ? 'pass' : 'fail');
+    g5El.querySelector('.gi-ic').textContent = gate.g5 ? '✓' : '!';
+    document.getElementById('gate5Cnt').textContent =
+      gate.g5 ? '0 列未覆盖' : uncovered.length + ' 列未覆盖';
+  }
+
+  const passed = 3 + (gate.g1 ? 1 : 0) + (gate.g5 ? 1 : 0);   // gate2/3/4 在本原型恒过
+  const sum = document.getElementById('gateSummary');
+  /* 附加强断言未过时直接标红：它不参与 override，与可放宽的门禁 1 不同级 */
+  sum.className = 'badge b-sm ' + (!gate.gsrc ? 'b-err' : passed === 5 ? 'b-ok' : 'b-warn');
+  sum.textContent = passed + ' / 5 通过' + (gate.gsrc ? '' : ' · 强断言未过（不可 override）');
+  const ov = document.getElementById('ovPending');
+  if (ov) ov.textContent = pending;   // override 标签的待审数与实际联动
+
+  const ck = document.getElementById('ckOverride');
+  const btn = document.getElementById('btnPublish');
+  const hint = document.getElementById('publishHint');
+
+  const st5 = document.getElementById('gate5State');
+  if (st5){
+    st5.innerHTML = gate.g5
+      ? '<br>✓ <code>mask_coverage: passed</code> —— 所有 L2/L3 列已具备 mask_rule、显式降级或人工豁免之一'
+        + '（豁免列写入 <code>gate_json.exemptions[]</code>）'
+      : '<br>当前未过：' + uncovered.map(c=>'<code>' + c + '</code>').join(' ')
+        + ' · 错误码 <code>PUBLISH_BLOCKED_MASK_COVERAGE</code> —— 请前往审阅队列处理该行红标按钮';
+  }
+  const bn = document.getElementById('gateBanner');
+  if (bn){
+    if (gate.g1 && gate.g5 && gate.gsrc){
+      bn.className = 'banner bn-ok';
+      bn.innerHTML = '<i>✓</i><div><b>五项门禁均通过</b>　可发布 <code>v' + (ontVersion + 1) + '</code>。'
+        + '发布动作先写 <code>meta_ontology_version.snapshot_json</code> 再改 <code>current_version</code> 指针。</div>';
+    } else {
+      const codes = [];
+      if (!gate.gsrc) codes.push('<code>PUBLISH_BLOCKED_UNREVIEWED_SOURCE</code>');
+      if (!gate.g1) codes.push('<code>PUBLISH_BLOCKED_PENDING_REVIEW</code>');
+      if (!gate.g5) codes.push('<code>PUBLISH_BLOCKED_MASK_COVERAGE</code>');
+      const parts = [];
+      if (!gate.gsrc) parts.push('<b>' + badSrc.length + '</b> 个已采纳元素的 <code>source</code> 仍为 <code>llm_draft</code>'
+        + '（' + badSrc.map(b=>'<code>' + b.code + '</code>').join(' ') + '）');
+      if (!gate.g1) parts.push('仍有 <b>' + pending + '</b> 条候选处于 <code>suggested</code>');
+      if (!gate.g5) parts.push('<b>' + uncovered.length + '</b> 列敏感属性无脱敏覆盖（'
+        + uncovered.map(c=>'<code>' + c + '</code>').join(' ') + '）');
+      bn.className = 'banner bn-err';
+      bn.innerHTML = '<i>▲</i><div><b>发布被阻断</b>　' + codes.join(' · ') + ' —— '
+        + parts.join('，且') + '。门禁只拦「发布」不拦「编辑」；<b>override 仅适用于门禁 1</b>，'
+        + '门禁 5 必须实际处理（脱敏 / 降级 / 豁免），'
+        + (gate.gsrc ? '' : '<b>附加强断言（D3 rev.2）也不参与 override</b>，只能回到审阅台走「采纳」让防线② 改写 source。')
+        + '</div>';
+    }
+  }
+  const ok = gate.g5 && gate.gsrc && (gate.g1 || ck.checked);
+  btn.disabled = !ok;
+  if (ok){
+    hint.innerHTML = gate.g1
+      ? '五项门禁全部通过，可直接发布'
+      : '将写入 <code class="mono" style="font-size:10.5px">gate_json.override = {pending_skipped: '
+        + pending + ', by: current_user}</code>，审计可追；<b>override 仅放宽门禁 1</b>';
+  } else {
+    const why = [];
+    if (!gate.gsrc) why.push('附加强断言（' + badSrc.length + ' 个 llm_draft 已采纳元素）');
+    if (!gate.g1 && !ck.checked) why.push('门禁 1（' + pending + ' 条待审）');
+    if (!gate.g5) why.push('门禁 5（' + uncovered.map(c=>'<code>' + c + '</code>').join(' ') + ' 未脱敏）');
+    hint.innerHTML = why.join('、') + ' 未通过 —— 门禁 5 与附加强断言<b>均不可 override</b>，'
+      + '前者需 mask_rule / 降级 / 豁免三者之一，后者需回审阅台走「采纳」';
+  }
+}
+
+/* ═══════ 建模助手 Dock（AF-16、§5.6 四档 intent、§5.7 两步提交）═══════ */
+let dockIntent = 'ask';
+
+const DOCK_REPLY = {
+  ask: () => {
+    const pending = state.items.filter(x=>x.status==='suggested').length;
+    const parts = ['object','property','relation','mapping'].map(k=>state.items.filter(x=>x.kind===k).length);
+    return `<div class="msg a">「当前待审队列有多少候选未采纳？」
+    <b>${pending} / ${state.items.length}</b>（对象 ${parts[0]} / 属性 ${parts[1]} / 关系 ${parts[2]} / 映射 ${parts[3]}）· 数据源：
+    <code>meta_ontology_build_item</code> 按 <code>review_status</code> 分组计数。
+    <div class="w">intent=ask · 只读 · SELECT-only · 耗时 42ms</div></div>`;
+  },
+  explain: () => `<div class="msg a">
+    <code>rel_product_of_item</code> 置信度 <b>0.71</b>，由 3 条证据合成：
+    外键形态 <code>sales_order_item.product_id → product.id</code>（0.85）
+    + 采样 500 行值域重叠率 96.2%（0.96）
+    + 基数不推断只留人工（无票）。落在 <b>0.65~0.85 待审档</b>，因此<b>不自动采纳</b>。
+    <div class="w">intent=explain · 读取 meta_ontology_evidence · 不写回</div></div>`,
+  propose_scope: () => `<div class="msg a">
+    根据“订单-区域分析”意图，建议在当前 6 表基础上补选
+    <code>region</code>（已在）与 <code>sales_channel</code>（MySQL-20260224/sales）。
+    这只是一份<b>作用域草稿建议</b>，不会自动写结构。
+    <div style="margin-top:6px"><button class="btn btn-sm btn-primary"
+      onclick="applyScope()">采纳为作用域草稿</button>
+      <span class="hint" style="margin-left:6px">仅覆盖 draft_scope_json</span></div>
+    <div class="w">intent=propose_scope · 产出物 = 送数 payload，不是本体元素</div></div>`,
+  /* D3 rev.2：build 档只给预览，一行不写 */
+  build: () => {
+    buildPreview = { fp:'sha256:9f3c1a7e…', ts:Date.now(), n:LLM_CANDIDATES.length };
+    return `<div class="msg a">
+      utterance“把 <code>sales_payment</code> 建成付款对象并关联订单”，我草拟了
+      <b>${LLM_CANDIDATES.length}</b> 条候选：
+      <div style="margin:6px 0;padding:7px 9px;border:1px dashed var(--purple-br);border-radius:6px;background:var(--purple-bg);font-size:11.5px;line-height:1.75">
+        ${LLM_CANDIDATES.map(c=>`<div><code>${c.code}</code> · ${c.name}
+          <span class="tag-llm" title="origin=${c.origin}（产出通道）；写入结构表的 source = ${c.source}">llm_draft</span>
+          <span class="muted" style="font-size:10.5px">自评 ${c.ai.c.toFixed(2)}</span></div>`).join('')}
+      </div>
+      这是 <code>commit=false</code> 的<b>预览</b>：一行数据都没写。确认后才会落
+      <code>build_item(origin='llm', status='suggested')</code>。
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary bp" onclick="commitBuild()">确认提交（commit=true）</button>
+        <button class="btn btn-sm bp" onclick="commitStale()">模拟指纹不匹配</button>
+      </div>
+      <div class="w">预览指纹 <code>${buildPreview.fp}</code> · intent=build · 不落结构表、不建 build_job</div></div>`;
+  },
+};
+
+/* build 档预览产物：与规则候选同台进审阅台，origin=llm / source=llm_draft
+   第三条故意重用已有 code 'obj_region'，用于验证 §5.7 代价清单的去重约定 */
+const LLM_CANDIDATES = [
+  { id:'l1', kind:'object', code:'obj_payment', name:'付款 Payment',
+    def:'表 sales_payment 建为付款对象（规则未命中，由 build 档草拟）', conf:0, status:'suggested',
+    mapping:'sales.sales_payment', origin:'llm', source:'llm_draft',
+    ai:{t:'build 档生成 · 模型自评', c:0.71, adopted:false},
+    evi:[['assistant','utterance「把 sales_payment 建成付款对象」','0.71'],
+         ['naming','列名 payment_id / order_id / paid_at 命中命名模式','0.62']] },
+  { id:'l2', kind:'relation', code:'rel_payment_of_order', name:'付款 → 订单',
+    def:'payment 多对一 order（外键 order_id 存在，基数待人工确认）', conf:0, status:'suggested',
+    mapping:'sales_payment.order_id → sales_order.id', origin:'llm', source:'llm_draft',
+    ai:{t:'build 档生成 · 模型自评', c:0.66, adopted:false},
+    evi:[['assistant','utterance 中“关联到订单”','0.66'],
+         ['naming','列名 order_id 疑外键','0.58']] },
+  { id:'l3', kind:'object', code:'obj_region', name:'区域（LLM 变体）',
+    def:'与规则候选同 code，应被判重并丢弃', conf:0, status:'suggested',
+    mapping:'sales.region', origin:'llm', source:'llm_draft',
+    ai:{t:'build 档生成 · 模型自评', c:0.55, adopted:false},
+    evi:[['assistant','utterance 未提及，模型自行补选','0.55']] },
+];
+
+let buildPreview = null;
+
+/* 预览是一次性的：提交或失效后禁用旧按钮，避免重复点击造成「未先走预览」的歧义路径 */
+function invalidatePreview(){
+  document.querySelectorAll('#dockBody .bp:not(:disabled)').forEach(b=>{
+    b.disabled = true;
+    b.classList.remove('btn-primary');
+    b.textContent = '预览已失效（一次性的 commit token）';
+  });
+}
+
+function commitBuild(){
+  if (!buildPreview){
+    toast('<code>commit=true</code> 但未先走预览 → <code>ASSISTANT_BUILD_PREVIEW_STALE</code>，服务端拒写', 'err', 5600);
+    invalidatePreview();
+    return;
+  }
+  const fp = buildPreview.fp;
+  buildPreview = null;                       // 一次性：提交后预览即失效
+  invalidatePreview();
+  let added = 0, duped = 0;
+  LLM_CANDIDATES.forEach(c=>{
+    if (state.items.some(x=>x.kind===c.kind && x.code===c.code)){ duped++; return; }   // 规则优先
+    state.items.push({...c, ai:{...c.ai}, evi:c.evi.slice()});
+    added++;
+  });
+  state.origin = 'llm';                       // 提交后自动只看 LLM 一路，方便对照 source 列
+  go('review');
+  document.querySelectorAll('#originSeg button').forEach(x=>x.classList.toggle('on', x.dataset.o==='llm'));
+  renderReview();
+  toast('<code>POST /assistant {intent:"build", commit:true}</code> → 落 <code>build_item</code> <b>'
+    + added + '</b> 条（指纹 ' + fp + '）'
+    + (duped ? '；<b>' + duped + '</b> 条与规则候选同 code，已按 §5.7 去重（<code>action=skip · duplicated_by_rule</code>）' : '')
+    + '。结构表行数 <b>0</b> 增长', 'ok', 8000);
+}
+
+function commitStale(){
+  buildPreview = null;
+  invalidatePreview();
+  toast('回传的预览指纹与服务端重算不一致 → <code>ASSISTANT_BUILD_PREVIEW_STALE</code>，零写入', 'err', 6000);
+}
+
+function toggleDock(){
+  const d = document.getElementById('dock');
+  const min = d.classList.toggle('min');
+  const mn = document.querySelector('#dock .dk-h .mn');
+  if (mn) mn.textContent = min ? '▸' : '▾';
+}
+
+function setIntent(i){
+  dockIntent = i;
+  document.querySelectorAll('#intentBar .ib').forEach(b=>{
+    b.classList.toggle('on', b.dataset.i === i);
+  });
+  toast('intent → <code>' + i + '</code>（服务端白名单：ask | explain | propose_scope | build'
+    + (i==='build' ? ' · 本档需两步提交，先预览后确认' : '') + '）', 'ok', 3200);
+}
+
+function askDock(){
+  const inp = document.getElementById('dockInput');
+  const q = (inp.value || '').trim();
+  if (!q){ toast('请输入问题', 'err', 2000); return; }
+  const body = document.getElementById('dockBody');
+  const u = document.createElement('div');
+  u.className = 'msg u';
+  u.textContent = q;                       // 只走 textContent，避免 XSS
+  body.appendChild(u);
+  inp.value = '';
+  const a = document.createElement('div');
+  a.className = 'msg a';
+  a.innerHTML = '<span class="muted">思考中…</span>';
+  body.appendChild(a);
+  body.scrollTop = body.scrollHeight;
+  setTimeout(()=>{
+    /* 新的 build 预览到达时，上一次预览的 token 作废（服务端同样只认最新指纹）*/
+    if (dockIntent === 'build') invalidatePreview();
+    a.outerHTML = DOCK_REPLY[dockIntent]();
+    body.scrollTop = body.scrollHeight;
+  }, 460);
+}
+
+function applyScope(){
+  const o = document.getElementById('scopeOrigin');
+  if (o) o.textContent = 'origin: assistant_proposed';
+  go('build');
+  toast('已 <code>PUT /ontologies/7/draft-scope</code>（origin=assistant_proposed，+1 表）；'
+    + '<b>不触发构建</b>，仍需人工点「启动构建」', 'ok', 5200);
+}
+
+/* ═══════ 本体应用登记（AF-17/18、§3.2 meta_ontology_publish）═══════ */
+let pubSeq = 3;
+
+function refreshPubCount(){
+  const on = document.querySelectorAll('#pubList .pubcard:not(.dis)').length;
+  const el = document.getElementById('pubOn');
+  if (el) el.textContent = on + ' 启用';
+}
+
+function togglePub(pid){
+  const card = document.querySelector('#pubList .pubcard[data-pid="' + pid + '"]');
+  if (!card) return;
+  if (card.classList.contains('p2')){
+    toast('MCP 属 <b>P2</b>，<code>POST /publishes</code> 现在会返回 <code>PUBLISH_TARGET_NOT_FOUND</code>', 'err', 5000);
+    return;
+  }
+  const off = card.classList.toggle('dis');
+  const st = card.querySelector('.st');
+  if (st){
+    st.className = 'badge b-sm ' + (off ? 'b-idle' : 'b-ok');
+    st.textContent = off ? 'disabled' : 'enabled';
+  }
+  const btn = card.querySelector('.pc-f button');
+  if (btn) btn.textContent = off ? '启用' : '停用';
+  refreshPubCount();
+  toast('<code>PATCH /ontologies/7/publishes/' + pid + '</code> → status=<b>'
+    + (off ? 'disabled' : 'enabled') + '</b>', off ? '' : 'ok');
+}
+
+function addPublish(){
+  if (pubSeq >= 6){
+    toast('原型上限 6 张登记卡（避免面板无限撑高）', 'err', 3000);
+    return;
+  }
+  pubSeq++;
+  const box = document.getElementById('pubList');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'pubcard';
+  div.dataset.pid = pubSeq;
+  div.innerHTML = `
+    <div class="pc-h">
+      <div class="pc-ic http">HT</div>
+      <div style="min-width:0;flex:1">
+        <div class="pc-n">新增登记 #${pubSeq}</div>
+        <div class="pc-c">target_type=http · code=browse_${pubSeq}</div>
+      </div>
+      <span class="badge b-ok b-sm st">enabled</span>
+    </div>
+    <div class="pc-d">钉在 <b>v${ontVersion}</b>。<code>payload_json</code> 保存端点与参数；
+      新版本发布后本行置 <code>stale=true</code>，<b>不隐式升级</b>。</div>
+    <div class="pc-f">
+      <span class="badge b-idle b-sm">v${ontVersion}</span>
+      <span class="hint">POST /publishes · 201</span>
+      <span class="sp"></span>
+      <button class="btn btn-sm" onclick="togglePub(${pubSeq})">停用</button>
+    </div>`;
+  box.appendChild(div);
+  refreshPubCount();
+  toast('<code>POST /ontologies/7/publishes</code> → 201；唯一约束 '
+    + '<code>(tenant_id, target_type, code)</code>', 'ok', 5000);
+}
+
+/* ── 初始化 ── */
+renderReview();
+renderGraph();
+recheckGate();
+refreshPubCount();
+document.getElementById('agentInput').value = JSON.stringify(AGENT_PAYLOADS.manifest.input);
+</script>
+</body>
+</html>

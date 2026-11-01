@@ -15,14 +15,17 @@ Spec: ``docs/superpowers/specs/2026-10-30-kg-knowledge-base-design.md`` §3.3
 ``suggested``（待评审） → ``active``（已采纳） / ``deprecated``（已废弃）。
 """
 from sqlalchemy import (
-    BigInteger, Column, ForeignKey, Index, String, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Column, Computed, ForeignKey, Index, String, TIMESTAMP,
+    UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import deferred
 
 from pgvector.sqlalchemy import Vector
 
 from app.config import settings
 from app.db.database import Base
+from app.models.kb.kg_vector_types import HalfVector
 from app.models.tenant_mixin import TenantMixin
 
 
@@ -59,6 +62,20 @@ class KgEntity(Base, TenantMixin):
         Vector(settings.EMBEDDING_DIMENSION), nullable=True,
         comment="实体向量（与 kms_segment 同模型同空间，P3 写入）",
     )
+    # 半精度副本（生成列）：2048 维超出 pgvector HNSW 对 vector 的 2000 维上限，
+    # 故用 halfvec(2048) + HNSW 承载 ANN 索引（实测 3.7~5x 加速，召回由
+    # hnsw.ef_search 调节）。生成列由 DB 计算，永不失同步。见 spec §9.2。
+    #
+    # ``deferred(...)``：该列只服务于原生 SQL 的 ANN 查询（``embedding_half <=> ...``），
+    # Python 侧从不读写；deferred 让默认 SELECT 不展开它，即使某个库尚未补上这列
+    # （模型先行、库滞后的常见漂移）也不会让整表查询直接 UndefinedColumn 抛 500。
+    embedding_half = deferred(Column(
+        "embedding_half",
+        HalfVector(settings.EMBEDDING_DIMENSION),
+        Computed("embedding::halfvec", persisted=True),
+        nullable=True,
+        comment="半精度向量副本（生成列，仅供 HNSW ANN 召回）",
+    ))
     status = Column(
         String(16), nullable=False, server_default="suggested",
         comment="状态: suggested|active|deprecated",

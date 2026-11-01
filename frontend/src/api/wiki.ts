@@ -172,32 +172,3 @@ export function convertDocument(file: File) {
     timeout: 60000,
   })
 }
-
-
-
-// ── OWL ──
-
-export function listOwlClasses() {
-  return request.get(`${API_PREFIX}/wiki/owl/classes`)
-}
-
-export function createOwlClass(data: {
-  uri: string
-  label: string
-  comment?: string
-  parent_uris?: string[]
-}) {
-  return request.post(`${API_PREFIX}/wiki/owl/classes`, data)
-}
-
-export function getOwlHierarchy() {
-  return request.get(`${API_PREFIX}/wiki/owl/hierarchy`)
-}
-
-export function getOwlStats() {
-  return request.get(`${API_PREFIX}/wiki/owl/stats`)
-}
-
-export function getArticlesByOwlClass(classUri: string) {
-  return request.get(`${API_PREFIX}/wiki/owl/articles/${encodeURIComponent(classUri)}`)
-}

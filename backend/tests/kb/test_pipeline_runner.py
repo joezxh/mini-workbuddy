@@ -67,6 +67,15 @@ def test_pipeline_applies_clean_operators():
     assert run.steps[1]["step"] == "clean"
 
 
+def test_pipeline_strips_nul_from_parser_output():
+    """PDF 抽取残留的 NUL(0x00)：PG text 不接受 → 解析后无条件剔除。"""
+    run = run_pipeline_from_config("第一段\x00内容\x00".encode("utf-8"), "a.txt")
+    joined = "".join(c.content.text for c in run.chunks)
+    assert "\x00" not in joined
+    assert "第一段内容" in joined
+    assert run.steps[0]["step"] == "parse" and run.steps[0]["nul_removed"] == 2
+
+
 def test_pipeline_same_config_same_chunks_for_dryrun_and_ingest():
     """同一配置两次执行产物一致 → dry-run 预览即真实落库结果。"""
     cfg = {"chunker": {"type": "approx_token", "params": {"chunk_size": 64, "overlap": 8}}}

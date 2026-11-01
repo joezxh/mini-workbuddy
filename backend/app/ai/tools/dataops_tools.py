@@ -10,7 +10,7 @@
 
 租户链路
 --------
-与 ``ontology_tools`` 一致：``call()`` 内自建会话，经 ``get_tool_user()`` 解析
+与其它内置工具一致：``call()`` 内自建会话，经 ``get_tool_user()`` 解析
 ``tenant_id``；取不到租户的调用返回 ``tenant_required`` 错误，**绝不落到 NULL 分区**。
 """
 from __future__ import annotations

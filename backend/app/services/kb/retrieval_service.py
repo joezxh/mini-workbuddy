@@ -51,7 +51,7 @@ class KbRetrievalService:
         """文本检索：向量化查询后做余弦相似检索。
 
         :param class_uris: 本体类过滤（P4.3）；应传「后代扩展后」的 URI 列表
-            （见 ``app.services.ontology.search_filter.expand_with_descendants``）
+            （见 ``app.services.semantica.retrieval_service``）
         :param media_kind: 媒体类型过滤（spec §7）；None 不过滤
         """
         vectors = self._embed_fn([query_text])

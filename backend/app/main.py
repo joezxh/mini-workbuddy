@@ -126,6 +126,14 @@ async def lifespan(app: FastAPI):
         except Exception as _idx_err:
             logger.warning(f"性能索引创建失败(忽略): {_idx_err}")
 
+        # 图谱实体半精度向量列：模型后加的生成列，运行库需幂等补齐
+        # （否则 ORM SELECT 展开全列会报 UndefinedColumn，图谱查询接口全 500）
+        try:
+            from app.db.startup_migrations import ensure_kg_entity_half_column
+            ensure_kg_entity_half_column(engine)
+        except Exception as _half_err:
+            logger.warning(f"kg_entity.embedding_half 补齐失败(忽略): {_half_err}")
+
         # 向量列维度对齐：嵌入模型变更后把 kms_segment.embedding 对齐到生效配置
         # （模型管理默认向量化模型优先、环境变量兜底）；仅空表自动 ALTER
         try:
@@ -149,7 +157,7 @@ async def lifespan(app: FastAPI):
         app.state.tool_manager = mgr
         startup_db = SessionLocal()
         try:
-            # 先幂等登记系统内置工具（web_search + 三个本体工具），再加载缓存
+            # 先幂等登记系统内置工具（web_search + 语义 + DataOps），再加载缓存
             from app.ai.tool_manager.seed_tools import register_builtin_tools
             register_builtin_tools(startup_db)
             mgr.load_all(startup_db)
@@ -232,6 +240,10 @@ app.add_middleware(
 # 注册域名→租户解析中间件（ASGI 层）
 app.add_middleware(TenantResolverMiddleware)
 
+# 统一错误契约处理器（本体端点 {code,message,detail?}；向后兼容，不影响既有端点）
+from app.core.api_error import register_api_error_handler
+register_api_error_handler(app)
+
 
 # 全局异常处理
 @app.exception_handler(Exception)
@@ -246,7 +258,16 @@ async def global_exception_handler(request, exc):
 # 健康检查
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "version": settings.APP_VERSION}
+    # 路由模块加载失败的清单由 router_registry 写入 app.state：
+    # 这些模块的接口全部是 404，必须让探活能看出来，否则会被误判为“服务正常”。
+    router_failures = getattr(app.state, "router_failures", None) or []
+    payload = {
+        "status": "ok" if not router_failures else "degraded",
+        "version": settings.APP_VERSION,
+    }
+    if router_failures:
+        payload["routers_failed"] = [f.get("module") for f in router_failures]
+    return payload
 
 
 # 注册路由（声明式清单：新增/下线模块只需改 app/core/router_registry.py，无需改动本文件）

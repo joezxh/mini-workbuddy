@@ -69,12 +69,25 @@ def _resolve_index_mode(db: Session, collection: str) -> str:
     return resolve_index_mode(db, collection)
 
 
+# 嵌入失败的典型信号：只有命中这些线索才值得补上端点上下文
+_EMBED_ERROR_HINTS = (
+    "connection", "connect", "timeout", "timed out", "status code",
+    "embedding", "dimension", "api key", "rate limit", "unauthorized",
+)
+
+
 def _embed_failure(exc: Exception) -> Exception:
-    """给向量化步的异常补上嵌入端点上下文，让失败节点可自解释。
+    """给**嵌入相关**失败补上嵌入端点上下文，让失败节点可自解释。
 
     嵌入依赖外部 HTTP 服务（GPUStack / NIM / 百炼），裸 ``APIConnectionError``
     无法看出是哪个节点、哪个端点不可达；此处补齐 provider/base_url/model/维度。
+
+    非嵌入类失败（如落库时 PG 报 ``A string literal cannot contain NUL``）原样
+    返回：硬贴「嵌入服务不可达」会把排查方向带偏，本轮就因此误判过一次。
     """
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if not any(hint in text for hint in _EMBED_ERROR_HINTS):
+        return exc
     try:
         from app.services.kb.embedding_config import (
             describe_embedding_config,

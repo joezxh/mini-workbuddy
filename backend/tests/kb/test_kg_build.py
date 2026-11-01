@@ -1,4 +1,7 @@
 """图谱构建管线测试（P3）：配置 / 抽取器 / 两阶段编排 / 幂等 / 撤销 / 互斥。"""
+import threading
+import time
+
 import pytest
 
 from app.models.kb.kb_document import KbDocument, new_document_uuid
@@ -359,6 +362,46 @@ def test_rebuild_action_clears_then_reextracts(db, kb, doc):
     assert db.query(KgEntity).filter(KgEntity.knowledge_id == kb.id).count() == 1
 
 
+def test_rebuild_document_keeps_other_documents_intact(db, kb, doc):
+    """单文档重抽不得波及同库其他文档（否则整库全变「未抽取」）。"""
+    other = KbDocument(
+        uuid_code=new_document_uuid(), knowledge_id=kb.id,
+        collection=f"kb_{kb.id}", name="另一个文档", status="completed",
+        tenant_id=TENANT_A,
+    )
+    db.add(other)
+    db.commit()
+    db.refresh(other)
+
+    seg_a = make_segment(db, kb, doc, "星海科技", index=0)
+    seg_b = make_segment(db, kb, other, "启明电子", index=0)
+    clients = {
+        "星海科技": FakeClient(entities=[{"name": "星海科技", "label": "客户"}]),
+        "启明电子": FakeClient(entities=[{"name": "启明电子", "label": "供应商"}]),
+    }
+
+    def by_text(text, *, schema_hint="", tenant_id=None):
+        client = clients["星海科技" if "星海" in text else "启明电子"]
+        return kg_extractor.extract(text, client=client, schema_hint=schema_hint,
+                                    tenant_id=tenant_id)
+
+    svc = builder(db, kb, extractor=by_text, embed_fn=vec_fn())
+    svc.run("build")
+    db.refresh(seg_a)
+    db.refresh(seg_b)
+    assert seg_a.graph_structure_indexed is True and seg_b.graph_structure_indexed is True
+
+    svc.run("rebuild", doc.uuid_code)  # 只重抽 seg_a 所属文档
+
+    db.refresh(seg_a)
+    db.refresh(seg_b)
+    assert seg_a.graph_structure_indexed is True, "本文档应已重新抽取完成"
+    assert seg_b.graph_structure_indexed is True, "其他文档的阶段标志不得被重置"
+    assert seg_b.graph_indexed is True, "其他文档的向量标志不得被重置"
+    names = {e.name for e in db.query(KgEntity).filter(KgEntity.knowledge_id == kb.id).all()}
+    assert names == {"星海科技", "启明电子"}, "其他文档的实体不得被全库清空"
+
+
 # ── 互斥 ─────────────────────────────────────────────────────────────────
 def test_single_kb_mutex():
     assert kg_build_service.try_acquire(42) is True
@@ -387,3 +430,62 @@ def test_submit_build_rejects_when_locked(monkeypatch, db, kb):
     monkeypatch.setattr(job_runner, "run_in_background", fake_run)
     out = kg_build_service.submit_build(tenant_id=TENANT_A, knowledge_id=kb.id)
     assert out["accepted"] is False and started["n"] == 0
+
+
+# ── 并发（concurrency_count）──────────────────────────────────────
+def entity_result(name):
+    """构造一个与 kg_extractor 产物同形的结果（含 normalized，落库依赖它）。"""
+    return kg_extractor.ExtractionResult(entities=[{
+        "name": name, "label": "客户", "aliases": [], "properties": {},
+        "normalized": kg_extractor.normalize_entity_name(name),
+    }])
+
+
+def run_concurrency_case(db, kb, doc, *, workers, segments=4, delay=0.2):
+    """逐切片均睡 delay 后返回同一实体；返回（峰值并发, 构建报告）。"""
+    kg_config.save_graph_config(db, kb.id, {"concurrency_count": workers})
+    for i in range(segments):
+        make_segment(db, kb, doc, f"星海科技 片段{i}", index=i)
+
+    guard = threading.Lock()
+    state = {"running": 0, "peak": 0}
+
+    def slow(text, **kwargs):
+        with guard:
+            state["running"] += 1
+            state["peak"] = max(state["peak"], state["running"])
+        time.sleep(delay)
+        with guard:
+            state["running"] -= 1
+        return entity_result("星海科技")
+
+    svc = builder(db, kb, extractor=slow, embed_fn=vec_fn())
+    report = svc.run("build")
+    return state["peak"], report
+
+
+def test_concurrency_count_parallelizes_extraction(db, kb, doc):
+    """抽取是最贵的一段（逐切片等 LLM），``concurrency_count`` 必须在此真正生效。"""
+    peak, report = run_concurrency_case(db, kb, doc, workers=4)
+
+    assert peak >= 2, f"并发度未生效（峰值只有 {peak}）"
+    assert report.structure_done == 4 and report.structure_failed == 0
+
+
+def test_concurrency_count_one_keeps_serial(db, kb, doc):
+    """并发改为 1 时串行执行（不白开线程池）。"""
+    peak, report = run_concurrency_case(db, kb, doc, workers=1, segments=3)
+
+    assert peak == 1
+    assert report.structure_done == 3
+
+
+def test_concurrent_extraction_still_writes_in_main_thread(db, kb, doc):
+    """并发只包抽取；落库必须串行完成，四切片都得标位。"""
+    run_concurrency_case(db, kb, doc, workers=4, segments=4, delay=0.05)
+
+    segs = db.query(KbSegment).filter(KbSegment.collection == f"kb_{kb.id}").all()
+    assert all(s.graph_structure_indexed is True for s in segs)
+    assert all(s.graph_indexed is True for s in segs)
+    assert db.query(KgEntity).filter(KgEntity.knowledge_id == kb.id).count() == 1, \
+        "同名词跨切片归一到同一实体（并发不得破幂等）"

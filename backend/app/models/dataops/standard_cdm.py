@@ -4,8 +4,8 @@
 见 spec docs/superpowers/specs/2026-10-28-standard-cdm-graph-ui-design.md。
 """
 from sqlalchemy import (
-    BigInteger, Boolean, Column, Float, ForeignKey, Index, Integer, String,
-    Text, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Boolean, CheckConstraint, Column, Float, ForeignKey, Index,
+    Integer, String, Text, TIMESTAMP, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -20,6 +20,7 @@ class MetaStandardCatalog(Base, TenantMixin):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     parent_id = Column(BigInteger, ForeignKey("meta_standard_catalog.id", ondelete="RESTRICT"), nullable=True, comment="父节点（null=根）")
+    ontology_id = Column(BigInteger, nullable=True, comment="归属本体（可空=未归类；应用层引用 meta_ontology.id，不建外键以避免与 meta_ontology 循环依赖）")
     code = Column(String(64), nullable=False, comment="目录编码（租户内唯一）")
     name = Column(String(200), nullable=False, comment="目录名称")
     description = Column(Text, nullable=True, comment="说明")
@@ -34,6 +35,7 @@ class MetaStandardCatalog(Base, TenantMixin):
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_meta_catalog_code"),
         Index("idx_meta_catalog_tenant_parent", "tenant_id", "parent_id"),
+        Index("idx_meta_catalog_ontology", "tenant_id", "ontology_id"),
     )
 
 
@@ -51,6 +53,14 @@ class MetaObjectStandard(Base, TenantMixin):
     domain = Column(String(64), nullable=True, comment="主题域")
     status = Column(String(32), nullable=False, server_default="draft", comment="draft|published")
     current_version = Column(Integer, nullable=False, server_default="1", comment="当前版本号")
+    # —— D3 rev.2：本次新增（原表无 source 列，已核设计 §3.1 注）——
+    # llm 取值永远非法；llm_draft 只允许出现在未发布元素上，人工采纳时改写为 human
+    source = Column(String(16), nullable=False, server_default="rule", comment="来源: rule|human|llm_draft")
+    review_status = Column(String(16), nullable=False, server_default="suggested", comment="人审结论: suggested|accepted|rejected")
+    reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
+    reviewed_at = Column(TIMESTAMP, nullable=True, comment="评审时间")
+    confidence = Column(Float, nullable=True, comment="规则置信度")
+    evidence_ref = Column(BigInteger, nullable=True, comment="最新一条证据 id（应用层引用 meta_ontology_evidence.id，不建外键避免建表顺序依赖）")
     creator_id = Column(BigInteger, nullable=True, comment="创建者")
     updater_id = Column(BigInteger, nullable=True, comment="最后更新者")
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
@@ -58,7 +68,10 @@ class MetaObjectStandard(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_meta_object_standard_code"),
+        CheckConstraint("source IN ('rule','human','llm_draft')", name="ck_meta_object_standard_source"),
+        CheckConstraint("review_status IN ('suggested','accepted','rejected')", name="ck_meta_object_standard_review"),
         Index("idx_meta_object_standard_catalog", "tenant_id", "catalog_id"),
+        Index("idx_meta_object_standard_review", "tenant_id", "review_status"),
     )
 
 
@@ -74,9 +87,11 @@ class MetaObjectStandardAttribute(Base, TenantMixin):
     sort_order = Column(Integer, nullable=False, server_default="0", comment="对象内排序")
     security_level_override = Column(String(8), nullable=True, comment="对象上下文安全等级覆盖")
     note = Column(String(500), nullable=True, comment="备注")
+    review_status = Column(String(16), nullable=False, server_default="suggested", comment="人审结论: suggested|accepted|rejected")
 
     __table_args__ = (
         UniqueConstraint("object_id", "standard_id", name="uq_meta_object_attribute"),
+        CheckConstraint("review_status IN ('suggested','accepted','rejected')", name="ck_meta_object_attribute_review"),
         Index("idx_meta_object_attribute_object", "object_id"),
     )
 
@@ -96,6 +111,13 @@ class MetaObjectRelation(Base, TenantMixin):
     via_attribute_ids = Column(JSONB, nullable=True, comment="连接键引用的属性标准 id 列表（有序）")
     description = Column(Text, nullable=True, comment="说明")
     status = Column(String(32), nullable=False, server_default="draft", comment="draft|published")
+    # —— D3 rev.2：本次新增（原表无 source 列）——
+    source = Column(String(16), nullable=False, server_default="rule", comment="来源: rule|human|llm_draft")
+    review_status = Column(String(16), nullable=False, server_default="suggested", comment="人审结论: suggested|accepted|rejected")
+    reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
+    reviewed_at = Column(TIMESTAMP, nullable=True, comment="评审时间")
+    confidence = Column(Float, nullable=True, comment="规则置信度")
+    evidence_ref = Column(BigInteger, nullable=True, comment="最新一条证据 id（应用层引用，不建外键）")
     creator_id = Column(BigInteger, nullable=True, comment="创建者")
     updater_id = Column(BigInteger, nullable=True, comment="最后更新者")
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
@@ -103,9 +125,12 @@ class MetaObjectRelation(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_meta_object_relation_code"),
+        CheckConstraint("source IN ('rule','human','llm_draft')", name="ck_meta_object_relation_source"),
+        CheckConstraint("review_status IN ('suggested','accepted','rejected')", name="ck_meta_object_relation_review"),
         Index("idx_meta_object_relation_from", "from_object_id"),
         Index("idx_meta_object_relation_to", "to_object_id"),
         Index("idx_meta_object_relation_catalog", "tenant_id", "catalog_id"),
+        Index("idx_meta_object_relation_review", "tenant_id", "review_status"),
     )
 
 
@@ -120,7 +145,8 @@ class MetaTableStandard(Base, TenantMixin):
     standard_version = Column(Integer, nullable=True, comment="绑定时对象版本")
     security_level_override = Column(String(8), nullable=True, comment="覆盖")
     status = Column(String(32), nullable=False, server_default="suggested", comment="suggested|accepted|rejected")
-    source = Column(String(32), nullable=False, server_default="human", comment="rule|llm|human")
+    # D3 rev.2：取值域由 rule|llm|human 收敛为 rule|human|llm_draft（llm 遗留值在本次消除，见迁移 CHECK）
+    source = Column(String(32), nullable=False, server_default="human", comment="rule|human|llm_draft")
     confidence = Column(Float, nullable=True, comment="置信度（rule 通道产出）")
     evidence_json = Column(JSONB, nullable=True, comment="判定依据")
     reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
@@ -131,6 +157,7 @@ class MetaTableStandard(Base, TenantMixin):
 
     __table_args__ = (
         UniqueConstraint("table_id", name="uq_meta_table_standard_table"),
+        CheckConstraint("source IN ('rule','human','llm_draft')", name="ck_meta_table_standard_source"),
     )
 
 

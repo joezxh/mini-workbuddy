@@ -19,6 +19,9 @@
       <a-tab-pane key="sql" :tab="t('kbMgmt.dataSource.tabSql')">
         <SqlWorkbench />
       </a-tab-pane>
+      <a-tab-pane key="ontology" :tab="t2('本体工作台')">
+        <OntologyWorkspace />
+      </a-tab-pane>
     </a-tabs>
   </div>
 </template>
@@ -31,6 +34,8 @@ import MetadataExplorer from './MetadataExplorer.vue'
 import StandardManagement from './StandardManagement.vue'
 import BindingWorkbench from './BindingWorkbench.vue'
 import SqlWorkbench from './SqlWorkbench.vue'
+import OntologyWorkspace from './ontology/OntologyWorkspace.vue'
+import { t2 } from './ontology/ontologyText'
 
 const { t } = useI18n()
 const active = ref('source')
@@ -50,11 +55,18 @@ function onDrillDown(payload: { source_id: number; db_name?: string; database?: 
   height: 100%;
 
   &__header {
-    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
   }
   &__title {
     margin: 0;
-    font-size: 18px;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--fg);
   }
   &__tabs {
     flex: 1;

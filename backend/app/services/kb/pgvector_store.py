@@ -185,7 +185,10 @@ class PGVectorStore:
                     "collection": collection,
                     "document_id": document_id,
                     "chunk_index": s.chunk_index,
-                    "content": s.content,
+                    # PG text 不接受 NUL(0x00)：表格/QA/媒体等旁路导入也可能带入
+                    "content": (
+                        s.content.replace("\x00", "") if s.content else s.content
+                    ),
                     # 维度对齐：按物理列维度补齐/截断；None 保持 NULL（economy/无向量）
                     "embedding": (
                         fit_vector_dimension(s.embedding, self.vector_dim)
