@@ -186,3 +186,20 @@ def test_list_checkpoints_ordered_and_filtered(db, world):
     # 另一分支无检查点
     d = eng.derive_branch(sid, world["baseline_cp"], "平行B")
     assert eng.list_checkpoints(sid, branch_id=d["branch_id"]) == []
+
+
+def test_entity_detail_includes_source_ref_and_can_act(db, world):
+    """节点详情补来源回链 source_ref 与行动可用标志 can_act（origin!=derived 且未脱敏）。"""
+    sid, bid = world["scene_id"], world["branch_id"]
+    # SUP006: origin=clone, masked=False → can_act True
+    d = SandboxEngineService(db, TENANT_A).entity_detail(sid, bid, "SUP006")
+    assert d["can_act"] is True
+    assert "source_ref" in d and d["source_ref"] is None
+    # 补一条脱敏实体 → can_act False，带 source_ref
+    db.add(SandboxEntity(tenant_id=TENANT_A, scene_id=sid, branch_id=bid,
+                         entity_code="MASK1", object_code="Supplier", props_json={},
+                         risk_score=0.1, masked=True, origin="clone",
+                         source_ref_json={"asset": "dwd_supp", "col": "phone"}))
+    db.commit()
+    m = SandboxEngineService(db, TENANT_A).entity_detail(sid, bid, "MASK1")
+    assert m["can_act"] is False and m["source_ref"] == {"asset": "dwd_supp", "col": "phone"}

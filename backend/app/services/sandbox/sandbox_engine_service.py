@@ -477,7 +477,8 @@ class SandboxEngineService:
             raise ApiError("PARAM_INVALID", "实体不存在", http_status=400)
         return {"entity_code": r.entity_code, "object_code": r.object_code,
                 "props": r.props_json, "risk_score": r.risk_score, "masked": r.masked,
-                "origin": r.origin}
+                "origin": r.origin, "source_ref": r.source_ref_json,
+                "can_act": r.origin != "derived" and not bool(r.masked)}
 
     def list_observations(self, scene_id: int, branch_id: int, *, kind: Optional[str] = None,
                           tick_from: Optional[int] = None, tick_to: Optional[int] = None) -> list[dict]:
