@@ -84,10 +84,10 @@
  * 探活限流、打标载荷等决策委托 :mod:`assetOps` 纯函数；跨源约束在卡片层拦截。
  * 送数**不写结构表**，只落 `meta_ontology.draft_scope_json`；一个作用域仅单一 source_id（§4.7-5）。
  */
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  assetsSearch, bindAssetTag, listAssetTags, listMetaColumns, listOntologies,
+  assetsSearch, bindAssetTag, getDraftScope, listAssetTags, listMetaColumns, listOntologies,
   putDraftScope, reclassifyTags, testTable, testTables, updateTableMeta,
 } from '@/api/dataops'
 import { t2 } from '../ontology/ontologyText'
@@ -95,6 +95,7 @@ import AssetTypeTree from './AssetTypeTree.vue'
 import AssetSearchBar from './AssetSearchBar.vue'
 import AssetCardList from './AssetCardList.vue'
 import { buildBindTagPayload, checkBatchProbeLimit } from './assetOps'
+import { restoreSelection, staleNotice } from './assetSend'
 
 const treeRef = ref<any>(null)
 const cardRef = ref<any>(null)
@@ -119,6 +120,34 @@ const ontOptions = computed(() =>
   ontologies.value.map((o) => ({ label: `${o.name} (${o.code})`, value: o.id })),
 )
 
+// 送数回显（AF-08）：目标本体锁定单一 source_id 的 draft_scope，按 table_name 回显当前页勾选
+const draftScope = ref<{ source_id?: number; tables?: string[] } | null>(null)
+
+function applyRestore() {
+  if (!draftScope.value) return
+  for (const it of restoreSelection(draftScope.value, items.value)) {
+    if (!selected.value.some((s) => s.table_id === it.table_id)) selected.value.push(it)
+  }
+}
+
+async function syncDraftScope() {
+  if (!targetId.value) {
+    draftScope.value = null
+    return
+  }
+  const resp: any = await getDraftScope(targetId.value)
+  draftScope.value = resp?.draft_scope || null
+  const notice = staleNotice(resp?.removed_stale)
+  if (notice) message.info(t2(notice))
+  applyRestore()
+}
+
+// 切换目标本体：清空跨目标勾选，重新回显该本体的 draft_scope
+watch(targetId, () => {
+  selected.value = []
+  syncDraftScope()
+})
+
 async function runSearch() {
   loading.value = true
   try {
@@ -134,6 +163,7 @@ async function runSearch() {
     })
     items.value = resp?.items || []
     total.value = resp?.total || 0
+    applyRestore() // 回显：当前页命中 draft_scope 的表恢复勾选
   } finally {
     loading.value = false
   }
@@ -351,6 +381,7 @@ function activate() {
   loadOntologies()
   treeRef.value?.reload?.()
   if (!items.value.length) runSearch()
+  syncDraftScope()
 }
 
 runSearch()

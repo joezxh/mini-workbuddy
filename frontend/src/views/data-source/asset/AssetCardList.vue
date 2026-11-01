@@ -76,6 +76,7 @@ import { message } from 'ant-design-vue'
 import { t2 } from '../ontology/ontologyText'
 import { hl, fmtRows } from './assetText'
 import { probeView } from './assetOps'
+import { CROSS_SOURCE_BLOCK_MSG } from './assetSend'
 
 type ProbeResult = { ok: boolean; code?: string | null }
 
@@ -126,7 +127,7 @@ function lockedOut(it: any) {
 
 function toggle(it: any) {
   if (lockedOut(it)) {
-    message.warning(t2('一个建模作用域仅允许单一数据源，请先清空勾选'))
+    message.warning(t2(CROSS_SOURCE_BLOCK_MSG))
     return
   }
   emit('toggle', it, !isChecked(it))
