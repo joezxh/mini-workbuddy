@@ -4,6 +4,7 @@ import { createSSRApp } from 'vue'
 import ContextBar from '../components/ContextBar.vue'
 import KpiModal from '../components/KpiModal.vue'
 import TickBar from '../components/TickBar.vue'
+import ScenePanel from '../components/ScenePanel.vue'
 
 describe('ContextBar', () => {
   it('渲染来源标签与检查点计数', async () => {
@@ -37,5 +38,14 @@ describe('TickBar', () => {
       riskTop3: [{ entity_code: 'SUP006', score: 0.8, name: 'SUP006' }],
     }))
     expect(html).toContain('Step +1'); expect(html).toContain('SUP006'); expect(html).toContain('风险 TOP 3')
+  })
+})
+
+describe('ScenePanel', () => {
+  it('空态与分支对比按钮', async () => {
+    const html = await renderToString(createSSRApp(ScenePanel, {
+      scenes: [], currentSceneId: null, timeline: [], branches: [], selectedBranchId: null, compareSet: new Set(),
+    }))
+    expect(html).toContain('暂无推演场景'); expect(html).toContain('对比所选分支')
   })
 })
