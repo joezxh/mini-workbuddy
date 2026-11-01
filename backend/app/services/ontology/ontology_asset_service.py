@@ -153,6 +153,11 @@ class OntologyAssetService:
             f"{c.column_name} {c.data_type or ''} '{c.column_comment or c.biz_name or ''}'".strip()
             for c in cols
         )
+        columns = [
+            {"name": c.column_name, "type": c.data_type or "",
+             "comment": (c.column_comment or c.biz_name or ""), "pii": c.pii_level or "L0"}
+            for c in cols
+        ]
         pii_max = self.db.execute(
             select(func.max(MetaColumn.pii_level)).where(
                 MetaColumn.tenant_id == self.tenant_id, MetaColumn.table_id == t.id
@@ -176,6 +181,7 @@ class OntologyAssetService:
             "table_name": t.table_name,
             "table_comment": t.table_comment,
             "column_digest": digest,
+            "columns": columns,
             "column_count": t.column_count,
             "row_count": t.row_count,
             "pii_max_level": pii_max,
@@ -186,7 +192,7 @@ class OntologyAssetService:
 
     def _tags_for(self, table_id: int) -> List[dict]:
         rows = self.db.execute(
-            select(MetaAssetTag.code, MetaAssetTag.name, MetaAssetTag.color)
+            select(MetaAssetTag.id, MetaAssetTag.code, MetaAssetTag.name, MetaAssetTag.color)
             .join(MetaAssetTagBinding, MetaAssetTagBinding.tag_id == MetaAssetTag.id)
             .where(
                 MetaAssetTagBinding.tenant_id == self.tenant_id,
@@ -194,7 +200,7 @@ class OntologyAssetService:
                 MetaAssetTagBinding.asset_id == table_id,
             )
         ).all()
-        return [{"code": c, "name": n, "color": col} for c, n, col in rows]
+        return [{"id": tid, "code": c, "name": n, "color": col} for tid, c, n, col in rows]
 
     # ------------------------------------------------- E-编辑 元数据（AF-06）
 

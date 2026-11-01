@@ -151,3 +151,37 @@ def test_route_rejects_bad_table_type_and_sort(client_a, db):
                         params={"table_type": "BASE TABLE"}).status_code == 200
     r = client_a.get("/api/v1/dataops/assets/search", params={"table_type": "VIEW", "sort": "rows"})
     assert r.status_code == 200
+
+
+# ── Task 1：结构化列 + 标签 id（AF-05/AF-03 视觉对齐）──
+
+def test_card_returns_structured_columns(db):
+    from app.models.dataops.meta import MetaColumn
+
+    ds = _source(db)
+    t = _add_table(db, ds.id, "crm_customer", comment="客户主数据")
+    db.add(MetaColumn(tenant_id=100, table_id=t.id, column_name="cust_name",
+                      data_type="VARCHAR", column_comment="客户名称", pii_level="L1", ordinal=1))
+    db.add(MetaColumn(tenant_id=100, table_id=t.id, column_name="id_card",
+                      data_type="VARCHAR", column_comment="身份证号", pii_level="L3", ordinal=2))
+    db.flush()
+    item = OntologyAssetService(db, 100).search(kw="客户")["items"][0]
+    cols = {c["name"]: c for c in item["columns"]}
+    assert cols["id_card"]["pii"] == "L3"
+    assert cols["id_card"]["type"] == "VARCHAR"
+    assert cols["cust_name"]["comment"] == "客户名称"
+    assert item["column_digest"]  # 扁平串向后兼容仍在
+
+
+def test_card_tags_carry_id(db):
+    from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
+
+    ds = _source(db)
+    t = _add_table(db, ds.id, "sales_order")
+    tag = MetaAssetTag(tenant_id=100, code="core", name="核心表", color="#3371fc", tag_kind="biz")
+    db.add(tag)
+    db.flush()
+    db.add(MetaAssetTagBinding(tenant_id=100, tag_id=tag.id, asset_kind="table", asset_id=t.id))
+    db.flush()
+    item = OntologyAssetService(db, 100).search(kw="sales")["items"][0]
+    assert item["tags"] and item["tags"][0]["id"] == tag.id
