@@ -24,19 +24,13 @@ from app.models.ontology.ontology import MetaOntology, MetaOntologyVersion
 from app.models.dataops.standard_cdm import (
     MetaObjectRelation, MetaObjectStandard, MetaStandardCatalog,
 )
-from app.services.dataops.data_source_service import enabled_types
+from app.services.dataops import source_types as st
 
-# E40 目录树分组：family → 分类节点（不新增字典项，映射到既有 family 取值聚合）
-_FAMILY_TO_KIND = {
-    "excel": "file",
-    "es": "search",
-}
-_KIND_LABELS = {
-    "rdbms": "关系型数据库",
-    "file": "文件数据源",
-    "search": "搜索引擎",
-}
-_KIND_ORDER = ("rdbms", "file", "search")
+
+def _bucket_code(external_type: Optional[str]) -> str:
+    """分组归一：缺失/非法值显式落 other 桶（CHECK+服务层已拦，此为读侧防御）。"""
+    code = (external_type or "").lower().strip()
+    return code if code in st.EXTERNAL_TYPE_CODES else "other"
 
 
 class OntologyService:
@@ -214,10 +208,10 @@ class OntologyService:
     # ------------------------------------------------------------ E40 目录树
 
     def assets_tree(self) -> List[dict]:
-        """按数据源类型分类聚合的目录树（AF-01，不新建表，完全由既有数据拼出）。
+        """AF-01：按 ``meta_data_source.external_type`` 分组的 10 节点目录树（Q1 裁决 B 物化列）。
 
-        分组：``meta_data_source.source_type`` → 字典启用项 ``family`` → 粗分类
-        （rdbms / file / search）；节点 ``count`` = 该源已扫描表数（``meta_table``）。
+        固定输出 ``EXTERNAL_TYPE_CODES`` 全部 10 组（空组保留）；组 ``count`` = 该组
+        各源已扫描表数之和；历史行 ``external_type`` 缺失显式落 ``other`` 桶。
         """
         sources = list(self.db.execute(
             select(DataSource).where(DataSource.tenant_id == self.tenant_id)
@@ -230,33 +224,21 @@ class OntologyService:
             .group_by(MetaTable.source_id)
         ).all())
 
-        types = enabled_types(self.db, self.tenant_id)
-
-        buckets: dict = {kind: [] for kind in _KIND_ORDER}
+        buckets: dict = {code: [] for code in st.EXTERNAL_TYPE_CODES}
         for s in sources:
-            meta = types.get((s.source_type or "").lower()) or {}
-            family = meta.get("family") or "rdbms"
-            kind = _FAMILY_TO_KIND.get(family, "rdbms")
-            buckets.setdefault(kind, []).append({
+            buckets[_bucket_code(s.external_type)].append({
                 "kind": "source",
                 "id": s.id,
                 "label": s.name,
                 "source_type": s.source_type,
+                "external_type": s.external_type,
                 "status": s.status,
                 "count": int(table_counts.get(s.id, 0)),
             })
-
-        tree: List[dict] = []
-        for kind in _KIND_ORDER:
-            children = buckets.get(kind, [])
-            tree.append({
-                "kind": "type",
-                "code": kind,
-                "label": _KIND_LABELS[kind],
-                "count": sum(c["count"] for c in children),
-                "children": children,
-            })
-        return tree
+        return [{"kind": "type", "code": code, "label": st.EXTERNAL_TYPE_LABELS[code],
+                 "count": sum(c["count"] for c in buckets.get(code, [])),
+                 "children": buckets.get(code, [])}
+                for code in st.EXTERNAL_TYPE_CODES]
 
     # ---------------------------------------------------------------- 序列化
 
