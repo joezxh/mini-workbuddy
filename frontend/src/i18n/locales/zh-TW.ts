@@ -373,6 +373,8 @@ export default {
       i18nKeyLabel: '多語言 Key',
       i18nKeyPlaceholder: '如：sys.menu.system',
       i18nPreview: '多語言預覽',
+      i18nEditHint: '修改後立即生效並保存在本瀏覽器；如需對所有使用者永久生效，請同步前端語言包',
+      i18nUpdated: '翻譯已更新',
       nameRequired: '選單名稱不能為空',
       typeRequired: '選單類型不能為空',
       sortRequired: '排序不能為空',

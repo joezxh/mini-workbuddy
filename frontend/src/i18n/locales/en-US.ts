@@ -373,6 +373,8 @@ export default {
       i18nKeyLabel: 'i18n Key',
       i18nKeyPlaceholder: 'e.g. sys.menu.system',
       i18nPreview: 'Translation Preview',
+      i18nEditHint: 'Changes take effect immediately and are stored in this browser; sync the frontend locale files to persist them for all users',
+      i18nUpdated: 'Translation updated',
       nameRequired: 'Menu name is required',
       typeRequired: 'Menu type is required',
       sortRequired: 'Sort order is required',

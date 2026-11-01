@@ -134,132 +134,168 @@
       @cancel="formVisible = false"
       :ok-text="t('common.confirm')"
       :cancel-text="t('common.cancel')"
+      :body-style="{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto', paddingRight: '8px' }"
     >
       <a-form
         ref="formRef"
         :model="formData"
         :rules="formRules"
-        :label-col="{ style: { width: '100px' } }"
+        :label-col="{ style: { width: '88px' } }"
         layout="horizontal"
       >
-        <a-form-item :label="t('sys.permission.parentMenu')" name="parentId">
-          <a-tree-select
-            v-model:value="formData.parentId"
-            :tree-data="menuTree"
-            :field-names="{ children: 'children', label: 'name', value: 'id' }"
-            tree-default-expand-all
-            :placeholder="t('sys.permission.selectParent')"
-            allow-clear
-          />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.parentMenu')" name="parentId">
+              <a-tree-select
+                v-model:value="formData.parentId"
+                :tree-data="menuTree"
+                :field-names="{ children: 'children', label: 'name', value: 'id' }"
+                tree-default-expand-all
+                :placeholder="t('sys.permission.selectParent')"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.menuType')" name="type">
+              <a-radio-group v-model:value="formData.type">
+                <a-radio-button :value="1">{{ t('sys.permission.typeDir') }}</a-radio-button>
+                <a-radio-button :value="2">{{ t('sys.permission.typeMenu') }}</a-radio-button>
+                <a-radio-button :value="3">{{ t('sys.permission.typeBtn') }}</a-radio-button>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item :label="t('sys.permission.menuType')" name="type">
-          <a-radio-group v-model:value="formData.type">
-            <a-radio-button :value="1">{{ t('sys.permission.typeDir') }}</a-radio-button>
-            <a-radio-button :value="2">{{ t('sys.permission.typeMenu') }}</a-radio-button>
-            <a-radio-button :value="3">{{ t('sys.permission.typeBtn') }}</a-radio-button>
-          </a-radio-group>
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.menuName')" name="name">
+              <a-input v-model:value="formData.name" :placeholder="t('sys.permission.inputMenuName')" allow-clear />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.displaySort')" name="sort">
+              <a-input-number v-model:value="formData.sort" :min="0" :max="9999" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item :label="t('sys.permission.menuName')" name="name">
-          <a-input v-model:value="formData.name" :placeholder="t('sys.permission.inputMenuName')" allow-clear />
-        </a-form-item>
+        <a-row v-show="formData.type !== 3" :gutter="16">
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.menuIcon')" name="icon">
+              <a-select
+                v-model:value="formData.icon"
+                :placeholder="t('sys.permission.selectIcon')"
+                allow-clear
+                show-search
+                :filter-option="filterIcon"
+                :dropdown-match-select-width="false"
+                :dropdown-style="{ width: '420px', padding: '12px' }"
+                :trigger-action="['click']"
+              >
+                <template #dropdownRender="{ menuNode: menu }">
+                  <component :is="menu" />
+                  <a-divider style="margin: 8px 0" />
+                  <div class="icon-grid">
+                    <div
+                      v-for="icon in availableIcons"
+                      :key="icon.name"
+                      class="icon-item"
+                      :class="{ selected: formData.icon === icon.name }"
+                      :title="icon.name"
+                      @click="selectIcon(icon.name)"
+                    >
+                      <component :is="icon.component" />
+                    </div>
+                  </div>
+                </template>
+                <a-select-option :value="formData.icon" :disabled="true">
+                  <span style="display: flex; align-items: center">
+                    <component :is="getIconComponent(formData.icon)" v-if="formData.icon" style="margin-right: 6px" />
+                    {{ formData.icon || t('sys.permission.selectIconPlaceholder') }}
+                  </span>
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.routePath')" name="path">
+              <a-input v-model:value="formData.path" :placeholder="t('sys.permission.routePlaceholder')" allow-clear />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.menuIcon')" name="icon">
-          <a-select
-            v-model:value="formData.icon"
-            :placeholder="t('sys.permission.selectIcon')"
-            allow-clear
-            show-search
-            :filter-option="filterIcon"
-            :dropdown-match-select-width="false"
-            :dropdown-style="{ width: '420px', padding: '12px' }"
-            :trigger-action="['click']"
-          >
-            <template #dropdownRender="{ menuNode: menu }">
-              <component :is="menu" />
-              <a-divider style="margin: 8px 0" />
-              <div class="icon-grid">
-                <div
-                  v-for="icon in availableIcons"
-                  :key="icon.name"
-                  class="icon-item"
-                  :class="{ selected: formData.icon === icon.name }"
-                  :title="icon.name"
-                  @click="selectIcon(icon.name)"
-                >
-                  <component :is="icon.component" />
-                </div>
-              </div>
-            </template>
-            <a-select-option :value="formData.icon" :disabled="true">
-              <span style="display: flex; align-items: center">
-                <component :is="getIconComponent(formData.icon)" v-if="formData.icon" style="margin-right: 6px" />
-                {{ formData.icon || t('sys.permission.selectIconPlaceholder') }}
-              </span>
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-
-        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.routePath')" name="path">
-          <a-input v-model:value="formData.path" :placeholder="t('sys.permission.routePlaceholder')" allow-clear />
-        </a-form-item>
-
-        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.componentPath')" name="component">
-          <a-input v-model:value="formData.component" :placeholder="t('sys.permission.componentPlaceholder')" allow-clear />
-        </a-form-item>
-
-        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.componentName')" name="componentName">
-          <a-input v-model:value="formData.componentName" :placeholder="t('sys.permission.componentNamePlaceholder')" allow-clear />
-        </a-form-item>
+        <a-row v-show="formData.type === 2" :gutter="16">
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.componentPath')" name="component">
+              <a-input v-model:value="formData.component" :placeholder="t('sys.permission.componentPlaceholder')" allow-clear />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.componentName')" name="componentName">
+              <a-input v-model:value="formData.componentName" :placeholder="t('sys.permission.componentNamePlaceholder')" allow-clear />
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item v-show="formData.type === 3" :label="t('sys.permission.permissionFlag')" name="permission">
           <a-input v-model:value="formData.permission" :placeholder="t('sys.permission.permissionPlaceholder')" allow-clear />
         </a-form-item>
 
-        <a-form-item :label="t('sys.permission.displaySort')" name="sort">
-          <a-input-number v-model:value="formData.sort" :min="0" :max="9999" style="width: 100%" />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item :label="t('sys.permission.menuStatus')" name="status">
+              <a-radio-group v-model:value="formData.status">
+                <a-radio :value="0">{{ t('sys.permission.statusOn') }}</a-radio>
+                <a-radio :value="1">{{ t('sys.permission.statusOff') }}</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col v-show="formData.type !== 3" :span="12">
+            <a-form-item :label="t('sys.permission.colVisible')" name="visible">
+              <a-radio-group v-model:value="formData.visible">
+                <a-radio :value="1">{{ t('sys.permission.visibleShow') }}</a-radio>
+                <a-radio :value="0">{{ t('sys.permission.visibleHide') }}</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
-        <a-form-item :label="t('sys.permission.menuStatus')" name="status">
-          <a-radio-group v-model:value="formData.status">
-            <a-radio :value="0">{{ t('sys.permission.statusOn') }}</a-radio>
-            <a-radio :value="1">{{ t('sys.permission.statusOff') }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.colVisible')" name="visible">
-          <a-radio-group v-model:value="formData.visible">
-            <a-radio :value="1">{{ t('sys.permission.visibleShow') }}</a-radio>
-            <a-radio :value="0">{{ t('sys.permission.visibleHide') }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <a-form-item v-show="formData.type !== 3" :label="t('sys.permission.alwaysShowLabel')" name="alwaysShow">
-          <a-radio-group v-model:value="formData.alwaysShow">
-            <a-radio :value="1">{{ t('sys.permission.alwaysShowOn') }}</a-radio>
-            <a-radio :value="0">{{ t('sys.permission.alwaysShowOff') }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
-
-        <a-form-item v-show="formData.type === 2" :label="t('sys.permission.keepAliveLabel')" name="keepAlive">
-          <a-radio-group v-model:value="formData.keepAlive">
-            <a-radio :value="1">{{ t('sys.permission.keepAliveOn') }}</a-radio>
-            <a-radio :value="0">{{ t('sys.permission.keepAliveOff') }}</a-radio>
-          </a-radio-group>
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col v-show="formData.type !== 3" :span="12">
+            <a-form-item :label="t('sys.permission.alwaysShowLabel')" name="alwaysShow">
+              <a-radio-group v-model:value="formData.alwaysShow">
+                <a-radio :value="1">{{ t('sys.permission.alwaysShowOn') }}</a-radio>
+                <a-radio :value="0">{{ t('sys.permission.alwaysShowOff') }}</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col v-show="formData.type === 2" :span="12">
+            <a-form-item :label="t('sys.permission.keepAliveLabel')" name="keepAlive">
+              <a-radio-group v-model:value="formData.keepAlive">
+                <a-radio :value="1">{{ t('sys.permission.keepAliveOn') }}</a-radio>
+                <a-radio :value="0">{{ t('sys.permission.keepAliveOff') }}</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
 
         <a-form-item :label="t('sys.permission.i18nKeyLabel')" name="i18nKey">
           <a-input v-model:value="formData.i18nKey" :placeholder="t('sys.permission.i18nKeyPlaceholder')" allow-clear />
         </a-form-item>
 
-        <!-- 4语言翻译预览 -->
+        <!-- 4语言翻译预览（可编辑） -->
         <a-form-item v-if="formData.i18nKey" :label="t('sys.permission.i18nPreview')">
           <div class="i18n-preview">
             <div v-for="locale in LOCALE_LABELS" :key="locale.key" class="i18n-preview-row">
               <span class="i18n-preview-label">{{ locale.label }}</span>
-              <span class="i18n-preview-value">{{ getTranslationForLocale(formData.i18nKey, locale.key) || '-' }}</span>
+              <a-input
+                v-model:value="i18nDraft[locale.key]"
+                size="small"
+                @change="applyTranslationEdit(locale.key)"
+              />
             </div>
+            <div class="i18n-preview-hint">{{ t('sys.permission.i18nEditHint') }}</div>
           </div>
         </a-form-item>
       </a-form>
@@ -268,7 +304,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed, markRaw, type Component } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed, watch, markRaw, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
@@ -405,6 +441,7 @@ import {
   ZhihuOutlined,
 } from '@ant-design/icons-vue'
 import { getMenuList, getMenuSimpleList, getMenuDetail, createMenu, updateMenu, deleteMenu } from '@/api/admin'
+import { setTranslationOverride } from '@/i18n'
 import type { MenuItem, MenuForm } from '@/api/admin'
 
 const { t, messages } = useI18n()
@@ -610,6 +647,34 @@ function createDefaultForm(): MenuForm {
 
 const formData = ref<MenuForm>(createDefaultForm())
 
+// 可编辑翻译草稿（按 locale 存储输入框当前值）
+const i18nDraft = reactive<Record<string, string>>({})
+
+/** 按当前 i18nKey 重新加载 4 语言草稿 */
+function refreshI18nDraft() {
+  const key = formData.value.i18nKey || ''
+  for (const l of LOCALE_LABELS) {
+    i18nDraft[l.key] = key ? getTranslationForLocale(key, l.key) : ''
+  }
+}
+
+watch(() => formData.value.i18nKey, refreshI18nDraft)
+
+/** 写回修改的翻译：运行时立即生效，并持久化到本浏览器（localStorage） */
+function applyTranslationEdit(localeKey: string) {
+  const key = formData.value.i18nKey
+  if (!key) return
+  const val = (i18nDraft[localeKey] || '').trim()
+  if (!val) {
+    // 清空视为放弃修改，回退为当前翻译
+    i18nDraft[localeKey] = getTranslationForLocale(key, localeKey)
+    return
+  }
+  if (val === getTranslationForLocale(key, localeKey)) return
+  setTranslationOverride(localeKey, key, val)
+  message.success(t('sys.permission.i18nUpdated'))
+}
+
 const formRules = computed(() => ({
   name: [{ required: true, message: t('sys.permission.nameRequired'), trigger: 'blur' }],
   type: [{ required: true, message: t('sys.permission.typeRequired'), trigger: 'change' }],
@@ -688,6 +753,7 @@ async function openForm(type: 'create' | 'update', id?: number, parentId?: numbe
   }
 
   await nextTick()
+  refreshI18nDraft()
   formVisible.value = true
 }
 
@@ -854,10 +920,10 @@ onMounted(() => {
   color: var(--fg-secondary);
 }
 
-.i18n-preview-value {
-  flex: 1;
-  color: var(--fg);
-  word-break: break-all;
+.i18n-preview-hint {
+  font-size: 12px;
+  color: var(--fg-secondary);
+  line-height: 1.5;
 }
 
 /* ── 表格 i18n 翻译列（Popover 下拉） ── */

@@ -378,6 +378,8 @@ export default {
       i18nKeyLabel: '多语言 Key',
       i18nKeyPlaceholder: '如：sys.menu.system',
       i18nPreview: '多语言预览',
+      i18nEditHint: '修改后立即生效并保存在本浏览器；如需对所有用户永久生效，请同步前端语言包',
+      i18nUpdated: '翻译已更新',
       nameRequired: '菜单名称不能为空',
       typeRequired: '菜单类型不能为空',
       sortRequired: '排序不能为空',

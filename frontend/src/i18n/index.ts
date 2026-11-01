@@ -65,6 +65,61 @@ export const LOCALE_OPTIONS = [
   { value: 'ja-JP', label: '日本語' },
 ]
 
+// ── 运行时翻译覆盖 ──────────────────────────────────────────
+/**
+ * 菜单管理「多语言预览」支持在线修改翻译：
+ * 通过 mergeLocaleMessage 立即生效，并写入 localStorage 在本浏览器持久化。
+ * 永久对所有用户生效需同步前端语言包源文件（src/i18n/locales/*.ts）。
+ */
+const I18N_OVERRIDES_KEY = 'app-i18n-overrides'
+
+function readTranslationOverrides(): Record<string, Record<string, string>> {
+  try {
+    const raw = localStorage.getItem(I18N_OVERRIDES_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** 'a.b.c' + value → { a: { b: { c: value } } }（mergeLocaleMessage 深合并，不影响兄弟 key） */
+function buildNestedMessage(key: string, value: string): Record<string, unknown> {
+  const parts = key.split('.')
+  const root: Record<string, any> = {}
+  let cur: Record<string, any> = root
+  for (const p of parts.slice(0, -1)) {
+    if (!cur[p] || typeof cur[p] !== 'object') cur[p] = {}
+    cur = cur[p]
+  }
+  cur[parts[parts.length - 1]] = value
+  return root
+}
+
+/** 修改某个 key 的翻译：运行时立即生效并持久化到本浏览器 */
+export function setTranslationOverride(locale: string, key: string, value: string): void {
+  if (!isSupportedLocale(locale) || !key) return
+  ;(i18n.global as any).mergeLocaleMessage(locale, buildNestedMessage(key, value))
+  const overrides = readTranslationOverrides()
+  if (!overrides[locale]) overrides[locale] = {}
+  overrides[locale][key] = value
+  try {
+    localStorage.setItem(I18N_OVERRIDES_KEY, JSON.stringify(overrides))
+  } catch {
+    // 存储配额异常时忽略：运行时翻译已生效
+  }
+}
+
+// 启动时把历史覆盖叠加到语言包上
+for (const [locale, entries] of Object.entries(readTranslationOverrides())) {
+  if (!isSupportedLocale(locale)) continue
+  for (const [key, value] of Object.entries(entries)) {
+    if (typeof value === 'string') {
+      ;(i18n.global as any).mergeLocaleMessage(locale, buildNestedMessage(key, value))
+    }
+  }
+}
+
 export function isSupportedLocale(value: unknown): value is LocaleKey {
   return typeof value === 'string' && (SUPPORTED_LOCALES as readonly string[]).includes(value)
 }
