@@ -7,14 +7,20 @@
       <div class="asset-picker__main">
         <AssetSearchBar :loading="loading" @search="onSearch" />
         <AssetCardList
+          ref="cardRef"
           :items="items"
           :total="total"
           :page="page"
           :size="size"
           :loading="loading"
           :selected="selected"
+          :kw="lastQuery.kw"
+          :probe="probe"
           @toggle="onToggle"
           @page-change="onPage"
+          @test="onTest"
+          @edit="openEdit"
+          @tag="openTag"
         />
       </div>
     </div>
@@ -24,6 +30,9 @@
         {{ t2('已勾选') }} {{ selected.length }} {{ t2('张表') }}
         <template v-if="selected.length">（{{ t2('来源') }} #{{ selected[0].source_id }}）</template>
       </span>
+      <a-button :disabled="!selected.length" @click="openTagBatch">{{ t2('打标签') }}</a-button>
+      <a-button :disabled="!selected.length" :loading="probing" @click="onProbeBatch">{{ t2('批量探活') }}</a-button>
+      <a-button :loading="reclassifying" @click="onReclassify">{{ t2('重新分级') }}</a-button>
       <a-select
         v-model:value="targetId"
         style="min-width: 240px"
@@ -38,33 +47,69 @@
       </a-button>
       <a-button :disabled="!selected.length" @click="selected = []">{{ t2('清空勾选') }}</a-button>
     </div>
+
+    <!-- 打标弹窗（单卡 ＋标签 / 选择条 打标签 复用） -->
+    <a-modal v-model:open="tagOpen" :title="t2('打标签')" :confirm-loading="tagging" @ok="doTag">
+      <a-select v-model:value="tagPick" style="width: 100%" :placeholder="t2('选择标签')" :loading="loadingTags"
+        show-search option-filter-prop="label" :options="tagOptions" />
+    </a-modal>
+
+    <!-- 编辑弹窗：表注释 + 列注释局部可编辑 -->
+    <a-modal v-model:open="editOpen" :title="t2('编辑元数据')" :confirm-loading="saving" width="640px" @ok="doEdit">
+      <a-form layout="vertical">
+        <a-form-item :label="t2('表说明')">
+          <a-textarea v-model:value="editForm.table_comment" :rows="2" />
+        </a-form-item>
+        <a-form-item :label="t2('业务名')">
+          <a-input v-model:value="editForm.biz_name" />
+        </a-form-item>
+        <a-spin :spinning="loadingCols">
+          <a-table :data-source="editColumns" :columns="colEditCols" :pagination="false" size="small" row-key="column_name">
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'column_comment'">
+                <a-input v-model:value="record.column_comment" size="small" />
+              </template>
+            </template>
+          </a-table>
+        </a-spin>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * 资产送数面板（AF-08 正向送数，§4.7 / §6.5）：类型树 + 全文检索 + 卡片多选 → PUT draft-scope。
- * 关键约束：送数**不写结构表**，只落 `meta_ontology.draft_scope_json`；一个作用域仅单一 source_id（§4.7-5）。
- * 复用 E40/E28/E1/E33，不改既有级联浏览（本面板为并列模式，由 MetadataExplorer 切换进入）。
+ * 资产送数面板（AF-03/06/07/08，§4.7 / §6.5）：类型树 + 全文检索 + 卡片多选 → PUT draft-scope。
+ * 卡片操作区（测试/编辑/＋标签）与选择条（打标签/批量探活/重新分级）经此编排：
+ * 探活限流、打标载荷等决策委托 :mod:`assetOps` 纯函数；跨源约束在卡片层拦截。
+ * 送数**不写结构表**，只落 `meta_ontology.draft_scope_json`；一个作用域仅单一 source_id（§4.7-5）。
  */
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { assetsSearch, listOntologies, putDraftScope } from '@/api/dataops'
+import {
+  assetsSearch, bindAssetTag, listAssetTags, listMetaColumns, listOntologies,
+  putDraftScope, reclassifyTags, testTable, testTables, updateTableMeta,
+} from '@/api/dataops'
 import { t2 } from '../ontology/ontologyText'
 import AssetTypeTree from './AssetTypeTree.vue'
 import AssetSearchBar from './AssetSearchBar.vue'
 import AssetCardList from './AssetCardList.vue'
+import { buildBindTagPayload, checkBatchProbeLimit } from './assetOps'
 
 const treeRef = ref<any>(null)
+const cardRef = ref<any>(null)
 const loading = ref(false)
 const items = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
 const size = ref(50)
 const selected = ref<any[]>([])
+const probe = ref<Record<number, { ok: boolean; code?: string | null }>>({})
 
 const sourceId = ref<number | null>(null)
-const lastQuery = ref<{ kw: string; tag_ids: number[]; kind: string }>({ kw: '', tag_ids: [], kind: 'table' })
+const lastQuery = reactive<{
+  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number
+}>({ kw: '', tag_ids: [], kind: 'table', table_type: undefined, sort: 'score', size: 50 })
 
 const ontologies = ref<any[]>([])
 const loadingOnt = ref(false)
@@ -78,10 +123,12 @@ async function runSearch() {
   loading.value = true
   try {
     const resp: any = await assetsSearch({
-      kw: lastQuery.value.kw || undefined,
+      kw: lastQuery.kw || undefined,
       source_id: sourceId.value || undefined,
-      tag_ids: lastQuery.value.tag_ids.length ? lastQuery.value.tag_ids : undefined,
-      kind: lastQuery.value.kind as any,
+      tag_ids: lastQuery.tag_ids.length ? lastQuery.tag_ids : undefined,
+      kind: lastQuery.kind as any,
+      table_type: lastQuery.table_type,
+      sort: lastQuery.sort,
       page: page.value,
       size: size.value,
     })
@@ -98,8 +145,11 @@ function onSource(id: number | null) {
   runSearch()
 }
 
-function onSearch(payload: { kw: string; tag_ids: number[]; kind: string }) {
-  lastQuery.value = payload
+function onSearch(payload: {
+  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number
+}) {
+  Object.assign(lastQuery, payload)
+  if (payload.size) size.value = payload.size
   page.value = 1
   runSearch()
 }
@@ -115,6 +165,149 @@ function onToggle(row: any, checked: boolean) {
     if (!selected.value.some((s) => s.table_id === row.table_id)) selected.value.push(row)
   } else {
     selected.value = selected.value.filter((s) => s.table_id !== row.table_id)
+  }
+}
+
+// ── 探活（单表 + 批量限流 20） ────────────────────────────────────
+const probing = ref(false)
+async function onTest(row: any) {
+  const sid = row.source_id
+  cardRef.value?.setProbing?.(row.table_id, true)
+  try {
+    const resp: any = await testTable(sid, row.table_id)
+    probe.value = { ...probe.value, [row.table_id]: { ok: resp?.ok ?? true, code: null } }
+  } catch (err: any) {
+    const code = err?.code || err?.response?.data?.code || null
+    probe.value = { ...probe.value, [row.table_id]: { ok: false, code } }
+  } finally {
+    cardRef.value?.setProbing?.(row.table_id, false)
+  }
+}
+
+async function onProbeBatch() {
+  const ids = selected.value.map((s) => s.table_id)
+  const guard = checkBatchProbeLimit(ids)
+  if (!guard.ok) {
+    message.warning(t2(guard.message || '批量探活数量不合规'))
+    return
+  }
+  const sid = selected.value[0].source_id
+  probing.value = true
+  try {
+    const resp: any = await testTables(sid, ids)
+    const next = { ...probe.value }
+    for (const r of resp?.results || []) next[r.table_id] = { ok: r.ok, code: r.code ?? null }
+    probe.value = next
+  } finally {
+    probing.value = false
+  }
+}
+
+// ── 重新分级（security 规则自动打标手动补刷） ─────────────────────
+const reclassifying = ref(false)
+async function onReclassify() {
+  reclassifying.value = true
+  try {
+    const resp: any = await reclassifyTags()
+    message.success(t2(`已重跑 pii 规则：新增 ${resp?.bound ?? 0} · 移除 ${resp?.removed ?? 0}`))
+    runSearch()
+  } finally {
+    reclassifying.value = false
+  }
+}
+
+// ── 打标（单卡 / 批量） ───────────────────────────────────────────
+const tagOpen = ref(false)
+const tagging = ref(false)
+const tagPick = ref<number | null>(null)
+const tagTargetIds = ref<number[]>([])
+const tagOptions = ref<{ label: string; value: number }[]>([])
+const loadingTags = ref(false)
+
+async function ensureTags() {
+  if (tagOptions.value.length) return
+  loadingTags.value = true
+  try {
+    const resp: any = await listAssetTags()
+    const arr = Array.isArray(resp) ? resp : (resp?.items || [])
+    tagOptions.value = arr.map((t: any) => ({ label: t.name || t.code, value: t.id }))
+  } finally {
+    loadingTags.value = false
+  }
+}
+
+function openTag(row: any) {
+  tagTargetIds.value = [row.table_id]
+  tagPick.value = null
+  tagOpen.value = true
+  ensureTags()
+}
+
+function openTagBatch() {
+  tagTargetIds.value = selected.value.map((s) => s.table_id)
+  tagPick.value = null
+  tagOpen.value = true
+  ensureTags()
+}
+
+async function doTag() {
+  if (!tagPick.value || !tagTargetIds.value.length) return
+  tagging.value = true
+  try {
+    await bindAssetTag(buildBindTagPayload(tagPick.value, tagTargetIds.value))
+    message.success(t2('已打标'))
+    tagOpen.value = false
+    runSearch()
+  } finally {
+    tagging.value = false
+  }
+}
+
+// ── 编辑元数据（表注释 + 列注释） ─────────────────────────────────
+const editOpen = ref(false)
+const saving = ref(false)
+const loadingCols = ref(false)
+const editRow = ref<any>(null)
+const editForm = reactive<{ table_comment: string; biz_name: string }>({ table_comment: '', biz_name: '' })
+const editColumns = ref<any[]>([])
+const colEditCols = [
+  { title: t2('列名'), dataIndex: 'column_name', key: 'column_name', width: 160 },
+  { title: t2('列说明'), key: 'column_comment', dataIndex: 'column_comment' },
+]
+
+async function openEdit(row: any) {
+  editRow.value = row
+  editForm.table_comment = row.table_comment || ''
+  editForm.biz_name = row.biz_name || ''
+  editColumns.value = []
+  editOpen.value = true
+  loadingCols.value = true
+  try {
+    const resp: any = await listMetaColumns(row.source_id, row.table_id)
+    const arr = Array.isArray(resp) ? resp : (resp?.items || [])
+    editColumns.value = arr.map((c: any) => ({
+      column_name: c.column_name, column_comment: c.column_comment || '',
+    }))
+  } finally {
+    loadingCols.value = false
+  }
+}
+
+async function doEdit() {
+  const row = editRow.value
+  if (!row) return
+  saving.value = true
+  try {
+    await updateTableMeta(row.source_id, row.table_id, {
+      table_comment: editForm.table_comment,
+      biz_name: editForm.biz_name || undefined,
+      columns: editColumns.value.map((c) => ({ column_name: c.column_name, column_comment: c.column_comment })),
+    })
+    message.success(t2('已保存'))
+    editOpen.value = false
+    runSearch()
+  } finally {
+    saving.value = false
   }
 }
 

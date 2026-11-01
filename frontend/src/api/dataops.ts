@@ -225,8 +225,30 @@ export function assetsTree() {
 /** 表/字段/注释检索（AF-02/05）：返回表卡片含 column_digest/pii_max_level/tags/score */
 export function assetsSearch(params: {
   kw?: string; source_id?: number; tag_ids?: number[]; kind?: 'table' | 'column'; page?: number; size?: number
+  table_type?: string; sort?: string
 }) {
   return request.get(`${BASE}/assets/search`, { params })
+}
+
+// ── 表级探活 / 元数据编辑（AF-03/06/07，Task 8/9 端点） ───────────────
+/** 单表可读性探活：成功 {table_id,ok:true,code:null}；失败按 ApiError 码渲染（源不可达 502 等） */
+export function testTable(sourceId: number, tableId: number) {
+  return request.post(`${BASE}/sources/${sourceId}/tables/${tableId}/test`)
+}
+/** 批量探活（串行，单次上限 20）：返回 {results:[{table_id,ok,code}]} */
+export function testTables(sourceId: number, tableIds: number[]) {
+  return request.post(`${BASE}/sources/${sourceId}/tables/test-batch`, { table_ids: tableIds })
+}
+/** 编辑扫描元数据（表/列说明与业务名）：写回 meta_table/meta_column，不动物理结构 */
+export function updateTableMeta(
+  sourceId: number,
+  tableId: number,
+  body: {
+    table_comment?: string; biz_name?: string; biz_description?: string
+    columns?: { column_name: string; column_comment?: string; biz_name?: string }[]
+  },
+) {
+  return request.put(`${BASE}/sources/${sourceId}/tables/${tableId}`, body)
 }
 
 // ── E4-E8 构建任务 + SSE ─────────────────────────────────────────
@@ -331,6 +353,10 @@ export function deleteAssetTag(id: number) {
 /** 批量打标/摘标：{tag_id, asset_kind, asset_ids[], op:bind|unbind} */
 export function bindAssetTag(body: { tag_id: number; asset_kind: string; asset_ids: number[]; op: 'bind' | 'unbind' }) {
   return request.post(`${BASE}/asset-tags/bind`, body)
+}
+/** 手动重分级（AF-03）：租户全量重跑 pii>=L2 规则自动打标，返回 {tag,bound,removed} */
+export function reclassifyTags() {
+  return request.post(`${BASE}/asset-tags/reclassify`)
 }
 
 // ── E34-E36 应用发布登记 ─────────────────────────────────────────

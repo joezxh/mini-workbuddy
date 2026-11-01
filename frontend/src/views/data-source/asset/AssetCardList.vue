@@ -40,6 +40,16 @@
               <a-tag v-for="tg in it.tags || []" :key="tg.code" :color="tg.color || undefined">{{ tg.name }}</a-tag>
             </span>
           </div>
+          <div class="asset-cards__ops">
+            <a-button
+              size="small"
+              :class="['probe', probeView(probe?.[it.table_id]).cls]"
+              :loading="probing.has(it.table_id)"
+              @click="emit('test', it)"
+            >{{ t2(probeView(probe?.[it.table_id]).text) }}</a-button>
+            <a-button size="small" @click="emit('edit', it)">{{ t2('编辑') }}</a-button>
+            <a-button size="small" @click="emit('tag', it)">{{ t2('＋标签') }}</a-button>
+          </div>
         </div>
       </div>
     </a-spin>
@@ -65,6 +75,9 @@ import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { t2 } from '../ontology/ontologyText'
 import { hl, fmtRows } from './assetText'
+import { probeView } from './assetOps'
+
+type ProbeResult = { ok: boolean; code?: string | null }
 
 const props = defineProps<{
   items: any[]
@@ -74,11 +87,27 @@ const props = defineProps<{
   loading?: boolean
   selected: any[]
   kw?: string
+  /** 各表探活结果（table_id → 结果），由父级探活后回填；缺省视为空闲态 */
+  probe?: Record<number, ProbeResult>
 }>()
 const emit = defineEmits<{
   (e: 'toggle', row: any, checked: boolean): void
   (e: 'page-change', page: number): void
+  (e: 'test', row: any): void
+  (e: 'edit', row: any): void
+  (e: 'tag', row: any): void
 }>()
+
+/** 正在探活的表 ID（按钮 loading 态，与回填结果独立） */
+const probing = ref<Set<number>>(new Set())
+defineExpose({
+  /** 父级发起探活前置 loading，返回后清除 */
+  setProbing(tableId: number, on: boolean) {
+    const next = new Set(probing.value)
+    next.has(tableId) ? next.delete(tableId) : on && next.add(tableId)
+    probing.value = next
+  },
+})
 
 /** PII 配色（原型口径）：L2/L3 → 错误(红)，其余（L1）→ 告警(黄) */
 function piiTone(level: string) {
@@ -186,6 +215,10 @@ function toggleExp(id: number) {
   &__pager {
     align-self: flex-end;
   }
+  &__ops {
+    display: flex;
+    gap: 6px;
+  }
 }
 // 三段确定性得分徽章（原型 .score.s3/s2/s1 配色）
 .score {
@@ -232,6 +265,19 @@ function toggleExp(id: number) {
     background: #fff1f0;
     border-color: #ffa39e;
     color: #cf1322;
+  }
+}
+// 探活按钮三态（空闲/通过/失败）
+.probe {
+  &.ok {
+    color: #389e0d;
+    border-color: #b7eb8f;
+    background: #f6ffed;
+  }
+  &.err {
+    color: #cf1322;
+    border-color: #ffa39e;
+    background: #fff1f0;
   }
 }
 </style>
