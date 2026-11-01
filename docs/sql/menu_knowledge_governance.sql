@@ -40,11 +40,19 @@ FROM (VALUES
 (2402, '数据源',             'knowledge.menu.dataSource','/admin/kg-data-source',     2401, 2, 0, 'kg:datasource:read',2, 'DatabaseOutlined',  NULL, false, 1, 0, 0),
 -- 本体（ontology 建模）
 (2405, '本体',               'knowledge.menu.ontology',  '/admin/kg-ontology',         2401, 3, 0, 'kg:ontology:read', 2, 'ApartmentOutlined', NULL, false, 1, 0, 0),
--- 孪生应用（菜单入口；Plan 1 只落后端，页面/路由属 Plan 2，故 visible=0 先压住侧栏）
+-- 数据资产目录（AF-01~AF-08）：路径末段 data-asset = componentMap key = i18n_key 末段
+(2406, '数据资产',           'knowledge.menu.dataAsset', '/admin/data-asset',          2401, 4, 0, 'kg:asset:read',    2, 'DatabaseOutlined',  NULL, false, 1, 0, 0),
+-- 孪生应用（菜单入口；Plan 2 前端已交付，path 改 /admin/digital-twin 并点亮侧栏）
 -- 注：原定 2406 已被上方的「数据资产」占用，故取下一个空号 2407（sort 顺延为 5）
-(2407, '孪生应用',         'knowledge.menu.twin',      '/admin/kg-twin',         2401, 5, 0, 'kg:twin:read',    2, 'DeploymentUnitOutlined', NULL, false, 0, 0, 0)
+(2407, '孪生应用',         'knowledge.menu.twin',      '/admin/digital-twin',    2401, 5, 0, 'kg:twin:read',    2, 'DeploymentUnitOutlined', NULL, false, 1, 0, 0),
+-- 推演沙盘（沙箱域 S1–S21）：path 末段 simulation = componentMap key = i18n_key 末段；页面对齐 ontology-simulation-sandbox-preview.html 原型
+(2408, '推演沙盘',         'knowledge.menu.simulation','/admin/simulation',      2401, 6, 0, 'kg:simulation:read', 2, 'NodeIndexOutlined', NULL, false, 1, 0, 0)
 ) AS v(id, name, i18n_key, path, parent_id, sort, status, permission, type, icon, component, is_deleted, visible, keep_alive, always_show)
 WHERE NOT EXISTS (SELECT 1 FROM "public"."sys_menu" s WHERE s.id = v.id);
+
+-- 已存在部署：Plan 1 交付的行是 ('/admin/kg-twin', visible=0)，Plan 2 幂等改写。
+-- 重跑无害（仅设置相同值）；全新安装由上方 VALUES 行直接带回新值，两路收敛到同一状态。
+UPDATE "public"."sys_menu" SET path = '/admin/digital-twin', visible = 1, updated_at = now() WHERE id = 2407;
 
 -- 已存在部署：将旧「知识库」(2403, kg-kb) 幂等改写为统一工作台。
 -- 重跑无害（仅设置相同值）；统一工作台收口后旧 kg-kb 管理视图不再单独进菜单。
@@ -78,7 +86,7 @@ UPDATE "public"."sys_menu" SET visible = 0, updated_at = now() WHERE id = 2;
 INSERT INTO "public"."sys_role_menu" (role_id, menu_id)
 SELECT r.role_id, m.id
 FROM "public"."sys_role" r
-CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2407 AND id <> 2404) m
+CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2408 AND id <> 2404) m
 WHERE NOT EXISTS (
   SELECT 1 FROM "public"."sys_role_menu" rm
   WHERE rm.role_id = r.role_id AND rm.menu_id = m.id

@@ -27,9 +27,9 @@ FIELDS = ["id", "name", "i18n_key", "path", "parent_id", "sort", "status", "perm
           "type", "icon", "component", "is_deleted", "visible", "keep_alive", "always_show"]
 EXPECTED = {
     "id": TWIN_ID, "name": "'孪生应用'", "i18n_key": "'knowledge.menu.twin'",
-    "path": "'/admin/kg-twin'", "parent_id": "2401", "sort": "5", "status": "0",
+    "path": "'/admin/digital-twin'", "parent_id": "2401", "sort": "5", "status": "0",
     "permission": "'kg:twin:read'", "type": "2", "icon": "'DeploymentUnitOutlined'",
-    "component": "NULL", "is_deleted": "false", "visible": "0",
+    "component": "NULL", "is_deleted": "false", "visible": "1",
     "keep_alive": "0", "always_show": "0",
 }
 
@@ -105,14 +105,27 @@ def test_every_values_row_but_the_last_ends_with_comma():
 
 
 def test_role_grant_range_covers_twin_row():
-    """角色授权范围不同步 → 菜单真打开那天所有角色都看不到它（比后端 403 更难查的幽灵 bug）。"""
-    needle = f"BETWEEN 2401 AND {TWIN_ID} AND id <> 2404"
+    """角色授权范围必须覆盖孪生行 2407（菜单真打开那天所有角色都看得到它）。
+
+    不钉死精确末值：并行特性会把范围末界合法外推（沙盘 2408 使 `menu_knowledge_governance.sql`
+    已到 `AND 2408`，而 `init.sql` 仍停在 `AND 2407`——两文件此刻合法分叉）。钉 `AND 2407`
+    会在别人加菜单时假失败，故判据改为「末界 ≥ 2407」= 覆盖孪生行，且 `id <> 2404` 排除项仍在。
+    """
+    pat = re.compile(r"BETWEEN 2401 AND (\d+) AND id <> 2404")
+    for path in (GOV, INIT):
+        ends = [int(m) for m in pat.findall(path.read_text(encoding="utf-8"))]
+        assert ends, f"{path.name} 找不到知识治理角色授权范围（BETWEEN 2401 AND <N> AND id <> 2404）"
+        assert max(ends) >= int(TWIN_ID), \
+            f"{path.name} 角色授权末界 {max(ends)} 未覆盖孪生行 {TWIN_ID}"
+
+
+def test_twin_upgrade_update_present_in_both_files():
+    """存量安装靠这条幂等 UPDATE 收敛（VALUES 的 NOT EXISTS 不会改已插的旧行）。"""
     for path in (GOV, INIT):
         raw = path.read_text(encoding="utf-8")
-        assert needle in raw, f"{path.name} 的角色授权范围未覆盖 {TWIN_ID}"
-        for stale in ("2405", "2406"):
-            assert f"BETWEEN 2401 AND {stale} AND id <> 2404" not in raw, \
-                f"{path.name} 还残留旧范围 AND {stale}"
+        assert "WHERE id = 2407" in raw, f"{path.name} 缺少 2407 的幂等 UPDATE"
+        assert "SET path = '/admin/digital-twin', visible = 1" in raw, \
+            f"{path.name} 的 2407 UPDATE 字段不全"
 
 
 def test_twin_row_inserts_and_is_idempotent(db):
@@ -133,9 +146,16 @@ def test_twin_row_inserts_and_is_idempotent(db):
     db.commit()
     assert second.rowcount == 0, "WHERE NOT EXISTS 没生效 → 重跑会插重复菜单"
 
+    # 模拟存量安装的真实收敛路径：旧行（kg-twin/0）已在库，Plan 2 的幂等 UPDATE 把它改写。
+    # 全新安装 VALUES 行本就带新值，UPDATE 是设相同值的 no-op；两路都落到 digital-twin/1。
+    upd = ("UPDATE sys_menu SET path = '/admin/digital-twin', visible = 1, "
+           "updated_at = now() WHERE id = 2407")
+    db.execute(text(upd))
+    db.commit()
+
     got = db.execute(text(f"SELECT id, name, path, permission, type, parent_id, sort, visible "
                           f"FROM sys_menu WHERE id = {TWIN_ID}")).mappings().all()
     assert len(got) == 1
-    assert dict(got[0]) == {"id": 2407, "name": "孪生应用", "path": "/admin/kg-twin",
+    assert dict(got[0]) == {"id": 2407, "name": "孪生应用", "path": "/admin/digital-twin",
                             "permission": "kg:twin:read", "type": 2, "parent_id": 2401,
-                            "sort": 5, "visible": 0}
+                            "sort": 5, "visible": 1}
