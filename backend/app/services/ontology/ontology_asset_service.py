@@ -18,7 +18,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.api_error import (
-    ApiError, DRAFT_SCOPE_EMPTY, ONTOLOGY_NOT_FOUND, ONTOLOGY_STOPPED,
+    ApiError, BUILD_SCOPE_SINGLE_SOURCE, DRAFT_SCOPE_EMPTY,
+    ONTOLOGY_NOT_FOUND, ONTOLOGY_STOPPED,
 )
 from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
 from app.models.dataops.meta import MetaColumn, MetaTable
@@ -208,8 +209,24 @@ class OntologyAssetService:
         return obj
 
     def get_draft_scope(self, ontology_id: int) -> dict:
+        """回显送数作用域；tables 模式下失效表静默剔除并回传条数（Q4 裁决，AF-08）。"""
         obj = self._ontology_or_404(ontology_id)
-        return {"ontology_id": ontology_id, "draft_scope": obj.draft_scope_json}
+        scope = obj.draft_scope_json or {}
+        tables = [t for t in (scope.get("tables") or []) if t]
+        removed = 0
+        if tables and scope.get("source_id") and scope.get("mode", "tables") == "tables":
+            live = set(self.db.execute(
+                select(MetaTable.table_name).where(
+                    MetaTable.tenant_id == self.tenant_id,
+                    MetaTable.source_id == scope["source_id"],
+                    MetaTable.table_name.in_(tables))
+            ).scalars().all())
+            removed = len([t for t in tables if t not in live])
+            if removed:
+                obj.draft_scope_json = {**scope, "tables": [t for t in tables if t in live]}
+                self.db.flush()
+        return {"ontology_id": ontology_id,
+                "draft_scope": obj.draft_scope_json, "removed_stale": removed}
 
     def put_draft_scope(self, ontology_id: int, scope: Optional[dict]) -> dict:
         """全量覆盖语义；空清单且非显式清空 → ``DRAFT_SCOPE_EMPTY``；``stopped`` 拒绝。"""
@@ -220,6 +237,22 @@ class OntologyAssetService:
         non_empty = bool(payload.get("tables") or payload.get("tag_ids") or payload.get("catalog_ids"))
         if not non_empty and not payload.get("clear"):
             raise ApiError(DRAFT_SCOPE_EMPTY, "送数作用域为空（未勾选任何表/标签/目录）")
+        # 服务端单源终防线（AF-08）：tables 模式实查 meta_table，跨源/失表一律拦截；显式清空跳过
+        if non_empty and payload.get("mode", "tables") == "tables":
+            src = payload.get("source_id")
+            names = [t for t in (payload.get("tables") or []) if t]
+            if not src:
+                raise ApiError(BUILD_SCOPE_SINGLE_SOURCE, "送数作用域缺少 source_id")
+            found = set(self.db.execute(
+                select(MetaTable.table_name).where(
+                    MetaTable.tenant_id == self.tenant_id, MetaTable.source_id == src,
+                    MetaTable.table_name.in_(names or ["__none__"]))
+            ).scalars().all())
+            missing = sorted(set(names) - found)
+            if missing:
+                raise ApiError(BUILD_SCOPE_SINGLE_SOURCE,
+                               f"表不属于锁定数据源 {src}: {', '.join(missing[:5])}",
+                               detail={"source_id": src, "missing": missing})
         obj.draft_scope_json = payload if non_empty else None
         self.db.flush()
         return {"ontology_id": ontology_id, "draft_scope": obj.draft_scope_json}
