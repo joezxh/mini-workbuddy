@@ -7,7 +7,7 @@ import Antd from 'ant-design-vue'
 vi.mock('@/views/data-source/ontology/ontologyText', () => ({ t2: (s: string) => s }))
 
 import AssetCardList from '../AssetCardList.vue'
-import { hl, fmtRows } from '../assetText'
+import { hl, fmtRows, renderColumnDigest } from '../assetText'
 
 /** 纯函数：高亮与行数格式化（从原型 JS 移植，忠实复刻取整口径） */
 describe('assetText 纯函数', () => {
@@ -66,5 +66,20 @@ describe('AssetCardList 渲染（AF-05）', () => {
   it('行数格式化', async () => {
     const html = await render()
     expect(html).toContain('128万')
+  })
+})
+
+describe('renderColumnDigest（AF-05）', () => {
+  it('PII L2/L3 标红 + COMMENT 段 + 关键词高亮', () => {
+    const html = renderColumnDigest(
+      [{ name: 'id_card', type: 'VARCHAR', comment: '身份证号', pii: 'L3' },
+       { name: 'qty', type: 'INT', comment: '', pii: 'L0' }], 'id')
+    expect((html.match(/cc-pii/g) || []).length).toBe(1)
+    expect(html).toContain('COMMENT')
+    expect(html).toContain('<mark>id</mark>_card')
+    expect(html).toContain('qty INT')
+  })
+  it('空列返回空串', () => {
+    expect(renderColumnDigest([], 'x')).toBe('')
   })
 })

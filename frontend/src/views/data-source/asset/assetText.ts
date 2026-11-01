@@ -26,3 +26,16 @@ export function fmtRows(n: number | null | undefined): string {
   if (n >= 1e4) return (n / 1e4).toFixed(n >= 1e6 ? 0 : 1) + '万'
   return String(n)
 }
+
+export interface DigestColumn { name: string; type?: string; comment?: string; pii?: string }
+
+/** 逐列内联摘要（移植原型 dg）：PII L2/L3 标红、关键词高亮、COMMENT 注释段、`·` 分隔 */
+export function renderColumnDigest(cols: DigestColumn[], kw = ''): string {
+  if (!cols || !cols.length) return ''
+  return cols.map((c) => {
+    const pii = c.pii === 'L2' || c.pii === 'L3'
+    const head = `${hl(c.name, kw)} ${esc(c.type || '')}`.trimEnd()
+    const tail = c.comment ? ` <span class="cc">COMMENT <b>'${hl(c.comment, kw)}'</b></span>` : ''
+    return `<span class="${pii ? 'cc-pii' : ''}">${head}${tail}</span>`
+  }).join(' <span class="dot">·</span> ')
+}
