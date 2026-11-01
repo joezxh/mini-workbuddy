@@ -126,6 +126,36 @@ def builtin_types() -> List[str]:
     return list(TYPE_META)
 
 
+# ── 资产粗分类（AF-01；spec 2026-11-01 §1.1，Q1 裁决 B：物化列取值域，不进字典）──
+EXTERNAL_TYPE_CODES = (
+    "rdbms", "tsdb", "warehouse", "graph", "kv", "vector", "search", "file", "saas", "other",
+)
+EXTERNAL_TYPE_LABELS = {
+    "rdbms": "关系型数据库",
+    "tsdb": "时序数据库",
+    "warehouse": "数仓 / 大数据",
+    "graph": "图数据库",
+    "kv": "NoSQL 键值",
+    "vector": "向量库",
+    "search": "搜索引擎",
+    "file": "文件资源",
+    "saas": "API / SaaS",
+    "other": "其他",
+}
+#: source_type → external_type 回填矩阵（Q2 裁决：clickhouse/doris/starrocks → warehouse）
+DEFAULT_EXTERNAL_TYPE_BY_SOURCE_TYPE = {
+    "mysql": "rdbms", "oracle": "rdbms", "postgresql": "rdbms",
+    "sqlserver": "rdbms", "dm": "rdbms", "kingbase": "rdbms",
+    "clickhouse": "warehouse", "doris": "warehouse", "starrocks": "warehouse",
+    "es": "search", "excel": "file",
+}
+
+
+def external_type_for(source_type: Optional[str]) -> str:
+    """按矩阵派生资产粗分类；未知类型显式落 other（不再默默归 rdbms）。"""
+    return DEFAULT_EXTERNAL_TYPE_BY_SOURCE_TYPE.get((source_type or "").lower().strip(), "other")
+
+
 def meta_for(item_code: str) -> Optional[Dict[str, Any]]:
     return TYPE_META.get((item_code or "").lower().strip())
 

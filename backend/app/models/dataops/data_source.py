@@ -4,7 +4,8 @@
 API 永不返回明文，仅回 ``has_password`` 布尔。
 """
 from sqlalchemy import (
-    BigInteger, Boolean, Column, Integer, JSON, String, Text, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Boolean, CheckConstraint, Column, Index, Integer, JSON, String, Text, TIMESTAMP,
+    UniqueConstraint, func,
 )
 
 from app.db.database import Base
@@ -20,6 +21,11 @@ class DataSource(Base, TenantMixin):
     name = Column(String(128), nullable=False, comment="显示名称")
     # 取值合法性以字典 data_source_type 启用项为准（见 services/dataops/source_types.py）
     source_type = Column(String(32), nullable=False, comment="数据源类型（字典 item_code）")
+    # 资产粗分类（AF-01，Q1 裁决 B 物化列）：创建时按矩阵派生，管理员可手改覆盖
+    external_type = Column(
+        String(32), nullable=False, server_default="other",
+        comment="资产粗分类: rdbms|tsdb|warehouse|graph|kv|vector|search|file|saas|other",
+    )
     host = Column(String(256), nullable=False, comment="主机")
     port = Column(Integer, nullable=False, comment="端口")
     username = Column(String(128), nullable=True, comment="用户名")
@@ -45,6 +51,11 @@ class DataSource(Base, TenantMixin):
     __table_args__ = (
         # 租户内名称唯一：全局唯一会跨租户泄露名称占用情况（对 spec「unique」的租户化收窄）
         UniqueConstraint("tenant_id", "name", name="uq_data_source_name"),
+        CheckConstraint(
+            "external_type IN ('rdbms','tsdb','warehouse','graph','kv','vector','search','file','saas','other')",
+            name="ck_meta_data_source_external_type",
+        ),
+        Index("idx_meta_data_source_tenant_extype", "tenant_id", "external_type"),
     )
 
     def __repr__(self) -> str:

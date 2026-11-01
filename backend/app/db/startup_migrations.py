@@ -118,6 +118,11 @@ _COLUMN_MIGRATIONS: list[str] = [
     "ALTER TABLE kms_collection ADD COLUMN IF NOT EXISTS retrieval_settings JSONB",
     # 外部代理调用方白名单（spec §10.6 引用与调用方管理）
     "ALTER TABLE kms_external_kb_endpoint ADD COLUMN IF NOT EXISTS allowed_callers JSONB",
+    # 资产粗分类物化列（AF-01，Q1 裁决 B；与迁移 2026_11_01_0010 同义，AUTO_CREATE_TABLES 路径兜底）
+    "ALTER TABLE meta_data_source ADD COLUMN IF NOT EXISTS external_type VARCHAR(32) NOT NULL DEFAULT 'other'",
+    "ALTER TABLE meta_data_source DROP CONSTRAINT IF EXISTS ck_meta_data_source_external_type",
+    "ALTER TABLE meta_data_source ADD CONSTRAINT ck_meta_data_source_external_type CHECK (external_type IN ('rdbms','tsdb','warehouse','graph','kv','vector','search','file','saas','other'))",
+    "CREATE INDEX IF NOT EXISTS idx_meta_data_source_tenant_extype ON meta_data_source (tenant_id, external_type)",
     "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS chunk_type VARCHAR(16) NOT NULL DEFAULT 'text'",
     "ALTER TABLE kms_segment ADD COLUMN IF NOT EXISTS parent_id BIGINT",
     "CREATE INDEX IF NOT EXISTS idx_kms_segment_parent ON kms_segment (parent_id)",
