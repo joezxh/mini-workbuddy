@@ -168,19 +168,26 @@ def _fake_user(tenant_id: Optional[int]) -> SysUser:
     return user
 
 
-def build_client(db: Session, tenant_id: Optional[int], *, with_twin: bool = False) -> TestClient:
+def build_client(db: Session, tenant_id: Optional[int], *, with_twin: bool = False,
+                 with_publish: bool = False) -> TestClient:
     """挂载 dataops 父 router（含 ontology 子 router）的测试客户端。
 
-    ``with_twin=True`` 额外挂 ``/api/v1/twins`` 与 ``/twin-p`` 路由（Task 6 起可用）；
-    默认 False，故 Task 1–5 阶段不会去 import 尚不存在的孪生 router。
+    ``with_twin=True`` 额外挂 ``/api/v1/twins`` 路由（Task 6 起可用）；
+    ``with_publish=True`` 再挂 ``/api/v1/twin-p`` 只读页路由（Task 8 起可用）；
+    默认均为 False，故 Task 1–5 阶段不会去 import 尚不存在的孪生 router。
     """
     from app.routers.dataops.dataops import router as dataops_router
 
     app = FastAPI()
     app.include_router(dataops_router)
-    if with_twin:
+    if with_twin or with_publish:
         from app.routers.twin.twin import router as twin_router
         app.include_router(twin_router)
+    if with_publish:
+        # 只读页要取数，而取数在**主 router** 上（T8/T9）；发布端点 T10 也在主 router。
+        # 所以 with_publish 必须把两个 router 都挂上，而不是只挂 publish_router。
+        from app.routers.twin.twin import publish_router
+        app.include_router(publish_router)
 
     # 与服务运行时同一错误契约：ApiError → {code, message, detail?}（main.py 亦如此注册）
     from app.core.api_error import register_api_error_handler
@@ -214,6 +221,17 @@ def twin_client_a(db: Session) -> TestClient:
 @pytest.fixture
 def twin_client_b(db: Session) -> TestClient:
     return build_client(db, TENANT_B, with_twin=True)
+
+
+@pytest.fixture
+def publish_client_a(db: Session) -> TestClient:
+    """同时挂 `/api/v1/twins/*`（T10 发布 + T8 取数）与 `/api/v1/twin-p/*`（T11 只读页）。"""
+    return build_client(db, TENANT_A, with_publish=True)
+
+
+@pytest.fixture
+def publish_client_b(db: Session) -> TestClient:
+    return build_client(db, TENANT_B, with_publish=True)
 
 
 @pytest.fixture

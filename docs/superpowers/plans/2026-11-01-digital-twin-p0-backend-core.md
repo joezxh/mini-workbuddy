@@ -5089,6 +5089,10 @@ def publish_client_b(db: Session) -> TestClient:
 > `with_twin` 分支不删：Task 6/7 的既有夹具仍在用它，且 `with_twin or with_publish` 的写法
 > 保证同一请求 Session 上不会出现主 router 的重复挂载（重复 include 会得到两份同路径路由，
 > Starlette 只匹配第一条，看似无害，实则让 OpenAPI 文档出现重复项）。
+>
+> 执行时保留（2026-11-01）：上面的代码块省略了 `build_client` 的 docstring，但本步自己的
+> 说明写的是「改动只在签名与挂载块两处」，因此**执行时保留并更新了 docstring**（把
+> `/twin-p` 从 `with_twin` 的描述里移给 `with_publish`），与计划意图一致。
 
 - [ ] **Step 3: 写失败测试（上：夹具 + slug / 快照 / 空页 / 未验证）**
 
@@ -5548,17 +5552,20 @@ def _record_access(db: Session, *, tenant_id: int, user_id: int, username: str,
        （先例同律：`sqlbot_template_tool.py:343-344`）。
     """
     try:
+        # 计划缺陷修正（执行时实测，2026-11-01）：`sys_audit_log` **没有 `tenant_id` 列**
+        # （`models/sys/sys_user.py` 的 `SysAuditLog` 以 `log_id` 为主键，不带 TenantMixin），
+        # 原稿的 `tenant_id=tenant_id` 会在构造实体时 `TypeError`；租户维度改落
+        # `request_params.tenantId`（与先例 `sqlbot_template_tool.py:328-336` 同律）。
         with Session(db.get_bind()) as s:
             s.add(SysAuditLog(
-                tenant_id=tenant_id,
                 user_id=user_id or None,
                 username=username or None,
                 operation_type="query",              # 沿用中间件的取值域，不发明新枚举
                 operation_module=AUDIT_MODULE,
                 operation_desc=f"访问孪生只读页 {slug}（{action}）"
                                + ("" if allowed else "：拒绝"),
-                request_params={"slug": slug, "action": action, "allowed": allowed,
-                                "reason": reason, "publishVersion": version},
+                request_params={"tenantId": tenant_id, "slug": slug, "action": action,
+                                "allowed": allowed, "reason": reason, "publishVersion": version},
                 response_status=200 if allowed else 403,
             ))
             s.commit()
@@ -5757,10 +5764,17 @@ class TwinPublishService:
 
         删行会让 slug 可被他人复用（历史链接指向新内容），且审计日志里的
         `publishVersion` 失去可追溯的记载。行由卡片/页面删除时的 FK CASCADE 自然带走。
+
+        重复停用回 **404**：已停用的行不再是「可被撤下的发布」。
+        （计划缺陷修正：执行时实测，2026-11-01——本步原稿缺这一道闸门，会得到
+        幂等式 204，与 Step 4 的 `test_unpublish_revokes_and_keeps_row` 相矛盾。）
         """
         row = self.db.get(TwinPublish, publish_id)
         if row is None or int(row.tenant_id or 0) != self.tenant_id:
             raise ApiError(TWIN_NOT_PUBLISHED, "发布记录不存在", 404, {"publish_id": int(publish_id)})
+        if str(row.status) != "enabled":
+            raise ApiError(TWIN_NOT_PUBLISHED, "发布记录已停用", 404,
+                           {"publish_id": int(publish_id), "status": str(row.status)})
         self._assert_writable_card(int(row.card_id))
         row.status = "disabled"
         self.db.commit()
@@ -5963,12 +5977,16 @@ def read_published_data(slug: str, body: Optional[DataBody] = None,
 改为：
 
 ```python
-    # --- 33~34. 孪生应用（两个 router 同模块，均自带完整 prefix，故此处不叠加）---
+    # --- 33. 孪生应用（同一模块两个 router，均自带完整 prefix，故此处不叠加）---
     # 先例：app.routers.kb.kg 的 router + build_router 两条目（:202/:204）。
     # 顺序不可颠倒也不可插到其它清单之间：本仓库的注册顺序即 Starlette 的匹配顺序。
     RouterSpec("app.routers.twin.twin", attr="router", tags=["孪生应用"]),
     RouterSpec("app.routers.twin.twin", attr="publish_router", tags=["孪生应用·只读页"]),
 ```
+
+> 计划缺陷修正（执行时实测，2026-11-01）：原稿把注释写成 `--- 33~34.`，但 Task 6 之后清单
+> 尾部已多了一条外部加进来的 **`--- 34. 视频会议 ---`**（LiveKit，不属于本计划），
+> 写 `33~34` 会与之重号；因此注释保持单号 `33.`，只在正文说明「同一模块两个 router」。
 
 - [ ] **Step 9: 跑到通过 + 启动不报错**
 
@@ -5996,6 +6014,11 @@ Run: `.\.venv\Scripts\python.exe -m pytest tests/twin tests/ontology tests/unit 
 Expected: 全绿。本任务不得回归 Task 1/4/5/6/7 的任何用例（尤其 `test_twin_data.py` 的 17 个：
 若它们变红，优先怀疑 `_pub_svc` 里改了 `_data_svc` 的构造顺序，或误动了 `TwinDataService` 的签名）。
 
+> ⚠️ **同 Task 7：本条合并跑不可用，必须逐目录跑**（跨目录收集污染 `Base.metadata` 先行缺陷，
+> 会得到成片的 `UndefinedTable: … "kms_segment" does not exist`）。实测（全部 EXIT=0）：
+> `tests/twin` **60 passed**（Task 6 的 20 + Task 7 的 17 + 本任务的 23）、
+> `tests/ontology` **79 passed**、`tests/unit` **309 passed / 1 skipped**。
+
 Run: `.\.venv\Scripts\python.exe -c "import app.main; print('router load ok')"`
 Expected: 输出 `router load ok`，且日志无 `路由模块加载失败: app.routers.twin.twin`（新增的
 第三条 `RouterSpec` 就是本步的验证对象；若 `attr="publish_router"` 写错，仓库的加载器会**打日志
@@ -6007,6 +6030,25 @@ Expected: 输出 `router load ok`，且日志无 `路由模块加载失败: app.
 git add backend/app/core/api_error.py backend/app/services/twin/twin_publish_service.py backend/app/routers/twin/twin.py backend/app/core/router_registry.py backend/tests/twin/conftest.py backend/tests/twin/test_twin_publish.py
 git commit -m "feat(twin): publish snapshot with anti-enumeration 403 and access audit"
 ```
+
+> 路径需按实际 cwd 写（cwd=`backend` 时去掉 `backend/` 前缀），提交前用
+> `git diff --cached --name-only` 核对无 frontend 混入。
+
+#### Task 8 执行记录（2026-11-01）
+
+交付：`twin_publish_service.py`（380 行）+ `publish_router` 与 T10/T11 四端点 +
+`router_registry` 第二条 `RouterSpec` + `conftest` 的 `with_publish` 与两个夹具 +
+`test_twin_publish.py`（**23 passed**）。未发现实现层生产缺陷，但计划有 3 处需修正：
+
+| # | 类别 | 现象 | 修法 |
+|---|---|---|---|
+| 19 | 计划缺陷（Step 6 代码） | `_record_access` 给 `SysAuditLog(tenant_id=…)`：该表**无 `tenant_id` 列**（不带 TenantMixin，主键 `log_id`），计划 Step 4 的 `test_record_access_never_raises` 因异常被吞成 warning 而**不会报错**——真实的审计写入在线上会 100% 静默失败 | 去掉 `tenant_id=` 入参，租户维度改落 `request_params.tenantId`（照 `sqlbot_template_tool.py` 先例） |
+| 20 | 计划缺陷（Step 6 vs Step 4） | `unpublish()` 无 `status` 闸门 ⇒ 重复停用回 204，`test_unpublish_revokes_and_keeps_row` 的 `assert 204 == 404` 失败（`22 passed / 1 failed`） | 按测试为真：补 `status != 'enabled'` → `TWIN_NOT_PUBLISHED` 404，不改测试 |
+| 21 | 环境漂移（Step 8） | 计划把注释写为 `--- 33~34.`，但尾部已存在外部加入的 `--- 34. 视频会议 ---`，会重号 | 注释保持 `33.`，只拆条目不拆编号 |
+
+反枚举不变量已按期望钉住：四条拒因不同的失败（角色不命中 / 跨租户 / 未知 slug / data 端点）
+得到**逐字相同**的 403 `DENY_MESSAGE`，差异只进审计 `request_params.reason`。
+快照/实时边界同样双向：结构（标题与参数实值）回快照、行数据每次直连现查。
 
 ---
 

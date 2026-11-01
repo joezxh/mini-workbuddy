@@ -18,9 +18,15 @@ from app.core.api_error import ApiError, TWIN_TENANT_REQUIRED
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
 from app.services.twin.twin_data_service import TwinDataService
+from app.services.twin.twin_publish_service import TwinPublishService
 from app.services.twin.twin_service import TEMPLATES, TwinService
 
 router = APIRouter(prefix="/api/v1/twins", tags=["孪生应用"])
+
+# 只读页与工作台共用同一个模块，但**不同前缀**：工作台走 /api/v1/twins/*（要写权限），
+# 只读页走 /api/v1/twin-p/*（只要发布授权）。分成两个 APIRouter 才可能在
+# router_registry 里各自挂载，也才挡住「把只读端点误挂到写权限链上」的错。
+publish_router = APIRouter(prefix="/api/v1/twin-p", tags=["孪生应用·只读页"])
 
 
 def _require_tenant_id(current_user: SysUser) -> int:
@@ -50,6 +56,16 @@ def _data_svc(db: Session, current_user: SysUser) -> TwinDataService:
     return TwinDataService(db, _require_tenant_id(current_user),
                            int(getattr(current_user, "user_id", 0) or 0), ctx,
                            session_factory=lambda: Session(bind, expire_on_commit=False))
+
+
+def _pub_svc(db: Session, current_user: SysUser) -> TwinPublishService:
+    """`session_factory` 与 `_data_svc()` 同一做法：只读页取数也要在工作线程里开新 Session，
+    不能复用当前请求 Session（SQLAlchemy Session 不是线程安全的）。"""
+    ctx = build_user_context(db, current_user)
+    bind = db.get_bind()
+    return TwinPublishService(db, _require_tenant_id(current_user),
+                              int(getattr(current_user, "user_id", 0) or 0), ctx,
+                              session_factory=lambda: Session(bind, expire_on_commit=False))
 
 
 class CardCreateBody(BaseModel):
@@ -124,6 +140,13 @@ class DataBody(BaseModel):
     """整页取数的**可选**页面级参数（spec §2.2 `{params}`）：只对本查询声明过的同名参数生效。"""
 
     params: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PublishBody(BaseModel):
+    """发布参数（spec §3.5）：`access=org` 同租户可见，`role` 仅指定角色可见（public 留 P1）。"""
+
+    access: str = Field("org", description="org|role")
+    role_codes: Optional[List[str]] = Field(None, max_length=32)
 
 
 # ---------------------------------------------------------------- T1–T3 卡片
@@ -255,3 +278,45 @@ def load_widget_data(widget_id: int, db: Session = Depends(get_db),
                      current_user: SysUser = Depends(get_current_user)) -> dict:
     """T9：单组件刷新与错误重试（原型 error 态的 ↻），只用已存 `param_values_json`。"""
     return _data_svc(db, current_user).load_widget(widget_id)
+
+
+# ------------------------------------------------------------ T10 发布 / 停用
+
+
+@router.post("/pages/{page_id}/publish")
+def publish_page(page_id: int, body: Optional[PublishBody] = None,
+                 db: Session = Depends(get_db),
+                 current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T10 发布。**恒回 200 而不是 201**：同一页面的重复发布是同一资源的版本推进
+    （slug 不变、version+1），回 201 会诱导前端把它当新资源再插一条。"""
+    b = body or PublishBody()
+    return _pub_svc(db, current_user).publish(page_id, access=b.access, role_codes=b.role_codes)
+
+
+@router.delete("/publish/{publish_id}", status_code=204)
+def unpublish_page(publish_id: int, db: Session = Depends(get_db),
+                   current_user: SysUser = Depends(get_current_user)) -> Response:
+    """T10 停用：改 `status='disabled'`，留行保审计与版本史，slug 不回收。"""
+    _pub_svc(db, current_user).unpublish(publish_id)
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------- T11 只读页（发布前缀）
+
+
+@publish_router.get("/{slug}")
+def read_published_page(slug: str, db: Session = Depends(get_db),
+                        current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T11 元数据：结构来自发布快照，发布后的编辑动作不影响已发布页面。
+
+    仍然要 `get_current_user`：P0 只发**登录态**只读页（§7.1 7a），分享票据与公开链接属 P1
+    （T17，新攻击面必须与水印/限流同批）。"""
+    return _pub_svc(db, current_user).get_by_slug(slug)
+
+
+@publish_router.post("/{slug}/data")
+def read_published_data(slug: str, body: Optional[DataBody] = None,
+                        db: Session = Depends(get_db),
+                        current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T11 取数：数据恒实时。复用 Task 7 的 `DataBody`，**不另建同名 Body**。"""
+    return _pub_svc(db, current_user).run_by_slug(slug, body.params if body else None)
