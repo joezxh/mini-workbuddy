@@ -1538,6 +1538,8 @@ git commit -m "docs(twin): plan2 closeout - main spec corrections C2/C3/C4/C5 an
 5. **D-05｜Task 1 步骤内部矛盾（测试 vs 实现）**：Step 1 测试钉 T8/runPublished 缺省发体 `{}`，Step 3 实现却发 `{ params: params ?? {} }`（永远带 params 键），直接执行必红。后端 `Optional[DataBody]` 两种体均合法，以测试为准：实现改为 `params ? { params } : {}`（loadPageData/runPublished 两处）。
 6. **D-06｜Task 1 mock 键名核对点（注 1 命中）**：`utils/request.ts:106-126` 实际导出 `get/post/put/delete/patch`，无 `del`；Step 1 测试的 mock 工厂按注 1 改为 `delete: del`，实现体本就用 `request.delete/patch`，无需调整。
 7. **D-07｜Task 3 测试胶水按授权优化（非缺陷，留痕）**：Step 1 原稿的 `globalThis.__loadPageResp` 钩子与 `openCardStart` 占位写法均未照搬，改为计划注 (:605)/Step 4 预先授权的形态：mock 工厂按 URL 模式返回样本、W11 用例直调 `openCard(99)`；另删未读变量 `resp`/未用导入 `afterEach`（仓库存量 vue-tsc 会报 TS6133，新代码须保持 twin 相关错误 = 0）。五条断言意图零弱化，实得 5 passed。
+8. **D-08｜Task 4 stateMap 测试断言子串陷阱**：原稿 `not.toContain('绑定查询')` 会被计划自己实现的 run 态文案「未绑定查询」子串命中而永久假红。契约意图 = 运行态无操作暗示，改钉 CTA 短语 `not.toContain('点击绑定')`（edit 文案「未绑定查询，点击绑定」仍被钉住，意图不弱化）；实现文案维持原稿。
+9. **D-09｜Task 4 Produces 里 `WIDGET_MAP` 无代码定义**：Interfaces 要求本任务先导出 shape→adapter 纯映射，但 Step 3 三个模块均无此常量、测试也未钉。处置：不在无调用方时臆造导出口（YAGNI），`WIDGET_MAP` 顺延到真正持有组件的 Task 5 WidgetGrid 内实现；若 Task 5 发现需要独立纯映射再补。
 
 ---
 
