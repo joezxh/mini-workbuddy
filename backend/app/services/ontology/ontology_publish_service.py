@@ -54,6 +54,37 @@ CQ_COVERAGE_THRESHOLD = 0.6
 _SENSITIVE_PII = {"L2", "L3"}
 
 
+def is_sensitive(pii: Optional[str]) -> bool:
+    """列是否属敏感（L2/L3）。"""
+    return pii in _SENSITIVE_PII
+
+
+def sensitive_covered(
+    pii: Optional[str],
+    mask_rule: Optional[str],
+    security_level_override: Optional[str],
+    exempt: bool = False,
+) -> bool:
+    """敏感列是否已有脱敏覆盖。
+
+    唯一真源：发布门禁 5（``_gate5_mask_coverage``）与孪生查询编译的敏感闸
+    （``OntologyQueryService``）共用本函数。任何一处私自改写判定都会破坏
+    「发布能过 == 孪生能查」这条不变量，禁止复制第二份逻辑。
+
+    覆盖成立（返回 True）当且仅当：
+      非敏感 | 已登记豁免 | 已绑定标准且 mask_rule 非空 | override 显式降级至 L1 以下
+    """
+    if not is_sensitive(pii):
+        return True
+    if exempt:
+        return True
+    if mask_rule:
+        return True
+    if security_level_override and security_level_override not in _SENSITIVE_PII:
+        return True
+    return False
+
+
 def _iso(dt) -> Optional[str]:
     return dt.isoformat() if dt else None
 
@@ -368,21 +399,13 @@ class OntologyPublishService:
         exempt_set = set(exemptions or [])
         for cm in column_maps:
             pii = pii_map.get(cm["column_id"])
-            if pii not in _SENSITIVE_PII:
-                continue
-            if cm["column_id"] in exempt_set:
-                continue
-            mask = mask_map.get(cm["standard_id"])
-            # 已绑定标准且 mask_rule 非空 → 覆盖
-            if mask:
-                continue
-            # 安全等级显式降级至 L1 以下 → 覆盖
             ovr = (override_map.get(cm["column_id"]) or {}).get("security_level_override")
-            if ovr and ovr not in _SENSITIVE_PII:
+            if sensitive_covered(pii, mask_map.get(cm["standard_id"]), ovr,
+                                 exempt=cm["column_id"] in exempt_set):
                 continue
             missing.append(f"column:{cm['column_id']} pii={pii}")
         check = {"gate": 5, "name": "mask_coverage", "passed": not missing,
-                 "sensitive": sum(1 for c in column_maps if pii_map.get(c['column_id']) in _SENSITIVE_PII)}
+                 "sensitive": sum(1 for c in column_maps if is_sensitive(pii_map.get(c['column_id'])))}
         if missing:
             check["blocked_code"] = PUBLISH_BLOCKED_MASK_COVERAGE
             check["reason"] = f"{len(missing)} 个敏感列缺脱敏覆盖"
