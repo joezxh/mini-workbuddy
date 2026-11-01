@@ -2,6 +2,11 @@
 
 > 日期：2026-10-31
 > 状态：设计已确认（3 项遗留决策已裁决，见 §14.3），待实施计划
+> ⚠️ 本文件为 2026-10-31 的**并行早期草案**，未同步后续立项。主规格为
+> `2026-10-31-ontology-capability-design.md`；推演沙盘与孪生应用的现状以
+> `2026-11-01-simulation-sandbox-design.md` 与 `2026-11-01-digital-twin-app-design.md` 为准。
+> 本文件内的 N3（`:43`）、D−2（`:610`）、P4 远期表（`:1099`）、D2 范围行（`:1140`）、
+> §15 远期展望（`:1176`）**不再回写**，仅作历史快照。实测：该文件自 2026-10-31 提交后未再修改。
 > 影响范围：backend `models/dataops` + `services/dataops` + `routers/dataops` + 新增 `services/ontology` + `routers/ontology` + `ai/tools/ontology_tools`；frontend `views/data-source/standard` 扩展 + 新增本体建模工作台；alembic 新增迁移
 > 对标产品：OntoFlow（本体智能应用开发平台）—— `docs/ontoflow/ontoflow.md`
 > 对标实现：OntoMind（本体建模前后端走读）—— `docs/ontoflow/ontomind.md`
