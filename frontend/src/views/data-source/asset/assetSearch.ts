@@ -58,3 +58,8 @@ export function buildSearchPayload(s: {
     size: s.size || 50,
   }
 }
+
+/** 关键词是否含 CJK（原型口径：命中则走 LIKE+trgm，非 similarity，前端显「检索降级」徽标） */
+export function isCjkQuery(kw: string): boolean {
+  return /[\u4e00-\u9fa5]/.test(kw || '')
+}

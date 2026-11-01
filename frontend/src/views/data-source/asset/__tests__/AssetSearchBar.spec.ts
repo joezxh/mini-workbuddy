@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { COLORS, TAG_KINDS, buildTagPayload, buildSearchPayload } from '../assetSearch'
+import { COLORS, TAG_KINDS, buildTagPayload, buildSearchPayload, isCjkQuery } from '../assetSearch'
 
 /**
  * 检索条 / 新建标签载荷（AF-02/03，纯函数）。
@@ -37,5 +37,13 @@ describe('buildSearchPayload（table_type/sort/size 扩展）', () => {
 
   it('sort 非法回落 score', () => {
     expect(buildSearchPayload({ sort: 'bogus' }).sort).toBe('score')
+  })
+})
+
+describe('isCjkQuery（AF-02 检索降级判定）', () => {
+  it('含 CJK true；ASCII/空 false', () => {
+    expect(isCjkQuery('订单表')).toBe(true)
+    expect(isCjkQuery('sales_order')).toBe(false)
+    expect(isCjkQuery('')).toBe(false)
   })
 })
