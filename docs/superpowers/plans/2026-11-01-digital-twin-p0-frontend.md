@@ -1531,6 +1531,11 @@ git commit -m "docs(twin): plan2 closeout - main spec corrections C2/C3/C4/C5 an
 
 （执行期间逐条回写：编号 / 现象 / 根因 / 处置。本行为占位起始，非 TBD。）
 
+1. **D-01｜Step 1 基线不绿**：预期 `6 passed`，实得 `1 failed, 5 passed`。根因：并行沙盘特性已把 `menu_knowledge_governance.sql` 的 2408 行与角色授权末界 `AND 2408` 写进工作区，而 `init.sql` 仍停在 `AND 2407`，旧测试钉死精确串 `BETWEEN 2401 AND 2407` → gov 侧假失败。处置：range 测试改为「末界 ≥ 2407 = 覆盖孪生行」语义（保留 `id <> 2404` 排除），不越界碰 2408 行（沙盘 owner 职责）；后续 Step 6 预期从 `6+1=7 passed` 仍成立。
+2. **D-02｜AccessListResp 键名预写有出入**（Step 7 注/Step 8 核对点）：后端 `twin_access_service.list_requests()` 实际返回 `{incoming, outgoing, incoming_pending}`，非计划暂写的 `pending_count`。处置：按裁决永远改前端类型，`types/twin.d.ts` 已按逐字实键落定。
+3. **D-03｜Step 8 vue-tsc 基线脏**：仓库存量已有大量无关错误（audioDsp/assistant/context/kms 等），「Expected: 无新增错误」无法直接判读。处置：判据改为「twin 相关错误 = 0」（`Select-String 'twin'` 计数），实测 0，达标。
+4. **D-04｜Step 9 守卫命令形态 + 文件粒度暂存污染**：① 计划写 `git diff HEAD~1 --stat`，实际对比的是工作树（含并行未提交改动，报 20 文件）；守卫应使用 `git diff HEAD~1 HEAD --stat`（实报恰 4 文件）。② 即便提交粒度正确，`git add docs/sql/menu_knowledge_governance.sql` 仍以整个文件入暂存，连带提交了并行特性预先存在于工作区的 2406「数据资产」行、2408「推演沙盘」行与授权末界 `2407→2408`。未拆分（共享脏工作区既有困境，拆分反会破坏对方编辑现场）；后续任务凡碰他人并行在飞的文件，守卫一律用 `HEAD~1 HEAD` 形态并在提交信息注明连带范围。
+
 ---
 
 ## 明确遗留（不在本 plan 任何 Task）
