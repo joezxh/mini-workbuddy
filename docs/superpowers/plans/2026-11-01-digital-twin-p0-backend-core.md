@@ -2929,12 +2929,49 @@ _perm_cache = TTLCache(maxsize=256, ttl=60.0)
 Run: `.\.venv\Scripts\python.exe -m pytest tests -v -k "audit or perm or middleware"`
 Expected: 全绿，且无测试文件被修改（`git diff --name-only` 中不得出现 tests 下的 audit 相关文件）
 
+> ⚠️ **计划缺陷修正（执行时实测，2026-11-01）：本 Step 的 `pytest tests` 全树单进程跑法不可用，与本 Task 无关。**
+>
+> 现象：`tests -k "audit or perm or middleware"` = 13 passed / 1 skipped / **3 errors**，3 个 error 全部落在
+> `tests/sandbox`，且发生在 **fixture setup 阶段**，报错原文：
+> `psycopg2.errors.UndefinedTable: relation "t_xxxx.kms_segment" does not exist`（`create_all` 的 DDL）。
+>
+> 根因（先行缺陷，非 Task 5 引入）：`tests/kb` 的 conftest 在 import 期把 `kms_*` / `kg_*` 等模型注册进
+> **进程级全局 `Base.metadata`**；而 `tests/{ontology,twin,sandbox}/conftest.py::_tables()` 的建表清单是
+> `Base.metadata.sorted_tables` **减去硬编码 3 个名字**（`kms_collection`/`kms_segment`/`kms_ref`）。两族用例
+> 同进程收集时，被排除的 `kms_segment` 仍被别的表外键引用 → 悬空 FK → DDL 失败。单目录跑永不复现。
+>
+> 归因实验（全部实测）：
+> - `tests/sandbox -k "..."` 单独跑 → **3 passed**
+> - `tests/sandbox tests/kb -k "..."` 合并跑 → 9 passed / **3 errors**
+> - 加 `--ignore=tests/unit` 仍 3 errors ⇒ 与 Task 5 新增文件无关
+> - 曾尝试把排除清单改为「整族前缀排除 `kms_`」：失败点转移到 `kg_entity` → `kms_knowledge`（非 `kms_` 前缀的表
+>   引用了被排除的表），越改越坏 ⇒ **已回退，三个 conftest 保持原样**
+>
+> **本 Step 的可信替代取证方式（按目录分别跑，禁止合并 `tests/`）**：
+>
+> ```powershell
+> foreach ($d in @('tests/unit','tests/sandbox','tests/kb')) {
+>   .\.venv\Scripts\python.exe -m pytest $d -q -k "audit or perm or middleware"
+> }
+> ```
+> 实测结果：`tests/unit` 3 passed / 1 skipped；`tests/sandbox` 3 passed；`tests/kb` 9 passed；
+> `tests/unit/test_ttl_cache.py` 单独跑 4 passed。合计 **0 failed / 0 error**，且 `git status` 中无任何
+> 既有测试文件被修改。
+>
+> 后续修法（**不在本计划范围内，另立任务**）：各 conftest 的建表清单应改为**显式 allow-list**（本用例族真正需要的表），
+> 而不是 `Base.metadata.sorted_tables` 减集；或为每族用例使用独立的 `MetaData` 注册域。
+>
 - [ ] **Step 7: 提交**
 
 ```bash
 git add backend/app/core/cache.py backend/app/middleware/audit_logger.py backend/tests/unit/test_ttl_cache.py
 git commit -m "refactor(core): lift TTLCache out of audit middleware into app.core.cache"
 ```
+
+> 注（执行时实测，2026-11-01）：若 cwd 已在 `backend/`，上述 `backend/...` 前缀会使 `git add` 报
+> `fatal: pathspec ... did not match`、commit 静默不发生。此时改用 `app/core/cache.py`、
+> `app/middleware/audit_logger.py`、`tests/unit/test_ttl_cache.py` 与 `../docs/...`。**提交前必读 `git status --short`，**
+> 绝不对未跟踪的临时文件与 frontend 改动做 `git add .`。
 
 ---
 

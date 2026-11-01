@@ -1,15 +1,14 @@
 import time
 import json
 import asyncio
-import threading
 from typing import Callable, Optional
-from collections import OrderedDict
 from fastapi import Request, Response, HTTPException
 from fastapi.routing import APIRoute
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 from loguru import logger
 
+from app.core.cache import TTLCache
 from app.db.database import SessionLocal
 from app.models.sys.sys_user import SysAuditLog, SysUser, SysUserRole, SysRoleMenu, SysMenu
 from app.config import settings
@@ -103,36 +102,10 @@ async def stop_audit_writer():
 
 
 # ──────────────────── 权限缓存（线程安全 LRU + TTL） ────────────────────
+# 实现已上提至 app.core.cache.TTLCache（孪生方案 Task 5）：同一份 LRU+TTL 逻辑
+# 将被取数缓存复用，不在中间件里养第二份私有实现。
 
-class _TTLCache:
-    """简单的线程安全 TTL 缓存"""
-
-    def __init__(self, maxsize: int = 256, ttl: float = 60.0):
-        self._cache: OrderedDict = OrderedDict()
-        self._maxsize = maxsize
-        self._ttl = ttl
-        self._lock = threading.Lock()
-
-    def get(self, key):
-        with self._lock:
-            if key in self._cache:
-                value, ts = self._cache[key]
-                if time.time() - ts < self._ttl:
-                    self._cache.move_to_end(key)
-                    return value
-                else:
-                    del self._cache[key]
-            return None
-
-    def set(self, key, value):
-        with self._lock:
-            self._cache[key] = (value, time.time())
-            self._cache.move_to_end(key)
-            if len(self._cache) > self._maxsize:
-                self._cache.popitem(last=False)
-
-
-_perm_cache = _TTLCache(maxsize=256, ttl=60.0)
+_perm_cache = TTLCache(maxsize=256, ttl=60.0)
 
 
 # ──────────────────── 权限 & 用户信息合并查询 ────────────────────
