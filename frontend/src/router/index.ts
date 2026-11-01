@@ -10,6 +10,14 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录', requiresAuth: false, hideHeader: true }
   },
   {
+    // 孪生只读发布页（T11）：不套 AppLayout（无左导航/把手，W12）；P0 仅登录态
+    path: '/twin-p/:slug',
+    name: 'TwinPublished',
+    component: () => import('@/views/twin/TwinPublishedPage.vue'),
+    props: true,
+    meta: { title: '孪生看板', requiresAuth: true, hideHeader: true }
+  },
+  {
     // 控制台外壳：左侧导航栏 + 顶栏，所有需要登录的页面都挂在它下面。
     path: '/',
     component: () => import('@/layouts/AppLayout.vue'),
