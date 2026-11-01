@@ -106,15 +106,18 @@ class SandboxEngineService:
         entities = {}
         events = []
         for r in rows:
-            ent = {
+            # 派生事件行（origin='derived'）是行动效应队列，非可量化的世界态实体：
+            # 不进 entities（避免 _flush_world 把 activation_tick 等属性 Decimal 量化写回，
+            # 污染字符串属性并使 int(activation_tick) 崩溃），仅登记到事件队列供 _fire_events 读取。
+            if r.origin == "derived":
+                events.append({"entity_code": r.entity_code, "row": r})
+                continue
+            entities[r.entity_code] = {
                 "props": {k: _to_dec(v) for k, v in (r.props_json or {}).items()},
                 "risk_score": _to_dec(r.risk_score),
                 "masked": bool(r.masked),
                 "object_code": r.object_code,
             }
-            entities[r.entity_code] = ent
-            if r.origin == "derived":
-                events.append({"entity_code": r.entity_code, "row": r})
         return World(entities=entities, elements=self._elements.load_accepted(scene_id),
                      events=events)
 
@@ -146,7 +149,7 @@ class SandboxEngineService:
     def _fire_events(self, scene_id, branch_id, tick, world) -> None:
         for ev in world.events:
             act = ev["row"].props_json.get("activation_tick") if ev["row"].props_json else None
-            if act is None or int(act) <= tick:
+            if act is None or int(Decimal(str(act))) <= tick:
                 self._obs(scene_id, branch_id, tick, "event_fired", "info",
                           f"事件生效 {ev['entity_code']}", {"entity_code": ev["entity_code"]})
 
