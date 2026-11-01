@@ -18,8 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.api_error import ApiError, ONTOLOGY_NOT_FOUND
-from app.models.dataops.ontology import MetaOntology
-from app.services.dataops.ontology_publish_service import OntologyPublishService
+from app.models.ontology.ontology import MetaOntology
+from app.services.ontology.ontology_publish_service import OntologyPublishService
 
 BROWSE_LIMIT = 6
 RESOLVE_LIMIT = 5

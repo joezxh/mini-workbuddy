@@ -8,7 +8,7 @@
 - ``architecture``：仅对象 + 关系（力导向，回答"本体长什么样"）；
 - ``workflow``：数据源表节点 + 对象节点 + 表→对象连线（分层，回答"数据怎么走到对象"）。
 
-证据链（E17）：按 ``element_kind + element_code`` 检索 ``meta_ontology_evidence``，
+证据链（E17）：按 ``element_kind + element_code`` 检索 ``onto_ontology_evidence``，
 原始依据 ``payload_json`` 原样透出供复核。
 """
 from __future__ import annotations
@@ -20,8 +20,8 @@ from sqlalchemy.orm import Session
 
 from app.core.api_error import ApiError, ONTOLOGY_NOT_FOUND
 from app.models.dataops.meta import MetaTable
-from app.models.dataops.ontology import MetaOntology, MetaOntologyEvidence
-from app.services.dataops.ontology_publish_service import OntologyPublishService
+from app.models.ontology.ontology import MetaOntology, MetaOntologyEvidence
+from app.services.ontology.ontology_publish_service import OntologyPublishService
 
 
 def _iso(dt) -> Optional[str]:

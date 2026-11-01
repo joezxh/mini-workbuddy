@@ -20,7 +20,7 @@ class MetaStandardCatalog(Base, TenantMixin):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     parent_id = Column(BigInteger, ForeignKey("meta_standard_catalog.id", ondelete="RESTRICT"), nullable=True, comment="父节点（null=根）")
-    ontology_id = Column(BigInteger, nullable=True, comment="归属本体（可空=未归类；应用层引用 meta_ontology.id，不建外键以避免与 meta_ontology 循环依赖）")
+    ontology_id = Column(BigInteger, nullable=True, comment="归属本体（可空=未归类；应用层引用 onto_ontology.id，不建外键以避免与 onto_ontology 循环依赖）")
     code = Column(String(64), nullable=False, comment="目录编码（租户内唯一）")
     name = Column(String(200), nullable=False, comment="目录名称")
     description = Column(Text, nullable=True, comment="说明")
@@ -60,7 +60,7 @@ class MetaObjectStandard(Base, TenantMixin):
     reviewed_by = Column(BigInteger, nullable=True, comment="评审人")
     reviewed_at = Column(TIMESTAMP, nullable=True, comment="评审时间")
     confidence = Column(Float, nullable=True, comment="规则置信度")
-    evidence_ref = Column(BigInteger, nullable=True, comment="最新一条证据 id（应用层引用 meta_ontology_evidence.id，不建外键避免建表顺序依赖）")
+    evidence_ref = Column(BigInteger, nullable=True, comment="最新一条证据 id（应用层引用 onto_ontology_evidence.id，不建外键避免建表顺序依赖）")
     creator_id = Column(BigInteger, nullable=True, comment="创建者")
     updater_id = Column(BigInteger, nullable=True, comment="最后更新者")
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")

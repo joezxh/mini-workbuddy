@@ -36,7 +36,7 @@ from app.core.api_error import (
 from app.db.database import SessionLocal
 from app.models.dataops.meta import MetaColumn, MetaTable
 from app.models.dataops.meta_relation import MetaRelation
-from app.models.dataops.ontology import (
+from app.models.ontology.ontology import (
     MetaOntology, MetaOntologyBuildItem, MetaOntologyBuildJob, MetaOntologyEvidence,
 )
 from app.models.dataops.standard import MetaColumnStandard
@@ -362,7 +362,7 @@ class OntologyBuildService:
                 stmt = stmt.where(MetaTable.table_name.in_(names))
         elif mode == "tags":
             tag_ids = scope.get("tag_ids") or []
-            from app.models.dataops.asset_tag import MetaAssetTagBinding
+            from app.models.ontology.asset_tag import MetaAssetTagBinding
             table_ids = self.db.execute(
                 select(MetaAssetTagBinding.asset_id).where(
                     MetaAssetTagBinding.tenant_id == self.tenant_id,

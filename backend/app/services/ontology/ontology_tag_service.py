@@ -1,8 +1,8 @@
 """资产标签体系（P0-10：E29 列表 + E30 新建 + E31 改删 + E32 批量打标，spec §3.2 / §6.1）。
 
 补 AF-03：此前全仓无任何 ``*tag*`` 表。两表已在 P0-1 建好——
-- ``meta_asset_tag``：租户内唯一 code；
-- ``meta_asset_tag_binding``：标签↔资产绑定，``asset_id`` **故意不建外键**，
+- ``onto_asset_tag``：租户内唯一 code；
+- ``onto_asset_tag_binding``：标签↔资产绑定，``asset_id`` **故意不建外键**，
   元数据重扫会重建 ``meta_table`` 行，强外键会连带删掉人工标签（OntoMind 证据丢失同构问题）。
 
 删除守卫：存在绑定时拒绝 ``ASSET_TAG_IN_USE``（须先摘标）；编码冲突 ``TAG_CODE_DUPLICATED``。
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.api_error import (
     ApiError, ASSET_TAG_IN_USE, ONTOLOGY_NOT_FOUND, TAG_CODE_DUPLICATED,
 )
-from app.models.dataops.asset_tag import MetaAssetTag, MetaAssetTagBinding
+from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
 
 _TAG_KINDS = {"biz", "security", "quality", "custom"}
 

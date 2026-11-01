@@ -1346,6 +1346,6 @@ def infer_relations(
 # 本体治理子路由（P0-2 起）：相对路径挂到本 router 的 /api/v1/dataops 前缀下，
 # 保持 router_registry 单挂载不变；后续 P0 任务继续向 ontology_router 追加端点。
 # ---------------------------------------------------------------------------
-from app.routers.dataops.ontology import router as ontology_router  # noqa: E402
+from app.routers.ontology.ontology import router as ontology_router  # noqa: E402
 
 router.include_router(ontology_router)

@@ -2,8 +2,8 @@
 
 **四档**（§5.6，写入副作用重新切分）：
 - ``ask``：零写入，转 §6.4 ``browse``/``resolve``/``manifest``；
-- ``explain``：只写 ``meta_ontology_semantic(field=review_hint, status=suggested)``；
-- ``propose_scope``：只写 ``meta_ontology.draft_scope_json``，**不建任务**；表名逐个对真实
+- ``explain``：只写 ``onto_ontology_semantic(field=review_hint, status=suggested)``；
+- ``propose_scope``：只写 ``onto_ontology.draft_scope_json``，**不建任务**；表名逐个对真实
   ``meta_table`` 校验，臆造丢弃计 ``hallucination_dropped``；
 - ``build``（rev.2 新增，D3 改动唯一原因）：**两步提交**——``commit=false`` 零写入返回预览 +
   指纹；``commit=true`` 且回传指纹与服务端重算一致，才落 ``build_item(origin='llm', status='suggested')``
@@ -29,12 +29,12 @@ from app.core.api_error import (
     ASSISTANT_INTENT_UNSUPPORTED, ONTOLOGY_NOT_FOUND,
 )
 from app.models.dataops.meta import MetaColumn, MetaTable
-from app.models.dataops.ontology import (
+from app.models.ontology.ontology import (
     MetaOntology, MetaOntologyBuildItem, MetaOntologyBuildJob, MetaOntologyPublish, MetaOntologySemantic,
 )
-from app.services.dataops.ontology_agent_service import OntologyAgentService
-from app.services.dataops.ontology_asset_service import OntologyAssetService
-from app.services.dataops.ontology_publish_service import OntologyPublishService
+from app.services.ontology.ontology_agent_service import OntologyAgentService
+from app.services.ontology.ontology_asset_service import OntologyAssetService
+from app.services.ontology.ontology_publish_service import OntologyPublishService
 
 _INTENTS = {"ask", "explain", "propose_scope", "build"}
 _PROMPT_VERSION = "onto-assistant-1"

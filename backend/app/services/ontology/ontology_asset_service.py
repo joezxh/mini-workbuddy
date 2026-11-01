@@ -6,7 +6,7 @@ E40 ``assets/tree`` 已在 P0-2 的 :class:`OntologyService` 提供，本服务�
 （本环境 pg_trgm 对 CJK 恒返回 0）；``gin_trgm_ops`` 索引只用于加速 ``LIKE '%kw%'``，
 打分用**三段确定性得分**：① 精确/前缀命中表名 ② 命中字段名 ③ 命中注释；同分按表名字典序。
 
-送数（§4.7）：``draft-scope`` 只改 ``meta_ontology.draft_scope_json``，**绝不写结构表**，
+送数（§4.7）：``draft-scope`` 只改 ``onto_ontology.draft_scope_json``，**绝不写结构表**，
 避免"选了就是待审"的假候选污染审阅台；空清单且非显式清空 → ``DRAFT_SCOPE_EMPTY``。
 """
 from __future__ import annotations
@@ -19,9 +19,9 @@ from sqlalchemy.orm import Session
 from app.core.api_error import (
     ApiError, DRAFT_SCOPE_EMPTY, ONTOLOGY_NOT_FOUND, ONTOLOGY_STOPPED,
 )
-from app.models.dataops.asset_tag import MetaAssetTag, MetaAssetTagBinding
+from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
 from app.models.dataops.meta import MetaColumn, MetaTable
-from app.models.dataops.ontology import MetaOntology
+from app.models.ontology.ontology import MetaOntology
 from app.models.dataops.standard_cdm import MetaObjectStandard, MetaTableStandard
 
 _COLUMN_DIGEST_LIMIT = 6

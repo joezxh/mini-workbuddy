@@ -20,7 +20,7 @@ from app.core.api_error import (
 )
 from app.models.dataops.data_source import DataSource
 from app.models.dataops.meta import MetaTable
-from app.models.dataops.ontology import MetaOntology, MetaOntologyVersion
+from app.models.ontology.ontology import MetaOntology, MetaOntologyVersion
 from app.models.dataops.standard_cdm import (
     MetaObjectRelation, MetaObjectStandard, MetaStandardCatalog,
 )

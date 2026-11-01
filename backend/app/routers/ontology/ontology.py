@@ -23,17 +23,17 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
-from app.services.dataops.ontology_build_service import OntologyBuildService, submit_build
-from app.services.dataops.ontology_agent_service import OntologyAgentService
-from app.services.dataops.ontology_apppublish_service import OntologyAppPublishService
-from app.services.dataops.ontology_asset_service import OntologyAssetService
-from app.services.dataops.ontology_assistant_service import OntologyAssistantService
-from app.services.dataops.ontology_graph_service import OntologyGraphService
-from app.services.dataops.ontology_publish_service import OntologyPublishService
-from app.services.dataops.ontology_review_service import OntologyReviewService
-from app.services.dataops.ontology_semantic_service import OntologySemanticService
-from app.services.dataops.ontology_service import OntologyService
-from app.services.dataops.ontology_tag_service import OntologyTagService
+from app.services.ontology.ontology_build_service import OntologyBuildService, submit_build
+from app.services.ontology.ontology_agent_service import OntologyAgentService
+from app.services.ontology.ontology_apppublish_service import OntologyAppPublishService
+from app.services.ontology.ontology_asset_service import OntologyAssetService
+from app.services.ontology.ontology_assistant_service import OntologyAssistantService
+from app.services.ontology.ontology_graph_service import OntologyGraphService
+from app.services.ontology.ontology_publish_service import OntologyPublishService
+from app.services.ontology.ontology_review_service import OntologyReviewService
+from app.services.ontology.ontology_semantic_service import OntologySemanticService
+from app.services.ontology.ontology_service import OntologyService
+from app.services.ontology.ontology_tag_service import OntologyTagService
 
 router = APIRouter(tags=["DataOps 本体治理"])
 
@@ -422,7 +422,7 @@ def get_evidence(
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ) -> dict:
-    """证据链：按元素检索 ``meta_ontology_evidence`` 原始依据（可复核）。"""
+    """证据链：按元素检索 ``onto_ontology_evidence`` 原始依据（可复核）。"""
     svc = OntologyGraphService(db, _require_tenant_id(current_user))
     return svc.evidence(ontology_id, element_kind=element_kind, element_code=element_code)
 

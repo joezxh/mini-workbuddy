@@ -3,7 +3,7 @@
 设计真源：docs/superpowers/specs/2026-10-31-ontology-capability-design.md §3.2 / §3.5 / §3.6。
 
 内容（§3.5）：
-  ① 10 张新表（原 7 + meta_asset_tag / meta_asset_tag_binding / meta_ontology_publish）；
+  ① 10 张新表（原 7 + onto_asset_tag / onto_asset_tag_binding / onto_ontology_publish）；
   ② 既有表加列（meta_standard_catalog.ontology_id、object/relation/standard/attribute 的
      review_status 等、object/relation 新建 source 列）；
   ③ §3.6 四个 pg_trgm GIN 索引（仅加速 LIKE，禁止 similarity()）；
@@ -33,16 +33,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 # 10 张新表（create_all 自动按 FK 依赖排序，此处列出仅用于 downgrade 逆序）
 _NEW_TABLES = (
-    "meta_ontology",
-    "meta_ontology_version",
-    "meta_ontology_build_job",
-    "meta_ontology_build_item",
-    "meta_ontology_cq",
-    "meta_ontology_evidence",
-    "meta_ontology_semantic",
-    "meta_ontology_publish",
-    "meta_asset_tag",
-    "meta_asset_tag_binding",
+    "onto_ontology",
+    "onto_ontology_version",
+    "onto_ontology_build_job",
+    "onto_ontology_build_item",
+    "onto_ontology_cq",
+    "onto_ontology_evidence",
+    "onto_ontology_semantic",
+    "onto_ontology_publish",
+    "onto_asset_tag",
+    "onto_asset_tag_binding",
 )
 
 _TRGM_INDEXES = (
@@ -109,8 +109,8 @@ def upgrade() -> None:
 
     # ① 10 张新表：以 ORM 元数据建表（模型唯一事实来源，自带存在性判断）
     from app.db.database import Base
-    from app.models.dataops.asset_tag import MetaAssetTag, MetaAssetTagBinding
-    from app.models.dataops.ontology import (
+    from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
+    from app.models.ontology.ontology import (
         MetaOntology, MetaOntologyBuildItem, MetaOntologyBuildJob, MetaOntologyCq,
         MetaOntologyEvidence, MetaOntologyPublish, MetaOntologySemantic, MetaOntologyVersion,
     )
@@ -174,19 +174,19 @@ def upgrade() -> None:
     ).scalars().all()
     for tid in tenant_ids:
         existing = bind.execute(
-            sa.text("SELECT id FROM meta_ontology WHERE tenant_id = :t AND code = 'default'"),
+            sa.text("SELECT id FROM onto_ontology WHERE tenant_id = :t AND code = 'default'"),
             {"t": tid},
         ).first()
         if existing is None:
             bind.execute(
                 sa.text(
-                    "INSERT INTO meta_ontology (tenant_id, code, name, description, status, current_version) "
+                    "INSERT INTO onto_ontology (tenant_id, code, name, description, status, current_version) "
                     "VALUES (:t, 'default', '默认本体', '迁移内为既有目录归属创建的默认本体', 'draft', 0)"
                 ),
                 {"t": tid},
             )
             existing = bind.execute(
-                sa.text("SELECT id FROM meta_ontology WHERE tenant_id = :t AND code = 'default'"),
+                sa.text("SELECT id FROM onto_ontology WHERE tenant_id = :t AND code = 'default'"),
                 {"t": tid},
             ).first()
         op.execute(

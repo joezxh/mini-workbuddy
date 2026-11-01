@@ -1,10 +1,10 @@
 """本体应用发布登记（P0-11：E34 列表 + E35 登记 + E36 启停，spec §4.6 / §6.1）。
 
-只做**登记与绑定**（``meta_ontology_publish``），不重复建设运行时：Skill 运行时复用既有
+只做**登记与绑定**（``onto_ontology_publish``），不重复建设运行时：Skill 运行时复用既有
 ``ai_skill`` / ``ai_tools``（§3.2 补 AF-17/AF-18/AF-22）。
 
 口径（§4.6）：
-- 列表 ``stale=true`` 当登记版本落后于 ``meta_ontology.current_version``；
+- 列表 ``stale=true`` 当登记版本落后于 ``onto_ontology.current_version``；
 - 登记**仅钉 ``version=current_version``**；``current_version=0``（草稿态）时**强制 ``status=disabled``**
   （模型约束：``=0 表示引用草稿态，仅允许 status=disabled``）；
 - 启停只翻 ``enabled|disabled``；未找到 → ``PUBLISH_TARGET_NOT_FOUND``。
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.api_error import (
     ApiError, ONTOLOGY_NOT_FOUND, PUBLISH_TARGET_NOT_FOUND,
 )
-from app.models.dataops.ontology import MetaOntology, MetaOntologyPublish
+from app.models.ontology.ontology import MetaOntology, MetaOntologyPublish
 
 _TARGET_TYPES = {"skill", "http", "mcp"}
 

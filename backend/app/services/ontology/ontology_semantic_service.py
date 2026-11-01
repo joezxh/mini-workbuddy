@@ -1,7 +1,7 @@
 """LLM 语义补全与采纳（P0-8：E21 suggest + E22 adopt，spec §5.1-§5.5 / §6.1）。
 
 **D3 rev.2 边界**（§5.1）：LLM 的一切**文本**产出（display_name / definition /
-semantic_type / aliases / review_hint）只落 ``meta_ontology_semantic(status='suggested')``，
+semantic_type / aliases / review_hint）只落 ``onto_ontology_semantic(status='suggested')``，
 **永不直写结构表**；人工显式采纳（E22）才把文本值回写到**已存在**元素的对应文本列，
 并按 §5.1 三值迁移把该元素 ``source`` 改写为 ``human``。
 
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.api_error import (
     ApiError, ONTOLOGY_NOT_FOUND, SEMANTIC_UNAVAILABLE,
 )
-from app.models.dataops.ontology import MetaOntology, MetaOntologySemantic
+from app.models.ontology.ontology import MetaOntology, MetaOntologySemantic
 from app.models.dataops.standard_cdm import MetaObjectRelation, MetaObjectStandard
 
 #: 提示词契约版本（§5.2：Python 常量定义并版本化，可重放）
@@ -89,7 +89,7 @@ class OntologySemanticService:
         element_codes: Optional[List[str]] = None,
         model_id: Optional[int] = None,
     ) -> dict:
-        """为**已存在**的 accepted 元素生成文本语义建议，落 ``meta_ontology_semantic``。"""
+        """为**已存在**的 accepted 元素生成文本语义建议，落 ``onto_ontology_semantic``。"""
         self._ontology_or_404(ontology_id)
         targets = self._load_targets(element_kind, element_codes)
         if not targets:

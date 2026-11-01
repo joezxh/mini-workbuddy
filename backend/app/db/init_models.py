@@ -81,12 +81,12 @@ from app.models.dataops.standard_cdm import (                                   
     MetaRelationCheck, MetaStandardCatalog, MetaTableStandard,
     MetaTableStandardHistory,
 )
-# --- 本体治理 (meta_ontology*) + 资产标签 (meta_asset_tag*) 2026-10-31 P0-1 ---
-from app.models.dataops.ontology import (                                           # noqa: F401
+# --- 本体治理 (onto_ontology*) + 资产标签 (onto_asset_tag*) 2026-10-31 P0-1 ---
+from app.models.ontology.ontology import (                                           # noqa: F401
     MetaOntology, MetaOntologyVersion, MetaOntologyBuildJob, MetaOntologyBuildItem,
     MetaOntologyCq, MetaOntologyEvidence, MetaOntologySemantic, MetaOntologyPublish,
 )
-from app.models.dataops.asset_tag import (                                           # noqa: F401
+from app.models.ontology.asset_tag import (                                           # noqa: F401
     MetaAssetTag, MetaAssetTagBinding,
 )
 # --- 连接器落库 (P3 Task 7) ---

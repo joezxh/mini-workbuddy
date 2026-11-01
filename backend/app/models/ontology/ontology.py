@@ -22,7 +22,7 @@ from app.models.tenant_mixin import TenantMixin
 class MetaOntology(Base, TenantMixin):
     """本体注册（模式层归属锚点，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology"
+    __tablename__ = "onto_ontology"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     code = Column(String(64), nullable=False, comment="租户内唯一，同时作为 TenantScope.ontology_code")
@@ -41,7 +41,7 @@ class MetaOntology(Base, TenantMixin):
     )
     # AF-08：资产送数后的作用域草稿（形状同 build_job.scope_json），使“勾选→离开→回来仍能构建”成立
     draft_scope_json = Column(JSONB, nullable=True, comment="AF-08 作用域草稿")
-    # P2 预留，本期降为兼容缓存（发布登记已拆至 meta_ontology_publish）
+    # P2 预留，本期降为兼容缓存（发布登记已拆至 onto_ontology_publish）
     publish_targets_json = Column(JSONB, nullable=True, comment="P2 预留: [skill,mcp,http]")
 
     creator_id = Column(BigInteger, nullable=True, comment="创建者")
@@ -50,20 +50,20 @@ class MetaOntology(Base, TenantMixin):
     updated_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "code", name="uq_meta_ontology_code"),
-        CheckConstraint("status IN ('draft','published','archived','stopped')", name="ck_meta_ontology_status"),
-        Index("idx_meta_ontology_tenant_status", "tenant_id", "status"),
+        UniqueConstraint("tenant_id", "code", name="uq_onto_ontology_code"),
+        CheckConstraint("status IN ('draft','published','archived','stopped')", name="ck_onto_ontology_status"),
+        Index("idx_onto_ontology_tenant_status", "tenant_id", "status"),
     )
 
 
 class MetaOntologyVersion(Base, TenantMixin):
     """版本快照（发布时冻结全量结构 + 门禁结论，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_version"
+    __tablename__ = "onto_ontology_version"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     version = Column(Integer, nullable=False, comment="本体内自增")
     snapshot_json = Column(JSONB, nullable=True, comment="冻结：对象/属性/关系/映射/CQ 全量")
@@ -74,19 +74,19 @@ class MetaOntologyVersion(Base, TenantMixin):
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
 
     __table_args__ = (
-        UniqueConstraint("ontology_id", "version", name="uq_meta_ontology_version"),
-        Index("idx_meta_ontology_version_list", "ontology_id", "created_at"),
+        UniqueConstraint("ontology_id", "version", name="uq_onto_ontology_version"),
+        Index("idx_onto_ontology_version_list", "ontology_id", "created_at"),
     )
 
 
 class MetaOntologyBuildJob(Base, TenantMixin):
     """构建任务（幂等 + mode + 进度，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_build_job"
+    __tablename__ = "onto_ontology_build_job"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     idempotency_key = Column(String(128), nullable=False, comment="幂等关键列（见 §4.2）")
     # D3 rev.2 不扩 mode：LLM 结构候选由助手端点直接产 build_item(origin='llm')，不改写构建任务 mode
@@ -115,24 +115,24 @@ class MetaOntologyBuildJob(Base, TenantMixin):
     updated_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "idempotency_key", name="uq_meta_build_job_idem"),
+        UniqueConstraint("tenant_id", "idempotency_key", name="uq_onto_build_job_idem"),
         CheckConstraint(
             "status IN ('pending','running','succeeded','failed','cancelled')",
-            name="ck_meta_build_job_status",
+            name="ck_onto_build_job_status",
         ),
-        Index("idx_meta_build_job_tenant_ontology_status", "tenant_id", "ontology_id", "status"),
-        Index("idx_meta_build_job_idem", "idempotency_key"),
+        Index("idx_onto_build_job_tenant_ontology_status", "tenant_id", "ontology_id", "status"),
+        Index("idx_onto_build_job_idem", "idempotency_key"),
     )
 
 
 class MetaOntologyBuildItem(Base, TenantMixin):
     """候选明细（替代 delta_json 大字段，rejected/dropped 照样落库可复盘，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_build_item"
+    __tablename__ = "onto_ontology_build_item"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     job_id = Column(
-        BigInteger, ForeignKey("meta_ontology_build_job.id", ondelete="CASCADE"), nullable=False, comment="任务 ID"
+        BigInteger, ForeignKey("onto_ontology_build_job.id", ondelete="CASCADE"), nullable=False, comment="任务 ID"
     )
     batch_index = Column(Integer, nullable=True, comment="批次序号")
     element_kind = Column(String(24), nullable=False, comment="object|property|relation|mapping")
@@ -155,21 +155,21 @@ class MetaOntologyBuildItem(Base, TenantMixin):
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
 
     __table_args__ = (
-        UniqueConstraint("job_id", "element_kind", "element_code", name="uq_meta_ontology_build_item"),
-        CheckConstraint("origin IN ('rule','llm')", name="ck_meta_build_item_origin"),
-        Index("idx_meta_build_item_job_status", "job_id", "status"),
-        Index("idx_meta_build_item_job_origin", "job_id", "origin"),
+        UniqueConstraint("job_id", "element_kind", "element_code", name="uq_onto_ontology_build_item"),
+        CheckConstraint("origin IN ('rule','llm')", name="ck_onto_build_item_origin"),
+        Index("idx_onto_build_item_job_status", "job_id", "status"),
+        Index("idx_onto_build_item_job_origin", "job_id", "origin"),
     )
 
 
 class MetaOntologyCq(Base, TenantMixin):
     """能力问题（question_hash 去重，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_cq"
+    __tablename__ = "onto_ontology_cq"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     version = Column(Integer, nullable=False, server_default="0", comment="生成时绑定版本（0=未发布态）")
     question = Column(Text, nullable=False, comment="CQ 文本")
@@ -186,19 +186,19 @@ class MetaOntologyCq(Base, TenantMixin):
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
 
     __table_args__ = (
-        UniqueConstraint("ontology_id", "version", "question_hash", name="uq_meta_ontology_cq"),
-        Index("idx_meta_ontology_cq_verify", "ontology_id", "verify_status"),
+        UniqueConstraint("ontology_id", "version", "question_hash", name="uq_onto_ontology_cq"),
+        Index("idx_onto_ontology_cq_verify", "ontology_id", "verify_status"),
     )
 
 
 class MetaOntologyEvidence(Base, TenantMixin):
     """证据（一等公民，可复核原始依据，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_evidence"
+    __tablename__ = "onto_ontology_evidence"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     element_kind = Column(String(24), nullable=False, comment="object|property|relation|mapping")
     element_code = Column(String(200), nullable=False, comment="指向元素 code")
@@ -210,21 +210,21 @@ class MetaOntologyEvidence(Base, TenantMixin):
     created_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间")
 
     __table_args__ = (
-        Index("idx_meta_evidence_lookup", "tenant_id", "ontology_id", "element_kind", "element_code"),
+        Index("idx_onto_evidence_lookup", "tenant_id", "ontology_id", "element_kind", "element_code"),
     )
 
 
 class MetaOntologySemantic(Base, TenantMixin):
     """LLM 语义产出（独立落表，永不直写结构表，D3 落地形态，spec §3.2）。"""
 
-    __tablename__ = "meta_ontology_semantic"
+    __tablename__ = "onto_ontology_semantic"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     build_job_id = Column(
-        BigInteger, ForeignKey("meta_ontology_build_job.id", ondelete="SET NULL"), nullable=True, comment="来源任务",
+        BigInteger, ForeignKey("onto_ontology_build_job.id", ondelete="SET NULL"), nullable=True, comment="来源任务",
     )
     element_kind = Column(String(24), nullable=False, comment="object|property|relation|mapping")
     element_code = Column(String(200), nullable=False, comment="指向元素 code")
@@ -244,20 +244,20 @@ class MetaOntologySemantic(Base, TenantMixin):
     __table_args__ = (
         UniqueConstraint(
             "ontology_id", "element_kind", "element_code", "field", "model",
-            name="uq_meta_ontology_semantic",
+            name="uq_onto_ontology_semantic",
         ),
-        Index("idx_meta_semantic_status", "ontology_id", "status"),
+        Index("idx_onto_semantic_status", "ontology_id", "status"),
     )
 
 
 class MetaOntologyPublish(Base, TenantMixin):
     """本体应用发布登记（只做登记与绑定，不重复建设运行时，spec §3.2 补 AF-17/AF-18）。"""
 
-    __tablename__ = "meta_ontology_publish"
+    __tablename__ = "onto_ontology_publish"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     ontology_id = Column(
-        BigInteger, ForeignKey("meta_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
+        BigInteger, ForeignKey("onto_ontology.id", ondelete="CASCADE"), nullable=False, comment="本体 ID"
     )
     # 钉在哪个发布版本（=0 表示引用草稿态，仅允许 status=disabled）
     version = Column(Integer, nullable=False, server_default="0", comment="钉住的发布版本")
@@ -273,8 +273,8 @@ class MetaOntologyPublish(Base, TenantMixin):
     updated_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now(), comment="更新时间")
 
     __table_args__ = (
-        UniqueConstraint("tenant_id", "target_type", "code", name="uq_meta_ontology_publish_code"),
-        CheckConstraint("target_type IN ('skill','http','mcp')", name="ck_meta_publish_target"),
-        CheckConstraint("status IN ('enabled','disabled')", name="ck_meta_publish_status"),
-        Index("idx_meta_publish_ontology_version", "ontology_id", "version"),
+        UniqueConstraint("tenant_id", "target_type", "code", name="uq_onto_ontology_publish_code"),
+        CheckConstraint("target_type IN ('skill','http','mcp')", name="ck_onto_publish_target"),
+        CheckConstraint("status IN ('enabled','disabled')", name="ck_onto_publish_status"),
+        Index("idx_onto_publish_ontology_version", "ontology_id", "version"),
     )

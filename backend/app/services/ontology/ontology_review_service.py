@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.api_error import ApiError, REVIEW_ITEM_NOT_FOUND
-from app.models.dataops.ontology import (
+from app.models.ontology.ontology import (
     MetaOntology, MetaOntologyBuildItem, MetaOntologyBuildJob,
 )
 from app.models.dataops.standard import MetaColumnStandard

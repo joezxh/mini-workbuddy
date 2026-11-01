@@ -1,10 +1,10 @@
 """本体发布服务（P0-5：E11 发布 + E12 版本列表 + E13 版本快照，spec §4.5 / §6.1）。
 
 发布 = 一个事务内完成三件事（§4.5 末）：
-1. 写 ``meta_ontology_version``（冻结 snapshot + diff + gate 结论）；
+1. 写 ``onto_ontology_version``（冻结 snapshot + diff + gate 结论）；
 2. 快照元素 ``status=published``（object / relation 有 status 列；mapping 侧沿用
    ``suggested|accepted|rejected`` 语义，不再叠 ``published``）；
-3. ``meta_ontology.current_version`` 自增、``status=published``。
+3. ``onto_ontology.current_version`` 自增、``status=published``。
 
 **先写快照再改指针**：保证成为 ``current_version`` 的版本号必然已有对应快照行。
 
@@ -38,7 +38,7 @@ from app.core.api_error import (
     PUBLISH_BLOCKED_UNREVIEWED_SOURCE, ONTOLOGY_NOT_FOUND,
 )
 from app.models.dataops.meta import MetaColumn, MetaTable
-from app.models.dataops.ontology import (
+from app.models.ontology.ontology import (
     MetaOntology, MetaOntologyBuildItem, MetaOntologyBuildJob, MetaOntologyCq,
     MetaOntologyVersion,
 )
