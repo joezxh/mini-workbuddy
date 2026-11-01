@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.api_error import ApiError, CHECKPOINT_LIMIT, GATE_DENIED_MODE, SCENE_NOT_FOUND
 from app.models.sandbox.sandbox import (
-    SandboxBranch, SandboxCheckpoint, SandboxEntity, SandboxObservation, SandboxRelation, SandboxScene,
+    SandboxAction, SandboxBranch, SandboxCheckpoint, SandboxEntity, SandboxObservation, SandboxRelation, SandboxScene,
 )
 from app.services.sandbox.ast_eval import AstEvalError, eval_expr
 from app.services.sandbox.sandbox_element_service import SandboxElementService
@@ -425,9 +425,42 @@ class SandboxEngineService:
             diff.append({"kpi": "health", "branch_id": bid,
                          "branch_a_final": (o.detail_json or {}).get("health") if o else None,
                          "delta": None})
+        # 逐分支末态汇总（CompareView 富差异表数据源，G1）
+        summaries: list[dict] = []
+        first_final: Optional[str] = None
+        for bid in branch_ids:
+            b = self._branch(bid)
+            last = b.tick_now
+            ko = self.db.execute(select(SandboxObservation).where(
+                SandboxObservation.branch_id == bid, SandboxObservation.kind == "kpi_point",
+                SandboxObservation.tick == last,
+                SandboxObservation.scene_id == scene_id)).scalars().first()
+            final_health = (ko.detail_json or {}).get("health") if ko else None
+            if first_final is None:
+                first_final = final_health
+            delta = (_to_dec(final_health) - _to_dec(first_final)).quantize(_Q) \
+                if final_health is not None and first_final is not None else None
+            goal_rows = self.db.execute(select(SandboxObservation).where(
+                SandboxObservation.branch_id == bid, SandboxObservation.kind == "goal_eval",
+                SandboxObservation.tick == last,
+                SandboxObservation.scene_id == scene_id)).scalars().all()
+            goal_reached = sum(1 for g in goal_rows if (g.detail_json or {}).get("status") == "reached")
+            rule_fired = len(self.db.execute(select(SandboxObservation.id).where(
+                SandboxObservation.branch_id == bid, SandboxObservation.kind == "rule_fired",
+                SandboxObservation.tick <= last,
+                SandboxObservation.scene_id == scene_id)).scalars().all())
+            action_count = len(self.db.execute(select(SandboxAction.id).where(
+                SandboxAction.branch_id == bid, SandboxAction.scene_id == scene_id,
+                SandboxAction.tenant_id == self.tenant_id)).scalars().all())
+            summaries.append({"branch_id": bid, "name": b.name, "final_tick": last,
+                              "final_health": final_health,
+                              "health_delta": str(delta) if delta is not None else None,
+                              "goal_reached_count": goal_reached,
+                              "rule_fired_count": rule_fired, "action_count": action_count})
         return {"branches": branches,
                 "series": [{"tick": t, "values": v} for t, v in sorted(series.items())],
-                "diff_table": diff}
+                "diff_table": diff,
+                "branch_summary": summaries}
 
     def world_view(self, scene_id: int, branch_id: int, tick: Optional[int] = None,
                    view: str = "world") -> dict:

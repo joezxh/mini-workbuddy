@@ -8,7 +8,7 @@ from app.core.api_error import ApiError
 from app.models.ontology.ontology import MetaOntology
 from app.models.sandbox.sandbox import (
     SandboxBranch, SandboxCheckpoint, SandboxElement, SandboxEntity,
-    SandboxObservation, SandboxRelation, SandboxScene,
+    SandboxObservation, SandboxRelation, SandboxScene, SandboxAction,
 )
 from app.services.sandbox.sandbox_engine_service import SandboxEngineService
 from tests.sandbox.conftest import TENANT_A
@@ -203,3 +203,24 @@ def test_entity_detail_includes_source_ref_and_can_act(db, world):
     db.commit()
     m = SandboxEngineService(db, TENANT_A).entity_detail(sid, bid, "MASK1")
     assert m["can_act"] is False and m["source_ref"] == {"asset": "dwd_supp", "col": "phone"}
+
+
+def test_compare_returns_branch_summary(db, world):
+    """compare 返回逐分支末态汇总 branch_summary（health_delta/目标/规则/行动计数）。"""
+    eng = SandboxEngineService(db, TENANT_A)
+    sid, b1 = world["scene_id"], world["branch_id"]
+    eng.advance(sid, b1, 2)
+    d = eng.derive_branch(sid, world["baseline_cp"], "分支二")
+    eng.advance(sid, d["branch_id"], 1)
+    # b1 落一条 allowed 行动审计行，验证 action_count
+    db.add(SandboxAction(tenant_id=TENANT_A, scene_id=sid, branch_id=b1, tick=1,
+                         template_code="adjust_capacity", target_entity_code="FAC007",
+                         gate_result="allowed", params_json={}))
+    db.commit()
+    cmp = eng.compare(sid, [b1, d["branch_id"]])
+    s = {x["branch_id"]: x for x in cmp["branch_summary"]}
+    assert s[b1]["final_tick"] == 2 and s[b1]["action_count"] == 1
+    assert s[b1]["rule_fired_count"] == 2 and s[b1]["goal_reached_count"] == 0
+    assert s[d["branch_id"]]["final_tick"] == 1
+    assert s[b1]["health_delta"] == "0.0000"           # 首分支相对自身
+    assert isinstance(s[d["branch_id"]]["health_delta"], str)
