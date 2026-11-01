@@ -4651,7 +4651,10 @@ FROM (VALUES
 (2401, '知识治理',           'knowledge.menu.knowledge', '/admin/knowledge',          NULL, 0, 0, 'kg:read',          1, 'DatabaseOutlined',  NULL, false, 1, 0, 0),
 (2403, '工作台',   'knowledge.menu.unified',  '/admin/kg-knowledge-manager', 2401, 1, 0, 'kg:kb:read',       2, 'BookOutlined',      NULL, false, 1, 0, 0),
 (2402, '数据源',             'knowledge.menu.dataSource','/admin/kg-data-source',     2401, 2, 0, 'kg:datasource:read',2, 'DatabaseOutlined',  NULL, false, 1, 0, 0),
-(2405, '本体',               'knowledge.menu.ontology',  '/admin/kg-ontology',         2401, 3, 0, 'kg:ontology:read', 2, 'ApartmentOutlined', NULL, false, 1, 0, 0)
+(2405, '本体',               'knowledge.menu.ontology',  '/admin/kg-ontology',         2401, 3, 0, 'kg:ontology:read', 2, 'ApartmentOutlined', NULL, false, 1, 0, 0),
+-- 孪生应用（菜单入口；Plan 1 只落后端，页面/路由属 Plan 2，故 visible=0 先压住侧栏）
+-- 注：id=2406 已被「数据资产」占用（见 menu_knowledge_governance.sql），故孪生应取 2407（sort=5）
+(2407, '孪生应用',         'knowledge.menu.twin',      '/admin/kg-twin',         2401, 5, 0, 'kg:twin:read',    2, 'DeploymentUnitOutlined', NULL, false, 0, 0, 0)
 ) AS v(id, name, i18n_key, path, parent_id, sort, status, permission, type, icon, component, is_deleted, visible, keep_alive, always_show)
 WHERE NOT EXISTS (SELECT 1 FROM "public"."sys_menu" s WHERE s.id = v.id);
 
@@ -4680,7 +4683,7 @@ UPDATE "public"."sys_menu" SET visible = 0, updated_at = now() WHERE id = 2;
 INSERT INTO "public"."sys_role_menu" (role_id, menu_id)
 SELECT r.role_id, m.id
 FROM "public"."sys_role" r
-CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2405 AND id <> 2404) m
+CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2407 AND id <> 2404) m
 WHERE NOT EXISTS (
   SELECT 1 FROM "public"."sys_role_menu" rm
   WHERE rm.role_id = r.role_id AND rm.menu_id = m.id

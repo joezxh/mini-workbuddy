@@ -60,7 +60,7 @@ backend/alembic/versions/2026_11_01_0013_add_twin_tables.py 🆕（Task 1，down
 backend/scripts/twin_mapping_probe.py           🆕 映射覆盖率探测
 backend/tests/twin/conftest.py                  🆕 仿 tests/ontology/conftest.py
 backend/tests/twin/test_*.py                    🆕
-docs/sql/init.sql · docs/sql/menu_knowledge_governance.sql ✏️ sys_menu 2406 行
+docs/sql/init.sql · docs/sql/menu_knowledge_governance.sql ✏️ sys_menu 2407 行（原定 2406 已被占用）
 docs/superpowers/specs/2026-10-31-ontology-capability-design.md   ✏️ 规格关账 4 处（Task 11）
 docs/superpowers/specs/2026-11-01-simulation-sandbox-design.md    ✏️ 规格关账 1 处（Task 11）
 docs/superpowers/specs/2026-10-31-minworkbuddy-ontology-capability-design.md ✏️ 旧草案标记（Task 11）
@@ -6988,11 +6988,11 @@ git commit -m "feat(twin): access request workflow with owner approval and expir
 （`reviewed_at`/`expires_at` 可比较），以及审批三闸一序（存在 → 是我卡 → 还在途）
 依次给出的 404 / 403 / 400 三种信号各归其位。
 
-提交：`TODO`。
+提交：`8dd9b62 feat(twin): access request workflow with owner approval and expiring grants`（7 文件）。
 
 ---
 
-### Task 10: `sys_menu` 2406 菜单行（两处 SQL 同步）
+### Task 10: `sys_menu` 2407 菜单行（两处 SQL 同步；原定 2406 已被占用）
 
 对应 **P0-1** 的后半（「迁移可 upgrade/downgrade + 菜单/权限 SQL」）与 spec §2.3 「菜单」行、§3.9。
 本任务不碰一行 Python 业务代码，但它是唯一**两个文件必须逐字一致**的任务，也是最容易被
@@ -7005,6 +7005,27 @@ git commit -m "feat(twin): access request workflow with owner approval and expir
 | 1 | `visible` 给 1 还是 0 | **0**（隐藏） | Plan 1 只交后端，`/admin/kg-twin` 对应的 `TwinWorkspace` 路由属 Plan 2（P0-5/P0-6）。先亮菜单会点出空白页；仓库已有同一手法：收口后的旧「wiki 知识库」靠 `UPDATE … SET visible = 0` 留路由遮入口（`menu_knowledge_governance.sql:72`、`init.sql:4678`）。**Plan 2 落地页面时把 2406 的 visible 改回 1**，同一文件里再追加一行幂等 UPDATE 即可 |
 | 2 | 后端会不会消费 `kg:twin:read` | **不消费** | 本计划的鉴权全部在 owner / share / publish 三层（Task 6/8/9）；Global Constraints 已写明不走 `AuditLogRoute` 的 `openapi_extra={"permissions": ...}` 分支（全仓零处使用、未运行验证）。这一行是**入口位 + 授权位**，不是后端闸门 |
 | 3 | 行尾逗号 | 前一行（2405）**必须加逗号** | `VALUES (…) , (…)` 语法；不改它就是一条 `syntax error at or near "("`，而且只在部署跑 SQL 时才暴露 |
+
+> #### 计划缺陷修正（执行时实测，2026-11-01）：菜单号 2406 已被占用
+>
+> 执行本 Task 时工作区已存在**并行在飞的「数据资产目录」特性**（AF-01~AF-08），它已把 2406 分给自己：
+>
+> ```sql
+> -- menu_knowledge_governance.sql:44（当时未提交的工作区内容）
+> (2406, '数据资产', 'knowledge.menu.dataAsset', '/admin/data-asset', 2401, 4, 0, 'kg:asset:read', …)
+> ```
+>
+> 同一 `VALUES` 块里出现两行 2406 = 一条重复主键 SQL（`WHERE NOT EXISTS` 只按 id 去重，
+> 第二行会被当成“已存在”而默默吃掉孪生菜单）。因此本次交付按下列三点偏移执行，
+> **下面各 Step 的代码块保留原稿的 2406 文本作为来源，不再逐处刷写**：
+>
+> 1. **`id` 2406 → 2407**（全仓 `docs/sql/*.sql` 搜索确认 2407 未被任何模块使用）；
+> 2. **`sort` 4 → 5**（数据资产已拿走 `parent_id=2401` 下的 sort=4，平号会让两页排序退化成不确定）；
+> 3. **角色授权范围 `BETWEEN 2401 AND 2406` → `AND 2407`**（两文件），同时它**越级盖住了**他人
+>    已改到一半的 `AND 2406`——这是超集关系（范围同时包含数据资产与孪生），不丢他人成果；
+> 4. 尾逗号测试不再钉死「2405 行」而改成「除块内末行外全部以 `),` 结尾」：真实末行现在随
+>    并行特性漂移（governance 块是 2407，init.sql 块也是 2407 但中间没有 2406），钉行号会在
+>    任何人追加菜单时假失败。
 
 **Files:**
 - Modify: `docs/sql/menu_knowledge_governance.sql`（VALUES 块 `:33-43`、角色授权范围 `:78`）
@@ -7251,10 +7272,10 @@ Expected: PASS（6 passed）。失败时的排查序（按此序查，**不得�
 7. 同上但报 `column "updated_at" …` 或 `NULL not allowed` → 把值写到了错误的列位，
    拿 `row_parts()` 与 `FIELDS` 的 zip 结果比对（测试失败消息里的 `got` 字典就是它）。
 
-Run（目视比对两行，独立于 pytest 的第二双确认）：
+Run（目视比对两行，独立于 pytest 的第二双确认；`2406` 按缺陷 #25 已改为 `2407`）：
 
 ```powershell
-Select-String -Path docs\sql\menu_knowledge_governance.sql,docs\sql\init.sql -Pattern '^\(2406,'
+Select-String -Path docs\sql\menu_knowledge_governance.sql,docs\sql\init.sql -Pattern '^\(2407,'
 ```
 
 Expected：恰好 2 行输出，除文件名/行号前缀外**后半段完全相同**。
@@ -7264,6 +7285,18 @@ Expected: 全绿。本任务不改 Python 代码，这条只是确认新增的
 `tests/twin/test_menu_sql_twin.py` 自己没弄坏共享夹具（它 `import app.models.sys.sys_user`，
 而 `tests/twin/conftest.py::_tables()` 默认不导该模型——这就是测试里要自己
 `SysMenu.__table__.create(checkfirst=True)` 的原因）。
+
+单文件确认（Step 5 首条命令）：实测 **6 passed**。
+
+目录回归（上面那条合并命令）**必须按目录分跑**（同 Task 7/8/9 的先行缺陷：跨目录收集会污染
+全局 `Base.metadata`，`tests/kb` 的导入链把 `kms_*` 注册进来而 `_tables()` 不建这些表）：
+
+```powershell
+foreach ($d in 'twin','ontology','unit') { .\.venv\Scripts\python.exe -m pytest "tests/$d" -v 1>"_t10r_$d.txt" 2> $null; "$d EXIT=$LASTEXITCODE" }
+```
+
+实测 `tests/twin` **84 passed**（含本任务新增 6 条）、`tests/ontology` 79 passed、
+`tests/unit` 309 passed + 1 skipped，三个 EXIT 均为 0。
 
 > **不要拿真库或测试库直接跑整个 SQL 文件。** 两个文件写的是 `"public"."sys_menu"`，
 > 而 `tests/twin` 夹具跑在每个用例独立的随机 schema 里：整文件执行会去动 `public`，
@@ -7278,6 +7311,36 @@ Expected: 全绿。本任务不改 Python 代码，这条只是确认新增的
 git add docs/sql/menu_knowledge_governance.sql docs/sql/init.sql backend/tests/twin/test_menu_sql_twin.py
 git commit -m "feat(twin): add sys_menu row for twin workspace (visible=0)"
 ```
+
+> 本任务的三个文件全在仓库根下，故 **cwd 要切回仓库根**（在 `backend/` 里写 `docs/sql/…` 会
+> `pathspec … did not match any files`），且需一并 `git add` 本文档。
+> `menu_knowledge_governance.sql` 的工作区 diff 含**他人未提交的 2406 数据资产两行**，
+> 因而是 Task 8 同一手法的延伸：先临时删那两行 → `git add` → 原样写回，
+> 并用 `git diff --cached -- docs/sql/menu_knowledge_governance.sql | Select-String dataAsset` 为空坐实。
+
+---
+
+#### Task 10 执行记录（2026-11-01）
+
+交付：`menu_knowledge_governance.sql` + `init.sql` 各新增 `2407` 孪生菜单行（两行**字节相同**，
+由 `test_both_files_have_identical_twin_row` 钉住）+ 两处角色授权范围 → `BETWEEN 2401 AND 2407` +
+`test_menu_sql_twin.py`（**6 passed**，红灯阶段 6 条全失败、0 条假绿）。
+
+| # | 类别 | 现象 | 修法 |
+|---|---|---|---|
+| 25 | 计划缺陷（整个 Task 的前提） | 原定 `id=2406` 已被并行的「数据资产」特性占用（同块两行 2406 = 重复主键，且 `WHERE NOT EXISTS` 会默默吃掉后一行） | 改取 `2407`，`sort` 顺延为 5（已在 Task 10 开头就地修正） |
+| 26 | 计划缺陷（Step 1 尾逗号测试） | `test_previous_row_gained_trailing_comma` 钉死「2405 行末必须接逗号」，而真实前驱行已不定（governance 是 2406）；同时 `assert not twin_row(path).endswith(",")` 假设本行是末行，也不定 | 改为「除块内末行外全部以 `),` 结尾 + 末行不带逗号」，不钉行号 |
+| 27 | 环境漂移（Step 6 提交） | 两个 SQL 文件里都有他人未提交内容；直接 `git add menu_knowledge_governance.sql` 会把「数据资产」菜单行并入本次提交 | 沿用 Task 8 手法：临时删他人两行 → `git add` → 原样写回；索引内 `dataAsset` 命中数为 0 |
+| 28 | 观察（不属本任务） | `init.sql` 作为同源镜像**尚未**包含 2406 数据资产行（只有 `menu_knowledge_governance.sql` 有），两文件已因并行开发短暂失同步 | 不由本次代偿（那会把别人的特性写进我的 commit）；已在 SQL 注释里标注 2406 归属，留给数据资产一方自己镜像 |
+
+两个未消的后续（都属 Plan 2，不阻断 P0）：
+
+1. `knowledge.menu.twin` 这个 i18n key **四个 locale 文件都还没有**（`frontend/src/i18n/locales/*.ts` 的
+   `knowledge.menu` 块里目前只到 `dataAsset`）。今天看不出问题（`visible=0` 不进侧栏），
+   Plan 2 把 2407 改回 `visible=1` 时必须同批补 key，否则侧栏直接渲染裸 key。
+2. 本次**未动前端**：按自决项 2，`kg:twin:read` 只是入口位 + 授权位，后端不消费。
+
+提交：`TODO`。
 
 ---
 

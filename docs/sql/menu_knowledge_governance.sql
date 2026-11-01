@@ -39,7 +39,10 @@ FROM (VALUES
 -- 数据源（DataOps，支撑 type=2/table 的 db_table 直连定时同步）
 (2402, '数据源',             'knowledge.menu.dataSource','/admin/kg-data-source',     2401, 2, 0, 'kg:datasource:read',2, 'DatabaseOutlined',  NULL, false, 1, 0, 0),
 -- 本体（ontology 建模）
-(2405, '本体',               'knowledge.menu.ontology',  '/admin/kg-ontology',         2401, 3, 0, 'kg:ontology:read', 2, 'ApartmentOutlined', NULL, false, 1, 0, 0)
+(2405, '本体',               'knowledge.menu.ontology',  '/admin/kg-ontology',         2401, 3, 0, 'kg:ontology:read', 2, 'ApartmentOutlined', NULL, false, 1, 0, 0),
+-- 孪生应用（菜单入口；Plan 1 只落后端，页面/路由属 Plan 2，故 visible=0 先压住侧栏）
+-- 注：原定 2406 已被上方的「数据资产」占用，故取下一个空号 2407（sort 顺延为 5）
+(2407, '孪生应用',         'knowledge.menu.twin',      '/admin/kg-twin',         2401, 5, 0, 'kg:twin:read',    2, 'DeploymentUnitOutlined', NULL, false, 0, 0, 0)
 ) AS v(id, name, i18n_key, path, parent_id, sort, status, permission, type, icon, component, is_deleted, visible, keep_alive, always_show)
 WHERE NOT EXISTS (SELECT 1 FROM "public"."sys_menu" s WHERE s.id = v.id);
 
@@ -75,7 +78,7 @@ UPDATE "public"."sys_menu" SET visible = 0, updated_at = now() WHERE id = 2;
 INSERT INTO "public"."sys_role_menu" (role_id, menu_id)
 SELECT r.role_id, m.id
 FROM "public"."sys_role" r
-CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2405 AND id <> 2404) m
+CROSS JOIN (SELECT id FROM "public"."sys_menu" WHERE id BETWEEN 2401 AND 2407 AND id <> 2404) m
 WHERE NOT EXISTS (
   SELECT 1 FROM "public"."sys_role_menu" rm
   WHERE rm.role_id = r.role_id AND rm.menu_id = m.id
