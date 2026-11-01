@@ -17,6 +17,7 @@ from app.ai.tool_manager.tool_context import build_user_context
 from app.core.api_error import ApiError, TWIN_TENANT_REQUIRED
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.services.twin.twin_access_service import TwinAccessService
 from app.services.twin.twin_data_service import TwinDataService
 from app.services.twin.twin_publish_service import TwinPublishService
 from app.services.twin.twin_service import TEMPLATES, TwinService
@@ -66,6 +67,15 @@ def _pub_svc(db: Session, current_user: SysUser) -> TwinPublishService:
     return TwinPublishService(db, _require_tenant_id(current_user),
                               int(getattr(current_user, "user_id", 0) or 0), ctx,
                               session_factory=lambda: Session(bind, expire_on_commit=False))
+
+
+def _access_svc(db: Session, current_user: SysUser) -> TwinAccessService:
+    """`role_codes` 与 `_svc()` 同源（`build_user_context`，失败降级最小权限）：
+    靠角色已能读的人不应该再发一张注定自动批准的单子。"""
+    ctx = build_user_context(db, current_user)
+    return TwinAccessService(db, _require_tenant_id(current_user),
+                             int(getattr(current_user, "user_id", 0) or 0),
+                             tuple(ctx.role_codes) if ctx else ())
 
 
 class CardCreateBody(BaseModel):
@@ -147,6 +157,18 @@ class PublishBody(BaseModel):
 
     access: str = Field("org", description="org|role")
     role_codes: Optional[List[str]] = Field(None, max_length=32)
+
+
+class AccessRequestBody(BaseModel):
+    """申请理由（原型 PermDrawer 的「申请访问权限」按钮背后就是这一段文本）。"""
+
+    reason: Optional[str] = Field(None, max_length=500)
+
+
+class ApproveBody(BaseModel):
+    """审批可选参数：授予有效期（天）。缺省走服务层的 `DEFAULT_GRANT_DAYS`。"""
+
+    expires_in_days: Optional[int] = Field(None, ge=1, le=365)
 
 
 # ---------------------------------------------------------------- T1–T3 卡片
@@ -320,3 +342,38 @@ def read_published_data(slug: str, body: Optional[DataBody] = None,
                         current_user: SysUser = Depends(get_current_user)) -> dict:
     """T11 取数：数据恒实时。复用 Task 7 的 `DataBody`，**不另建同名 Body**。"""
     return _pub_svc(db, current_user).run_by_slug(slug, body.params if body else None)
+
+
+# ------------------------------------------------------------ T12 权限申请闭环
+
+
+@router.post("/cards/{card_id}/access-request", status_code=201)
+def request_card_access(card_id: int, body: Optional[AccessRequestBody] = None,
+                        db: Session = Depends(get_db),
+                        current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T12 申请。**回 201**：每次合法申请都新建一行单（历史 rejected 不占坑）。"""
+    return _access_svc(db, current_user).request_access(
+        card_id, body.reason if body else None)
+
+
+@router.get("/access-requests")
+def list_access_requests(db: Session = Depends(get_db),
+                         current_user: SysUser = Depends(get_current_user)) -> dict:
+    """一次回两组：`incoming`（我卡上别人提的）/ `outgoing`（我提给别人的）+ 待办计数。"""
+    return _access_svc(db, current_user).list_requests()
+
+
+@router.post("/access-requests/{request_id}/approve")
+def approve_access_request(request_id: int, body: Optional[ApproveBody] = None,
+                          db: Session = Depends(get_db),
+                          current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T12 批准：同事务写 `twin_card_share` 并把单子置 approved（§10 Q1-A：仅 owner）。"""
+    return _access_svc(db, current_user).approve(
+        request_id, body.expires_in_days if body else None)
+
+
+@router.post("/access-requests/{request_id}/reject")
+def reject_access_request(request_id: int, db: Session = Depends(get_db),
+                         current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T12 驳回：不带 Body（无需理由字段也能驳），不产生任何授予。"""
+    return _access_svc(db, current_user).reject(request_id)

@@ -26,6 +26,7 @@ from app.models.sys.sys_user import SysUser
 
 TENANT_A = 100
 TENANT_B = 200
+OTHER_USER_ID = 9001     # 同租户内的第二个身份：T12 的申请人（与 TENANT_A 推导出的 101 不撞）
 TEST_DB_NAME = "minworkbuddy_test"
 
 logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
@@ -158,9 +159,12 @@ def db(engine: Engine) -> Iterator[Session]:
         session.close()
 
 
-def _fake_user(tenant_id: Optional[int]) -> SysUser:
+def _fake_user(tenant_id: Optional[int], user_id: Optional[int] = None) -> SysUser:
     user = SysUser()
-    user.user_id = abs(tenant_id) + 1 if tenant_id is not None else 1
+    # 不传 user_id 时保持 Task 1/6/7/8 的行为逐字不变（TENANT_A → 101、TENANT_B → 201），
+    # 否则那两个任务的夹具与断言（写死 owner_id=101）会整批错。
+    user.user_id = int(user_id) if user_id is not None else (
+        abs(tenant_id) + 1 if tenant_id is not None else 1)
     user.username = f"user-{tenant_id}"
     user.status = "active"
     user.is_admin = False
@@ -169,11 +173,13 @@ def _fake_user(tenant_id: Optional[int]) -> SysUser:
 
 
 def build_client(db: Session, tenant_id: Optional[int], *, with_twin: bool = False,
-                 with_publish: bool = False) -> TestClient:
+                 with_publish: bool = False,
+                 as_user_id: Optional[int] = None) -> TestClient:
     """挂载 dataops 父 router（含 ontology 子 router）的测试客户端。
 
     ``with_twin=True`` 额外挂 ``/api/v1/twins`` 路由（Task 6 起可用）；
     ``with_publish=True`` 再挂 ``/api/v1/twin-p`` 只读页路由（Task 8 起可用）；
+    ``as_user_id`` 只换身份不换租户（Task 9 的申请人/审批人两人同租）；
     默认均为 False，故 Task 1–5 阶段不会去 import 尚不存在的孪生 router。
     """
     from app.routers.dataops.dataops import router as dataops_router
@@ -198,7 +204,7 @@ def build_client(db: Session, tenant_id: Optional[int], *, with_twin: bool = Fal
         yield db
 
     app.dependency_overrides[get_db] = _override_db
-    app.dependency_overrides[get_current_user] = lambda: _fake_user(tenant_id)
+    app.dependency_overrides[get_current_user] = lambda: _fake_user(tenant_id, as_user_id)
     return TestClient(app)
 
 
@@ -232,6 +238,12 @@ def publish_client_a(db: Session) -> TestClient:
 @pytest.fixture
 def publish_client_b(db: Session) -> TestClient:
     return build_client(db, TENANT_B, with_publish=True)
+
+
+@pytest.fixture
+def twin_client_a_as_other(db: Session) -> TestClient:
+    """B 身份看 A 租户：T12 的申请人与审批人必须是两个不同 `user_id`。"""
+    return build_client(db, TENANT_A, with_twin=True, as_user_id=OTHER_USER_ID)
 
 
 @pytest.fixture

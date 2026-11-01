@@ -144,7 +144,8 @@ class TwinService:
         return {int(r[0]): int(r[1] or 0) for r in rows}
 
     def _card_dict(self, c: TwinCard, access: Optional[str],
-                   current_versions: Dict[int, int]) -> dict:
+                   current_versions: Dict[int, int],
+                   share: Optional[TwinCardShare] = None) -> dict:
         # stale：卡片钉的版落后于本体最新版（R5：只提示不自动跟随）
         cur = current_versions.get(int(c.ontology_id), 0)
         return {
@@ -155,6 +156,9 @@ class TwinService:
             "scene_key": c.scene_key, "runtime_state": c.runtime_state,
             "owner_id": int(c.owner_id), "access": access,
             "restricted": access == ACCESS_RESTRICTED,
+            # 只读期限（仅 share 进来的卡有值；owner 自己的卡恒 NULL）。前端据此渲染
+            # 「共享给我的（只读）· 剩余 N 天」（W13），没这个字段抽屉就只能含糊地说「已共享」。
+            "share_expires_at": share.expires_at.isoformat() if share is not None and share.expires_at else None,
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
         }
 
@@ -186,7 +190,7 @@ class TwinService:
             acc = self._access_of(c, shares, self.user_id)
             if acc is None:
                 continue
-            d = self._card_dict(c, acc, current)
+            d = self._card_dict(c, acc, current, shares.get(int(c.id)))
             if acc == ACCESS_OWNER:
                 out["mine"].append(d)
             elif acc == ACCESS_RESTRICTED:
@@ -197,11 +201,13 @@ class TwinService:
 
     def get_card(self, card_id: int) -> dict:
         card = self.card_or_404(card_id)
-        acc = self._access_of(card, self._my_shares(), self.user_id)
+        shares = self._my_shares()          # 同一个字典同时供可见性判定与期限回显
+        acc = self._access_of(card, shares, self.user_id)
         if acc is None:
             # 非 owner / 非共享 / 非对外：与跨租户同一信号，不用 403 泄露存在性
             raise ApiError(TWIN_CARD_NOT_FOUND, "卡片不存在", 404)
-        return self._card_dict(card, acc, self._current_versions({int(card.ontology_id)}))
+        return self._card_dict(card, acc, self._current_versions({int(card.ontology_id)}),
+                               shares.get(int(card.id)))
 
     def _require_published_version(self, ontology_id: int, version: int) -> None:
         ont = self.db.get(MetaOntology, ontology_id)

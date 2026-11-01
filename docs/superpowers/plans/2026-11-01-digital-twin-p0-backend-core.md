@@ -6045,6 +6045,9 @@ git commit -m "feat(twin): publish snapshot with anti-enumeration 403 and access
 | 19 | 计划缺陷（Step 6 代码） | `_record_access` 给 `SysAuditLog(tenant_id=…)`：该表**无 `tenant_id` 列**（不带 TenantMixin，主键 `log_id`），计划 Step 4 的 `test_record_access_never_raises` 因异常被吞成 warning 而**不会报错**——真实的审计写入在线上会 100% 静默失败 | 去掉 `tenant_id=` 入参，租户维度改落 `request_params.tenantId`（照 `sqlbot_template_tool.py` 先例） |
 | 20 | 计划缺陷（Step 6 vs Step 4） | `unpublish()` 无 `status` 闸门 ⇒ 重复停用回 204，`test_unpublish_revokes_and_keeps_row` 的 `assert 204 == 404` 失败（`22 passed / 1 failed`） | 按测试为真：补 `status != 'enabled'` → `TWIN_NOT_PUBLISHED` 404，不改测试 |
 | 21 | 环境漂移（Step 8） | 计划把注释写为 `--- 33~34.`，但尾部已存在外部加入的 `--- 34. 视频会议 ---`，会重号 | 注释保持 `33.`，只拆条目不拆编号 |
+| 22 | 环境漂移（Step 10 提交） | `app/core/router_registry.py` 的工作区 diff 是**单 hunk 混合**：我的 `publish_router` 条目与外部 LiveKit 的 `--- 34. 视频会议 ---` 三行落在同一个 `@@` 块里，`git add <file>` 会把他人接线并入本次提交 | 先临时删掉外部三行 → `git add` 该文件 → 原样写回；用 `git diff --cached … \| Select-String meeting` 为空证实索引干净，外部改动仍留在工作区未提交 |
+
+提交：`56caf2e feat(twin): publish snapshot with anti-enumeration 403 and access audit`（7 文件）。
 
 反枚举不变量已按期望钉住：四条拒因不同的失败（角色不命中 / 跨租户 / 未知 slug / data 端点）
 得到**逐字相同**的 403 `DENY_MESSAGE`，差异只进审计 `request_params.reason`。
@@ -6910,7 +6913,9 @@ def reject_access_request(request_id: int, db: Session = Depends(get_db),
 - [ ] **Step 9: 跑到通过**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/twin/test_twin_access.py -v`
-Expected: PASS（17 passed）。失败时的排查序（按此序查，**不得改测试迁就实现**）：
+Expected: PASS（**18 passed**）。计划缺陷修正（执行时实测，2026-11-01）：原稿写
+「17 passed」是少计了一个用例——本步代码块里的 `def test_` 正好 18 个（申请 8 + 审批 7 + 列表与过期 3）。
+失败时的排查序（按此序查，**不得改测试迁就实现**）：
 
 1. `AttributeError: 'TwinAccessService' object has no attribute '_row_dict'` → Step 6 下半没贴完；
 2. `TWIN_ACCESS_ALREADY_GRANTED` 未定义 → Step 1 的码没插到 `TWIN_PUBLISH_FORBIDDEN` 之后；
@@ -6931,6 +6936,19 @@ Run: `.\.venv\Scripts\python.exe -m pytest tests/twin tests/ontology tests/unit 
 Expected: 全绿（Task 1/4/5/6/7/8 的全部用例不得因本任务回归：Step 7 动了 `twin_service.py`，
 它是 Task 6/7/8 三个任务的共同地基，改错了会成批飘红）。
 
+> **必须改成按目录分跑**（同 Task 7 Step 7 的先行缺陷：三个目录一起收集会污染全局
+> `Base.metadata`，报 `UndefinedTable: relation "t_xxxx.kms_segment" does not exist`）：
+>
+> ```powershell
+> foreach ($d in 'tests/twin','tests/ontology','tests/unit') {
+>   .\.venv\Scripts\python.exe -m pytest $d -q 1> "_t9r.txt" 2> $null
+>   echo "$d EXIT=$LASTEXITCODE"
+> }
+> ```
+>
+> 实测（2026-11-01）：`tests/twin` 78 passed、`tests/ontology` 79 passed、
+> `tests/unit` 309 passed + 1 skipped，三个 EXIT 均为 0。
+
 Run: `.\.venv\Scripts\python.exe -c "import app.main; print('router load ok')"`
 Expected: 输出 `router load ok`，日志无 `路由模块加载失败`。（本任务不新增 `RouterSpec`，
 这一步只验证新增 import 没把模块循环拉起来：`twin_access_service` 同时 import 了
@@ -6942,6 +6960,35 @@ Expected: 输出 `router load ok`，日志无 `路由模块加载失败`。（�
 git add backend/app/core/api_error.py backend/app/services/twin/twin_access_service.py backend/app/services/twin/twin_service.py backend/app/routers/twin/twin.py backend/tests/twin/conftest.py backend/tests/twin/test_twin_access.py
 git commit -m "feat(twin): access request workflow with owner approval and expiring grants"
 ```
+
+> 路径需按实际 cwd 写（cwd=`backend` 时去掉 `backend/` 前缀），提交前用
+> `git diff --cached --name-only` 核对零外部文件混入；本任务同时改动计划文档，需一并 `git add`。
+
+---
+
+#### Task 9 执行记录（2026-11-01）
+
+交付：`twin_access_service.py`（275 行）+ `twin.py` 的 `_access_svc`/两个 Body/T12 四端点 +
+`twin_service._card_dict` 的 `share_expires_at`（三处）+ `conftest` 的 `as_user_id` 与
+`twin_client_a_as_other` + `test_twin_access.py`（**18 passed**）。
+
+| # | 类别 | 现象 | 修法 |
+|---|---|---|---|
+| 23 | 计划缺陷（Step 9 期望值） | 写「Expected: PASS（17 passed）」，但 Step 3 的用例块实际含 18 个 `def test_`；执行者若按 17 验收会怀疑多写了一个用例 | 改为 18 passed（Step 9 已就地修正） |
+| 24 | 环境漂移（Step 10） | 任务未列计划文档为提交件，但本文档的回写属于同一 Task 的事实记录 | `git add` 额外带上 `../docs/superpowers/plans/…md` |
+
+执行差异说明（不影响最终态）：Step 5 与 Step 6 是同一文件的上下两半，本次**一次写成**
+（避开 `Add-Content` 的 LF 污染），因此跳过了 Step 5 单独运行必然出现的
+`AttributeError: _row_dict`；红灯证据由 Step 4 的 `ModuleNotFoundError: No module named
+'app.services.twin.twin_access_service'`（EXIT=2）提供，与计划预期一致。
+
+关键不变量已钉住：批准的单次 `commit`（`test_approve_writes_share_and_request_in_one_transaction`
+用 `_upsert_share` 抛错验证回滚后单子仍 `pending` 且无 share 行）、同一 (card, user)
+只留一行授予（过期 `edit` 被重申后回落成 `read`，权限不上探）、全链路用应用时钟
+（`reviewed_at`/`expires_at` 可比较），以及审批三闸一序（存在 → 是我卡 → 还在途）
+依次给出的 404 / 403 / 400 三种信号各归其位。
+
+提交：`TODO`。
 
 ---
 
