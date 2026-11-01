@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
 from app.services.sandbox.sandbox_action_service import SandboxActionService
+from app.services.sandbox.sandbox_advisor_service import SandboxAdvisorService
 from app.services.sandbox.sandbox_element_service import SandboxElementService
 from app.services.sandbox.sandbox_engine_service import SandboxEngineService
 from app.services.sandbox.sandbox_scene_service import SandboxSceneService
@@ -86,6 +87,12 @@ class ActionApply(BaseModel):
 
 class ActionConfirm(BaseModel):
     token: str = Field(..., min_length=1)
+
+
+class AskRequest(BaseModel):
+    branch_id: int
+    question: str = Field(..., min_length=1, max_length=2000)
+    model_id: Optional[int] = None
 
 
 # --------------------------------------------------------------------- S1–S5
@@ -267,3 +274,12 @@ def list_actions(scene_id: int, branch_id: Optional[int] = Query(default=None),
                  user: SysUser = Depends(get_current_user)):
     return SandboxActionService(db, _tenant(user), getattr(user, "user_id", None)).list_actions(
         scene_id, branch_id=branch_id, result=result)
+
+
+# --------------------------------------------------------------------- S20
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/ask")
+def ask(scene_id: int, body: AskRequest, db: Session = Depends(get_db),
+        user: SysUser = Depends(get_current_user)):
+    return SandboxAdvisorService(db, _tenant(user)).ask(
+        scene_id, body.branch_id, body.question, model_id=body.model_id)
