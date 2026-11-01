@@ -1,14 +1,14 @@
 // stateMap.spec.ts —— 四态→StateWrapper 三态 + masked 独立位
 import { describe, it, expect } from 'vitest'
 import { widgetState } from '../stateMap'
-import type { WidgetDatum } from '@/types/twin'
+import type { WidgetDatum, TwinMode } from '@/types/twin'
 
 const base: WidgetDatum = {
   widget_id: 1, widget_key: 'w', title: 't', query_id: 1, state: 'ok', reason: null,
   result_shape: 'kpi', columns: ['v'], data: { value: 1, records: [] }, row_count: 1,
   truncated: false, masked_fields: [], error: null, cached: false, updated_at: 'x',
 }
-const s = (over: Partial<WidgetDatum>, mode = 'edit') => widgetState({ ...base, ...over }, mode)
+const s = (over: Partial<WidgetDatum>, mode: TwinMode = 'edit') => widgetState({ ...base, ...over }, mode)
 
 describe('widgetState（W6）', () => {
   it('ok → content', () => expect(s({}).branch).toBe('content'))

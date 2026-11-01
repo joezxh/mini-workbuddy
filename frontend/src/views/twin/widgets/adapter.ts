@@ -16,4 +16,5 @@ export function toPie(d: { records: Rec[]; parts: string[] }) {
   return (d.records ?? []).map((r) => ({ name: String(r[k] ?? ''), value: Number(r[v] ?? 0) }))
 }
 export const toTable = (d: { records?: Rec[] }) => d.records ?? []
-export const kpiValue = (d: { value?: unknown }) => d?.value ?? null
+// 后端 kpi 归一体是 {value,records} 整包，参数面收完整 wire 形状
+export const kpiValue = (d: Rec) => d?.value ?? null
