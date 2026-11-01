@@ -5,6 +5,7 @@ import ContextBar from '../components/ContextBar.vue'
 import KpiModal from '../components/KpiModal.vue'
 import TickBar from '../components/TickBar.vue'
 import ScenePanel from '../components/ScenePanel.vue'
+import CausalCanvas from '../components/CausalCanvas.vue'
 
 describe('ContextBar', () => {
   it('渲染来源标签与检查点计数', async () => {
@@ -47,5 +48,14 @@ describe('ScenePanel', () => {
       scenes: [], currentSceneId: null, timeline: [], branches: [], selectedBranchId: null, compareSet: new Set(),
     }))
     expect(html).toContain('暂无推演场景'); expect(html).toContain('对比所选分支')
+  })
+})
+
+describe('CausalCanvas', () => {
+  it('无世界时空渲染 + 视图 Tab', async () => {
+    const html = await renderToString(createSSRApp(CausalCanvas, {
+      world: null, tick: 0, cview: 'causal', zoomK: 1, selectedEntity: null, detail: null,
+    }))
+    expect(html).toContain('世界概览'); expect(html).toContain('因果传播'); expect(html).toContain('施加行动')
   })
 })
