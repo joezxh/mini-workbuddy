@@ -1540,6 +1540,8 @@ git commit -m "docs(twin): plan2 closeout - main spec corrections C2/C3/C4/C5 an
 7. **D-07｜Task 3 测试胶水按授权优化（非缺陷，留痕）**：Step 1 原稿的 `globalThis.__loadPageResp` 钩子与 `openCardStart` 占位写法均未照搬，改为计划注 (:605)/Step 4 预先授权的形态：mock 工厂按 URL 模式返回样本、W11 用例直调 `openCard(99)`；另删未读变量 `resp`/未用导入 `afterEach`（仓库存量 vue-tsc 会报 TS6133，新代码须保持 twin 相关错误 = 0）。五条断言意图零弱化，实得 5 passed。
 8. **D-08｜Task 4 stateMap 测试断言子串陷阱**：原稿 `not.toContain('绑定查询')` 会被计划自己实现的 run 态文案「未绑定查询」子串命中而永久假红。契约意图 = 运行态无操作暗示，改钉 CTA 短语 `not.toContain('点击绑定')`（edit 文案「未绑定查询，点击绑定」仍被钉住，意图不弱化）；实现文案维持原稿。
 9. **D-09｜Task 4 Produces 里 `WIDGET_MAP` 无代码定义**：Interfaces 要求本任务先导出 shape→adapter 纯映射，但 Step 3 三个模块均无此常量、测试也未钉。处置：不在无调用方时臆造导出口（YAGNI），`WIDGET_MAP` 顺延到真正持有组件的 Task 5 WidgetGrid 内实现；若 Task 5 发现需要独立纯映射再补。
+10. **D-10｜Task 5 Interfaces 承诺的 `layout` emit 在 Step 3 代码块中不存在**：Produces 列 `emits: … layout(items: LayoutItem[])`，但 Grid/Shell 模板只有 retry/bind/drill（拖拽布局属 Task 8 交互层）。处置：P0 壳不臆造无人触发的导出口；Task 8 接布局保存时再补 emit 并同步定名。另：组件映射实际落在 WidgetShell 的 `RENDERERS`（计划原稿如此，非 adapter.ts），D-09 的「顺延 Task 5」以该实现为准。
+11. **D-11｜Task 4 原稿两处过不了 vue-tsc（Task 5 验证时暴露）**：① `kpiValue(d: { value?: unknown })` 对测试传入的完整 wire 体 `{value,records}` 触发 excess-property 检查 TS2353 → 参数面改为 `Rec`（行为不变，kpi 归一体本就是整包）；② stateMap.spec 胶水函数 `mode = 'edit'` 被推断为 string，传 TwinMode 形参 TS2345 → 测试侧标注 `mode: TwinMode = 'edit'`（断言零改动）。教训：Task 4 提交前未复跑 vue-tsc，后续每个碰 .vue/.spec 的 Task 提交前均跑 twin 错误计数判据（D-03 口径）。
 
 ---
 
