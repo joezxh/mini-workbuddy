@@ -7531,7 +7531,7 @@ git commit -m "docs(specs): close twin-app non-goal statements in upstream specs
 
 Step 8 实测：GATE1 旧行专属针句 `依赖推演物化与实时回显`/`依赖推演与实时物化`/`推演/孪生维持非目标`/`推演孪生（观察项）` 均 0；反查 `维持 P3 观察项仅做预研` 仍在沙盘规格 `:17`（属推演沙盘被否备选，合法保留）；`tests/twin` **84 passed**（EXIT=0，未改代码）。
 
-提交：`TODO`。
+提交：`f824fe9 docs(specs): close twin-app non-goal statements in upstream specs (W16)`（4 文件）。
 
 ---
 
