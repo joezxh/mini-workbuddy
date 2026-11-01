@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
 from app.services.sandbox.sandbox_element_service import SandboxElementService
+from app.services.sandbox.sandbox_engine_service import SandboxEngineService
 from app.services.sandbox.sandbox_scene_service import SandboxSceneService
 
 router = APIRouter(tags=["推演沙盘 沙箱域"])
@@ -57,6 +58,23 @@ class ElementUpsert(BaseModel):
 
 class ElementReview(BaseModel):
     decision: str = Field(..., pattern="^(accept|reject)$")
+
+
+class AdvanceRequest(BaseModel):
+    n: int = Field(default=1, ge=1, le=1000)
+
+
+class CheckpointRequest(BaseModel):
+    label: str = Field(..., min_length=1, max_length=200)
+
+
+class BranchCreate(BaseModel):
+    checkpoint_id: int
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class ReplayRequest(BaseModel):
+    to_tick: int = Field(..., ge=0)
 
 
 # --------------------------------------------------------------------- S1–S5
@@ -138,3 +156,72 @@ def delete_element(element_id: int, db: Session = Depends(get_db),
 def review_element(element_id: int, body: ElementReview, db: Session = Depends(get_db),
                    user: SysUser = Depends(get_current_user)):
     return SandboxElementService(db, _tenant(user)).review_element(element_id, body.decision)
+
+
+# --------------------------------------------------------------------- S6–S12/S19/S21
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/world")
+def get_world(scene_id: int, branch_id: int = Query(...), tick: Optional[int] = Query(default=None),
+              view: str = Query(default="world"), db: Session = Depends(get_db),
+              user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).world_view(scene_id, branch_id, tick=tick, view=view)
+
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/entities/{entity_code}")
+def get_entity(scene_id: int, entity_code: str, branch_id: int = Query(...),
+               db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).entity_detail(scene_id, branch_id, entity_code)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/branches/{branch_id}/advance")
+def advance(scene_id: int, branch_id: int, body: AdvanceRequest, db: Session = Depends(get_db),
+            user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).advance(scene_id, branch_id, body.n)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/branches/{branch_id}/checkpoints", status_code=201)
+def save_checkpoint(scene_id: int, branch_id: int, body: CheckpointRequest,
+                    db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).save_checkpoint(
+        scene_id, branch_id, body.label, creator_id=getattr(user, "user_id", None))
+
+
+@router.delete("/ontologies/sandbox/checkpoints/{checkpoint_id}", status_code=204)
+def delete_checkpoint(checkpoint_id: int, db: Session = Depends(get_db),
+                      user: SysUser = Depends(get_current_user)):
+    SandboxEngineService(db, _tenant(user)).delete_checkpoint(checkpoint_id)
+    return Response(status_code=204)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/branches", status_code=201)
+def derive_branch(scene_id: int, body: BranchCreate, db: Session = Depends(get_db),
+                  user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).derive_branch(
+        scene_id, body.checkpoint_id, body.name)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/branches/{branch_id}/replay")
+def replay(scene_id: int, branch_id: int, body: ReplayRequest, db: Session = Depends(get_db),
+           user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).replay_to(scene_id, branch_id, body.to_tick)
+
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/compare")
+def compare(scene_id: int, branches: str = Query(..., description="逗号分隔 branch_id"),
+            db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    ids = [int(x) for x in branches.split(",") if x.strip()]
+    return SandboxEngineService(db, _tenant(user)).compare(scene_id, ids)
+
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/observations")
+def list_observations(scene_id: int, branch_id: int = Query(...), kind: Optional[str] = Query(default=None),
+                      tick_from: Optional[int] = Query(default=None), tick_to: Optional[int] = Query(default=None),
+                      db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).list_observations(
+        scene_id, branch_id, kind=kind, tick_from=tick_from, tick_to=tick_to)
+
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/kpis")
+def list_kpis(scene_id: int, branch_id: int = Query(...), db: Session = Depends(get_db),
+              user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).list_kpis(scene_id, branch_id)
