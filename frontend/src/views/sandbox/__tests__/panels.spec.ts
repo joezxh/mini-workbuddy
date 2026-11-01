@@ -6,6 +6,9 @@ import KpiModal from '../components/KpiModal.vue'
 import TickBar from '../components/TickBar.vue'
 import ScenePanel from '../components/ScenePanel.vue'
 import CausalCanvas from '../components/CausalCanvas.vue'
+import TracePanel from '../components/TracePanel.vue'
+import AdvisorPanel from '../components/AdvisorPanel.vue'
+import CompareView from '../components/CompareView.vue'
 
 describe('ContextBar', () => {
   it('渲染来源标签与检查点计数', async () => {
@@ -57,5 +60,27 @@ describe('CausalCanvas', () => {
       world: null, tick: 0, cview: 'causal', zoomK: 1, selectedEntity: null, detail: null,
     }))
     expect(html).toContain('世界概览'); expect(html).toContain('因果传播'); expect(html).toContain('施加行动')
+  })
+})
+
+describe('TracePanel/AdvisorPanel/CompareView', () => {
+  it('TracePanel trace tab 计数框', async () => {
+    const html = await renderToString(createSSRApp(TracePanel, {
+      tview: 'trace', goalElements: [], ruleElements: [], traceObs: [], futureItems: [],
+      entityCount: 3, relationCount: 0, tick: 2,
+    }))
+    expect(html).toContain('实体'); expect(html).toContain('传播过程')
+  })
+  it('AdvisorPanel chat tab 输入框', async () => {
+    const html = await renderToString(createSSRApp(AdvisorPanel, {
+      aview: 'chat', chat: [], chatInput: '', asking: false, actionLogs: [], recommendations: [], hasScene: true,
+    }))
+    expect(html).toContain('输入消息'); expect(html).toContain('发送')
+  })
+  it('CompareView 富差异表', async () => {
+    const html = await renderToString(createSSRApp(CompareView, {
+      show: true, summary: [{ branch_id: 1, name: '基线', final_tick: 2, final_health: '0.5', health_delta: '0.0000', goal_reached_count: 0, rule_fired_count: 2, action_count: 1 }],
+    }))
+    expect(html).toContain('基线'); expect(html).toContain('0.0000')
   })
 })
