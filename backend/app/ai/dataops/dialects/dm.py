@@ -75,6 +75,18 @@ class DmAdapter:
         except Exception as exc:  # noqa: BLE001 - 探活失败原因（含驱动指引）原样回传
             return False, f"{type(exc).__name__}: {exc}"[:500]
 
+    def probe_table(self, ds, database: Optional[str], table_name: str) -> Tuple[bool, Optional[str]]:
+        """表级探活（AF-06）：达梦原生驱动，标识符双引号大写（与 ALL_TAB_COMMENTS 口径一致）。"""
+        try:
+            conn, cleanup = self.open(ds)
+            try:
+                _fetch(conn, f'SELECT 1 FROM "{(database or "").upper()}"."{table_name.upper()}" WHERE ROWNUM <= 1')
+            finally:
+                cleanup()
+            return True, None
+        except Exception as exc:  # noqa: BLE001
+            return False, f"{type(exc).__name__}: {exc}"[:500]
+
     # ------------------------------------------------------------------
     def list_databases(self, conn) -> List[str]:
         """达梦的扫描边界是模式（schema）；DBA 视图优先，权限不足退 ALL_OBJECTS。"""

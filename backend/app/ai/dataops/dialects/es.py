@@ -81,6 +81,18 @@ class EsAdapter:
         except Exception as exc:  # noqa: BLE001 - 探活失败原因（含驱动指引）原样回传
             return False, f"{type(exc).__name__}: {exc}"[:500]
 
+    def probe_table(self, ds, database: Optional[str], table_name: str) -> Tuple[bool, Optional[str]]:
+        """表级探活（AF-06）：ES 以索引计数代替（索引不存在/无权访问 = 不可读）。"""
+        try:
+            client, cleanup = self.open(ds)
+            try:
+                client.count(index=table_name)
+            finally:
+                cleanup()
+            return True, None
+        except Exception as exc:  # noqa: BLE001
+            return False, f"{type(exc).__name__}: {exc}"[:500]
+
     # ------------------------------------------------------------------
     def list_databases(self, conn) -> List[str]:
         return [PSEUDO_SCOPE]

@@ -25,6 +25,7 @@ import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 // 知识治理（数据源 / 知识库 / 外部知识库 / 本体）
 import DataSourcePanel from '@/views/data-source/DataSourcePanel.vue'
+import OntologyWorkspace from '@/views/data-source/ontology/OntologyWorkspace.vue'
 import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
 import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）
@@ -65,6 +66,9 @@ export const componentMap: Record<string, Component> = {
   'workflow-management': markRaw(WorkflowManagement),
   // 知识治理（menuKey 与 sys_menu.path 末段一致）
   'kg-data-source': markRaw(DataSourcePanel),
+  // 本体工作台：sys_menu 2405 (/admin/kg-ontology)。与 DataSourcePanel 的「本体工作台」页签共用同一组件，
+  // 菜单直达时以独立 Tab 全量渲染（OntologyWorkspace 自带选择器与内部页签，不依赖外层壳）。
+  'kg-ontology': markRaw(OntologyWorkspace),
   'kg-kb': markRaw(KnowledgeBasePanel),
   'kg-external-kb': markRaw(ExternalKbPanel),
   'kg-private-kb': markRaw(WikiIndex),

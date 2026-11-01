@@ -5,9 +5,9 @@ clickhouse / excel 均经由 SQLAlchemy 连接；dm/es 为原生驱动族，各�
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from sqlalchemy import literal as _sa_literal, text as _text
 
-from sqlalchemy import text as _text
+from typing import Optional, Tuple
 
 
 class SQLAlchemyProbeMixin:
@@ -45,6 +45,22 @@ class SQLAlchemyProbeMixin:
             return True, None
         except Exception as exc:  # noqa: BLE001 - 探活失败原因原样回传用户
             return False, f"{type(exc).__name__}: {exc}"[:500]
+
+    def probe_table(self, ds, database: Optional[str], table_name: str) -> Tuple[bool, Optional[str]]:
+        """表级可读性探活（AF-06）：SELECT 1 FROM <t> LIMIT 1。
+
+        标识符由 SQLAlchemy core 自动按方言加引号，LIMIT 方言改写（Oracle/DM 自动
+        FETCH FIRST）免特判；``open`` 失败向上抛，由服务层归因 SOURCE_UNREACHABLE。"""
+        from sqlalchemy import select as _sa_select, table as _sa_table
+
+        conn, cleanup = self.open(ds, connect_database=database)
+        try:
+            conn.execute(_sa_select(_sa_literal(1)).select_from(_sa_table(table_name)).limit(1))
+        except Exception as exc:  # noqa: BLE001 - 表不可读原因原样回传
+            return False, f"{type(exc).__name__}: {exc}"[:500]
+        finally:
+            cleanup()
+        return True, None
 
 
 def _close(conn, engine) -> None:

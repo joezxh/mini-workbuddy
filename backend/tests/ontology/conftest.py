@@ -172,6 +172,11 @@ def build_client(db: Session, tenant_id: Optional[int]) -> TestClient:
     app = FastAPI()
     app.include_router(router)
 
+    # 与服务运行时同一错误契约：ApiError → {code, message, detail?}（main.py 亦如此注册）
+    from app.core.api_error import register_api_error_handler
+
+    register_api_error_handler(app)
+
     def _override_db():
         yield db
 

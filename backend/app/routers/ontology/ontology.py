@@ -21,8 +21,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.api_error import ApiError, PROBE_BATCH_LIMIT, SOURCE_UNREACHABLE
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.services.dataops.scan_service import MetaScanService
 from app.services.ontology.ontology_build_service import OntologyBuildService, submit_build
 from app.services.ontology.ontology_agent_service import OntologyAgentService
 from app.services.ontology.ontology_apppublish_service import OntologyAppPublishService
@@ -133,6 +135,57 @@ def assets_search(
     svc = OntologyAssetService(db, _require_tenant_id(current_user))
     return svc.search(kw=kw, source_id=source_id, tag_ids=tag_ids, kind=kind,
                       page=page, size=size, table_type=table_type, sort=sort)
+
+
+# ------------------------------------------- E-探活 表级可读性（AF-06，单+批量限20）
+
+class TableBatchProbeRequest(BaseModel):
+    table_ids: List[int] = Field(..., description="待探活表 ID 列表（单次上限 20）")
+
+
+@router.post("/sources/{source_id}/tables/{table_id}/test")
+def test_table_probe(
+    source_id: int,
+    table_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    """单表可读性探活：源不可达 → 502，表不可读 → 400，表不存在/跨租户 → 404。
+
+    错误经 :class:`ApiError` 渲染 ``{code, message, detail}``；成功返 ``{table_id, ok, code}``。
+    """
+    svc = MetaScanService(db, _require_tenant_id(current_user))
+    ok, code, err = svc.test_table(table_id, source_id=source_id)
+    if not ok:
+        raise ApiError(
+            code, err or "表探活失败",
+            http_status=502 if code == SOURCE_UNREACHABLE else 400,
+            detail={"table_id": table_id},
+        )
+    return {"table_id": table_id, "ok": True, "code": None}
+
+
+@router.post("/sources/{source_id}/tables/test-batch")
+def test_table_probe_batch(
+    source_id: int,
+    body: TableBatchProbeRequest,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    """批量探活（串行，单次上限 20）：每项 ``{table_id, ok, code}``，定位失败按错误码回传。"""
+    tenant_id = _require_tenant_id(current_user)
+    if len(body.table_ids) > 20:
+        raise ApiError(PROBE_BATCH_LIMIT, "单次批量探活上限 20 张表",
+                       http_status=400, detail={"count": len(body.table_ids)})
+    svc = MetaScanService(db, tenant_id)
+    results: List[dict] = []
+    for tid in body.table_ids:
+        try:
+            ok, code, _err = svc.test_table(tid, source_id=source_id)
+            results.append({"table_id": tid, "ok": ok, "code": code})
+        except ApiError as exc:
+            results.append({"table_id": tid, "ok": False, "code": exc.code})
+    return {"results": results}
 
 
 # -------------------------------------------------------------- E3 详情/改/删

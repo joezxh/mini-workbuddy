@@ -26,6 +26,9 @@ from sqlalchemy.orm import Session
 
 from app.ai.dataops.dialects.registry import get_adapter
 from app.ai.dataops.connection import resolve_family
+from app.core.api_error import (
+    ApiError, SOURCE_UNREACHABLE, TABLE_NOT_FOUND, TABLE_NOT_READABLE,
+)
 from app.models.dataops.data_source import DataSource
 from app.models.dataops.meta import MetaColumn, MetaScanJob, MetaTable
 from app.services.dataops.data_source_service import DataSourceService
@@ -75,6 +78,38 @@ class MetaScanService:
                                 database=database, config_json=config or {})
         draft._password_plain = password  # noqa: SLF001
         return get_adapter(t).test_connect(draft)
+
+    # ------------------------------------------------------------------ #
+    # 表级探活（AF-06）
+    # ------------------------------------------------------------------ #
+    def test_table(self, table_id: int, *, source_id: Optional[int] = None
+                   ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """单表可读性探活：返回 ``(ok, code, error)``，code ∈ {SOURCE_UNREACHABLE, TABLE_NOT_READABLE}。
+
+        先 ``test_connect`` 确认源可达（失败 → SOURCE_UNREACHABLE），再 ``probe_table``
+        确认表可读（失败 → TABLE_NOT_READABLE）；表不存在/跨租户/不属于 source_id → ApiError 404。
+        探活失败不抛异常（归因回三元组），仅定位失败才 404。
+        """
+        row = self.db.execute(
+            select(MetaTable).where(
+                MetaTable.tenant_id == self.tenant_id, MetaTable.id == table_id
+            )
+        ).scalar_one_or_none()
+        if row is None or (source_id is not None and row.source_id != source_id):
+            raise ApiError(TABLE_NOT_FOUND, "表不存在或不属于该数据源",
+                           http_status=404, detail={"table_id": table_id})
+        ds = self._prepare(self._ds.get_or_404(row.source_id))
+        adapter = get_adapter(ds.source_type)
+        ok, err = adapter.test_connect(ds)
+        if not ok:
+            return False, SOURCE_UNREACHABLE, err
+        try:
+            pok, perr = adapter.probe_table(ds, row.database, row.table_name)
+        except Exception as exc:  # noqa: BLE001 - 探针异常归为表不可读
+            return False, TABLE_NOT_READABLE, f"{type(exc).__name__}: {exc}"[:500]
+        if not pok:
+            return False, TABLE_NOT_READABLE, perr
+        return True, None, None
 
     # ------------------------------------------------------------------ #
     # 远端浏览（选表导入的前置，不落快照）
