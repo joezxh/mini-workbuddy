@@ -15,16 +15,27 @@
               :disabled="lockedOut(it)"
               @change="toggle(it)"
             />
-            <span class="asset-cards__name" :title="it.table_name">{{ it.table_name }}</span>
-            <a-tag v-if="it.pii_max_level && it.pii_max_level !== 'L0'" color="red">{{ it.pii_max_level }}</a-tag>
-            <a-tag v-if="it.bound_object_code" color="green">{{ t2('已映射') }}</a-tag>
+            <span class="asset-cards__name" :title="it.table_name" v-html="hl(it.table_name, kw || '')" />
+            <span v-if="it.score" class="score" :class="'s' + it.score">{{ it.score }}</span>
+            <span v-if="it.bound_object_code" class="badge b-ok">{{ t2('已映射') + ' ' + it.bound_object_code }}</span>
+            <span
+              v-if="it.pii_max_level && it.pii_max_level !== 'L0'"
+              class="badge"
+              :class="piiTone(it.pii_max_level)"
+              :title="t2('meta_column.pii_level')"
+            >{{ 'PII ' + it.pii_max_level }}</span>
           </div>
           <div class="asset-cards__meta">
             {{ it.db_name || it.database || '-' }}<template v-if="it.table_comment"> · {{ it.table_comment }}</template>
           </div>
-          <div class="asset-cards__digest" :title="it.column_digest">{{ it.column_digest || t2('（无字段摘要）') }}</div>
+          <div
+            class="asset-cards__digest"
+            :class="{ exp: isExp(it.table_id) }"
+            :title="it.column_digest"
+            @click="toggleExp(it.table_id)"
+          >{{ it.column_digest || t2('（无字段摘要）') }}</div>
           <div class="asset-cards__foot">
-            <span>{{ t2('列') }} {{ it.column_count ?? '-' }} · {{ t2('行') }} {{ it.row_count ?? '-' }}</span>
+            <span>{{ t2('列') }} {{ it.column_count ?? '-' }} · {{ t2('行') }} {{ fmtRows(it.row_count) }}</span>
             <span class="asset-cards__tags">
               <a-tag v-for="tg in it.tags || []" :key="tg.code" :color="tg.color || undefined">{{ tg.name }}</a-tag>
             </span>
@@ -47,11 +58,13 @@
 
 <script setup lang="ts">
 /**
- * 资产表卡片清单（AF-05/07/08）：column_digest 内联 + pii/已映射标记 + 分页多选。
+ * 资产表卡片清单（AF-05/07/08）：三段得分徽章 + 已映射码 + PII 分级配色 + 关键词高亮 + 摘要展开。
  * 跨源拦截（§4.7 约束5）：已选集合锁定 source_id，异源卡片复选框禁用。
  */
+import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { t2 } from '../ontology/ontologyText'
+import { hl, fmtRows } from './assetText'
 
 const props = defineProps<{
   items: any[]
@@ -60,11 +73,17 @@ const props = defineProps<{
   size: number
   loading?: boolean
   selected: any[]
+  kw?: string
 }>()
 const emit = defineEmits<{
   (e: 'toggle', row: any, checked: boolean): void
   (e: 'page-change', page: number): void
 }>()
+
+/** PII 配色（原型口径）：L2/L3 → 错误(红)，其余（L1）→ 告警(黄) */
+function piiTone(level: string) {
+  return level === 'L2' || level === 'L3' ? 'b-err' : 'b-warn'
+}
 
 function isChecked(it: any) {
   return props.selected.some((s) => s.table_id === it.table_id)
@@ -82,6 +101,17 @@ function toggle(it: any) {
     return
   }
   emit('toggle', it, !isChecked(it))
+}
+
+/** 字段摘要默认 2 行截断，点击解除（expanded 态） */
+const expanded = ref<Set<number>>(new Set())
+function isExp(id: number) {
+  return expanded.value.has(id)
+}
+function toggleExp(id: number) {
+  const next = new Set(expanded.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  expanded.value = next
 }
 </script>
 
@@ -114,12 +144,19 @@ function toggle(it: any) {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
   }
   &__name {
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    :deep(mark) {
+      background: #fff3a3;
+      color: inherit;
+      padding: 0 1px;
+      border-radius: 2px;
+    }
   }
   &__meta,
   &__foot {
@@ -140,9 +177,61 @@ function toggle(it: any) {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     word-break: break-all;
+    cursor: pointer;
+    &.exp {
+      -webkit-line-clamp: unset;
+      display: block;
+    }
   }
   &__pager {
     align-self: flex-end;
+  }
+}
+// 三段确定性得分徽章（原型 .score.s3/s2/s1 配色）
+.score {
+  font-family: var(--mono, monospace);
+  font-size: 9.5px;
+  color: var(--fg-mute, #888);
+  border: 1px solid var(--border, #d9d9d9);
+  border-radius: 3px;
+  padding: 0 4px;
+  &.s3 {
+    background: #f6ffed;
+    border-color: #b7eb8f;
+    color: #389e0d;
+    font-weight: 600;
+  }
+  &.s2 {
+    background: #e6f4ff;
+    border-color: #bcd8ff;
+    color: #1677ff;
+  }
+  &.s1 {
+    background: #fffbe6;
+    border-color: #ffe58f;
+    color: #874d00;
+  }
+}
+.badge {
+  border-radius: 10px;
+  font-size: 10.5px;
+  padding: 0 7px;
+  line-height: 18px;
+  border: 1px solid;
+  &.b-ok {
+    background: #f6ffed;
+    border-color: #b7eb8f;
+    color: #389e0d;
+  }
+  &.b-warn {
+    background: #fffbe6;
+    border-color: #ffe58f;
+    color: #874d00;
+  }
+  &.b-err {
+    background: #fff1f0;
+    border-color: #ffa39e;
+    color: #cf1322;
   }
 }
 </style>
