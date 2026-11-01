@@ -22,16 +22,27 @@
 | **T5** | AI 助手能力边界 | **双通道**：布局类指令走确定性解析；LLM 只产出「候选组件 + 绑定已有查询 + 栅格位」，服务端校验不过即丢弃并回执 | B LLM 自由生成整页 / C P0 不做 AI | AI 无法凭空造 SQL；权限与脱敏不被 AI 绕过；形态与 `ontology_semantic_service` 的 `suggest → hallucination_dropped → adopt` 同构 |
 | **T6** | 受限/脱敏深度 | **列级脱敏（编译期闸 + 出口 `apply_masking`）+ 查询级过滤实现实体限制 + 卡片三态 + 申请单** | B 独立行列视野引擎 / C 仅列脱敏与卡片级可见 / D 不脱敏仅水印 | 与上游 §1.2「本期不做行列级视野引擎」保持一致；原型园区单实体 🔒 态仍可复现（行不返回即得） |
 
-### 0.1 与上游规格的冲突关账（**验收阻断项**）
+### 0.1 与上游/姊妹规格的冲突关账（**验收阻断项**）
 
-上游规格把孪生应用判为"不做"，本方案使其落地，因此**必须在同一 PR 内回改以下 4 处**，否则文档与实现背离（本项目已有过此类教训）：
+上游规格现把孪生应用判为"不做/维持非目标"，本方案使其落地，因此**必须在同一 PR 内回改以下 5 处**，否则文档与实现背离（本项目已有过此类教训）。下表的「现文本」列**逐字摘自当前文件**（已复核，非记忆转述）：
 
-| 位置 | 现文本 | 应改为 |
-|---|---|---|
-| §1.2 能力边界（`ontology-capability-design.md:64`） | 「**推演沙盘、孪生应用**：依赖实例物化 + 世界模型，与 D2 冲突；列为 P3 观察项」 | 孪生应用 → 本期 P0/P1 落地（依 T1 直连路线，**不依赖实例物化**）；推演沙盘维持观察项 |
-| §1.3 对标表（同文件 `:77`） | 「七、孪生应用 … **不做** … 需实例物化 + 因果传导引擎」 | 「七、孪生应用 … **P0 部分做**：拖拽指标/告警/图表 + 绑定本体查询；3D 场景编辑 P1；因果传导不做」 |
-| §1.5 对照矩阵 AF-22（同文件 `:148`） | 「推演/孪生端不存在 … 推演/孪生维持非目标」 | 孪生端经 `onto_ontology_query` 消费，AF-22 四端复用由「图/问数/Agent/导出」扩为含**应用端** |
-| §8.2 假设 A2（同文件 `:1164`） | 「若后续需要推演/孪生，须重新评估物化方案」 | 已评估：孪生按 T1 直连路线**不需要**物化；仅当出现"任意时间回溯/告警去重历史"需求时重开（触发条件见 R4） |
+| # | 位置 | 现文本（逐字） | 应改为 |
+|---|---|---|---|
+| 1 | 上游 §1.2 能力边界（`ontology-capability-design.md:64`） | 「**孪生应用** \| 依赖推演物化与实时回显；维持 P3 观察项」 | 孪生应用 → 本期 P0/P1 落地（依 T1 **查询期直连**，**不依赖物化**）；同行的推演沙盘拆分说明保留 |
+| 2 | 上游 §1.3 对标表（同文件 `:77`） | 「七、孪生应用 \| 拖拽指标/告警/图表、绑定本体查询 \| **不做** \| 依赖推演与实时物化」 | 「七、孪生应用 \| 同上 \| **P0 部分做**：组件栅格 + 绑定本体查询 + 发布只读页；3D 场景编辑 P1；因果传导不做」 |
+| 3 | 上游 §1.5 对照矩阵 AF-22（同文件 `:148`） | 「\*\*部分具备\*\*：`query_service` + `sql_guard` + Agent 工具注册可复用；推演/孪生端不存在」 | 孪生端经 `onto_ontology_query` 消费，AF-22 消费端由「图/问数/Agent/导出」扩为含**应用端**；沙盘端按姊妹规格 V1 裁决单独表述 |
+| 4 | 上游 §7.1 分期图（同文件 `:1066`） | `P1C --> P2B["P2-2 多本体合并 / 推演孪生（观察项）"]` | 拆为两条：推演沙盘已在 P1 立项；孪生应用单列 P0/P1 节点（本文档 §7），P2-2 仅留多本体合并 |
+| 5 | 姊妹沙盘规格 §关账表（`2026-11-01-simulation-sandbox-design.md:364`） | 「§1.2 非目标表 \| …推演沙盘已单独立项（沙箱域物化裁决）；**孪生应用维持非目标**」 | 「孪生应用已单独立项（见 `2026-11-01-digital-twin-app-design.md`）」 |
+
+> 第 5 处是本方案自审时新发现的：沙盘规格的关账表在**它自己那一版里**把孪生写成了"维持非目标"。漏改它会让两份规格互相打脸，而前 4 处改完仍不足以消除矛盾。
+
+### 0.2 与沙盘「沙箱域例外物化」裁决的关系（**不冲突，且必须说清**）
+
+姊妹规格裁决 **V1**：D2「实例不落库」维持为**生产域红线**，仅在沙箱域开例外物化（克隆世界态）。本方案的 T1 选直连，理由正是**孪生属生产域**——看板展示的是源库当前事实，不是克隆态，因此受 D2 红线约束，不得复用沙箱的物化通道。两个域的唯一合法交点是单向消费：沙盘 P2「推演结果发布」（沙盘规格 `:327`）产出的结论可回链到孪生页作为**静态标注组件**，但孪生不写沙盘、不共享 `onto_sandbox_*` 表。
+
+### 0.3 术语撞车预警：「场景」
+
+本方案的 `scene` 指**等距视觉场景模板**（`twin_card.scene_key`），而沙盘规格的 `onto_sandbox_scene` 指**推演世界实例**。两者不是一个东西。落地要求：孪生侧字段与组件命名一律用 `scene_key` / `SceneWidget`，并在 `types/twin.d.ts` 顶部注释写明此区别；禁止孪生代码引用 `sandbox` 域的 `scene` 类型。
 
 ---
 
@@ -47,7 +58,7 @@
 
 | 做（P0） | 不做（明确排除） | 原因 |
 |---|---|---|
-| 卡片 / 页面 / 组件三层编排 | **自由拖拽与缩放栅格** | 前端无 grid-layout 依赖；原型画布组件本身亦未实现拖拽，只有左栏 palette 行 `draggable`（`prototype:432`）。P0 用跨度 3/6/12 + 上下左右移 + 自动布局等价覆盖 |
+| 卡片 / 页面 / 组件三层编排 | **自由拖拽与缩放栅格** | `frontend/package.json` 对 `grid-layout`/`gridstack`/`vuedraggable` **零命中**；原型全文件仅 1 处 drag 相关代码（左栏 palette 渲染 `prototype:432`），画布组件本身从未实现拖拽。P0 用跨度 3/6/12 + 上下左右移 + 自动布局（原型 `:315` 同有该按钮）等价覆盖 |
 | `onto_ontology_query` 声明 + 编译 + preview | 可视化 SQL 编辑器 / 任意手写 SQL | 手写 SQL 会绕开映射与脱敏闸，破"单一取数口" |
 | KPI / 趋势 / 柱状 / 环形 / 告警表 / 图谱组件（图谱 P1） | 报表式分页、导出 Excel、订阅邮件 | 属 BI 通用能力，与孪生定位无关，YAGNI |
 | 2D 内置场景模板只读展示 | **3D 等距引擎移植 + 场景配置编辑器 + 实体标记/弹窗/下钻** | T3：进 P1 |
@@ -64,7 +75,7 @@
 |---|---|---|---|
 | 孪生卡片 | 左栏 `#myCards` + 面包屑「孪生卡片：智慧工厂产线 · FAC007」（`prototype:266`） | `twin_card` | 顶层容器，钉一个「本体 + 版本」，状态三值：运行中 / 草稿 / 受限 |
 | 页面 | 顶部 Tab `#ptabs`（首页/设备健康/能耗管理/生产分析/告警中心 + 「＋」） | `twin_page` | 编辑态才可见「＋」 |
-| **模块** | 左栏「本页面模块」`#modList`（`prototype:303-304`） | palette 类型目录 | **可添加的类型**，非实例。内置：场景视图/设备状态监控/产能统计/能耗分析/告警列表/设备关系图谱 |
+| **模块** | 左栏「本页面模块」`#modList`（`prototype:303`） | palette 类型目录 | **可添加的类型**，非实例。内置：场景视图/设备状态监控/产能统计/能耗分析/告警列表/设备关系图谱 |
 | **组件** | 画布 `.widget` `#grid` | `twin_widget` | **已放置的实例**，携带 `query_id`、栅格位、刷新覆盖 |
 | 本体查询 | 组件把手上的 `⛓ FAC007.设备OEE`（`prototype:473`） | `onto_ontology_query` | 一等公民，跨端复用 |
 
@@ -73,7 +84,7 @@
 ### 1.4 相邻模块边界
 
 - **本体建模工作台**（`/admin/kg-ontology`，`componentMap.ts:71`）：查询定义在**本体侧**创建与校验，孪生侧只做"挑选 + 绑定 + 预览"。不复制第二套查询编辑器。
-- **推演沙盘**（板块六）：原型「在推演沙盘中推演」按钮 = **跳转 + 传参**（`scene_key` + `entity_id`），不共享执行引擎。
+- **推演沙盘**（板块六，**已于 2026-11-01 单独立项**，见 §0.2）：原型「在推演沙盘中推演」与「推演缓解方案」按钮在 mock 中**仅弹 toast 占位**（`prototype:655,:656`），本方案将其定义为**跳转 + 传参**（`scene_key` + `entity_id`）；不共享执行引擎，不读写 `onto_sandbox_*`。
 - **图可视化 / 探索 / 智能体**：`onto_ontology_query` 的兄弟消费端；孪生图谱组件复用 `common/graph/GraphCanvas.vue`。
 - **门户 / OA 嵌入**：P0 仅同域 iframe（token 走 `Authorization: Bearer`，`utils/request.ts:33`），跨域嵌入随 P1 分享票据一并解决。
 - **本体应用发布登记**（`onto_ontology_publish`，`target_type ∈ skill|http|mcp`，`ontology.py:277`）：**刻意不复用**。那张登记「本体→对外契约」，本方案的 `twin_publish` 登记「孪生页→只读路由」，混用将逼 `ck_onto_publish_target` 加 `page` 值并污染其语义。
@@ -101,7 +112,7 @@
      │    ├─ 缓存键 (tenant, query_id, sha1(param_values), principal_role_hash) 命中？→ 直接返回
      │    └─ 未命中 → ReadonlyQueryService.run(source_id, sql, limit, params)
      │                   └─ SqlGuard.is_readonly → 源库执行 → 行结果
-     │         → apply_masking(rows, query.mask_rules, user_roles)   ← 出口脱敏
+     │         → apply_masking(rows, rules, user)   ← 出口脱敏（内部走 user.has_any_role(rule.exempt_roles)）
      │         → 按 result_shape 归一（kpi/trend/bar/donut/table/entity_set/graph）
      └─ 组装 per-widget {state: ok|empty|error|masked, columns, rows, updated_at, masked_fields[]}
   → WidgetGrid 按 state 分派四态（loading 由前端本地态驱动）
@@ -211,7 +222,7 @@ id, tenant_id, card_id, applicant_id, reason Text, required_role_code String(64)
 status pending|approved|rejected|expired, approver_id, reviewed_at, expires_at, created_at
 ```
 
-形态取自 `DataWriteRequest`（`write_request.py:25-40`）的申请/审批/过期三段；**不发一次性令牌**——批准的产物是写入 `twin_card_share`，而非 token 消费。
+形态取自 `DataWriteRequest`（表 `meta_data_write_request`，`write_request.py:17`）的申请/审批/过期三段；**不发一次性令牌**——批准的产物是写入 `twin_card_share`，而非 token 消费。
 
 ### 3.8 状态机
 
@@ -238,9 +249,9 @@ status pending|approved|rejected|expired, approver_id, reviewed_at, expires_at, 
 |---|---|---|
 | 1 | **版本解析**：`version > 0` 才允许编译，输入取 `onto_ontology_version.snapshot_json`（发布时冻结的对象/属性/关系/映射全量，`ontology.py:69`）；`version=0` 直接拒绝 | 与 `MetaOntologyPublish`「草稿态仅 disabled」同律；保证本体发新版打不穿已上线看板 |
 | 2 | **元素解析**：`spec_json` 的 object/attribute code 在快照内解析，仅接受 `review_status=='accepted'` | 口径复用 `OntologyAgentService._accepted()`（`ontology_agent_service.py:47-53`），不另写筛选 |
-| 3 | **物理绑定解析**：对象→`meta_table_standard`→`MetaTable`（`source_id` 在此刻确定）；属性→`meta_column_standard`→`MetaColumn.column_name`；跨对象 JOIN 走 `MetaObjectRelation` | 表名实存：`standard_cdm.py:140`、`standard.py:83` |
+| 3 | **物理绑定解析**：对象→`meta_table_standard`→`MetaTable`（`source_id` 在此刻确定）；属性→`meta_column_standard`→`MetaColumn.column_name`；跨对象 JOIN 走 `MetaObjectRelation` | 表名实存：`meta_table_standard`（`standard_cdm.py:140`）、`meta_column_standard`（`standard.py:83`）、`meta_object_relation`（`standard_cdm.py:102`） |
 | 3′ | **P0 硬限制**：最多 2 个对象、1 跳 JOIN、路径唯一；不唯一则失败并回传候选路径 | 砍掉编译正确性里最贵的不确定性（R1） |
-| 4 | **敏感闸（编译期）**：引用列 `pii_level ∈ {L2,L3}` 时须满足「标准 `mask_rule` 非空」或「`security_level_override` 降级至 L1 以下」或「登记豁免」，否则失败并返回 `blocked_columns[]` | **与发布门禁 5 同源**：从 `OntologyPublishService`（`ontology_publish_service.py:374-390`）抽出 `_sensitive_covered()` 共用，**严禁复制第二份**（两处口径必然漂移） |
+| 4 | **敏感闸（编译期）**：引用列 `pii_level ∈ {L2,L3}` 时须满足「标准 `mask_rule` 非空」或「`security_level_override` 降级至 L1 以下」或「登记豁免」，否则失败并返回 `blocked_columns[]` | **与发布门禁 5 同源**：复用常量 `_SENSITIVE_PII`（`ontology_publish_service.py:54`）与 `_gate5_mask_coverage` 的覆盖判定体（`:348` 定义，判定逻辑 `:370-383`），从中抽出 `_sensitive_covered(pii, mask, override)` 共用；**严禁复制第二份**（两处口径必然漂移） |
 | 5 | **SQL 生成**：sqlglot 构造表达式树 → 按方言渲染（复用 `query_service._dialect_of`）。产出必须是**无注释单语句** | `SqlGuard` 对 `--`、`/* */` 零容忍（`sql_guard.py:25,102`）；禁写节点/危险函数见 `sql_guard.py:32-82`；解析失败 fail-closed（`:11`） |
 | 6 | **参数化**：过滤值与时间窗编译为 `:p_xxx` 绑定参数，绝不字面量拼接；模板存 `compiled_sql` + `sql_sha256` | 注入面关闭，且"审批的 SQL == 执行的 SQL"可验证 |
 | 7 | **预览（dry-run）**：`preview` → `SqlGuard.is_readonly` → `run(limit ≤ 200)` → 回写 `verify_status` + `verify_detail_json` | 把运行期失败前移到设计期；前端绑定抽屉的"预览"即此项 |
@@ -279,7 +290,7 @@ def run(self, source_id: int, sql: str, limit: int = 100, params: dict | None = 
 |---|---|---|
 | 受限卡片（整卡） | 「园区安防孪生 🔒 受限」`prototype:299` + 自动弹权限说明 `pickCard→showPerm` (`:433,:657`) | `twin_card_share` 无记录且 `runtime_state=live` → 列表标 🔒 受限；进入自动开 PermDrawer（受限内容 / 所需角色 / 申请按钮） |
 | 申请 → 审批 → 可见 | 「申请访问权限」按钮 `prototype:657` | `twin_access_request` pending → owner 审批 approved → 写 `twin_card_share(read, expires_at)` → 卡片转入「共享给我的（只读）」 |
-| 卡片内单列脱敏 | 能耗组件「电费成本 🔒 脱敏」`prototype:464` | 出口 `apply_masking`（`masking.py:96` + `exempt_roles`，`sqlbot_tool_config.py:134`）；非豁免用户值位显示 🔒 |
+| 卡片内单列脱敏 | 能耗组件 `masked:true`（`prototype:452`）渲染为「电费成本 🔒 脱敏」（`prototype:464`） | 出口 `apply_masking`（`masking.py:97`，豁免判定 `:112-115`）+ `exempt_roles` 字段（`sqlbot_tool_config.py:152`）；非豁免用户值位显示 🔒 |
 | 卡片内单实体限制 | park 场景摄像头/闸机 `masked:true`、周界红外可查 `prototype:581-593` | 靠**查询级过滤**：无权限时该行根本不返回；前端对已知实体渲染 🔒 占位（T6，不建策略引擎） |
 
 ### 4.6 错误处理
@@ -302,11 +313,11 @@ def run(self, source_id: int, sql: str, limit: int = 100, params: dict | None = 
 
 ### 5.2 受限生成的校验三闸（复用 `ontology_semantic_service` 形态）
 
-1. **schema 校验**：产出必须是 `{ops:[{op, widget_key?, query_id?, grid?, title?}]}`，字段白名单外一律丢弃 → `dropped[]` 计数与原因（同 `hallucination_dropped`，`ontology_semantic_service.py:128`）。
+1. **schema 校验**：产出必须是 `{ops:[{op, widget_key?, query_id?, grid?, title?}]}`，字段白名单外一律丢弃 → `dropped[]` 计数与原因（同 `hallucination_dropped` 形态，`ontology_semantic_service.py:104-128`）。
 2. **引用校验**：`query_id` 必须属于本卡片钉住的本体+版本且 `verify_status=verified`；不存在的 code/id 一律丢弃并回执说明。
 3. **形状配对校验**：`result_shape` 与 `widget_key` 不匹配即拒绝（kpi 组件绑 `entity_set` 查询 → 拒绝并给出可选查询清单）。
 
-**AI 永不直接落库**：产出先存 draft（会话内内存态），前端渲染候选卡（原型 `.embedcard`，`prototype:200-204`），用户点「应用到页面」才走 `POST /twins/pages/{id}/widgets/batch`（确定性写入，可整体回滚）。
+**AI 永不直接落库**：产出先存 draft（会话内存态），前端渲染候选卡（原型 `.embedcard`，`prototype:200-201`），用户点「应用到页面」才走 `POST /twins/pages/{id}/widgets/batch`（确定性写入，可整体回滚）。
 
 ### 5.3 禁止项
 
@@ -381,11 +392,11 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 
 | 态 | 触发 | 实现 | 原型锚点 |
 |---|---|---|---|
-| loading | 请求 in-flight | StateWrapper loading slot + 骨架微光；图表与 KPI 降 `opacity .25` | `.skel::after` `:186-188` |
+| loading | 请求 in-flight | StateWrapper loading slot + 骨架微光；图表与 KPI 降 `opacity .25` | `.skel` `:185-188`（含 `body.loading` 降透明度 `:188`） |
 | empty-未绑定 | `query_id == NULL` | 空态卡 + 「绑定本体查询」CTA → BindDrawer | `.wempty` `:461` |
 | empty-零行 | `row_count == 0` | 文案区分：「查询返回 0 行，检查时间窗/过滤条件」 | 原型未区分 → 本设计补齐 |
 | error | 超时 / SqlGuard 拒 / 编译失败 | `.werr` + 错误码 + ↻ 重试（走 T9） | `:455,:460` |
-| masked | 列脱敏 / 受限卡片 / 实体无权限 | 值位 🔒；进受限卡片自动弹 PermDrawer；实体级渲染 🔒 占位 | `:464,:657` |
+| masked | 列脱敏 / 受限卡片 / 实体无权限 | 值位 🔒；进受限卡片自动弹 PermDrawer；实体级渲染 🔒 占位 | `:452,:464`、`pickCard:433`、`showPerm:657` |
 
 ### 6.5 视觉规则与 token 缺口
 
@@ -415,7 +426,7 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 | 7a | 发布登录态只读页 + RBAC | **P0** | T4 |
 | 7b | 分享票据 / 公开链接 / 跨域嵌入 | **P1** | 新攻击面须与水印/限流同批 |
 | 8 | 列脱敏 + 卡片三态 + 权限申请 + 实体 🔒 | **P0** | T6，实体限制近零成本 |
-| 9 | 与本体/资产/图谱/智能体边界 | **P0**；MCP/HTTP 目标 **P2**（沿用上游 P2-1） | |
+| 9 | 与本体/资产/图谱/智能体边界 | **P0**；MCP 发布目标 **P2**（沿用上游对 `target_type='mcp'` 的 P2 安排，见上游 `:65`） | 本期只存不执行 |
 | 10 | 输出物 | 本文档 | |
 
 ### 7.2 MVP（P0）可演示闭环
@@ -443,7 +454,7 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 | P0-8 | 受限三态 + 权限申请审批闭环 | W5, W13 | P0-6 |
 | P0-9 | AI 双通道（确定性指令 + 受限生成 + 应用到页面） | W14 | P0-5 |
 | P0-10 | tokens 补 `--cyan`/`--purple` + 全站回归 | W2, R9 | — |
-| P0-11 | **上游规格 4 处关账**（§0.1） | W16 | — |
+| P0-11 | **规格关账（上游 4 处 + 姊妹 1 处）** | W16 | — |
 
 ### 7.4 测试策略
 
@@ -463,7 +474,7 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 | R4 | 无实例物化 → 趋势/同比环比/告警历史受限 | 产品要求"任意时间回溯"或"告警去重与历史" | 时间窗交库端 SQL（窗口函数）；同比环比用双查询拼装 | **触发即重开 T1 的 B 方案并显式修订上游 D2**，不得偷偷加物化 |
 | R6 | 扩公共取数口引入回归 | 既有链路报错 | `params=None` 等价测试覆盖 3 调用方 | 回退为孪生专用 service（会破"单一取数口"，须评审） |
 | R5 | 钉版与本体新版本静默漂移 | 本体发新版后画面仍用旧结构且无提示 | 卡片/查询显示 `stale`（抄 `ontology_apppublish_service.py:52`）+ 手动升级向导 | 禁止自动跟随——结构漂移打穿画面不可接受 |
-| R7 | **规格未关账 → 文档与实现背离** | 上游规格仍写「孪生 不做/P3」 | 同 PR 回改 4 处（§0.1） | 未关账即 W16 不通过，阻断验收 |
+| R7 | **规格未关账 → 文档与实现背离** | 上游规格仍写「孪生 不做/P3」，沙盘规格关账表仍写「维持非目标」 | 同 PR 回改 5 处（§0.1） | 未关账即 W16 不通过，阻断验收 |
 | R10 | 发布 slug 可枚举 → IDOR | 遍历 slug 成功 | 随机不可猜串 + 每次访问校验 `role_codes` + 审计留痕 | 加限流与短时效（随 P1 分享票据） |
 | R8 | 编辑/运行两套画布漂移 | 出现 `RunCanvas.vue` 类文件 | §6.3 承重原则：`WidgetGrid` 只接 `mode` | 写入非目标，review 拦截 |
 | R9 | 补全局 token 引发全站视觉回归 | 其他模块配色异常 | 只新增变量、不改既有值；light skin 同步 | 先在孪生模块局部定义，验证后上提 |
@@ -477,32 +488,39 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 | 事实 | 依据 |
 |---|---|
 | 原型三栏 `238px 1fr 336px`，顶栏 52 / 上下文栏 42 / 状态栏 30 | `ontology-digital-twin-preview.html:93,52,77,211` |
-| 原型 6 个等距场景（factory/energy/warehouse/transit/park/lineA），含 `restricted`/`depth` 标志 | `prototype:501-604` |
+| 原型 6 个等距场景（factory / energy / warehouse / transit / park / lineA），含 `restricted`/`depth` 标志 | `prototype:501`（`const SCENES={`）、park `:539`、lineA `:595` |
 | 投影与 viewBox 参数 | `prototype:489`（`iso`）、`322`（`viewBox 900 460`）、`622/629`（`centerDepth`） |
-| 8 个组件模型与 `span/err/empty/masked/ai` 标志 | `prototype:449-458` |
+| 8 个组件模型与 `span/err/empty/masked/ai` 标志 | `prototype:449`（`let WIDGETS=[`）至 `:458`；`sensor` err `:455`、`ratio` empty `:456`、`energy` masked `:452`、`graph` span4 `:457` |
 | 四态样式与骨架动画均已存在 | `prototype:182-188` |
-| 上游规格把孪生列为「不做 / P3 观察项」，理由为依赖实例物化、与 D2 冲突 | `2026-10-31-ontology-capability-design.md:64,77,148,1066,1164` |
+| 上游规格现文本（**已逐字复核**） | `2026-10-31-ontology-capability-design.md:64`「维持 P3 观察项」、`:77`「**不做**」、`:148`「推演/孪生端不存在」、`:1066` 分期图「推演孪生（观察项）」 |
 | 不存在任何"已保存查询/指标"一等公民；CQ 只存自然语言 + 校验结论 | `ontology.py:165-191`（无表达式列） |
 | `ReadonlyQueryService.run` 签名与全库 3 个调用方 | `query_service.py:41`；`dataops.py:594`、`dataops_tools.py:183`、`table_sync_service.py:68` |
-| SqlGuard 拒注释、禁写节点、危险函数黑名单、fail-closed | `sql_guard.py:11,25,32-55,61-82,102` |
-| 发布门禁 5 已按 `pii_level≥L2 → mask_rule/降级/豁免` 校验 | `ontology_publish_service.py:24,374-390` |
+| SqlGuard：解析失败 fail-closed / 拒注释 / allow roots / 禁写 `Set` / sleep 族黑名单 | `sql_guard.py:11`、`:25`+`:102`、`:28`、`:45`、`:62-64` |
+| 发布门禁 5 已按 `pii_level≥L2 → mask_rule/降级/豁免` 校验（本方案抽共用函数的源） | `ontology_publish_service.py:24`（文档）、`:54`（`_SENSITIVE_PII`）、`:348`（`_gate5_mask_coverage`）、`:370-383`（判定体）；错误码 `PUBLISH_BLOCKED_MASK_COVERAGE` 在 `api_error.py:56` |
 | 版本快照 `snapshot_json` 冻结对象/属性/关系/映射/CQ 全量 | `ontology.py:69` |
-| `onto_ontology_publish.target_type` CHECK 仅 `skill|http|mcp`；`version=0` 仅 disabled | `ontology.py:277`；`ontology_apppublish_service.py:81,126` |
-| `stale` = 登记版本落后 `current_version` | `ontology_apppublish_service.py:52` |
-| 申请→审批→过期形态已存在于写请求单 | `write_request.py:25-40` |
-| 列级脱敏纯函数 + `exempt_roles` 已具备 | `masking.py:96`；`sqlbot_tool_config.py:134` |
-| 可复用图表组件 5 个 + `types/chart.d.ts` + 三态容器 | `components/charts/*`、`components/common/StateWrapper.vue` |
+| `onto_ontology_publish.target_type` CHECK 仅 `skill|http|mcp`；`version=0` 强制 disabled；`stale` = 登记版本落后 `current_version` | `ontology.py:256`（表名）、`:277`（CHECK）；`ontology_apppublish_service.py:8`、`:52`（stale）、`:81`（草稿强制 disabled） |
+| 申请→审批→过期的单据形态已存在（表名 `meta_data_write_request`） | `write_request.py:17` |
+| 列级脱敏为纯函数，豁免靠 `user.has_any_role(rule.exempt_roles)` | `masking.py:97`（`def apply_masking`）、`:112-115`（豁免判定）；`sqlbot_tool_config.py:152`（`exempt_roles`） |
+| 可复用图表组件**实测 5 个**：`BarChart` `LineChart` `MultiLineChart` `PieChart` `StackedBarChart`；通用件 `StateWrapper` `StatsCard` `StatusTag` 均在 | `frontend/src/components/charts/`、`components/common/`；数据类型 `types/chart.d.ts:19,26,34` |
 | 暗色 token 主色族与原型逐值一致 | `styles/tokens.css:81-92` |
 | `--cyan:#39d3c4` 与 `--purple:#b48ef0` 在 `tokens.css` **未定义** | grep 无命中（仅 `prototype:21,26` 定义） |
-| 前端无 grid-layout 类依赖（echarts/antv/d3/vue-flow 有） | `frontend/package.json` dependencies |
+| 前端**无任何**网格/拖拽类依赖（查询词 `grid-layout`/`gridstack`/`vuedraggable`/`drag` 全部零命中） | `frontend/package.json` |
 | 菜单挂载机制与 2405 本体行样例 | `docs/sql/menu_knowledge_governance.sql:42`；`componentMap.ts:71` |
-| 顶层路由 + `hideHeader` 先例 | `router/index.ts:6-11` |
+| 顶层路由 + `hideHeader` 先例 | `router/index.ts:7`（`/login`）、`:10`（`requiresAuth:false, hideHeader:true`） |
+| 进入受限场景**自动**弹权限抽屉（本方案 W5 的行为依据，非推测） | `prototype:433` 末尾 `if(S&&S.restricted)showPerm()`；抽屉内容三段 + 申请按钮 `:657` |
+| 模式切换仅靠 `body.edit/body.run` 类 + toast，**无第二套画布** | `prototype:660`（`setMode`） |
+| 顶栏「运行中 · 数据刷新 10s」/ 页面级刷新档位下拉 / 自动布局按钮 | `prototype:259`、`:360`、`:315` |
+| 沙盘裁决 **V1**：D2 仍为**生产域红线**，仅沙箱域开例外物化 | `2026-11-01-simulation-sandbox-design.md:17` |
+| 沙盘 P2 将推演结果回链孪生应用；且其关账表已将孪生写作「维持非目标」 | 同文件 `:327`、`:364` |
+| 新建**平级服务/路由目录**已有先例（本方案 `services/twin/`+`routers/twin/` 沿用此形态） | 同文件 `:203`、`:215` |
+| 上游规格正文写作 `meta_ontology_publish` / `meta_ontology_version`，**代码实际表名为 `onto_ontology_*`** | 规格 `:423` vs `ontology.py:256`（实施时以代码为准） |
+| 错误码集中在 `app/core/api_error.py`（新增错误码沿用该模块） | `api_error.py:56` |
 
 ### 8.2 假设（未验证，不作为验收依据）
 
 | ID | 假设 | 风险 |
 |---|---|---|
-| A1 | demo 本体的对象/属性映射已完成到足以支撑 ≥ 2 条 verified 查询 | 若否，P0-2 无法演示；须先造 seed 本体 |
+| A1 | demo 本体的对象/属性映射已完成到足以支撑 ≥ 2 条 verified 查询 | 若否，P0-2 无法演示；须先造 seed 本体——**已证实为否**（见 §8.3 U1），已由迁移 `2026_11_01_0012_seed_twin_demo_mapping.py` 补齐 |
 | A2 | 单租户低并发下 `Semaphore(4)` + 30s TTL 足以护住源库 | 沿用上游 A3 的同类假设，未实测 |
 | A3 | 10s 轮询的"实时"语义被业务方接受 | 若要求秒级推送，须重开 T1/新增 SSE |
 | A4 | 2 对象 / 1 跳 JOIN 覆盖 P0 全部演示组件 | 若产品要"多表关联口径"，须提前进 P1 编译增强 |
@@ -512,7 +530,7 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 
 | ID | 待核实项 | 谁在何时核实 |
 |---|---|---|
-| U1 | 默认 demo 本体与数据源选哪个（是否需新建 seed 数据） | P0-2 开工前 |
+| U1 | ~~默认 demo 本体与数据源选哪个（是否需新建 seed 数据）~~ **已核实（2026-11-01，Plan 1 Task 0 探测 + Task 0b）**：`scripts/twin_mapping_probe.py` 实测 14 条 `(租户, 本体, 版本)` 组合的 `mapping_rate` **全为 0.0**；根因是 0009 的版本快照硬编码 `"properties": []` / `"mappings": {"table": [], "column": []}`，且库内无任何 `meta_table_standard` / `meta_column_standard` 的 accepted 行——**无现成可演示本体**。处置：迁移 0012 为 `sales_ontology` 建 `twin_demo` schema（客户/订单/产品三表 + 含手机号的样例行）、登记 `twin-demo` 数据源（凭据取 `DB_*` 环境变量、Fernet 落库）、补 11 条 accepted 属性引用与 3+11 条表/列绑定、回写 JOIN 连接键，并**追加**（不改写历史）`current_version + 1` 快照。验收：探测复跑 `sales_ontology` v4 = `obj 3/3`、`attr 11/11`、`rate 1.0`；`downgrade -1` 后残留十项均为空 | 已关（Plan 1 Task 0b） |
 | U2 | `result_shape='graph'` 的节点/边归一契约（P1 图谱组件前置） | P1 启动时 |
 | U3 | 真实源库上批量取数的 p95 延迟 | 首次接入真数据源后压测（不进 CI） |
 | U4 | 审计中间件是否覆盖 `/twin-p/*`（`audit_logger` 的 `required_permissions` 组合） | P0-7 |
@@ -540,7 +558,7 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 | W13 | 权限申请闭环 | 申请 → owner 审批 → 转入「共享给我的（只读）」并含过期时间 |
 | W14 | AI 双通道 | 「移到左上」不请求 LLM；「加 OEE 环形」产候选组件且非法项被丢弃并回执 |
 | W15 | 公共代码回归 | `params=None` 时 3 个既有调用方行为逐字节不变 |
-| W16 | 规格关账 | §0.1 的 4 处已改，AF-22 应用端一行可追溯 |
+| W16 | 规格关账 | §0.1 的 **5 处**已改（上游 4 + 姊妹沙盘 1），AF-22 应用端一行可追溯 |
 
 ---
 
@@ -554,6 +572,10 @@ TwinWorkspace.vue            🆕 壳：ctxbar + grid(238/1fr/336) + statusbar
 ### Q2 P0 演示本体来源（驱动：假设 A1 / 待核实 U1）
 
 - **A（本方案默认）**：复用现有已完成映射的本体，若不足则补一份 seed 迁移造 demo 本体。
+  - **裁决（2026-11-01，已执行）**：选 A 的后半枝——探测证实无现成可演示本体，故新增迁移
+    `2026_11_01_0012_seed_twin_demo_mapping.py` 只补 `sales_ontology`（三对象 / 11 属性，落在
+    A4 的 2 对象 1 跳限制内）；`supply_chain_ontology` 维持 0.0、不属 P0 演示范围。
+    代价已知：生产库升级也会多出 `twin_demo` 的三张假表与一份重发布版本（行上有稳定标记可清）。
 - **B**：P0 交付不以真实数据为验收条件，改为"preview 通过"即可（会把 R1 风险推到上线后）。
 
 ### Q3 卡片是否需要 `paused` 运行态控制（§3.2 已留状态位）
