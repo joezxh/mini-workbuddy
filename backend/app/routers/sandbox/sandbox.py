@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.services.sandbox.sandbox_action_service import SandboxActionService
 from app.services.sandbox.sandbox_element_service import SandboxElementService
 from app.services.sandbox.sandbox_engine_service import SandboxEngineService
 from app.services.sandbox.sandbox_scene_service import SandboxSceneService
@@ -75,6 +76,16 @@ class BranchCreate(BaseModel):
 
 class ReplayRequest(BaseModel):
     to_tick: int = Field(..., ge=0)
+
+
+class ActionApply(BaseModel):
+    template_code: str = Field(..., min_length=1, max_length=64)
+    target_entity_code: str = Field(..., min_length=1, max_length=64)
+    params: dict = Field(default_factory=dict)
+
+
+class ActionConfirm(BaseModel):
+    token: str = Field(..., min_length=1)
 
 
 # --------------------------------------------------------------------- S1–S5
@@ -225,3 +236,34 @@ def list_observations(scene_id: int, branch_id: int = Query(...), kind: Optional
 def list_kpis(scene_id: int, branch_id: int = Query(...), db: Session = Depends(get_db),
               user: SysUser = Depends(get_current_user)):
     return SandboxEngineService(db, _tenant(user)).list_kpis(scene_id, branch_id)
+
+
+# --------------------------------------------------------------------- S16–S18
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/action-templates")
+def list_action_templates(scene_id: int, db: Session = Depends(get_db),
+                          user: SysUser = Depends(get_current_user)):
+    return SandboxActionService(db, _tenant(user), getattr(user, "user_id", None)).list_templates()
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/branches/{branch_id}/actions")
+def apply_action(scene_id: int, branch_id: int, body: ActionApply, db: Session = Depends(get_db),
+                 user: SysUser = Depends(get_current_user)):
+    return SandboxActionService(db, _tenant(user), getattr(user, "user_id", None)).apply_action(
+        scene_id, branch_id, template_code=body.template_code,
+        target_entity_code=body.target_entity_code, params=body.params)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/actions/{action_id}/confirm")
+def confirm_action(scene_id: int, action_id: int, body: ActionConfirm, db: Session = Depends(get_db),
+                   user: SysUser = Depends(get_current_user)):
+    return SandboxActionService(db, _tenant(user), getattr(user, "user_id", None)).confirm_action(
+        scene_id, action_id, token=body.token)
+
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/actions")
+def list_actions(scene_id: int, branch_id: Optional[int] = Query(default=None),
+                 result: Optional[str] = Query(default=None), db: Session = Depends(get_db),
+                 user: SysUser = Depends(get_current_user)):
+    return SandboxActionService(db, _tenant(user), getattr(user, "user_id", None)).list_actions(
+        scene_id, branch_id=branch_id, result=result)
