@@ -17,6 +17,7 @@ from app.ai.tool_manager.tool_context import build_user_context
 from app.core.api_error import ApiError, TWIN_TENANT_REQUIRED
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.services.twin.twin_data_service import TwinDataService
 from app.services.twin.twin_service import TEMPLATES, TwinService
 
 router = APIRouter(prefix="/api/v1/twins", tags=["孪生应用"])
@@ -35,6 +36,20 @@ def _svc(db: Session, current_user: SysUser) -> TwinService:
     return TwinService(db, _require_tenant_id(current_user),
                        int(getattr(current_user, "user_id", 0) or 0),
                        tuple(ctx.role_codes) if ctx else ())
+
+
+def _data_svc(db: Session, current_user: SysUser) -> TwinDataService:
+    """取数上下文走 `build_user_context()`：**同一个 ctx 同时驱动脱敏豁免与缓存键**，
+    两处各取一次角色就会不一致（R3 的事故面）。
+
+    `session_factory` 从当前请求 session 的 bind 派生：生产上就是应用引擎（等价
+    `SessionLocal`），测试里自然落到带 `search_path` 监听器的测试引擎——无需为测试另开配置。
+    """
+    ctx = build_user_context(db, current_user)
+    bind = db.get_bind()
+    return TwinDataService(db, _require_tenant_id(current_user),
+                           int(getattr(current_user, "user_id", 0) or 0), ctx,
+                           session_factory=lambda: Session(bind, expire_on_commit=False))
 
 
 class CardCreateBody(BaseModel):
@@ -103,6 +118,12 @@ class LayoutItem(BaseModel):
 
 class LayoutBody(BaseModel):
     items: List[LayoutItem] = Field(..., min_length=1, max_length=64)
+
+
+class DataBody(BaseModel):
+    """整页取数的**可选**页面级参数（spec §2.2 `{params}`）：只对本查询声明过的同名参数生效。"""
+
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- T1–T3 卡片
@@ -215,3 +236,22 @@ def delete_widget(widget_id: int, db: Session = Depends(get_db),
                   current_user: SysUser = Depends(get_current_user)) -> Response:
     _svc(db, current_user).delete_widget(widget_id)
     return Response(status_code=204)
+
+
+# ------------------------------------------------------------ T8–T9 取数
+
+
+@router.post("/pages/{page_id}/data")
+def load_page_data(page_id: int, body: Optional[DataBody] = None,
+                   db: Session = Depends(get_db),
+                   current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T8：整页刷新只发 1 个请求（W8）。空体合法（组件用已存实值）；
+    单组件失败只影响该组件的 state，**端点本身永远回 200**。"""
+    return _data_svc(db, current_user).load_page(page_id, body.params if body else None)
+
+
+@router.get("/widgets/{widget_id}/data")
+def load_widget_data(widget_id: int, db: Session = Depends(get_db),
+                     current_user: SysUser = Depends(get_current_user)) -> dict:
+    """T9：单组件刷新与错误重试（原型 error 态的 ↻），只用已存 `param_values_json`。"""
+    return _data_svc(db, current_user).load_widget(widget_id)

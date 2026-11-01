@@ -4344,7 +4344,7 @@ def test_query_defined_in_another_tenant_is_not_runnable(db, env):
     assert FakeQueryService.calls == []
 
 
-# ---------------------------------------------------- 整页扇出（HTTP戒 W8）
+# ---------------------------------------------------- 整页扇出（HTTP 层 W8）
 
 def test_page_data_returns_all_widgets_in_one_request(twin_client_a, db, env):
     """W8：整页刷新只发 1 个端点请求，回体按 sort_order 覆盖全部组件。"""
@@ -4405,9 +4405,15 @@ MASK_RULES = ('{"enabled": true, "rules": [{"field": "id_card", "strategy": "mas
 
 
 def prepare_masked_kpi(db, env):
-    """把 q_kpi 换成“工号列 + 全掩规则”（keep 3/2 避开 `guess_strategy_for_field` 的预设干扰）。"""
+    """把 q_kpi 换成“全掩规则 + 工号列”（keep 3/2 避开 `guess_strategy_for_field` 的预设干扰）。
+
+    计划缺陷修正（执行时实测，2026-11-01）：`id_card` **必须排在第一列**。
+    `shape_result("kpi")` 的 `value` 只读 `columns[0]`（ontology_query_service.py:109），
+    计划原稿的 `["dev_code", "id_card"]` 使 `value` 永远是未脱敏的工号，
+    两条脱敏断言以假失败；保留第二列是为了继续测“原值不得出现在 `records` 里”。
+    """
     set_query(db, env["q_kpi"], "mask_rules_json", MASK_RULES, as_json=True)
-    FakeQueryService.payload = {"columns": ["dev_code", "id_card"], "rows": [["D1", ID_CARD]],
+    FakeQueryService.payload = {"columns": ["id_card", "dev_code"], "rows": [[ID_CARD, "D1"]],
                                 "row_count": 1, "truncated": False}
 
 
@@ -4671,7 +4677,7 @@ class TwinDataService:
         self.ctx = ctx
         self.role_codes = tuple(sorted({r for r in (ctx.role_codes if ctx else ()) if r}))
         self._role_sig = role_signature(ctx)
-        # 工作线程**绞不复用** self.db：SQLAlchemy Session 不是线程安全的。
+        # 工作线程**绝不复用** self.db：SQLAlchemy Session 不是线程安全的。
         # 缺省用应用引擎（与 SessionLocal 同一个连接池）；测试注入绑定到测试引擎的工厂。
         self._session_factory: Callable[[], Session] = session_factory or SessionLocal
         self._orch = TwinService(db, self.tenant_id, self.user_id, self.role_codes)
@@ -4931,12 +4937,53 @@ Expected: PASS（17 passed）。失败时的排查序（按此序查，不得改
 Run: `.\.venv\Scripts\python.exe -m pytest tests/twin tests/ontology tests/unit -v`
 Expected: 全绿（Task 1/4/5/6 的用例不得因本任务回归；尤其 Task 5 的 4 个与 Task 6 的 12 个）
 
+> ⚠️ **计划缺陷修正（执行时实测，2026-11-01）：本条合并跑不可用，必须按目录分跑。**
+> 同进程跑三个目录会得到 `335 passed, 1 skipped, 90 errors`，错文全部是
+> `psycopg2.errors.UndefinedTable: relation "t_xxxx.kms_segment" does not exist`（fixture setup 阶段的 `create_all`），
+> 即 Task 5 Step 6 已记录的**跨目录收集污染 `Base.metadata` 先行缺陷**（此处由 `app.main` 导入链带入 kms_*，
+> 而 `tests/{ontology,twin}/conftest.py::_tables()` 只靠硬编码 3 个名字做黑名单减法），
+> **与本任务代码无关**。取证实际命令（逐目录跑，全部 EXIT=0）：
+>
+> ```powershell
+> foreach ($d in 'tests/twin','tests/ontology','tests/unit') {
+>   .\.venv\Scripts\python.exe -m pytest $d -q -p no:logging 1>"_t7_$d.txt" 2> $null
+>   echo "$d EXIT=$LASTEXITCODE"
+> }
+> ```
+>
+> 实测结果：`tests/twin` **37 passed**（Task 6 的 20 + 本任务的 17）、`tests/ontology` **79 passed**、
+> `tests/unit` **309 passed / 1 skipped**（含 Task 5 的 4 个）。
+
 - [ ] **Step 8: 提交**
 
 ```bash
 git add backend/app/core/api_error.py backend/app/services/twin/twin_data_service.py backend/app/routers/twin/twin.py backend/tests/twin/test_twin_data.py
 git commit -m "feat(twin): batched page fan-out with role-salted cache and egress masking"
 ```
+
+> 路径需按实际 cwd 写（cwd=`backend` 时去掉 `backend/` 前缀），提交前用
+> `git diff --cached --name-only` 核对无 frontend 混入。
+
+#### Task 7 执行记录（2026-11-01）
+
+交付：`twin_data_service.py`（335 行）+ T8/T9 两端点 + `tests/twin/test_twin_data.py`（17 用例）
++ 3 个错误码。**本 Task 未发现实现层生产缺陷**，但共有 3 处需修正：
+
+| # | 类别 | 现象 | 修法 |
+|---|---|---|---|
+| 16 | 计划缺陷（测试夹具） | `prepare_masked_kpi` 的 kpi 结果集把 `dev_code` 排在第一列，而 `shape_result("kpi")` 的 `value` 只读 `columns[0]` ⇒ 两条脱敏断言拿到未脱敏的 `'D1'`，`15 passed / 2 failed` | 改夹具为列序 `["id_card", "dev_code"]`（保留第二列继续验 `records` 不回原值），不改实现 |
+| 17 | 先行缺陷（同 Task 5） | Step 7 的 `pytest tests/twin tests/ontology tests/unit` 合并跑 = 90 errors | 按目录分跑（见 Step 7 注），根因同 Task 5 Step 6 |
+| 18 | 计划笔误 | `HTTP戒 W8` / `绞不复用` | 已在代码块内改正 |
+
+另两点执行期收敛：
+
+- **“`MaskingRule.field` 无 `min_length`，空串不会 `ValidationError`”的怀疑不成立**：
+  `sqlbot_tool_config.py:155-160` 已有 `@field_validator("field")` 拒绝空白 field，
+  所以 `test_invalid_mask_rules_fail_closed_before_execution` 按计划原样即可通过，**无需额外守卫**。
+- `Add-Content` 追写的分隔注释用的是 ASCII `-`，已用编辑工具回改为与文件内其余区块一致的 `T8–T9`（全角短横）。
+
+缓存安全不变量已双向验证：`test_cache_key_includes_role_signature` 要求两个角色各执行一次 SQL（未串味），
+`role_signature(ctx_of("A","B")) == role_signature(ctx_of("B","A"))` 要求同角色不同排列不碎化命中率。
 
 ---
 
