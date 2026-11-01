@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.api_error import (
@@ -72,9 +72,10 @@ class OntologyAssetService:
             )
             if kind == "column":
                 stmt = stmt.where(col_hits)
-            else:  # table：表名/注释命中，或含命中列的表
+            else:  # table：库名/表名/表注释命中，或含命中列的表（AF-02 补 database 分支）
                 stmt = stmt.where(or_(
                     MetaTable.table_name.ilike(like),
+                    MetaTable.database.ilike(like),
                     MetaTable.table_comment.ilike(like),
                     col_hits,
                 ))
@@ -82,7 +83,9 @@ class OntologyAssetService:
             stmt.order_by(MetaTable.table_name.asc())
         ).scalars().all())
 
-        scored = [(self._score(t, q, kind), t) for t in tables]
+        # 批量预载列命中，消除逐表 EXISTS 的 N+1（AF-02）
+        hits_map = self._column_hit_map(tables, q) if q else {}
+        scored = [(self._score(t, q, kind, hits_map.get(t.id, (False, False))), t) for t in tables]
         # 同分按表名字典序（SQL 已按 table_name 升序，稳定排序保序）
         scored.sort(key=lambda x: (-x[0], x[1].table_name))
         total = len(scored)
@@ -91,36 +94,38 @@ class OntologyAssetService:
         items = [self._card(t, sc, q) for sc, t in window]
         return {"total": total, "page": page, "size": size, "items": items}
 
-    def _score(self, t: MetaTable, q: str, kind: str) -> int:
-        """三段确定性得分（§3.6）：①表名精确/前缀 ②字段名 ③注释。"""
+    @staticmethod
+    def _score(t: MetaTable, q: str, kind: str, hits: tuple) -> int:
+        """三段确定性得分（§3.6 原型口径）：3=表名∪库名∪表注释；2=字段名；1=仅字段注释。
+
+        纯函数：``hits=(列名命中, 列注释命中)`` 由 :meth:`_column_hit_map` 批量预载，
+        打分阶段不再发 SQL（禁 similarity，Global Constraint 1）。
+        """
         if not q:
             return 0
         ql = q.lower()
-        tl = (t.table_name or "").lower()
-        if ql == tl or tl.startswith(ql):
+        if ql in (t.table_name or "").lower() or ql in (t.database or "").lower() \
+           or ql in (t.table_comment or "").lower():
             return 3
-        if ql in tl:
-            return 3 if kind == "table" else 2
-        col_name_hit = self.db.execute(
-            select(exists().where(
-                MetaColumn.tenant_id == self.tenant_id,
-                MetaColumn.table_id == t.id,
-                MetaColumn.column_name.ilike(f"%{q}%"),
-            ))
-        ).scalar()
-        if col_name_hit:
+        name_hit, comment_hit = hits
+        if name_hit:
             return 2
-        comment_hit = (
-            (t.table_comment or "").lower().find(ql) != -1
-            or self.db.execute(
-                select(exists().where(
-                    MetaColumn.tenant_id == self.tenant_id,
-                    MetaColumn.table_id == t.id,
-                    MetaColumn.column_comment.ilike(f"%{q}%"),
-                ))
-            ).scalar()
-        )
-        return 1 if comment_hit else 0
+        if comment_hit:
+            return 1
+        return 0
+
+    def _column_hit_map(self, tables: List[MetaTable], q: str) -> Dict[int, tuple]:
+        """一次 IN 批量取各表的 (列名命中, 列注释命中)，消除逐表 EXISTS 的 N+1。"""
+        like = f"%{q}%"
+        ids = [t.id for t in tables] or [-1]
+        rows = self.db.execute(
+            select(MetaColumn.table_id,
+                   func.bool_or(MetaColumn.column_name.ilike(like)).label("nh"),
+                   func.bool_or(MetaColumn.column_comment.ilike(like)).label("ch"))
+            .where(MetaColumn.tenant_id == self.tenant_id,
+                   MetaColumn.table_id.in_(ids)).group_by(MetaColumn.table_id)
+        ).all()
+        return {r.table_id: (bool(r.nh), bool(r.ch)) for r in rows}
 
     def _card(self, t: MetaTable, score: int, q: str) -> dict:
         cols = list(self.db.execute(
