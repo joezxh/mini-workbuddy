@@ -1542,6 +1542,9 @@ git commit -m "docs(twin): plan2 closeout - main spec corrections C2/C3/C4/C5 an
 9. **D-09｜Task 4 Produces 里 `WIDGET_MAP` 无代码定义**：Interfaces 要求本任务先导出 shape→adapter 纯映射，但 Step 3 三个模块均无此常量、测试也未钉。处置：不在无调用方时臆造导出口（YAGNI），`WIDGET_MAP` 顺延到真正持有组件的 Task 5 WidgetGrid 内实现；若 Task 5 发现需要独立纯映射再补。
 10. **D-10｜Task 5 Interfaces 承诺的 `layout` emit 在 Step 3 代码块中不存在**：Produces 列 `emits: … layout(items: LayoutItem[])`，但 Grid/Shell 模板只有 retry/bind/drill（拖拽布局属 Task 8 交互层）。处置：P0 壳不臆造无人触发的导出口；Task 8 接布局保存时再补 emit 并同步定名。另：组件映射实际落在 WidgetShell 的 `RENDERERS`（计划原稿如此，非 adapter.ts），D-09 的「顺延 Task 5」以该实现为准。
 11. **D-11｜Task 4 原稿两处过不了 vue-tsc（Task 5 验证时暴露）**：① `kpiValue(d: { value?: unknown })` 对测试传入的完整 wire 体 `{value,records}` 触发 excess-property 检查 TS2353 → 参数面改为 `Rec`（行为不变，kpi 归一体本就是整包）；② stateMap.spec 胶水函数 `mode = 'edit'` 被推断为 string，传 TwinMode 形参 TS2345 → 测试侧标注 `mode: TwinMode = 'edit'`（断言零改动）。教训：Task 4 提交前未复跑 vue-tsc，后续每个碰 .vue/.spec 的 Task 提交前均跑 twin 错误计数判据（D-03 口径）。
+12. **D-12｜statusbar 要求 collected_at 但 Task 3 store 未存**：Step 3（:1168）statusbar 要显示采集时刻，而 Task 3 定稿的 store 只把 `LoadPageResp.collected_at` 用完即弃。处置：Task 6 执行前给 `stores/twin.ts` 补 `collectedAt = ref<string|null>(null)`（refreshPage 内赋值、return 导出），随本任务提交。属计划跨 Task 契约缺口，非行为变更。
+13. **D-13｜Step 3 示例把 onBeforeUnmount 嵌在 onMounted 回调内**：Vue 3 生命周期钩子必须在 setup 同步顶层注册；示例代码 `onMounted(async () => { ... onBeforeUnmount(...) })` 在首个 await 之后实例上下文已丢失，卸载钩子会无效注册并告警。处置：按正确形态实现——`onVis` 处理器与 `onBeforeUnmount` 均提升到 setup 顶层（行为等价：监听器卸载 + stopScheduler 都执行）。
+14. **D-14｜Step 2 locale 插入锚点的缩进陷阱**：计划把锚点行展示为顶格 `simulation: ...`，实际四文件该行有 6 空格缩进；首次替换按顶格匹配后新行叠加成 12 空格。处置：Read 核实真实缩进后二次修正四文件为 6 空格。教训：以 grep 输出为锚点前先确认其是否保留行首空白。
 
 ---
 
