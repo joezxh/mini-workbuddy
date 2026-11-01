@@ -4,6 +4,8 @@ import {
   CROSS_SOURCE_BLOCK_MSG,
   restoreSelection,
   staleNotice,
+  buildSendPreviewPayload,
+  formatPayloadJson,
 } from '../assetSend'
 
 /**
@@ -53,5 +55,29 @@ describe('CROSS_SOURCE_BLOCK_MSG（跨源拦截文案）', () => {
   it('文案携带后端错误码 BUILD_SCOPE_SINGLE_SOURCE', () => {
     expect(BUILD_SCOPE_SINGLE_SOURCE).toBe('BUILD_SCOPE_SINGLE_SOURCE')
     expect(CROSS_SOURCE_BLOCK_MSG).toContain(BUILD_SCOPE_SINGLE_SOURCE)
+  })
+})
+
+describe('buildSendPreviewPayload / formatPayloadJson（AF-08 dock）', () => {
+  it('同源取首项 source/db，tables 为全表名', () => {
+    const p = buildSendPreviewPayload([
+      { table_id: 1, source_id: 5, table_name: 'b_tab', db_name: 'd1' },
+      { table_id: 2, source_id: 5, table_name: 'a_tab', db_name: 'd1' },
+    ])
+    expect(p.source_id).toBe(5)
+    expect(p.db_name).toBe('d1')
+    expect(p.tables).toEqual(['b_tab', 'a_tab'])
+    expect(p.mode).toBe('tables')
+    expect(p.origin).toBe('asset_picker')
+  })
+  it('空选择 → tables:[] 且 source_id:null', () => {
+    const p = buildSendPreviewPayload([])
+    expect(p.tables).toEqual([])
+    expect(p.source_id).toBeNull()
+  })
+  it('formatPayloadJson 输出着色 key span', () => {
+    const html = formatPayloadJson({ tables: ['x'] })
+    expect(html).toContain('class="k"')
+    expect(html).toContain('tables')
   })
 })

@@ -40,3 +40,34 @@ export function staleNotice(removedStale?: number | null): string | null {
   if (removedStale && removedStale > 0) return `已从作用域剔除 ${removedStale} 张失效表`
   return null
 }
+
+export interface SendItem { table_id: number; source_id: number; table_name: string; db_name?: string; database?: string }
+export interface SendBody {
+  mode: 'tables'; source_id: number | null; db_name?: string; database?: string
+  tables: string[]; tag_ids: number[]; catalog_ids: number[]; origin: 'asset_picker'
+}
+
+/** 送数请求体（dock 预览与 doSend 共用，保证所见即所发）：source/db 取首个勾选项 */
+export function buildSendPreviewPayload(selected: SendItem[]): SendBody {
+  const first = selected[0]
+  return {
+    mode: 'tables',
+    source_id: first?.source_id ?? null,
+    db_name: first?.db_name,
+    database: first?.database,
+    tables: selected.map((s) => s.table_name),
+    tag_ids: [],
+    catalog_ids: [],
+    origin: 'asset_picker',
+  }
+}
+
+/** 请求体 JSON 着色（移植原型 jsonColor，含转义防注入），供 dock `v-html` */
+export function formatPayloadJson(o: unknown): string {
+  const e = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string))
+  return e(JSON.stringify(o, null, 2))
+    .replace(/&quot;([^&]+?)&quot;(\s*:)/g, '<span class="k">"$1"</span>$2')
+    .replace(/:\s&quot;(.*?)&quot;/g, ': <span class="s">"$1"</span>')
+    .replace(/:\s(\d+)/g, ': <span class="n">$1</span>')
+    .replace(/:\s(true|false|null)/g, ': <span class="b">$1</span>')
+}
