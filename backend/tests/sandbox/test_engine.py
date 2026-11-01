@@ -8,7 +8,7 @@ from app.core.api_error import ApiError
 from app.models.ontology.ontology import MetaOntology
 from app.models.sandbox.sandbox import (
     SandboxBranch, SandboxCheckpoint, SandboxElement, SandboxEntity,
-    SandboxObservation, SandboxScene,
+    SandboxObservation, SandboxRelation, SandboxScene,
 )
 from app.services.sandbox.sandbox_engine_service import SandboxEngineService
 from tests.sandbox.conftest import TENANT_A
@@ -154,3 +154,35 @@ def test_compare_series_from_observations(db, world):
         SandboxObservation.branch_id == b1, SandboxObservation.kind == "kpi_point",
         SandboxObservation.tick == 1)).scalar_one()
     assert cmp["series"][0]["values"][b1]["health"] == kpi.detail_json["health"]
+
+
+def test_world_view_includes_entities_relations_causal_edges(db, world):
+    """画布数据源：world_view 除实体外，还带结构关系与 accepted 因果边。"""
+    sid, bid = world["scene_id"], world["branch_id"]
+    # 落一条结构关系行（clone 不产关系，测试手动补）
+    db.add(SandboxRelation(tenant_id=TENANT_A, scene_id=sid, branch_id=bid,
+                           rel_code="R1", link_type_code="supplies",
+                           from_entity_code="SUP006", to_entity_code="FAC007", props_json={},
+                           origin="clone"))
+    db.commit()
+    wv = SandboxEngineService(db, TENANT_A).world_view(sid, bid)
+    assert len(wv["entities"]) == 3
+    assert wv["entities"][0]["source_ref"] is None or isinstance(wv["entities"][0]["source_ref"], dict)
+    assert [r["rel_code"] for r in wv["relations"]] == ["R1"]
+    # world fixture 里有一条 accepted causal_edge CE-1
+    assert any(e["code"] == "CE-1" for e in wv["causal_edges"])
+
+
+def test_list_checkpoints_ordered_and_filtered(db, world):
+    """检查点列表：基线 seq=0 恒在，保存后按 (tick,seq) 升序，可按分支过滤。"""
+    sid, bid = world["scene_id"], world["branch_id"]
+    eng = SandboxEngineService(db, TENANT_A)
+    eng.advance(sid, bid, 3)
+    eng.save_checkpoint(sid, bid, "T3快照")
+    cps = eng.list_checkpoints(sid)
+    assert len(cps) == 2                              # 基线 + 手动一个
+    assert cps[0]["seq"] == 0 and cps[0]["tick"] == 0
+    assert cps[1]["tick"] == 3 and cps[1]["label"] == "T3快照"
+    # 另一分支无检查点
+    d = eng.derive_branch(sid, world["baseline_cp"], "平行B")
+    assert eng.list_checkpoints(sid, branch_id=d["branch_id"]) == []

@@ -436,11 +436,37 @@ class SandboxEngineService:
             SandboxEntity.tenant_id == self.tenant_id, SandboxEntity.scene_id == scene_id,
             SandboxEntity.branch_id == branch_id, SandboxEntity.checkpoint_id.is_(None),
         ).order_by(SandboxEntity.entity_code)).scalars().all()
+        rels = self.db.execute(select(SandboxRelation).where(
+            SandboxRelation.tenant_id == self.tenant_id, SandboxRelation.scene_id == scene_id,
+            SandboxRelation.branch_id == branch_id, SandboxRelation.checkpoint_id.is_(None),
+        ).order_by(SandboxRelation.rel_code)).scalars().all()
+        # accepted 因果边元素：前端「因果传播」画布的边来源（clone 只产实体，结构关系常为空）
+        edges = [{"code": e["code"], "label": e["label"], "from_ref": e["from_ref"],
+                  "to_ref": e["to_ref"], "activation_tick": e["activation_tick"]}
+                 for e in self._elements.load_accepted(scene_id) if e["kind"] == "causal_edge"]
         return {"scene_id": scene_id, "branch_id": branch_id, "tick": self._branch(branch_id).tick_now,
                 "view": view, "entities": [
                     {"entity_code": r.entity_code, "object_code": r.object_code,
-                     "props": r.props_json, "risk_score": r.risk_score, "masked": r.masked}
-                    for r in rows]}
+                     "props": r.props_json, "risk_score": r.risk_score, "masked": r.masked,
+                     "origin": r.origin, "source_ref": r.source_ref_json}
+                    for r in rows],
+                "relations": [
+                    {"rel_code": rl.rel_code, "link_type_code": rl.link_type_code,
+                     "from_entity_code": rl.from_entity_code, "to_entity_code": rl.to_entity_code,
+                     "props": rl.props_json, "origin": rl.origin}
+                    for rl in rels],
+                "causal_edges": edges}
+
+    def list_checkpoints(self, scene_id: int, branch_id: Optional[int] = None) -> list[dict]:
+        """检查点列表（时间轴 cp 标记 / 上限计数用）：按 (tick, seq) 升序，可选按分支过滤。"""
+        self._scene(scene_id)
+        q = select(SandboxCheckpoint).where(
+            SandboxCheckpoint.tenant_id == self.tenant_id, SandboxCheckpoint.scene_id == scene_id)
+        if branch_id is not None:
+            q = q.where(SandboxCheckpoint.branch_id == branch_id)
+        rows = self.db.execute(q.order_by(SandboxCheckpoint.tick, SandboxCheckpoint.seq)).scalars().all()
+        return [{"id": c.id, "branch_id": c.branch_id, "tick": c.tick, "seq": c.seq,
+                 "label": c.label, "stats": c.stats_json} for c in rows]
 
     def entity_detail(self, scene_id: int, branch_id: int, entity_code: str) -> dict:
         r = self.db.execute(select(SandboxEntity).where(

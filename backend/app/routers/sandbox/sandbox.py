@@ -211,6 +211,12 @@ def delete_checkpoint(checkpoint_id: int, db: Session = Depends(get_db),
     return Response(status_code=204)
 
 
+@router.get("/ontologies/sandbox/scenes/{scene_id}/checkpoints")
+def list_checkpoints(scene_id: int, branch_id: Optional[int] = Query(default=None),
+                     db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxEngineService(db, _tenant(user)).list_checkpoints(scene_id, branch_id=branch_id)
+
+
 @router.post("/ontologies/sandbox/scenes/{scene_id}/branches", status_code=201)
 def derive_branch(scene_id: int, body: BranchCreate, db: Session = Depends(get_db),
                   user: SysUser = Depends(get_current_user)):
