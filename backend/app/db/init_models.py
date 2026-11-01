@@ -89,6 +89,12 @@ from app.models.ontology.ontology import (                                      
 from app.models.ontology.asset_tag import (                                           # noqa: F401
     MetaAssetTag, MetaAssetTagBinding,
 )
+# --- 推演沙盘沙箱域 (onto_sandbox_* / onto_action_template) 2026-11-01 ---
+from app.models.sandbox.sandbox import (                                              # noqa: F401
+    SandboxScene, SandboxBranch, SandboxCheckpoint, SandboxEntity,
+    SandboxRelation, SandboxElement, SandboxAction, SandboxObservation,
+)
+from app.models.sandbox.action_template import SandboxActionTemplate                  # noqa: F401
 # --- 连接器落库 (P3 Task 7) ---
 from app.models.connectors.connector_record import (                              # noqa: F401
     ConnectorIngest, ConnectorSyncState, ConnectorInstance, ConnectorSyncLog,
