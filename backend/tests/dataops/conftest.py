@@ -201,3 +201,33 @@ def client_a(db: Session) -> TestClient:
 @pytest.fixture
 def client_b(db: Session) -> TestClient:
     return build_client(db, TENANT_B)
+
+
+@pytest.fixture
+def tenant_factory():
+    """返回租户 id（与既有 dataops 用例同一口径：不依赖 sys_tenant 行）。"""
+    def _make(tenant_id: int = TENANT_A) -> int:
+        return int(tenant_id)
+
+    return _make
+
+
+@pytest.fixture
+def source_factory(db: Session):
+    """建一条指向本机测试库的 DataSource（密码经 ``DataSourceService`` Fernet 落库），返回 id。
+
+    供需要真实建连跑 SQL 的用例（扫描/只读查询/参数绑定）使用。
+    """
+    from app.config import settings
+    from app.services.dataops.data_source_service import DataSourceService
+
+    def _make(tenant_id: int) -> int:
+        ds = DataSourceService(db, tenant_id).create(
+            name=f"qsrc-{uuid.uuid4().hex[:8]}", source_type="postgresql",
+            host=settings.DB_HOST, port=settings.DB_PORT,
+            username=settings.DB_USER, password=settings.DB_PASSWORD, database=TEST_DB_NAME,
+        )
+        db.commit()
+        return int(ds.id)
+
+    return _make

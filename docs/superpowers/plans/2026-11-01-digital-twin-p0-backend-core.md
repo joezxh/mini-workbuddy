@@ -1346,6 +1346,19 @@ Expected: PASS（6 passed）
 
 追加到 `backend/tests/dataops/test_query_params.py`：
 
+> **计划缺陷修正（执行时实测，2026-11-01）**：原写的两条用例直接不可用，已按下述重写：
+> 1. `CREATE TABLE p_t` 经 `db` 连接建在本用例的**随机 schema** 里，而 `run()` 会按 DataSource
+>    另起一个引擎（`build_engine` 不传 `config`，`dbSchema`/search_path 不生效），那个连接默认
+>    search_path 看不到 `p_t` → 未限定名的 SQL 必报 `relation "p_t" does not exist`。
+>    正解：表名用 `"{schema_name}".p_t` 全限定。
+> 2. 注入串那条写成了 `assert out2["rows"] == []`，但类型校验会**先抛 `ValueError`**，语句得
+>    不到返回值 → 用例直接报错。正解：用 `pytest.raises(ValueError, match="类型")`。
+> 3. 新增两条补置：`params` 有值但 `params_declared` 缺位也必须拒（白名单只来自声明），
+>    以及 `params=None` 的逐字节等价用例（W15 的正面证据）。
+> 4. 夹具 `tenant_factory` / `source_factory` 在 `tests/dataops/conftest.py` 中原本**不存在**，
+>    已按该文件既有风格补两个工厂（`source_factory` 用 `DataSourceService.create` 指向本机
+>    `minworkbuddy_test`，密码自动 Fernet 落库）。
+
 ```python
 from sqlalchemy import text
 
@@ -1430,8 +1443,14 @@ def test_run_rejects_unknown_placeholder_before_guard(db, tenant_factory, source
 
 - [ ] **Step 7: 等价回归（W15）**
 
-Run: `.\.venv\Scripts\python.exe -m pytest tests/dataops tests/kb/test_table_sync.py tests/ai -v -k "query or sync or dataops"`
+Run: `.\.venv\Scripts\python.exe -m pytest tests/dataops tests/kb/test_table_sync_and_reprocess.py tests/ai -v -k "query or sync or dataops"`
 Expected: 既有测试全绿，且**未新增任何 `params` 实参**（`git diff` 里这 3 个调用方文件必须无改动——用 `git status` 确认它们未被修改）
+
+> **计划缺陷修正（执行时实测，2026-11-01）**：路径 `tests/kb/test_table_sync.py` **不存在**
+> （实名 `tests/kb/test_table_sync_and_reprocess.py`）。pytest 对不存在的收集路径直接以用法错误退出，
+> 既不跑也不报错在摘要里——实测输出是「3 warnings in 0.01s」且 **0 collected**，看上去像全绿但一条也没跑。
+> 这类“空绿灯”比红灯更危险：收集范里必须核对末尾的 passed/skipped 计数非零。
+> 实测（修正路径后）：135 passed / 10 skipped / 36 deselected。
 
 - [ ] **Step 8: 提交**
 
