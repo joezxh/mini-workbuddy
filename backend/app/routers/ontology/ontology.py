@@ -188,6 +188,41 @@ def test_table_probe_batch(
     return {"results": results}
 
 
+# ---------------------------------------- E-编辑 表/列说明元数据（AF-06）
+
+class ColumnMetaItem(BaseModel):
+    column_name: str = Field(..., min_length=1, max_length=256)
+    column_comment: Optional[str] = None
+    biz_name: Optional[str] = Field(default=None, max_length=200)
+
+
+class TableMetaUpdate(BaseModel):
+    table_comment: Optional[str] = None
+    biz_name: Optional[str] = Field(default=None, max_length=200)
+    biz_description: Optional[str] = None
+    columns: Optional[List[ColumnMetaItem]] = None
+
+
+@router.put("/sources/{source_id}/tables/{table_id}")
+def update_table_meta(
+    source_id: int,
+    table_id: int,
+    body: TableMetaUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    """编辑扫描元数据（AF-06）：表/列说明与业务名写回 ``meta_table``/``meta_column``，不动物理结构。"""
+    svc = OntologyAssetService(db, _require_tenant_id(current_user))
+    result = svc.update_table_meta(
+        table_id, source_id=source_id,
+        table_comment=body.table_comment, biz_name=body.biz_name,
+        biz_description=body.biz_description,
+        columns=[c.model_dump(exclude_none=True) for c in body.columns] if body.columns else None,
+    )
+    db.commit()
+    return result
+
+
 # -------------------------------------------------------------- E3 详情/改/删
 
 @router.get("/ontologies/{ontology_id}")

@@ -196,6 +196,68 @@ class OntologyAssetService:
         ).all()
         return [{"code": c, "name": n, "color": col} for c, n, col in rows]
 
+    # ------------------------------------------------- E-编辑 元数据（AF-06）
+
+    def update_table_meta(
+        self, table_id: int, *,
+        source_id: Optional[int] = None,
+        table_comment: Optional[str] = None,
+        biz_name: Optional[str] = None,
+        biz_description: Optional[str] = None,
+        columns: Optional[List[dict]] = None,
+    ) -> dict:
+        """编辑扫描元数据（表/列说明、业务名称/描述）：仅写 ``meta_table``/``meta_column``，非结构变更。
+
+        租户 +（可选）``source_id`` 定位表，缺失 → ``ONTOLOGY_NOT_FOUND`` 404。字段仅在非 ``None``
+        时覆盖（部分更新）；列按 ``column_name`` 匹配，未知列名静默跳过并回传 ``skipped``。
+        """
+        stmt = select(MetaTable).where(
+            MetaTable.tenant_id == self.tenant_id, MetaTable.id == table_id
+        )
+        if source_id is not None:
+            stmt = stmt.where(MetaTable.source_id == source_id)
+        t = self.db.execute(stmt).scalar_one_or_none()
+        if t is None:
+            raise ApiError(ONTOLOGY_NOT_FOUND, "表不存在或不属于该数据源",
+                           http_status=404, detail={"table_id": table_id})
+        if table_comment is not None:
+            t.table_comment = table_comment
+        if biz_name is not None:
+            t.biz_name = biz_name
+        if biz_description is not None:
+            t.biz_description = biz_description
+
+        updated = 0
+        skipped: List[str] = []
+        for item in columns or []:
+            cname = (item or {}).get("column_name")
+            if not cname:
+                continue
+            c = self.db.execute(
+                select(MetaColumn).where(
+                    MetaColumn.tenant_id == self.tenant_id,
+                    MetaColumn.table_id == table_id,
+                    MetaColumn.column_name == cname,
+                )
+            ).scalar_one_or_none()
+            if c is None:
+                skipped.append(cname)
+                continue
+            if item.get("column_comment") is not None:
+                c.column_comment = item["column_comment"]
+            if item.get("biz_name") is not None:
+                c.biz_name = item["biz_name"]
+            updated += 1
+        self.db.flush()
+        return {
+            "table_id": table_id,
+            "table_comment": t.table_comment,
+            "biz_name": t.biz_name,
+            "biz_description": t.biz_description,
+            "columns_updated": updated,
+            "skipped": skipped,
+        }
+
     # ------------------------------------------------------- E33 draft-scope
 
     def _ontology_or_404(self, ontology_id: int) -> MetaOntology:
