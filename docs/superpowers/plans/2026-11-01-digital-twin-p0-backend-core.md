@@ -1677,15 +1677,18 @@ def test_unsupported_dialect_rejected_without_db():
 ```python
 @pytest.fixture
 def seeded_ontology(db: Session, schema_name: str) -> dict:
-    """最小可编译本体：真实形状的版本快照 + accepted 映射 + 两张可查的 demo 表。
+    """最小可编译本体：真实形状的版本快照 + accepted 映射 + 三张可查的 demo 表。
 
-    设该夹具的两个硬约束：
+    设该夹具的三个硬约束：
     1. demo 表建在**本测试的随机 schema**（db 连接的 search_path 已指向它），
        而 MetaTable.database 也写该 schema——编译产物因此带限定名，
        能被 ReadonlyQueryService 另建的引擎（默认 search_path）直接看到；
     2. DataSource 密码必须用 ``encrypt_secret`` 写 ``password_enc``，
        因为建连走 ``DataSourceService.reveal_password`` 会解密（Fernet 密钥由
-       本文件 autouse 夹具 ``_encryption_key`` 注入）。
+       本文件 autouse 夹具 ``_encryption_key`` 注入）；
+    3. 一个对象一张表、一个列一个标准项：``uq_meta_table_standard_table`` 与
+       ``uq_meta_column_standard_column`` 都是单列 UNIQUE，所以 o_site 有自己的
+       demo_site_stat、a_pending 占自己的 note 列，共用会撞 UniqueViolation。
     """
     import json
 
@@ -1698,12 +1701,17 @@ def seeded_ontology(db: Session, schema_name: str) -> dict:
     tid = TENANT_A
     ex = lambda s, p=None: db.execute(text(s), p or {})  # noqa: E731
 
-    # ---------- 1. 两张真实可查的 demo 表（落在本测试 schema） ----------
+    # ---------- 1. 三张真实可查的 demo 表（落在本测试 schema） ----------
     ex(f'CREATE TABLE "{schema_name}".demo_device_stat '
-       f'(dev_code text, oee numeric, id_card text, ts_posted timestamp)')
+       f'(dev_code text, oee numeric, id_card text, ts_posted timestamp, note text)')
     ex(f'CREATE TABLE "{schema_name}".demo_line_stat (line_code text, dev_code text)')
-    ex(f'INSERT INTO "{schema_name}".demo_device_stat VALUES (\'D1\', 0.85, \'310101199001011234\', now())')
+    # o_site 必须有自己的物理表：uq_meta_table_standard_table 是 UNIQUE(table_id)，
+    # 一张表只能绑一个对象标准，「多个对象共用同一张表」在真实系统里根本建不出来。
+    ex(f'CREATE TABLE "{schema_name}".demo_site_stat (site_code text, dev_code text)')
+    ex(f'INSERT INTO "{schema_name}".demo_device_stat '
+       f'(dev_code, oee, id_card, ts_posted, note) VALUES (\'D1\', 0.85, \'310101199001011234\', now(), NULL)')
     ex(f'INSERT INTO "{schema_name}".demo_line_stat VALUES (\'L1\', \'D1\')')
+    ex(f'INSERT INTO "{schema_name}".demo_site_stat VALUES (\'S1\', \'D1\')')
 
     dsid = ex(
         "INSERT INTO meta_data_source (tenant_id, name, source_type, external_type, host, port, "
@@ -1721,6 +1729,7 @@ def seeded_ontology(db: Session, schema_name: str) -> dict:
         ).scalar_one()
 
     tb_dev, tb_line = table("demo_device_stat"), table("demo_line_stat")
+    tb_site = table("demo_site_stat")
 
     def column(table_id: int, name: str, ordinal: int, pii: str) -> int:
         return ex(
@@ -1733,8 +1742,10 @@ def seeded_ontology(db: Session, schema_name: str) -> dict:
     c_oee = column(tb_dev, "oee", 2, "L1")
     c_id_card = column(tb_dev, "id_card", 3, "L2")     # 敏感且标准无 mask_rule → 触发敏感闸
     column(tb_dev, "ts_posted", 4, "L0")
+    c_note = column(tb_dev, "note", 5, "L0")
     c_line_code = column(tb_line, "line_code", 1, "L0")
     c_line_dev = column(tb_line, "dev_code", 2, "L0")  # 与 dev 侧同名，是 JOIN 的连接键
+    c_site_dev = column(tb_site, "dev_code", 2, "L0")  # o_site 侧的 JOIN 连接键
 
     # ---------- 2. 模式层：对象 / 标准项 ----------
     def obj(code: str, name: str, review: str = "accepted") -> int:
@@ -1806,13 +1817,16 @@ def seeded_ontology(db: Session, schema_name: str) -> dict:
 
     bind_table(dev, tb_dev)          # o_nomap 故意不绑
     bind_table(line, tb_line)
-    bind_table(site, tb_line)
+    bind_table(site, tb_site)
     bind_column(c_dev_code, a_devcode)
     bind_column(c_oee, a_oee)
     bind_column(c_id_card, a_idcard)
     bind_column(c_line_code, a_linecode)
     bind_column(c_line_dev, a_devcode)
-    bind_column(c_dev_code, a_pending)  # 列侧已绑，但属性 review_status=suggested
+    bind_column(c_site_dev, a_devcode)
+    bind_column(c_note, a_pending)  # 列侧已绑，但属性 review_status=suggested
+    # uq_meta_column_standard_column 是 UNIQUE(column_id)：一个物理列只能绑一个标准项，
+    # 故 a_pending 必须占自己的 note 列，不能搭 c_dev_code 的车。
 
     # ---------- 5. 关系：o_dev→o_line 唯一路径；o_dev↔o_site 两条→歧义 ----------
     rel_rows = []
@@ -1868,6 +1882,7 @@ def seeded_ontology(db: Session, schema_name: str) -> dict:
     return {
         "id": int(oid), "version": int(vid), "source_id": int(dsid),
         "schema": schema_name, "table": "demo_device_stat", "table_line": "demo_line_stat",
+        "table_site": "demo_site_stat",
         "objects": {"o_dev": dev, "o_line": line, "o_site": site},
         "attributes": {"a_oee": a_oee, "a_idcard": a_idcard,
                        "a_devcode": a_devcode, "a_linecode": a_linecode},
@@ -1976,7 +1991,10 @@ class OntologyQueryService:
         self.db.commit()
         self.db.refresh(row)
         # 创建即尝试编译：失败信息直接回给调用方（前端绑定抽屉据此提示）
-        self.compile_query(row.id)
+        # 例外：version=0 的草稿不自动编译——草稿必须存得下来（spec §3.1），
+        # 编译是显式动作，否则 create 会当场抛 QUERY_DRAFT_FORBIDDEN 而无处保存。
+        if int(version or 0) != 0:
+            self.compile_query(row.id)
         return self.get(row.id)
 
     def get(self, qid: int) -> dict:
@@ -2004,7 +2022,8 @@ class OntologyQueryService:
                 setattr(row, f, patch[f])
         row.verify_status = "pending"
         self.db.commit()
-        self.compile_query(qid)
+        if int(row.version or 0) != 0:   # 同上：草稿改动不触发自动编译
+            self.compile_query(qid)
         return self.get(qid)
 
     def bindings(self, qid: int) -> List[dict]:
@@ -2669,9 +2688,13 @@ def query_bindings(query_id: int, db: Session = Depends(get_db),
     return _query_service(db, current_user).bindings(query_id)
 ```
 
-> 路径前缀：本体子 router 挂在 dataops 之下（`app/core/router_registry.py` 的
-> `RouterSpec(module="app.routers.dataops.ontology", prefix="/ontologies")` 链条，见 `dataops.py:1353-1355`），
-> Q1/Q2 实际 URL 为 `/api/v1/dataops/ontologies/{id}/queries`，Q3–Q5 为 `/api/v1/dataops/queries/{qid}/...`。
+> 路径前缀（计划缺陷修正（执行时实测，2026-11-01）：原说法有误）：本体子 router **并不带自己的
+> prefix**，而是在 `dataops.py:1353-1355` 以 `router.include_router(ontology_router)`（无 prefix）
+> 挂进 dataops 父 router，故完整 URL = 父 router 的 `/api/v1/dataops` + 本文件里写的相对路径：
+> Q1/Q2 为 `/api/v1/dataops/ontologies/{id}/queries`，Q3–Q5 为 `/api/v1/dataops/queries/{qid}/...`。
+> `router_registry.py` 里根本没有 `app.routers.dataops.ontology` 这条 RouterSpec，也没有
+> `prefix="/ontologies"`（若有，`/queries/...` 会被误拼成 `/ontologies/queries/...` 而使 Q3–Q5 全 404）。
+> 旁证：同一文件里已有的 `/sources/{source_id}/tables/...` 路由也只能是相对路径。
 >
 > `PreviewBody` 而不用裸 dict 形参：FastAPI 会把单个 dict 形参嵌成 `{"params": {...}}` 请求体，
 > 测试里 `json=None` 会空返 422；显式模型同时把 `limit` 的范围校验交给 Pydantic。
@@ -2754,6 +2777,22 @@ def bound_widget(db: Session, seeded_ontology) -> dict:
 git add backend/app/services/ontology/ontology_query_service.py backend/app/routers/ontology/ontology.py backend/app/core/api_error.py backend/tests/ontology
 git commit -m "feat(ontology): named query entity with 7-step fail-closed compiler"
 ```
+
+> **执行记录（2026-11-01）**：`test_query_compile.py` 15 passed；回归
+> `tests/ontology tests/twin tests/dataops` 214 passed / 10 skipped。
+> 本 Task 共修正计划缺陷 4 处（均已就地回写）：
+> ⑴ **缺陷 #7｜夹具建不出**：`uq_meta_table_standard_table` 是 `UNIQUE(table_id)`，
+>   而原 `seeded_ontology` 让 `o_line` 与 `o_site` 共用 `demo_line_stat`，插入即 UniqueViolation，
+>   11/12 用例卡在 setup。修法：为 `o_site` 建 `demo_site_stat`。副作用：一个对象一张表。
+> ⑵ **缺陷 #8｜夹具建不出**：`uq_meta_column_standard_column` 是 `UNIQUE(column_id)`，
+>   而原夹具把 `a_devcode` 与 `a_pending` 同绑到 `c_dev_code`。修法：给 `a_pending` 自己的 `note` 列，
+>   保留“列侧已绑、语义侧未采纳”的测试意图（该意图不依赖列绑定，`attr_codes` 只从 accepted
+>   `properties` 里收集，因此即使不绑任何列也会拦住）。
+> ⑶ **缺陷 #9｜Step 5 与 Step 2 自相矛盾**：`create()` 无条件自动编译，使 `version=0` 的草稿
+>   在创建时就抛 `QUERY_DRAFT_FORBIDDEN`，而 `test_draft_version_cannot_compile` 要求“先建成功、
+>   再显式编译才拒”。修在实现侧（草稿不自动编译），因为 spec §3.1 要求草稿态可保存；
+>   `update()` 同步加同一护栏。未改测试迁就实现。
+> ⑷ **文档缺陷｜路由前缀误述**：见 Step 8 注（子 router 无 prefix，靠父 router 单点挂载）。
 
 ---
 

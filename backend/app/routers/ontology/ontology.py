@@ -14,7 +14,7 @@ import hashlib
 import json
 import time
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -868,3 +868,81 @@ def ontology_pipeline(
     """五步链路拓扑各环节计数与状态（§6.6），供前端 PipelineBar 渲染（只读）。"""
     svc = OntologyAssistantService(db, _require_tenant_id(current_user))
     return svc.pipeline(ontology_id)
+
+
+# ─────────────────── 本体查询定义（孪生方案 Q1~Q5）───────────────────
+
+from app.services.ontology.ontology_query_service import OntologyQueryService  # noqa: E402
+
+
+class QueryCreateBody(BaseModel):
+    version: int = Field(..., ge=0, description="钉住的发布版本；0=草稿")
+    code: str = Field(..., min_length=1, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    result_shape: str = Field(..., description="kpi|trend|bar|donut|table|entity_set|graph")
+    spec_json: Dict[str, Any]
+    params_json: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class QueryPatchBody(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    spec_json: Optional[Dict[str, Any]] = None
+    params_json: Optional[List[Dict[str, Any]]] = None
+    result_shape: Optional[str] = None
+
+
+class PreviewBody(BaseModel):
+    params: Dict[str, Any] = Field(default_factory=dict)
+    limit: int = Field(default=200, ge=1, le=200)
+
+
+def _query_service(db: Session, current_user: SysUser) -> OntologyQueryService:
+    return OntologyQueryService(db, _require_tenant_id(current_user))
+
+
+@router.post("/ontologies/{ontology_id}/queries", status_code=201)
+def create_query(ontology_id: int, body: QueryCreateBody,
+                 db: Session = Depends(get_db),
+                 current_user: SysUser = Depends(get_current_user)):
+    return _query_service(db, current_user).create(
+        ontology_id=ontology_id, version=body.version, code=body.code, name=body.name,
+        description=body.description, result_shape=body.result_shape,
+        spec_json=body.spec_json, params_json=body.params_json)
+
+
+@router.get("/ontologies/{ontology_id}/queries")
+def list_queries(ontology_id: int, shape: Optional[str] = None, kw: Optional[str] = None,
+                 verified_only: bool = False, db: Session = Depends(get_db),
+                 current_user: SysUser = Depends(get_current_user)):
+    return _query_service(db, current_user).list_for_ontology(
+        ontology_id, shape=shape, kw=kw, verified_only=verified_only)
+
+
+@router.post("/queries/{query_id}/preview")
+def preview_query(query_id: int, body: PreviewBody,
+                  db: Session = Depends(get_db),
+                  current_user: SysUser = Depends(get_current_user)):
+    """预览上限 200 行（与真实取数同一口径，防止预览能拉全量而发布页不能）。"""
+    return _query_service(db, current_user).preview(
+        query_id, params=body.params, limit=body.limit)
+
+
+@router.patch("/queries/{query_id}")
+def update_query(query_id: int, body: QueryPatchBody, db: Session = Depends(get_db),
+                 current_user: SysUser = Depends(get_current_user)):
+    return _query_service(db, current_user).update(query_id, body.model_dump(exclude_unset=True))
+
+
+@router.delete("/queries/{query_id}", status_code=204)
+def delete_query(query_id: int, db: Session = Depends(get_db),
+                 current_user: SysUser = Depends(get_current_user)):
+    _query_service(db, current_user).delete(query_id)
+    return Response(status_code=204)
+
+
+@router.get("/queries/{query_id}/bindings")
+def query_bindings(query_id: int, db: Session = Depends(get_db),
+                   current_user: SysUser = Depends(get_current_user)):
+    return _query_service(db, current_user).bindings(query_id)

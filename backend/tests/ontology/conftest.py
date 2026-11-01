@@ -195,3 +195,244 @@ def client_a(db: Session) -> TestClient:
 @pytest.fixture
 def client_b(db: Session) -> TestClient:
     return build_client(db, TENANT_B)
+
+
+@pytest.fixture
+def seeded_ontology(db: Session, schema_name: str) -> dict:
+    """最小可编译本体：真实形状的版本快照 + accepted 映射 + 三张可查的 demo 表。
+
+    设该夹具的三个硬约束：
+    1. demo 表建在**本测试的随机 schema**（db 连接的 search_path 已指向它），
+       而 MetaTable.database 也写该 schema——编译产物因此带限定名，
+       能被 ReadonlyQueryService 另建的引擎（默认 search_path）直接看到；
+    2. DataSource 密码必须用 ``encrypt_secret`` 写 ``password_enc``，
+       因为建连走 ``DataSourceService.reveal_password`` 会解密（Fernet 密钥由
+       本文件 autouse 夹具 ``_encryption_key`` 注入）；
+    3. 一个对象一张表、一个列一个标准项：``uq_meta_table_standard_table`` 与
+       ``uq_meta_column_standard_column`` 都是单列 UNIQUE，所以 o_site 有自己的
+       demo_site_stat、a_pending 占自己的 note 列，共用会撞 UniqueViolation。
+    """
+    import json
+
+    from app.ai.dataops.crypto import encrypt_secret
+    from app.config import settings
+
+    tid = TENANT_A
+    ex = lambda s, p=None: db.execute(text(s), p or {})  # noqa: E731
+
+    # ---------- 1. 三张真实可查的 demo 表（落在本测试 schema） ----------
+    ex(f'CREATE TABLE "{schema_name}".demo_device_stat '
+       f'(dev_code text, oee numeric, id_card text, ts_posted timestamp, note text)')
+    ex(f'CREATE TABLE "{schema_name}".demo_line_stat (line_code text, dev_code text)')
+    # o_site 必须有自己的物理表：uq_meta_table_standard_table 是 UNIQUE(table_id)，
+    # 一张表只能绑一个对象标准，「多个对象共用同一张表」在真实系统里根本建不出来。
+    ex(f'CREATE TABLE "{schema_name}".demo_site_stat (site_code text, dev_code text)')
+    ex(f'INSERT INTO "{schema_name}".demo_device_stat '
+       f'(dev_code, oee, id_card, ts_posted, note) VALUES (\'D1\', 0.85, \'310101199001011234\', now(), NULL)')
+    ex(f'INSERT INTO "{schema_name}".demo_line_stat VALUES (\'L1\', \'D1\')')
+    ex(f'INSERT INTO "{schema_name}".demo_site_stat VALUES (\'S1\', \'D1\')')
+
+    dsid = ex(
+        "INSERT INTO meta_data_source (tenant_id, name, source_type, external_type, host, port, "
+        "username, password_enc, database, status) "
+        "VALUES (:t,'twin-demo','postgresql','rdbms',:h,:p,:u,:pw,:db,'online') RETURNING id",
+        {"t": tid, "h": settings.DB_HOST, "p": int(settings.DB_PORT), "u": settings.DB_USER,
+         "pw": encrypt_secret(str(settings.DB_PASSWORD)), "db": TEST_DB_NAME},
+    ).scalar_one()
+
+    def table(name: str) -> int:
+        return ex(
+            "INSERT INTO meta_table (tenant_id, source_id, db_name, database, table_name) "
+            "VALUES (:t,:s,:db,:sc,:n) RETURNING id",
+            {"t": tid, "s": dsid, "db": TEST_DB_NAME, "sc": schema_name, "n": name},
+        ).scalar_one()
+
+    tb_dev, tb_line = table("demo_device_stat"), table("demo_line_stat")
+    tb_site = table("demo_site_stat")
+
+    def column(table_id: int, name: str, ordinal: int, pii: str) -> int:
+        return ex(
+            "INSERT INTO meta_column (tenant_id, table_id, column_name, ordinal, pii_level) "
+            "VALUES (:t,:tb,:n,:o,:p) RETURNING id",
+            {"t": tid, "tb": table_id, "n": name, "o": ordinal, "p": pii},
+        ).scalar_one()
+
+    c_dev_code = column(tb_dev, "dev_code", 1, "L0")
+    c_oee = column(tb_dev, "oee", 2, "L1")
+    c_id_card = column(tb_dev, "id_card", 3, "L2")     # 敏感且标准无 mask_rule → 触发敏感闸
+    column(tb_dev, "ts_posted", 4, "L0")
+    c_note = column(tb_dev, "note", 5, "L0")
+    c_line_code = column(tb_line, "line_code", 1, "L0")
+    c_line_dev = column(tb_line, "dev_code", 2, "L0")  # 与 dev 侧同名，是 JOIN 的连接键
+    c_site_dev = column(tb_site, "dev_code", 2, "L0")  # o_site 侧的 JOIN 连接键
+
+    # ---------- 2. 模式层：对象 / 标准项 ----------
+    def obj(code: str, name: str, review: str = "accepted") -> int:
+        return ex(
+            "INSERT INTO meta_object_standard (tenant_id, code, name, status, review_status, source) "
+            "VALUES (:t,:c,:n,'published',:r,'human') RETURNING id",
+            {"t": tid, "c": code, "n": name, "r": review},
+        ).scalar_one()
+
+    def std(code: str, name: str, mask: str = "keep_first2", level: str = "L1") -> int:
+        return ex(
+            "INSERT INTO meta_standard (tenant_id, code, name, status, security_level, mask_rule) "
+            "VALUES (:t,:c,:n,'published',:l,:m) RETURNING id",
+            {"t": tid, "c": code, "n": name, "l": level, "m": mask},
+        ).scalar_one()
+
+    dev, line, site = obj("o_dev", "设备"), obj("o_line", "产线"), obj("o_site", "园区")
+    obj("o_nomap", "未映射对象")                        # accepted 但未绑表 → ③ 失败路径
+    a_oee = std("a_oee", "设备OEE")
+    a_idcard = std("a_idcard", "身份证号", mask=None)      # 无脱敏规则 → ④ 敏感闸拦截
+    a_devcode = std("a_devcode", "设备编码")
+    a_linecode = std("a_linecode", "产线编码")
+    a_pending = std("a_pending", "待采纳属性")
+
+    # ---------- 3. 对象↔属性（快照里的 properties） ----------
+    prop_rows = []
+
+    def prop(object_id: int, standard_id: int, review: str = "accepted") -> None:
+        pid = ex(
+            "INSERT INTO meta_object_standard_attribute (tenant_id, object_id, standard_id, "
+            "required, sort_order, review_status) "
+            "VALUES (:t,:o,:s,false,0,:r) RETURNING id",
+            {"t": tid, "o": object_id, "s": standard_id, "r": review},
+        ).scalar_one()
+        prop_rows.append({"id": int(pid), "object_id": int(object_id),
+                          "standard_id": int(standard_id), "required": False,
+                          "review_status": review})
+
+    prop(dev, a_devcode)
+    prop(dev, a_oee)
+    prop(dev, a_idcard)
+    prop(dev, a_pending, review="suggested")            # ② 未采纳路径
+    prop(line, a_linecode)
+    prop(line, a_devcode)
+    prop(site, a_devcode)
+
+    # ---------- 4. 物理映射（status=accepted） ----------
+    table_map_rows = []
+
+    def bind_table(object_id: int, table_id: int) -> None:
+        mid = ex(
+            "INSERT INTO meta_table_standard (tenant_id, table_id, object_standard_id, status, source) "
+            "VALUES (:t,:tb,:o,'accepted','human') RETURNING id",
+            {"t": tid, "tb": table_id, "o": object_id},
+        ).scalar_one()
+        table_map_rows.append({"id": int(mid), "table_id": int(table_id),
+                               "object_standard_id": int(object_id), "source": "human"})
+
+    column_map_rows = []
+
+    def bind_column(column_id: int, standard_id: int) -> None:
+        mid = ex(
+            "INSERT INTO meta_column_standard (tenant_id, column_id, standard_id, status, source) "
+            "VALUES (:t,:c,:s,'accepted','human') RETURNING id",
+            {"t": tid, "c": column_id, "s": standard_id},
+        ).scalar_one()
+        column_map_rows.append({"id": int(mid), "column_id": int(column_id),
+                                "standard_id": int(standard_id), "source": "human"})
+
+    bind_table(dev, tb_dev)          # o_nomap 故意不绑
+    bind_table(line, tb_line)
+    bind_table(site, tb_site)
+    bind_column(c_dev_code, a_devcode)
+    bind_column(c_oee, a_oee)
+    bind_column(c_id_card, a_idcard)
+    bind_column(c_line_code, a_linecode)
+    bind_column(c_line_dev, a_devcode)
+    bind_column(c_site_dev, a_devcode)
+    bind_column(c_note, a_pending)  # 列侧已绑，但属性 review_status=suggested
+    # 注：uq_meta_column_standard_column 是 UNIQUE(column_id)——一个物理列只能绑
+    # 一个标准项，故 a_pending 必须占自己的列，不能搭 c_dev_code 的车。
+
+    # ---------- 5. 关系：o_dev→o_line 唯一路径；o_dev↔o_site 两条→歧义 ----------
+    rel_rows = []
+
+    def relation(code: str, from_id: int, to_id: int, via: list, review: str = "accepted") -> int:
+        rid = ex(
+            "INSERT INTO meta_object_relation (tenant_id, code, name, from_object_id, to_object_id, "
+            "relation_type, via_attribute_ids, status, source, review_status) "
+            "VALUES (:t,:c,:n,:f,:to,'N:1',CAST(:v AS jsonb),'published','human',:r) RETURNING id",
+            {"t": tid, "c": code, "n": code, "f": from_id, "to": to_id,
+             "v": json.dumps([int(x) for x in via]), "r": review},
+        ).scalar_one()
+        rel_rows.append({"id": int(rid), "code": code, "name": code,
+                         "from_object_id": int(from_id), "to_object_id": int(to_id),
+                         "relation_type": "N:1", "source": "human", "review_status": review})
+        return int(rid)
+
+    relation("r_dev_line", dev, line, [a_devcode])
+    relation("r_dev_site_a", dev, site, [a_devcode])
+    relation("r_dev_site_b", site, dev, [a_devcode])   # 同一对对象的第二条路径
+    db.commit()
+
+    # ---------- 6. 版本快照（逐字段对齐 build_snapshot 输出） ----------
+    snap = {
+        "objects": [
+            {"id": int(dev), "code": "o_dev", "name": "设备", "domain": None, "aliases": [],
+             "source": "human", "review_status": "accepted", "confidence": None},
+            {"id": int(line), "code": "o_line", "name": "产线", "domain": None, "aliases": [],
+             "source": "human", "review_status": "accepted", "confidence": None},
+            {"id": int(site), "code": "o_site", "name": "园区", "domain": None, "aliases": [],
+             "source": "human", "review_status": "accepted", "confidence": None},
+            {"id": int(ex("SELECT id FROM meta_object_standard WHERE tenant_id=:t AND code='o_nomap'",
+                          {"t": tid}).scalar_one()),
+             "code": "o_nomap", "name": "未映射对象", "domain": None, "aliases": [],
+             "source": "human", "review_status": "accepted", "confidence": None},
+        ],
+        "relations": rel_rows,
+        "properties": prop_rows,
+        "mappings": {"table": table_map_rows, "column": column_map_rows},
+        "cq": [],
+    }
+    oid = ex(
+        "INSERT INTO onto_ontology (tenant_id, code, name, status, current_version) "
+        "VALUES (:t,'twin_demo','孪生演示本体','published',1) RETURNING id", {"t": tid}
+    ).scalar_one()
+    vid = ex(
+        "INSERT INTO onto_ontology_version (tenant_id, ontology_id, version, snapshot_json) "
+        "VALUES (:t,:o,1,CAST(:s AS jsonb)) RETURNING id",
+        {"t": tid, "o": oid, "s": json.dumps(snap, ensure_ascii=False)},
+    ).scalar_one()
+    db.commit()
+
+    return {
+        "id": int(oid), "version": int(vid), "source_id": int(dsid),
+        "schema": schema_name, "table": "demo_device_stat", "table_line": "demo_line_stat",
+        "table_site": "demo_site_stat",
+        "objects": {"o_dev": int(dev), "o_line": int(line), "o_site": int(site)},
+        "attributes": {"a_oee": int(a_oee), "a_idcard": int(a_idcard),
+                       "a_devcode": int(a_devcode), "a_linecode": int(a_linecode)},
+    }
+
+
+@pytest.fixture
+def bound_widget(db: Session, seeded_ontology) -> dict:
+    """一条真实引用 query_id 的孪生组件，用于验证 Q5 的 WIDGET_IN_USE 拦截。
+
+    列名逐字对齐 Task 1 模型：卡片用 ``ontology_version``/``runtime_state``/``owner_id``
+    （没有 ``version``/``status`` 列），页面只有 ``sort_order``/``refresh_json``（无布局列）。
+    ``owner_id`` 无外键，取 101——即 ``_fake_user(TENANT_A)`` 的 user_id，与 client_a 同一人。
+    """
+    from sqlalchemy import text
+
+    from tests.ontology.conftest import TENANT_A
+    ex = lambda s, p=None: db.execute(text(s), p or {})  # noqa: E731
+    qid = ex(
+        "INSERT INTO onto_ontology_query (tenant_id, ontology_id, version, code, name, "
+        "result_shape, spec_json, status) VALUES (:t,:o,1,'q_bound','绑定中','kpi',"
+        "CAST(:s AS jsonb),'enabled') RETURNING id",
+        {"t": TENANT_A, "o": seeded_ontology["id"], "s": '{"objects":["o_dev"],"attributes":["a_oee"]}'},
+    ).scalar_one()
+    cid = ex("INSERT INTO twin_card (tenant_id, name, ontology_id, ontology_version, "
+             "runtime_state, owner_id) VALUES (:t,'卡',:o,1,'draft',101) RETURNING id",
+             {"t": TENANT_A, "o": seeded_ontology["id"]}).scalar_one()
+    pid = ex("INSERT INTO twin_page (tenant_id, card_id, name, sort_order) "
+             "VALUES (:t,:c,'页',0) RETURNING id", {"t": TENANT_A, "c": cid}).scalar_one()
+    wid = ex("INSERT INTO twin_widget (tenant_id, page_id, widget_key, title, query_id, sort_order) "
+             "VALUES (:t,:p,'kpi','组件',:q,0) RETURNING id",
+             {"t": TENANT_A, "p": pid, "q": qid}).scalar_one()
+    db.commit()
+    return {"query_id": int(qid), "widget_id": int(wid)}
