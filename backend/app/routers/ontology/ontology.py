@@ -754,6 +754,18 @@ def bind_asset_tag(
     return result
 
 
+@router.post("/asset-tags/reclassify")
+def reclassify_asset_tags(
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    """手动重分级（AF-03）：租户全量重跑 ``pii>=L2`` 规则自动打标（扫描钩子的手动补刷）。"""
+    svc = OntologyTagService(db, _require_tenant_id(current_user))
+    result = svc.apply_security_rule(source_id=None)
+    db.commit()
+    return result
+
+
 # ================================================ E34-E36 应用发布登记（P0-11）
 
 

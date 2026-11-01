@@ -16,6 +16,7 @@ SQLBot 式「选表导入」动作。
 """
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import asdict
 from types import SimpleNamespace
@@ -325,6 +326,24 @@ class MetaScanService:
 
         job.finished_at = self._now()
         job.duration_ms = int((time.perf_counter() - started) * 1000)
+
+        if job.status == "succeeded":
+            self._apply_security_tags(ds)
+
+    def _apply_security_tags(self, ds: DataSource) -> None:
+        """扫描成功后刷新 pii 敏感标签（AF-03 钩子）：失败仅记 warning，不回滚扫描。
+
+        置于 SAVEPOINT（``begin_nested``）：打标内部的任何异常（含表缺失）只回滚该保
+        存点，不会污染外层扫描事务（PG 语句失败会使整个事务进入 aborted 态）。
+        """
+        try:
+            from app.services.ontology.ontology_tag_service import OntologyTagService
+
+            with self.db.begin_nested():
+                OntologyTagService(self.db, self.tenant_id).apply_security_rule(source_id=ds.id)
+        except Exception as exc:  # noqa: BLE001 - 打标异常不影响扫描结果（已回滚至保存点）
+            logging.getLogger(__name__).warning(
+                "security 自动打标失败(source=%s): %s", ds.id, exc)
 
     def _sync_table(self, adapter, conn, source_id: int, physical_db: str, database: str,
                     t, with_profile: bool) -> int:

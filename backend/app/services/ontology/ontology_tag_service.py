@@ -11,15 +11,19 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.api_error import (
     ApiError, ASSET_TAG_IN_USE, ONTOLOGY_NOT_FOUND, TAG_CODE_DUPLICATED,
 )
+from app.models.dataops.meta import MetaColumn, MetaTable
 from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
 
 _TAG_KINDS = {"biz", "security", "quality", "custom"}
+# security 自动打标命中的敏感等级（字符串枚举，L2/L3 达阈）
+_SENSITIVE_PII_LEVELS = ("L2", "L3")
+_SECURITY_PII_TAG_CODE = "pii"
 
 
 class OntologyTagService:
@@ -162,3 +166,77 @@ class OntologyTagService:
             added += 1
         self.db.flush()
         return {"tag_id": tag_id, "op": op, "affected": added, "skipped": len(ids) - added}
+
+    # ------------------------------------------- E-自动打标 security 规则（AF-03）
+
+    def apply_security_rule(self, source_id: Optional[int] = None) -> dict:
+        """按 ``pii_level >= L2`` 规则自动重打 ``pii`` 安全标签（幂等，rule/human 分治）。
+
+        口径（spec §5.2）：
+        - 仅当租户已有 ``tag_kind='security' AND code='pii'`` 标签才打标，**不自动建标签**（缺失→``{"tag": None}``）；
+        - 先删本批作用域内该标签的 ``source='rule'`` 旧绑定，再对敏感表重打（同表已有 human 则跳过，避开 uq 冲突）；
+        - ``source='human'`` 永不触碰；``source_id`` 缺省＝租户全量（供手动重分级）。
+        返回 ``{"tag": code|None, "bound": 新增 rule 数, "removed": 删除 rule 数}``。
+        """
+        tag = self.db.execute(
+            select(MetaAssetTag).where(
+                MetaAssetTag.tenant_id == self.tenant_id,
+                MetaAssetTag.tag_kind == "security",
+                MetaAssetTag.code == _SECURITY_PII_TAG_CODE,
+            )
+        ).scalar_one_or_none()
+        if tag is None:
+            return {"tag": None, "bound": 0, "removed": 0}
+
+        # 作用域内的快照表（可限定本批扫描涉及源）
+        scope_stmt = select(MetaTable.id).where(MetaTable.tenant_id == self.tenant_id)
+        if source_id is not None:
+            scope_stmt = scope_stmt.where(MetaTable.source_id == source_id)
+        scope_ids = set(self.db.execute(scope_stmt).scalars().all())
+        if not scope_ids:
+            return {"tag": tag.code, "bound": 0, "removed": 0}
+
+        # 敏感表：含任一 L2/L3 列
+        sensitive_ids = set(self.db.execute(
+            select(MetaColumn.table_id)
+            .where(
+                MetaColumn.tenant_id == self.tenant_id,
+                MetaColumn.table_id.in_(scope_ids),
+                MetaColumn.pii_level.in_(_SENSITIVE_PII_LEVELS),
+            )
+            .group_by(MetaColumn.table_id)
+        ).scalars().all())
+
+        # 删除作用域内该标签的 rule 旧绑定（human 保留）
+        removed = int(self.db.execute(
+            delete(MetaAssetTagBinding).where(
+                MetaAssetTagBinding.tenant_id == self.tenant_id,
+                MetaAssetTagBinding.tag_id == tag.id,
+                MetaAssetTagBinding.asset_kind == "table",
+                MetaAssetTagBinding.source == "rule",
+                MetaAssetTagBinding.asset_id.in_(scope_ids),
+            )
+        ).rowcount or 0)
+
+        # human 已覆盖的敏感表不重建 rule（同一 (tag,asset) 唯一约束）
+        human_ids = set(self.db.execute(
+            select(MetaAssetTagBinding.asset_id).where(
+                MetaAssetTagBinding.tenant_id == self.tenant_id,
+                MetaAssetTagBinding.tag_id == tag.id,
+                MetaAssetTagBinding.asset_kind == "table",
+                MetaAssetTagBinding.source == "human",
+                MetaAssetTagBinding.asset_id.in_(sensitive_ids or [-1]),
+            )
+        ).scalars().all())
+
+        bound = 0
+        for tid in sorted(sensitive_ids):
+            if tid in human_ids:
+                continue
+            self.db.add(MetaAssetTagBinding(
+                tenant_id=self.tenant_id, tag_id=tag.id, asset_kind="table",
+                asset_id=tid, source="rule",
+            ))
+            bound += 1
+        self.db.flush()
+        return {"tag": tag.code, "bound": bound, "removed": removed}
