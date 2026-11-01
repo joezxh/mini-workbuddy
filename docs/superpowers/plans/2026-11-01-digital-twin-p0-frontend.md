@@ -1535,6 +1535,8 @@ git commit -m "docs(twin): plan2 closeout - main spec corrections C2/C3/C4/C5 an
 2. **D-02｜AccessListResp 键名预写有出入**（Step 7 注/Step 8 核对点）：后端 `twin_access_service.list_requests()` 实际返回 `{incoming, outgoing, incoming_pending}`，非计划暂写的 `pending_count`。处置：按裁决永远改前端类型，`types/twin.d.ts` 已按逐字实键落定。
 3. **D-03｜Step 8 vue-tsc 基线脏**：仓库存量已有大量无关错误（audioDsp/assistant/context/kms 等），「Expected: 无新增错误」无法直接判读。处置：判据改为「twin 相关错误 = 0」（`Select-String 'twin'` 计数），实测 0，达标。
 4. **D-04｜Step 9 守卫命令形态 + 文件粒度暂存污染**：① 计划写 `git diff HEAD~1 --stat`，实际对比的是工作树（含并行未提交改动，报 20 文件）；守卫应使用 `git diff HEAD~1 HEAD --stat`（实报恰 4 文件）。② 即便提交粒度正确，`git add docs/sql/menu_knowledge_governance.sql` 仍以整个文件入暂存，连带提交了并行特性预先存在于工作区的 2406「数据资产」行、2408「推演沙盘」行与授权末界 `2407→2408`。未拆分（共享脏工作区既有困境，拆分反会破坏对方编辑现场）；后续任务凡碰他人并行在飞的文件，守卫一律用 `HEAD~1 HEAD` 形态并在提交信息注明连带范围。
+5. **D-05｜Task 1 步骤内部矛盾（测试 vs 实现）**：Step 1 测试钉 T8/runPublished 缺省发体 `{}`，Step 3 实现却发 `{ params: params ?? {} }`（永远带 params 键），直接执行必红。后端 `Optional[DataBody]` 两种体均合法，以测试为准：实现改为 `params ? { params } : {}`（loadPageData/runPublished 两处）。
+6. **D-06｜Task 1 mock 键名核对点（注 1 命中）**：`utils/request.ts:106-126` 实际导出 `get/post/put/delete/patch`，无 `del`；Step 1 测试的 mock 工厂按注 1 改为 `delete: del`，实现体本就用 `request.delete/patch`，无需调整。
 
 ---
 
