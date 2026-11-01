@@ -48,6 +48,7 @@ class DataSourceCreate(BaseModel):
     charset: str = "utf8mb4"
     is_default: bool = False
     config: Optional[dict] = Field(default=None, description="类型特有参数（dbSchema/mode/timeout 等，禁含凭据）")
+    external_type: Optional[str] = Field(default=None, description="资产粗分类（AF-01）；缺省按 source_type 矩阵派生")
 
 
 class DataSourceUpdate(BaseModel):
@@ -61,6 +62,7 @@ class DataSourceUpdate(BaseModel):
     is_default: Optional[bool] = None
     status: Optional[str] = None
     config: Optional[dict] = Field(default=None, description="整体替换类型特有参数；缺省=不改")
+    external_type: Optional[str] = Field(default=None, description="资产粗分类；缺省=不改（非空才重派生）")
 
 
 class SourceTestRequest(BaseModel):
@@ -94,6 +96,7 @@ def create_source(
             is_default=body.is_default,
             creator_id=getattr(current_user, "user_id", None),
             config=body.config,
+            external_type=body.external_type,
         )
         db.commit()
     except ValueError as exc:
@@ -140,7 +143,8 @@ def update_source(
         obj = svc.update(
             source_id,
             updater_id=getattr(current_user, "user_id", None),
-            **body.model_dump(),
+            # exclude_unset：未传=不改（external_type 未传=保持派生值），显式 null 仍不改
+            **body.model_dump(exclude_unset=True),
         )
         db.commit()
     except KeyError:

@@ -30,7 +30,7 @@ SUPPORTED_SOURCE_TYPES = tuple(st.builtin_types())  # 内置种子（兼容旧�
 
 _UPDATABLE_FIELDS = (
     "name", "host", "port", "username", "database", "charset", "config_json",
-    "is_default", "status", "updater_id",
+    "is_default", "status", "updater_id", "external_type",
 )
 
 #: config_json 中禁止出现的键（凭据必须走 password 字段加密链路）
@@ -122,6 +122,16 @@ class DataSourceService:
                 raise ValueError(f"config 不允许包含凭据字段 {key!r}，密码请填入 password 参数")
         return dict(config)
 
+    @staticmethod
+    def validate_external_type(external_type: str) -> str:
+        """资产粗分类枚举校验（AF-01）；非法值拒绝，合法值归一小写。"""
+        t = (external_type or "").lower().strip()
+        if t not in st.EXTERNAL_TYPE_CODES:
+            raise ValueError(
+                f"external_type {external_type!r} 非法，可选：{', '.join(st.EXTERNAL_TYPE_CODES)}"
+            )
+        return t
+
     def create(
         self,
         name: str,
@@ -135,6 +145,7 @@ class DataSourceService:
         is_default: bool = False,
         creator_id: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
+        external_type: Optional[str] = None,
     ) -> DataSource:
         t = self.validate_source_type(source_type, self.db, self.tenant_id)
         if not (name or "").strip():
@@ -152,6 +163,9 @@ class DataSourceService:
             tenant_id=self.tenant_id,
             name=name.strip(),
             source_type=t,
+            # 手改优先：显式传了用传值（限枚举）；未传按 source_type 矩阵派生（AF-01）
+            external_type=(self.validate_external_type(external_type)
+                           if external_type else st.external_type_for(t)),
             host=host,
             port=int(port),
             username=username,
@@ -198,6 +212,8 @@ class DataSourceService:
         """部分更新；password=None/空串表示不改；source_type 不可改。"""
         obj = self.get_or_404(source_id)
         fields.pop("source_type", None)
+        if fields.get("external_type"):  # 传了即手改（限枚举）；未传保持原值不重派生
+            fields["external_type"] = self.validate_external_type(fields["external_type"])
         if "password" in fields:
             pwd = fields.pop("password")
             if pwd:
@@ -246,6 +262,7 @@ class DataSourceService:
             "id": obj.id,
             "name": obj.name,
             "source_type": obj.source_type,
+            "external_type": obj.external_type,
             "host": obj.host,
             "port": obj.port,
             "username": obj.username,
