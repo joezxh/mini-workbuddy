@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAssetTree } from '../assetTree'
+import { buildAssetTree, groupBadge } from '../assetTree'
 
 /**
  * AF-01 分组树数据映射（纯函数，不触网/不依赖 i18n）：
@@ -59,5 +59,23 @@ describe('buildAssetTree（AF-01）', () => {
     const tree = buildAssetTree(GROUPS, id)
     const wh = tree[0].children!.find((g) => g.key === 'type:warehouse')!
     expect(wh.children![0].title).toBe('CH 集群 [3]')
+  })
+})
+
+describe('groupBadge + 树节点字段（AF-01 视觉）', () => {
+  it('9 组映射 + 未知码回落前两位大写', () => {
+    expect(groupBadge('rdbms')).toBe('RL')
+    expect(groupBadge('warehouse')).toBe('WH')
+    expect(groupBadge('saas')).toBe('AP')
+    expect(groupBadge('foo')).toBe('FO')
+  })
+  it('组节点带 badge/label/count，源节点带 count 药丸值', () => {
+    const tree = buildAssetTree(GROUPS, id)
+    const wh = tree[0].children!.find((g) => g.key === 'type:warehouse')!
+    expect(wh.badge).toBe('WH')
+    expect(wh.label).toBe('数仓 / 大数据')
+    expect(wh.count).toBe(3)
+    expect(wh.children![0].count).toBe(3)
+    expect(wh.children![0].label).toBe('CH 集群')
   })
 })

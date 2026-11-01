@@ -10,9 +10,15 @@
         @select="onSelect"
       >
         <template #title="node">
-          <span v-if="node.dotClass !== undefined" class="tn">
+          <span v-if="node.badge" class="tg-h">
+            <span class="ic">{{ node.badge }}</span>
+            <span class="nm">{{ node.label ?? node.title }}</span>
+            <span class="ct">{{ node.count ?? 0 }}</span>
+          </span>
+          <span v-else-if="node.dotClass !== undefined" class="tn">
             <span :class="['dotk', node.dotClass]" />
-            <span class="nm">{{ node.title }}</span>
+            <span class="nm">{{ node.label ?? node.title }}</span>
+            <span v-if="node.count != null" class="cnt">{{ node.count }}</span>
           </span>
           <span v-else>{{ node.title }}</span>
         </template>
@@ -93,5 +99,34 @@ defineExpose({ reload })
 }
 .dotk.off {
   background: #d9d9d9;
+}
+.tg-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.tg-h .ic {
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  background: #e8edf5;
+  color: #646a73;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-family: var(--mono, monospace);
+}
+.tg-h .ct,
+.tn .cnt {
+  font-size: 10px;
+  background: #eceff4;
+  color: #646a73;
+  border-radius: 9px;
+  padding: 0 6px;
+  font-family: var(--mono, monospace);
+}
+.tg-h .nm {
+  font-weight: 600;
 }
 </style>

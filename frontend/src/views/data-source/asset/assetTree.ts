@@ -12,6 +12,9 @@
 export interface AssetTreeNode {
   key: string
   title: string
+  label?: string
+  count?: number | null
+  badge?: string
   selectable: boolean
   disabled?: boolean
   isLeaf?: boolean
@@ -24,6 +27,16 @@ export interface AssetTreeNode {
   empty?: boolean
 }
 
+const BADGES: Record<string, string> = {
+  rdbms: 'RL', tsdb: 'TS', warehouse: 'WH', graph: 'GR', kv: 'KV',
+  vector: 'VC', search: 'SE', file: 'FS', saas: 'AP',
+}
+
+/** external_type → 字母徽标（对齐原型 9 组；未知码回落前两位大写） */
+export function groupBadge(code: string): string {
+  return BADGES[code] || (code || '').slice(0, 2).toUpperCase()
+}
+
 export function buildAssetTree(
   groups: any[],
   tr: (s: string) => string = (s) => s,
@@ -32,6 +45,8 @@ export function buildAssetTree(
     const kids: AssetTreeNode[] = (g.children || []).map((c: any) => ({
       key: `source:${c.id}`,
       title: `${c.label}${c.count != null ? ` [${c.count}]` : ''}`,
+      label: c.label,
+      count: c.count ?? null,
       selectable: true,
       isLeaf: true,
       status: c.status,
@@ -40,6 +55,9 @@ export function buildAssetTree(
     return {
       key: `type:${g.code}`,
       title: `${g.label}（${g.count ?? 0}）`,
+      label: g.label,
+      count: g.count ?? 0,
+      badge: groupBadge(g.code),
       selectable: false,
       children: kids.length
         ? kids
