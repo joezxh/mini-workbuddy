@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
 from app.models.sys.sys_user import SysUser
+from app.services.sandbox.sandbox_element_service import SandboxElementService
 from app.services.sandbox.sandbox_scene_service import SandboxSceneService
 
 router = APIRouter(tags=["推演沙盘 沙箱域"])
@@ -40,6 +41,22 @@ class SceneCreate(BaseModel):
 class ScenePatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     exec_mode: Optional[str] = None
+
+
+class ElementUpsert(BaseModel):
+    kind: str
+    code: str = Field(..., min_length=1, max_length=64)
+    label: Optional[str] = Field(default=None, max_length=200)
+    from_ref: Optional[str] = None
+    to_ref: Optional[str] = None
+    condition_expr_json: Optional[dict] = None
+    effect_expr_json: Optional[dict] = None
+    activation_tick: Optional[int] = None
+    confidence: Optional[float] = None
+
+
+class ElementReview(BaseModel):
+    decision: str = Field(..., pattern="^(accept|reject)$")
 
 
 # --------------------------------------------------------------------- S1–S5
@@ -78,3 +95,46 @@ def patch_scene(scene_id: int, body: ScenePatch, db: Session = Depends(get_db),
                 user: SysUser = Depends(get_current_user)):
     return SandboxSceneService(db, _tenant(user)).patch_scene(
         scene_id, name=body.name, exec_mode=body.exec_mode)
+
+
+# --------------------------------------------------------------------- S13–S15
+
+@router.get("/ontologies/sandbox/scenes/{scene_id}/elements")
+def list_elements(scene_id: int, kind: Optional[str] = Query(default=None),
+                  status: Optional[str] = Query(default=None),
+                  db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxElementService(db, _tenant(user)).list_elements(
+        scene_id, kind=kind, status=status)
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/elements", status_code=201)
+def create_element(scene_id: int, body: ElementUpsert, db: Session = Depends(get_db),
+                   user: SysUser = Depends(get_current_user)):
+    return SandboxElementService(db, _tenant(user)).upsert_element(
+        scene_id, body.model_dump(), origin="human", creator_id=getattr(user, "user_id", None))
+
+
+@router.post("/ontologies/sandbox/scenes/{scene_id}/elements/llm-draft")
+def draft_elements(scene_id: int, model_id: Optional[int] = Query(default=None),
+                   db: Session = Depends(get_db), user: SysUser = Depends(get_current_user)):
+    return SandboxElementService(db, _tenant(user)).draft_llm(scene_id, model_id=model_id)
+
+
+@router.put("/ontologies/sandbox/elements/{element_id}")
+def update_element(element_id: int, body: ElementUpsert, db: Session = Depends(get_db),
+                   user: SysUser = Depends(get_current_user)):
+    return SandboxElementService(db, _tenant(user)).update_element(
+        element_id, body.model_dump(exclude_unset=True))
+
+
+@router.delete("/ontologies/sandbox/elements/{element_id}", status_code=204)
+def delete_element(element_id: int, db: Session = Depends(get_db),
+                   user: SysUser = Depends(get_current_user)):
+    SandboxElementService(db, _tenant(user)).delete_element(element_id)
+    return Response(status_code=204)
+
+
+@router.post("/ontologies/sandbox/elements/{element_id}/review")
+def review_element(element_id: int, body: ElementReview, db: Session = Depends(get_db),
+                   user: SysUser = Depends(get_current_user)):
+    return SandboxElementService(db, _tenant(user)).review_element(element_id, body.decision)
