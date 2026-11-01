@@ -70,6 +70,17 @@ ASSISTANT_INTENT_UNSUPPORTED = "ASSISTANT_INTENT_UNSUPPORTED"
 ASSISTANT_BUILD_PREVIEW_STALE = "ASSISTANT_BUILD_PREVIEW_STALE"
 ASSISTANT_BUILD_EMPTY = "ASSISTANT_BUILD_EMPTY"
 
+# --- 推演沙盘沙箱域（spec 2026-11-01-simulation-sandbox-design.md §4.2；命名逐字一致）---
+SCENE_NOT_FOUND = "SCENE_NOT_FOUND"                        # 场景不存在/跨租户
+ONTOLOGY_NOT_PUBLISHED = "ONTOLOGY_NOT_PUBLISHED"          # 世界来源未发布或无 enabled 应用登记（钉版校验）
+CLONE_LIMIT_EXCEEDED = "CLONE_LIMIT_EXCEEDED"              # 克隆行数超上限
+CHECKPOINT_LIMIT = "CHECKPOINT_LIMIT"                      # 检查点场景级合计超 5
+GATE_DENIED_MASKED = "GATE_DENIED_MASKED"                  # 脱敏目标禁止施加行动
+GATE_DENIED_MODE = "GATE_DENIED_MODE"                      # replay 只读模式拒绝写
+ELEMENT_NOT_ADOPTED = "ELEMENT_NOT_ADOPTED"                # element 未 accepted 不参与求值
+ACTION_TEMPLATE_DISABLED = "ACTION_TEMPLATE_DISABLED"      # 行动模板 disabled
+CONFIRM_EXPIRED = "CONFIRM_EXPIRED"                        # stepwise 确认令牌超时
+
 
 def register_api_error_handler(app: FastAPI) -> None:
     """注册 :class:`ApiError` 处理器：输出顶层 ``{code, message, detail?}``。

@@ -1353,3 +1353,11 @@ def infer_relations(
 from app.routers.ontology.ontology import router as ontology_router  # noqa: E402
 
 router.include_router(ontology_router)
+
+# ---------------------------------------------------------------------------
+# 推演沙盘沙箱域子路由（2026-11-01）：相对路径 /ontologies/sandbox/... 挂到本 router
+# 的 /api/v1/dataops 前缀下，与 ontology_router 同一单点挂载纪律。
+# ---------------------------------------------------------------------------
+from app.routers.sandbox.sandbox import router as sandbox_router  # noqa: E402
+
+router.include_router(sandbox_router)
