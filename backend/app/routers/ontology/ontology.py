@@ -189,6 +189,7 @@ class BuildJobCreate(BaseModel):
 
 
 def _default_idem_key(ontology_id: int, scope: dict, mode: str) -> str:
+    # scope["tables"] 入键前已由路由展开（tags/catalog 模式防同表集双任务，§3.3）
     tables = sorted(scope.get("tables") or [])
     parts = f"{ontology_id}|{mode}|{scope.get('source_id')}|{';'.join(tables)}|{date.today().isoformat()}"
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:64]
@@ -209,7 +210,14 @@ def create_build_job(
     current_user: SysUser = Depends(get_current_user),
 ) -> JSONResponse:
     svc = OntologyBuildService(db, _require_tenant_id(current_user))
-    idem = body.idempotency_key or _default_idem_key(ontology_id, body.scope, body.mode)
+    if body.idempotency_key:
+        idem = body.idempotency_key
+    else:
+        # 展开防御（§3.3）：非 tables 模式先解析为表名列表再入键；tables 模式原样不额外查询
+        scope_for_key = dict(body.scope)
+        if scope_for_key.get("mode", "tables") != "tables":
+            scope_for_key["tables"] = svc.resolve_scope_tables(body.scope)
+        idem = _default_idem_key(ontology_id, scope_for_key, body.mode)
     job, created = svc.create_build_job(
         ontology_id, mode=body.mode, scope=body.scope, idempotency_key=idem
     )

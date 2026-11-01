@@ -346,6 +346,10 @@ class OntologyBuildService:
             job.duration_ms = int((time.monotonic() - t0) * 1000)
             self.db.commit()
 
+    def resolve_scope_tables(self, scope: dict) -> List[str]:
+        """对外展开：任意模式 scope → 排序表名列表（默认幂等键防双任务, spec §3.3）。"""
+        return sorted({t.table_name for t in self._resolve_scope(scope)})
+
     def _resolve_scope(self, scope: dict) -> List[MetaTable]:
         """三种圈定入口归一为 MetaTable 列表（§4.7）：tables / tags / catalog。"""
         source_id = scope.get("source_id")
