@@ -19,6 +19,7 @@ export const useTwinStore = defineStore('twin', () => {
   const loadingPage = ref(false)
   const accessRequests = ref<AccessListResp | null>(null)
   const publishInfo = ref<PublishInfo | null>(null)
+  const collectedAt = ref<string | null>(null)                  // T8 回体 collected_at（statusbar 新鲜度）
   const aiDraft = ref<[]>([])                              // D1：占位，无端点
 
   let timer: ReturnType<typeof setInterval> | null = null
@@ -61,6 +62,7 @@ export const useTwinStore = defineStore('twin', () => {
       const next: Record<number, WidgetDatum> = {}
       for (const it of resp.items) next[it.widget_id] = it
       pageData.value = next
+      collectedAt.value = resp.collected_at ?? null
       applyRefreshCfg(resp.refresh)
     } finally { loadingPage.value = false }
   }
@@ -84,7 +86,7 @@ export const useTwinStore = defineStore('twin', () => {
   async function reject(id: number) { await api.rejectAccessRequest(id); await loadRequests() }
 
   return { cards, activeCardId, cardDetail, pages, activePageId, widgets, pageData, mode,
-           loadingPage, accessRequests, publishInfo, aiDraft, intervalMs,
+           loadingPage, accessRequests, publishInfo, collectedAt, aiDraft, intervalMs,
            applyRefreshCfg, startScheduler, stopScheduler, onVisibility,
            loadCards, openCard, selectPage, refreshPage, retryWidget, setMode,
            publish, unpublish, loadRequests, requestAccess, approve, reject }

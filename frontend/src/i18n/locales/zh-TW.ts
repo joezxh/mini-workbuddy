@@ -273,6 +273,7 @@ export default {
       assistant: 'AI 助理',
       skills: '技能管理',
       wiki: '知識庫 Wiki',
+      meeting: '視訊會議',
       admin: '管理後台',
       agentTeam: '智能體團隊',
       // 管理控制台菜单（sys_menu，i18n_key = sys.menu.<menuKey>）
@@ -2897,6 +2898,9 @@ export default {
       externalKb: '外部知識庫',
       ontology: '本體',
       unified: '工作台',
+      dataAsset: '資料資產',
+      simulation: '推演沙盤',
+      twin: '孿生應用',
       private: {
         knowledge: 'wiki知識庫',
       },

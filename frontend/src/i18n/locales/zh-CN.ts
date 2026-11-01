@@ -278,6 +278,7 @@ export default {
       assistant: 'AI 助理',
       skills: '技能管理',
       wiki: '知识库 Wiki',
+      meeting: '视频会议',
       admin: '管理后台',
       agentTeam: '智能体团队',
       // 管理控制台菜单（sys_menu，i18n_key = sys.menu.<menuKey>）
@@ -2917,6 +2918,9 @@ export default {
       externalKb: '外部知识库',
       ontology: '本体',
       unified: '工作台',
+      dataAsset: '数据资产',
+      simulation: '推演沙盘',
+      twin: '孪生应用',
       private: {
         knowledge: 'wiki 知识库',
       },

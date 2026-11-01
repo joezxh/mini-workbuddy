@@ -25,7 +25,12 @@ import TeamEditor from '@/views/admin/agent-team/TeamEditor.vue'
 import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 // 知识治理（数据源 / 知识库 / 外部知识库 / 本体）
 import DataSourcePanel from '@/views/data-source/DataSourcePanel.vue'
+import DataAssetPanel from '@/views/data-source/DataAssetPanel.vue'
 import OntologyWorkspace from '@/views/data-source/ontology/OntologyWorkspace.vue'
+// 推演沙盘（沙箱域 S1–S21）：sys_menu 2408 (/admin/simulation)，与真实路由 /admin/simulation 共用同一组件
+import SimulationSandbox from '@/views/sandbox/SimulationSandbox.vue'
+// 孪生应用（Plan 2）：sys_menu 2407 (/admin/digital-twin)，与真实路由 /admin/digital-twin 共用同一组件
+import TwinWorkspace from '@/views/twin/TwinWorkspace.vue'
 import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
 import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）
@@ -66,9 +71,13 @@ export const componentMap: Record<string, Component> = {
   'workflow-management': markRaw(WorkflowManagement),
   // 知识治理（menuKey 与 sys_menu.path 末段一致）
   'kg-data-source': markRaw(DataSourcePanel),
+  // 数据资产目录（AF-01~AF-08）：sys_menu 2406 (/admin/data-asset)，与真实路由 /admin/data-asset 共用同一组件
+  'data-asset': markRaw(DataAssetPanel),
   // 本体工作台：sys_menu 2405 (/admin/kg-ontology)。与 DataSourcePanel 的「本体工作台」页签共用同一组件，
   // 菜单直达时以独立 Tab 全量渲染（OntologyWorkspace 自带选择器与内部页签，不依赖外层壳）。
   'kg-ontology': markRaw(OntologyWorkspace),
+  // 推演沙盘：忠实移植 ontology-simulation-sandbox-preview.html 原型，接沙箱域真实 API
+  'simulation': markRaw(SimulationSandbox),
   'kg-kb': markRaw(KnowledgeBasePanel),
   'kg-external-kb': markRaw(ExternalKbPanel),
   'kg-private-kb': markRaw(WikiIndex),
@@ -79,6 +88,8 @@ export const componentMap: Record<string, Component> = {
   'voice-models': markRaw(VoiceModelConfig),
   'voice-agents': markRaw(AgentConfigPanel),
   'voice-tool-policy': markRaw(ToolPolicyEditor),
+  // 孪生应用：sys_menu 2407 (/admin/digital-twin)，path 末段 = menuKey = i18n_key 末段
+  'digital-twin': markRaw(TwinWorkspace),
 }
 
 /**

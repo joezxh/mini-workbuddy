@@ -273,6 +273,7 @@ export default {
       assistant: 'AIアシスタント',
       skills: 'スキル',
       wiki: 'ナレッジWiki',
+      meeting: 'ビデオ会議',
       admin: '管理',
       agentTeam: 'エージェントチーム',
       // 管理控制台菜单（sys_menu，i18n_key = sys.menu.<menuKey>）
@@ -2880,6 +2881,9 @@ export default {
       externalKb: '外部ナレッジベース',
       ontology: 'オントロジー',
       unified: 'ワークベンチ',
+      dataAsset: 'データ資産',
+      simulation: 'シミュレーション',
+      twin: 'デジタルツイン',
       private: {
         knowledge: 'Wikiナレッジベース',
       },

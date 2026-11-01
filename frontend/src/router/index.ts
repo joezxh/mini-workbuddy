@@ -97,12 +97,40 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/workflow/WorkflowManagement.vue'),
         meta: { title: '工作流管理', icon: 'ApiOutlined', requiresAdmin: true }
       },
+      // ── 数据资产目录（AF-01~AF-08）：独立路由，等价于 /admin?tab=data-asset 的外壳 Tab ──
+      {
+        path: 'admin/data-asset',
+        name: 'DataAsset',
+        component: () => import('@/views/data-source/DataAssetPanel.vue'),
+        meta: { title: '数据资产', icon: 'DatabaseOutlined', requiresAdmin: true }
+      },
+      // ── 推演沙盘（沙箱域 S1–S21）：独立路由，等价于 /admin?tab=simulation 的外壳 Tab ──
+      {
+        path: 'admin/simulation',
+        name: 'SimulationSandbox',
+        component: () => import('@/views/sandbox/SimulationSandbox.vue'),
+        meta: { title: '推演沙盘', icon: 'NodeIndexOutlined', requiresAdmin: true }
+      },
+      // ── 孪生应用（Plan 2）：sys_menu 2407 (/admin/digital-twin)，与沙盘同构双挂载 ──
+      {
+        path: 'admin/digital-twin',
+        name: 'DigitalTwin',
+        component: () => import('@/views/twin/TwinWorkspace.vue'),
+        meta: { title: '孪生应用', icon: 'DeploymentUnitOutlined', requiresAdmin: true }
+      },
       {
         // 调解语音 RTC 演示（迁移自 risk_control）
         path: 'duplex/voice-demo',
         name: 'DuplexVoiceDemo',
         component: () => import('@/views/duplex/VoiceDemo.vue'),
         meta: { title: '调解语音 RTC 演示' }
+      },
+      {
+        // 视频会议（LiveKit 自建 SFU，docs/LIVEKIT_SELF_HOSTED_DEPLOYMENT_GUIDE.md）
+        path: 'meeting',
+        name: 'MeetingRoom',
+        component: () => import('@/views/meeting/MeetingRoom.vue'),
+        meta: { title: '视频会议', icon: 'VideoCameraOutlined' }
       }
     ]
   },

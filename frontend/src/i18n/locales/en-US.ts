@@ -273,6 +273,7 @@ export default {
       assistant: 'AI Assistant',
       skills: 'Skills',
       wiki: 'Knowledge Wiki',
+      meeting: 'Video Meeting',
       admin: 'Administration',
       agentTeam: 'Agent Teams',
       // 管理控制台菜单（sys_menu，i18n_key = sys.menu.<menuKey>）
@@ -2899,6 +2900,9 @@ export default {
       externalKb: 'External Knowledge Base',
       ontology: 'Ontology',
       unified: 'Workbench',
+      dataAsset: 'Data Assets',
+      simulation: 'Simulation Sandbox',
+      twin: 'Digital Twin',
       private: {
         knowledge: 'Wiki Knowledge Base',
       },
