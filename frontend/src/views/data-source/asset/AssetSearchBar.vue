@@ -18,9 +18,19 @@
       allow-clear
       @change="emitSearch"
     />
-    <a-select v-model:value="kind" style="width: 120px" @change="emitSearch">
+    <a-select v-model:value="kind" style="width: 100px" @change="emitSearch">
       <a-select-option value="table">{{ t2('表') }}</a-select-option>
       <a-select-option value="column">{{ t2('字段') }}</a-select-option>
+    </a-select>
+    <a-select v-model:value="tableType" style="width: 120px" @change="emitSearch">
+      <a-select-option value="all">{{ t2('全部对象') }}</a-select-option>
+      <a-select-option value="BASE TABLE">{{ t2('仅表') }}</a-select-option>
+      <a-select-option value="VIEW">{{ t2('仅视图') }}</a-select-option>
+    </a-select>
+    <a-select v-model:value="sort" style="width: 130px" @change="emitSearch">
+      <a-select-option value="score">{{ t2('相关度') }}</a-select-option>
+      <a-select-option value="updated">{{ t2('更新时间') }}</a-select-option>
+      <a-select-option value="rows">{{ t2('行数') }}</a-select-option>
     </a-select>
     <a-button type="primary" :loading="loading" @click="emitSearch">{{ t2('查询') }}</a-button>
     <a-button @click="onReset">{{ t2('重置') }}</a-button>
@@ -34,8 +44,22 @@
         <a-form-item :label="t2('名称')" required>
           <a-input v-model:value="tagForm.name" />
         </a-form-item>
+        <a-form-item :label="t2('类别 tag_kind')" required>
+          <a-select v-model:value="tagForm.tag_kind" style="width: 100%">
+            <a-select-option v-for="k in TAG_KINDS" :key="k" :value="k">{{ kindLabel(k) }}</a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item :label="t2('颜色')">
-          <a-input v-model:value="tagForm.color" placeholder="#3371fc" />
+          <div class="asset-search__swatches">
+            <span
+              v-for="c in COLORS"
+              :key="c"
+              class="asset-search__swatch"
+              :class="{ on: tagForm.color === c }"
+              :style="{ background: c }"
+              @click="tagForm.color = c"
+            />
+          </div>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -44,38 +68,52 @@
 
 <script setup lang="ts">
 /**
- * 资产检索条（AF-02/03）：全文检索 + 重置 + 标签多选筛选 + 新建标签。
- * 通过 emit `search` 把 {kw, tag_ids, kind} 交给父级驱动 E28 请求。
+ * 资产检索条（AF-02/03）：全文检索 + 标签筛选 + 对象类型/排序下拉 + 新建标签（tag_kind 修复 + 色板）。
+ * 载荷归一委托纯函数 :func:`buildSearchPayload`/`buildTagPayload`；emit `search` 交父级驱动 E28。
  */
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { createAssetTag, listAssetTags } from '@/api/dataops'
 import { t2 } from '../ontology/ontologyText'
+import { COLORS, TAG_KINDS, buildSearchPayload, buildTagPayload } from './assetSearch'
 
 const emit = defineEmits<{
-  (e: 'search', payload: { kw: string; tag_ids: number[]; kind: string }): void
+  (e: 'search', payload: {
+    kw: string; tag_ids: number[]; kind: string
+    table_type?: string; sort: string; size: number
+  }): void
 }>()
 
 defineProps<{ loading?: boolean }>()
 
 const kw = ref('')
 const kind = ref('table')
+const tableType = ref('all')
+const sort = ref('score')
 const tagIds = ref<number[]>([])
 const tagOptions = ref<{ label: string; value: number }[]>([])
 const loadingTags = ref(false)
 
 const tagOpen = ref(false)
 const creating = ref(false)
-const tagForm = reactive({ code: '', name: '', color: '#3371fc' })
+const tagForm = reactive({ code: '', name: '', color: COLORS[0], tag_kind: 'custom' })
+
+function kindLabel(k: string) {
+  return { biz: 'biz 主题', security: 'security 安全', quality: 'quality 质量', custom: 'custom 自定义' }[k] || k
+}
 
 function emitSearch() {
-  emit('search', { kw: kw.value.trim(), tag_ids: tagIds.value, kind: kind.value })
+  emit('search', buildSearchPayload({
+    kw: kw.value, tag_ids: tagIds.value, kind: kind.value, table_type: tableType.value, sort: sort.value,
+  }))
 }
 
 function onReset() {
   kw.value = ''
   tagIds.value = []
   kind.value = 'table'
+  tableType.value = 'all'
+  sort.value = 'score'
   emitSearch()
 }
 
@@ -93,18 +131,20 @@ async function loadTags() {
 function openCreateTag() {
   tagForm.code = ''
   tagForm.name = ''
-  tagForm.color = '#3371fc'
+  tagForm.color = COLORS[0]
+  tagForm.tag_kind = 'custom'
   tagOpen.value = true
 }
 
 async function doCreateTag() {
-  if (!tagForm.code || !tagForm.name) {
+  const payload = buildTagPayload(tagForm)
+  if (!payload.code || !payload.name) {
     message.warning(t2('code 与名称必填'))
     return
   }
   creating.value = true
   try {
-    await createAssetTag({ ...tagForm, tag_kind: 'table' })
+    await createAssetTag(payload)
     message.success(t2('标签已创建'))
     tagOpen.value = false
     await loadTags()
@@ -125,5 +165,20 @@ defineExpose({ reloadTags: loadTags })
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  &__swatches {
+    display: flex;
+    gap: 7px;
+  }
+  &__swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    &.on {
+      border-color: var(--fg, #333);
+      transform: scale(1.12);
+    }
+  }
 }
 </style>
