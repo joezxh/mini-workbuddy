@@ -2990,7 +2990,7 @@ git commit -m "refactor(core): lift TTLCache out of audit middleware into app.co
 - Consumes: Task 1 的 `TwinCard/TwinPage/TwinWidget/TwinCardShare`、`MetaOntologyQuery`（绑定校验直读表行）、`MetaOntology`/`MetaOntologyVersion`（钉版校验与 `stale`）、`build_user_context()`（取 `role_codes`）
 - Produces: `TwinService(db, tenant_id, user_id, role_codes=())`；方法 `list_cards() -> dict[str, list[dict]]`、`get_card(int) -> dict`、`create_card(dict) -> dict`、`update_card(int, dict) -> dict`、`delete_card(int) -> None`、`create_from_template(str, str) -> dict`、`list_pages(int) -> list[dict]`、`create_page(int, str, dict) -> dict`、`update_page(int, dict) -> dict`、`delete_page(int) -> None`、`reorder_pages(int, list[int]) -> list[dict]`、`list_widgets(int) -> list[dict]`、`add_widget(int, dict) -> dict`、`update_widget(int, dict) -> dict`、`delete_widget(int) -> None`、`save_layout(int, list[dict]) -> list[dict]`、`card_or_404(int) -> TwinCard`、`page_with_card(int) -> tuple[TwinPage, TwinCard]`；模块常量 `WIDGET_KEY_TO_SHAPES`、`TEMPLATES`、`GRID_W_ALLOWED`；`app.routers.twin.twin.router`（自带 `prefix="/api/v1/twins"`）
 
-- [ ] **Step 1: 补三个错误码**
+- [ ] **Step 1: 补五个错误码**（标题修正：Step 1 原文写“三个”，但代码块实际列了 5 个）
 
 在 `backend/app/core/api_error.py` 中 Task 4 追加的 `TWIN_WIDGET_NOT_FOUND` 之后插入：
 
@@ -3014,6 +3014,8 @@ TWIN_TENANT_REQUIRED = "TWIN_TENANT_REQUIRED"        # 登录用户无租户上�
 """编排层：结构、可见性分组与形状配对（spec §4.5 卡片三态、§5.2 第 3 闸、W5/W9）。"""
 import pytest
 from sqlalchemy import text
+from sqlalchemy.orm import Session  # 计划缺陷修正（执行时实测）：夹具注解 db: Session 需显式 import，
+                                    # 否则模块定义期就 NameError（注解在无 PEP 563 时是立即求值的）
 
 from tests.twin.conftest import TENANT_A, TENANT_B
 
@@ -3110,8 +3112,8 @@ def test_widget_shape_mismatch_rejected_with_readable_reason(twin_client_a, db, 
                      {"t": TENANT_A, "c": card_a}).scalar_one()
     qid = db.execute(text(
         "INSERT INTO onto_ontology_query (tenant_id, ontology_id, version, code, name, result_shape, "
-        "spec_json, verify_status, status) VALUES (:t,:o,1,'q_e','实体集','entity_set',"
-        "CAST('{\"objects\":[]}' AS jsonb),'verified','enabled') RETURNING id"),
+        "spec_json, compiled_sql, verify_status, status) VALUES (:t,:o,1,'q_e','实体集','entity_set',"
+        "CAST('{\"objects\":[]}' AS jsonb),'SELECT 1','verified','enabled') RETURNING id"),
         {"t": TENANT_A, "o": published_version["ontology_id"]}).scalar_one()
     db.commit()
     r = twin_client_a.post(f"/api/v1/twins/pages/{int(pid)}/widgets",
@@ -3129,8 +3131,8 @@ def test_widget_binding_must_match_card_ontology_and_version(twin_client_a, db, 
     other = ontology_factory()
     qid = db.execute(text(
         "INSERT INTO onto_ontology_query (tenant_id, ontology_id, version, code, name, result_shape, "
-        "spec_json, verify_status, status) VALUES (:t,:o,1,'q_x','跳本体','kpi',"
-        "CAST('{\"objects\":[]}' AS jsonb),'verified','enabled') RETURNING id"),
+        "spec_json, compiled_sql, verify_status, status) VALUES (:t,:o,1,'q_x','跳本体','kpi',"
+        "CAST('{\"objects\":[]}' AS jsonb),'SELECT 1','verified','enabled') RETURNING id"),
         {"t": TENANT_A, "o": other}).scalar_one()
     db.commit()
     r = twin_client_a.post(f"/api/v1/twins/pages/{int(pid)}/widgets",
@@ -3144,8 +3146,8 @@ def test_scene_widget_cannot_bind_query(twin_client_a, db, card_a, published_ver
                           "VALUES (:t,:c,'页',0) RETURNING id"), {"t": TENANT_A, "c": card_a}).scalar_one()
     qid = db.execute(text(
         "INSERT INTO onto_ontology_query (tenant_id, ontology_id, version, code, name, result_shape, "
-        "spec_json, verify_status, status) VALUES (:t,:o,1,'q_s','实体','entity_set',"
-        "CAST('{\"objects\":[]}' AS jsonb),'verified','enabled') RETURNING id"),
+        "spec_json, compiled_sql, verify_status, status) VALUES (:t,:o,1,'q_s','实体','entity_set',"
+        "CAST('{\"objects\":[]}' AS jsonb),'SELECT 1','verified','enabled') RETURNING id"),
         {"t": TENANT_A, "o": published_version["ontology_id"]}).scalar_one()
     db.commit()
     r = twin_client_a.post(f"/api/v1/twins/pages/{int(pid)}/widgets",
@@ -3272,8 +3274,14 @@ WIDGET_KEY_TO_SHAPES: Dict[str, Tuple[str, ...]] = {
     "scene3d": (),
 }
 
-# 离散栅格（P0 不做自由拖拽，spec §1.2）：w 只允许 3/6/12，且 x 必须是 w 的整数倍
-# 且不溢出 12 列——“拖不动到非法位”在服务端就成立，而不是靠前端按钮藏起来。
+# 离散栅格（P0 不做自由拖拽，spec §1.2）：w 只允许 3/6/12，且不得溢出 12 列——
+# “拖不动到非法位”在服务端就成立，而不是靠前端按钮藏起来。
+#
+# 原计划另要求「x 必须是 w 的整数倍」，实测**自相矛盾已删**（计划缺陷修正，2026-11-01）：
+# 内置模板 ops-line 自己的第二个组件就是 x=3/w=6（3+6=9，后再放 w=3 正好铺满 12 列），
+# 按该规则会被自己的 `_clean_grid()` 判成 TWIN_LAYOUT_INVALID，`from-template` 必然建卡失败。
+# 收益（限制对齐位）远小于它否决合法紧凑布局的代价，故闸门保留“离散宽度 + 不溢出 +
+# h 在范围内 + x/y 非负”，不再约束 x 与 w 的整除关系。
 GRID_W_ALLOWED = (3, 6, 12)
 GRID_H_RANGE = (1, 24)
 GRID_COLS = 12
@@ -3461,14 +3469,17 @@ class TwinService:
             oid = int(patch.get("ontology_id") or card.ontology_id)
             ver = int(patch.get("ontology_version") or card.ontology_version)
             self._require_published_version(oid, ver)
+        # 非法 runtime_state 必须在 setattr **之前**拒（计划缺陷修正：执行时实测）：
+        # 原序先赋值再校验，脏值已挂在 session 对象上；本次虽未 commit，但 SessionLocal
+        # 配了 expire_on_commit=False，同会话的后续 flush 会把它写进库并撞上 ck_twin_card_state。
+        if "runtime_state" in patch and patch["runtime_state"] not in ("draft", "live", "paused"):
+            raise ApiError(TWIN_LAYOUT_INVALID, "runtime_state 取值非法", 400,
+                           {"runtime_state": patch["runtime_state"]})
         allowed = {"name", "icon", "description", "scene_key", "runtime_state",
                    "ontology_id", "ontology_version"}
         for k, v in patch.items():
             if k in allowed:
                 setattr(card, k, v)
-        if "runtime_state" in patch and patch["runtime_state"] not in ("draft", "live", "paused"):
-            raise ApiError(TWIN_LAYOUT_INVALID, "runtime_state 取值非法", 400,
-                           {"runtime_state": patch["runtime_state"]})
         self._commit_unique_or_409()
         acc = self._access_of(card, self._my_shares(), self.user_id)
         return self._card_dict(card, acc, self._current_versions({int(card.ontology_id)}))
@@ -3630,6 +3641,10 @@ class TwinService:
             self.db.execute(TwinPage.__table__.update().where(TwinPage.id == pid)
                             .values(sort_order=idx))
         self.db.commit()
+        # Core 批量 UPDATE 不会同步 ORM identity map（上面 `select(TwinPage)` 已把行载入），
+        # 而 SessionLocal 是 `expire_on_commit=False`——不显式 expire 就会把内存里的旧 sort_order
+        # 当作重读结果返回（计划缺陷修正：执行时实测）。
+        self.db.expire_all()
         return self.list_pages(card_id)
 
     @staticmethod
@@ -3679,8 +3694,10 @@ class TwinService:
             bad["w"] = f"{w} 不在 {GRID_W_ALLOWED}"
         if not (GRID_H_RANGE[0] <= h <= GRID_H_RANGE[1]):
             bad["h"] = f"{h} 不在 {GRID_H_RANGE}"
-        if w in GRID_W_ALLOWED and (x % w != 0 or x + w > GRID_COLS):
-            bad["x"] = f"x={x} 与 w={w} 不满足「整倍且不出 12 列」"
+        if x < 0:
+            bad["x"] = f"{x} 不得为负"
+        elif x + w > GRID_COLS:
+            bad["x"] = f"x={x} 与 w={w} 溢出 {GRID_COLS} 列"
         if y < 0:
             bad["y"] = f"{y} 不得为负"
         if bad:
@@ -3799,6 +3816,10 @@ class TwinService:
             self.db.execute(TwinWidget.__table__.update().where(TwinWidget.id == wid)
                             .values(grid_json=grid))
         self.db.commit()
+        # 同 reorder_pages：校验期的 `widget_or_404()` 已把这些组件载入 identity map，
+        # 而 session 配了 `expire_on_commit=False`，不 expire 就会返回旧的栅格位。
+        # （本行由 `test_layout_batch_write_is_atomic` 实测拓出：缺它则 `w == 6` 而非 12。）
+        self.db.expire_all()
         return self.list_widgets(page_id)
 ```
 
@@ -4053,6 +4074,10 @@ Expected: PASS（12 passed）。失败时的排查序：
 3. `test_layout_batch_write_is_atomic` 第二条写入了 → 把校验和写库混在同一次循环里了（必须两阶段）；
 4. 405/404 路由找不到 → `router_registry` 条目没加，或 `router` 自身 prefix 被叠加了两次。
 
+> 执行时补记（2026-11-01）：Step 3 的实际红灯信号是 `ModuleNotFoundError: No module named 'app.routers.twin'`
+> 而非计划预期的 `'app.services.twin'`，因为 `tests/twin/conftest.py::build_client(with_twin=True)` 比服务更早 import；
+> 两者同一事实（目标模块不存在），红灯成立。
+
 Run: `.\.venv\Scripts\python.exe -c "import app.main; print('router load ok')"`
 Expected: 输出 `router load ok`，且日志无 `路由模块加载失败: app.routers.twin.twin`
 
@@ -4062,6 +4087,36 @@ Expected: 输出 `router load ok`，且日志无 `路由模块加载失败: app.
 git add backend/app/core/api_error.py backend/app/services/twin backend/app/routers/twin backend/app/core/router_registry.py backend/tests/twin/test_twin_crud.py
 git commit -m "feat(twin): card/page/widget orchestration with shape pairing gate"
 ```
+
+#### Task 6 执行记录（2026-11-01）
+
+实测结果：`tests/twin/test_twin_crud.py` **12 passed**；`import app.main` 输出 `router load ok`
+（路由注册 45 个成功 / 0 跳过，无 `路由模块加载失败`）；回归 `tests/twin` 20 passed、
+`tests/ontology` 79 passed、`tests/dataops` 127 passed / 10 skipped（均按目录分跑，原因见 Task 5 Step 6 注）。
+
+发现并修正的 5 处计划缺陷（代码已就地改定，本节只存目）：
+
+1. **测试文件缺 `from sqlalchemy.orm import Session`**——夹具签名 `db: Session` 在模块定义期即 NameError（无
+   `from __future__ import annotations` 时注解立即求值），整文件无法收集。
+2. **夹具的 `onto_ontology_query` INSERT 缺 `compiled_sql`**——绑定三验的顺序是「同本体+版本 → 已编译 → 形状」，
+   无产物会被 `QUERY_COMPILE_FAILED` 先拦，导致 `test_widget_shape_mismatch_...` 与
+   `test_scene_widget_cannot_bind_query` 拿不到预期的 `QUERY_SHAPE_MISMATCH`。修在**夹具侧**（补
+   `compiled_sql,'SELECT 1'`）而非放宽闸门：`verify_status='verified'` 而无产物在生产上不可能存在。
+3. **栅格规则「x 必须是 w 的整数倍」与内置模板自相矛盾**——ops-line 的 trend 就是 x=3/w=6，`from-template`
+   会被自家 `_clean_grid()` 拒掉。已删该约束，保留「离散宽度 + 不溢出 12 列 + h 范围 + x/y 非负」。
+4. **`save_layout` / `reorder_pages` 返回脏数据（真实生产缺陷，非仅测试）**——Core 批量 UPDATE 不同步
+   ORM identity map，而 `app/db/database.py:42` 的 `SessionLocal` 配了 `expire_on_commit=False`，
+   重读拿到旧值（由 `test_layout_batch_write_is_atomic` 抓出：`w == 6` 而非 12）。修法：commit 后
+   `self.db.expire_all()` 再重读。`reorder_pages` 同病（它先 `select(TwinPage)` 载入了行）但既有断言只看 id
+   序列以故未被发现。
+5. **`update_card` 先 `setattr` 后校验 `runtime_state`**——脏值会留在 session 上（同一
+   `expire_on_commit=False` 配位），同会话后续 flush 将撞上 `ck_twin_card_state`。已把校验提到赋值之前。
+
+另有两处文档修正：Step 1 标题写「三个错误码」但代码块列了 5 个（已改「五个」）；Step 3 的预期红灯
+`'app.services.twin'` 实际为 `'app.routers.twin'`（conftest 更早 import，同一事实）。
+
+未采纳的候选改造（留给后续）：`add_widget` 内两次 `self.db.commit()` 与 `_commit_unique_or_409()` 混用
+（组件表无唯一约束，所以不致错），不构成功能缺陷。
 
 ---
 

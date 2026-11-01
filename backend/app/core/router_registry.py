@@ -214,6 +214,11 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.duplex.voice.websocket_gateway", prefix=API_V1_PREFIX, tags=["调解语音"]),
     # admin_voice_config 自带 prefix /duplex/config，此处叠加 /api/v1/admin
     RouterSpec("app.routers.admin_voice_config", prefix=f"{API_V1_PREFIX}/admin", tags=["语音配置"]),
+
+    # --- 33. 孪生应用（自带完整 prefix /api/v1/twins，故此处不叠加）---
+    # Task 8 会在同一模块再加一条 attr="publish_router"（先例：app.routers.kb.kg 的
+    # router + build_router 两条目，:202/:204），本期先不声明尚未存在的 publish_router。
+    RouterSpec("app.routers.twin.twin", attr="router", tags=["孪生应用"]),
 ]
 
 
