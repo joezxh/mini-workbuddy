@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { app, BrowserWindow, Menu, shell, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, Menu, session, shell, ipcMain, screen } from 'electron'
 import type { AppConfig } from '../shared/ipc'
 import { IPC } from '../shared/ipc'
 import { getConfig, setConfig } from './config'
@@ -85,6 +85,20 @@ async function createWindow() {
   })
 
   mainWindow = win
+
+  // 视频会议（LiveKit）需要 getUserMedia：默认策略下 Electron 会拒绝媒体权限请求，
+  // 这里仅当请求来自本应用自身 origin（dev server / 内置静态服务器）时放行 media，
+  // 其余一律拒绝。必须在首次 getUserMedia 前注册，故在 loadURL 之前设置。
+  session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
+    let frameOrigin = ''
+    try {
+      frameOrigin = new URL(wc.url).origin
+    } catch {
+      frameOrigin = ''
+    }
+    const isSelf = !!origin && frameOrigin === origin
+    callback(permission === 'media' && isSelf)
+  })
 
   win.once('ready-to-show', () => {
     win.show()

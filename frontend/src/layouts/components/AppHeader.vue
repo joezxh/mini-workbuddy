@@ -86,6 +86,7 @@ const QUICK_NAV = [
   { path: '/dashboard', icon: 'DashboardOutlined', titleKey: 'sys.menu.dashboard' },
   { path: '/ai-assistant', icon: 'MessageOutlined', titleKey: 'sys.menu.assistant' },
   { path: '/wiki', icon: 'BookOutlined', titleKey: 'sys.menu.wiki' },
+  { path: '/meeting', icon: 'VideoCameraOutlined', titleKey: 'sys.menu.meeting' },
   { path: '/admin', icon: 'SettingOutlined', titleKey: 'sys.menu.admin' },
 ]
 

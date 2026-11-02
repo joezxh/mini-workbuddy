@@ -5,41 +5,53 @@
 #   <源镜像>            <目标名（相对 BASE_REGISTRY）>          [实际拉取地址]
 #
 # 第三列可选：当源镜像直连不可达时，指定走 proxy registry 或国内镜像。
-# 缺省时直接用第一列地址拉取。
+# 缺省时直接用第一列地址拉取。第一列始终是镜像的权威官方名，仅作记录。
 #
-# 当前环境已配置代理，全部镜像改为直连官方源拉取，故第三列均未启用。
-# （历史曾用第三方 Docker Hub 镜像加速器，拉取慢且易卡死，已全部移除。）
+# 2026-11 起（大陆环境无代理可依赖）：Docker Hub / ghcr.io 直连不可达，
+# 全部启用第三列国内前缀（DaoCloud 公共代理，2026-10 社区实测可用）：
+#   Docker Hub 镜像 → docker.m.daocloud.io/<完整路径，官方镜像含 library/>
+#   ghcr.io 镜像    → ghcr.m.daocloud.io/<原路径>
+# 备选前缀（DaoCloud 失效时全局替换即可）：
+#   docker.1ms.run / docker.xuanyuan.me（后者需注册，免费版不稳定）
+# 注：daemon.json 的 registry-mirrors 只接管 Docker Hub，
+#     对 ghcr.io 无效，故 ghcr 必须走第三列前缀改写。
 #
 # 目标名统一放在 base/ 命名空间下，业务 Dockerfile 全部只依赖这些地址。
 # =============================================================
 
 # ---------- NVIDIA CUDA ----------
-nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04    base/nvidia-cuda:12.8.1-cudnn-runtime-ubuntu24.04
-nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04      base/nvidia-cuda:12.4.1-cudnn-devel-ubuntu22.04
+nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04    base/nvidia-cuda:12.8.1-cudnn-runtime-ubuntu24.04    docker.m.daocloud.io/nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04
+nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04      base/nvidia-cuda:12.4.1-cudnn-devel-ubuntu22.04      docker.m.daocloud.io/nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # ---------- 语言运行时 ----------
-python:3.12-slim                                base/python:3.12-slim
-python:3.10-slim                                base/python:3.10-slim
-node:20-alpine                                  base/node:20-alpine
+python:3.12-slim                                base/python:3.12-slim                                docker.m.daocloud.io/library/python:3.12-slim
+python:3.10-slim                                base/python:3.10-slim                                docker.m.daocloud.io/library/python:3.10-slim
+node:20-alpine                                  base/node:20-alpine                                  docker.m.daocloud.io/library/node:20-alpine
 
 # ---------- Web / 代理 ----------
-nginx:alpine                                    base/nginx:alpine
+nginx:alpine                                    base/nginx:alpine                                    docker.m.daocloud.io/library/nginx:alpine
 
-# ---------- SQLBot 官方基础镜像（已在阿里云 Ao 公开仓储，可直连）----------
+# ---------- SQLBot 官方组件 ----------
+# 阿里云青岛仓库本身境内可达，不加前缀；Docker Hub 上的 dataease/sqlbot 走代理
 registry.cn-qingdao.aliyuncs.com/dataease/sqlbot-base:latest        base/sqlbot-base:latest
 registry.cn-qingdao.aliyuncs.com/dataease/sqlbot-python-pg:latest   base/sqlbot-python-pg:latest
-dataease/sqlbot:v1.10.1                                             base/sqlbot:v1.10.1
+dataease/sqlbot:v1.10.1                                             base/sqlbot:v1.10.1              docker.m.daocloud.io/dataease/sqlbot:v1.10.1
 
 # ---------- Dify 官方组件（remote-dify 直接用业务 tag，不改名）----------
-langgenius/dify-api:1.17.1                      dify-api:1.17.1
-langgenius/dify-web:1.17.1                      dify-web:1.17.1
-langgenius/dify-sandbox:0.2.15                  dify-sandbox:0.2.15
-langgenius/dify-plugin-daemon:0.6.10-local      dify-plugin-daemon:0.6.10-local
+langgenius/dify-api:1.17.1                      dify-api:1.17.1                      docker.m.daocloud.io/langgenius/dify-api:1.17.1
+langgenius/dify-web:1.17.1                      dify-web:1.17.1                      docker.m.daocloud.io/langgenius/dify-web:1.17.1
+langgenius/dify-sandbox:0.2.15                  dify-sandbox:0.2.15                  docker.m.daocloud.io/langgenius/dify-sandbox:0.2.15
+langgenius/dify-plugin-daemon:0.6.10-local      dify-plugin-daemon:0.6.10-local      docker.m.daocloud.io/langgenius/dify-plugin-daemon:0.6.10-local
 
-# ---------- llama.cpp GGUF 推理服务（speech-to-speech 可选内置 LLM）----------
-ghcr.io/ggml-org/llama.cpp:server-cuda          base/llama-cpp:server-cuda
+# ---------- llama.cpp GGUF 推理服务（speech-to-speech 可选内置 LLM，ghcr）----------
+ghcr.io/ggml-org/llama.cpp:server-cuda          base/llama-cpp:server-cuda           ghcr.m.daocloud.io/ggml-org/llama.cpp:server-cuda
 
 # ---------- 本地基础设施（docker-compose.infra.yml 依赖）----------
-pgvector/pgvector:pg17                          base/pgvector:pg17
-redis/redis-stack-server:7.4.0-v8-x86_64        base/redis-stack-server:7.4.0-v8-x86_64
-library/neo4j:5.26                              base/neo4j:5.26
+pgvector/pgvector:pg17                          base/pgvector:pg17                   docker.m.daocloud.io/pgvector/pgvector:pg17
+redis/redis-stack-server:7.4.0-v8-x86_64        base/redis-stack-server:7.4.0-v8-x86_64   docker.m.daocloud.io/redis/redis-stack-server:7.4.0-v8-x86_64
+library/neo4j:5.26                              base/neo4j:5.26                      docker.m.daocloud.io/library/neo4j:5.26
+
+# ---------- LiveKit 视频会议（docker/livekit 依赖，2026-11 新增）----------
+# 版本号已核实为 GitHub Releases 最新稳定版（server v1.13.11 / egress v1.15.0）
+livekit/livekit-server:v1.13.11                 base/livekit-server:v1.13.11         docker.m.daocloud.io/livekit/livekit-server:v1.13.11
+livekit/egress:v1.15.0                          base/livekit-egress:v1.15.0          docker.m.daocloud.io/livekit/egress:v1.15.0

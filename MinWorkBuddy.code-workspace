@@ -17,6 +17,12 @@
 		},
 		{
 			"path": "../github/EvoOntology"
+		},
+		{
+			"path": "../github/digital-human-koubo"
+		},
+		{
+			"path": "../github/aetherviz-master"
 		}
 	],
 	"settings": {}

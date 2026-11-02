@@ -1,0 +1,21 @@
+# =============================================================
+# LiveKit Egress 配置（挂载进容器，EGRESS_CONFIG_FILE=/etc/lk/egress.yaml）
+#
+# 与 livekit.yaml 同理：不展开 ${VAR}，密钥直接写在文件里。
+# ⚠️ api_key/api_secret 必须与 livekit.yaml 的 keys 一致。
+# 字段以 livekit/egress v1.15.0 README 为准；如需接对象存储，
+# 追加 s3:（兼容 MinIO，填 endpoint）段，见 docs 指南第 10 节。
+# =============================================================
+
+# 消息总线：与 livekit-server 共用 infra Redis，接收 StartEgress 任务
+redis:
+  address: mwb-redis-stack:6379
+
+# 集群内直连 server（bridge 网络用容器名；Linux 生产 host 网络时改回 localhost）
+ws_url: ws://mwb-livekit:7880
+
+api_key: devkey
+api_secret: secret
+
+# web 录制用到 Chrome；容器内无 sandbox 时必须关（官方镜像文档要求）
+enable_chrome_sandbox: false

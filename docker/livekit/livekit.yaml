@@ -1,0 +1,54 @@
+# =============================================================
+# LiveKit Server 配置（挂载进容器，命令：--config /etc/lk/config.yaml）
+#
+# 注意：LiveKit 不会展开 YAML 里的 ${VAR}，keys 是 map 也无法用
+#       LIVEKIT_* 环境变量覆盖，因此密钥必须直接写在本文件里。
+#
+# ⚠️ 生产环境务必替换 keys：
+#     docker run --rm livekit/livekit-server:<ver> generate-keys
+#   并保持与后端 .env 的 LIVEKIT_API_KEY / LIVEKIT_API_SECRET 完全一致。
+# =============================================================
+
+# HTTP API（webhook、房间管理）+ WebSocket 信令入口
+port: 7880
+
+# 绑定所有网卡；dev 模式才会锁回环，这里用 --config 启动，默认即全接口
+bind_addresses:
+  - "0.0.0.0"
+
+rtc:
+  # 单一媒体 UDP 端口（多路复用），避免 50000-60000 大段端口映射
+  # —— Windows Docker Desktop 上映射万级 UDP 端口会卡死，务必用单端口方案
+  # 注意：v1.13.x 无 use_websocket 字段（WS 信令挂在 port 上，始终可用）
+  udp_port: 7881
+  # ICE-TCP 兜底端口
+  tcp_port: 7882
+  # 内网 / 多网卡机器上，若客户端收到不可达的媒体地址（能连信令却黑屏无声），
+  # 显式指定宿主机对客户端可达的 IP：
+  # hostname: 192.168.x.x
+  # 纯公网/VPN 直连场景也可让 server 自行探测外部 IP：
+  # use_external_ip: true
+
+# 签发/校验 access token 的密钥对（keyID: secret）
+# 注意：v1.13.x 已删除 auth 段与 enable_egress 开关——
+#   - token 的 TTL 由签发方（后端 livekit-api SDK）决定
+#   - redis 配置存在时，egress 通过消息总线自动调度
+keys:
+  devkey: secret
+
+room:
+  empty_timeout: 300            # 房间无人 5 分钟后自动回收
+  max_participants: 50          # 按业务上限收紧
+
+# ⚠️ 内置 TURN 在 v1.13.x 需要 TLS 证书与 domain（cert_file/key_file 或
+#    LIVEKIT_TURN_CERT/LIVEKIT_TURN_KEY），本机冒烟无需；
+#    生产跨严格 NAT 时再按官方 config-sample.yaml 的 turn 段配置。
+
+# 复用 infra 的 Redis（mwb-redis-stack）。单节点也建议开启：
+# 便于状态观测，未来加第二台 server 指向同一 Redis 即自动组网，
+# 同时是 egress/ingress 任务的消息总线。
+redis:
+  address: mwb-redis-stack:6379
+
+logging:
+  level: info

@@ -1,0 +1,68 @@
+# =============================================================
+# LiveKit 视频会议（单节点 SFU + 内置 TURN + 录制 Egress）
+#
+# 前置：
+#   1. 先起 infra（提供 mwb-infra-network 与 mwb-redis-stack）：
+#        docker compose -f ../../docker-compose.infra.yml up -d
+#   2. cp .env.example .env 并按需改版本号 / 生产替换 livekit.yaml、egress.yaml 密钥
+#   3. 镜像已中转至 BASE_REGISTRY（见 ../_Common/prepull-images.txt）
+#
+# 端口：7880 TCP HTTP/WS 信令   7881 UDP 单媒体端口   7882 TCP TURN/ICE-TCP
+# 录制：livekit-egress 走 profile "record"，默认不随 up 启动：
+#   docker compose --profile record up -d
+#
+# 说明：keys 是 map、LiveKit 又不展开 YAML 变量，故密钥直接写在 livekit.yaml /
+#       egress.yaml，本文件仅负责编排与端口映射，不注入 LIVEKIT_* 运行时变量。
+# =============================================================
+name: livekit-local
+
+services:
+  livekit-server:
+    # 默认走个人 ACR 中转地址；未 prepull 时可直接改成 livekit/livekit-server:<ver>
+    # v1.13.11 = 2026-10-25 GitHub Releases 最新稳定版（已核实）
+    image: ${BASE_REGISTRY:-crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base}/livekit-server:${LIVEKIT_VERSION:-v1.13.11}
+    container_name: mwb-livekit
+    # 官方镜像 ENTRYPOINT 为 /livekit-server，这里只追加参数
+    command: --config /etc/lk/config.yaml
+    volumes:
+      - ./livekit.yaml:/etc/lk/config.yaml:ro
+    ports:
+      - "7880:7880"        # HTTP API + WebSocket 信令
+      - "7881:7881/udp"    # 单一媒体 UDP 端口
+      - "7882:7882"        # TURN over TCP / ICE-TCP 兜底
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+    # livekit-server 无标准 healthcheck 端点，用日志/HTTP 探活代替：
+    #   docker logs mwb-livekit | Select-String "livekit starting"
+    #   curl http://localhost:7880            # 有 HTTP 响应即存活
+    #   docker exec mwb-livekit /livekit-server ports   # 打印实际占用端口
+
+  # -----------------------------------------------------------
+  # Egress 录制/转码服务（profile: record，依赖 server 的 enable_egress: true）
+  # 通过 redis 消息总线接收 server 分发的 StartEgress 请求，把房间混流
+  # 录制为文件落到 ./data/egress（容器内默认输出目录 /tmp/egress）
+  # -----------------------------------------------------------
+  livekit-egress:
+    image: ${BASE_REGISTRY:-crpi-c762f77rjuytqer9.cn-hangzhou.personal.cr.aliyuncs.com/llm-basic/base}/livekit-egress:${LIVEKIT_EGRESS_VERSION:-v1.15.0}
+    container_name: mwb-livekit-egress
+    profiles: ["record"]
+    # 官方镜像通过 EGRESS_CONFIG_FILE 定位配置；字段写在 egress.yaml
+    environment:
+      - EGRESS_CONFIG_FILE=/etc/lk/egress.yaml
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./egress.yaml:/etc/lk/egress.yaml:ro
+      - ./data/egress:/tmp/egress      # 录制产物输出目录（宿主机 docker/livekit/data/egress）
+    depends_on:
+      - livekit-server
+    networks:
+      - mwb-infra-network
+    restart: unless-stopped
+    # ⚠ Linux 生产建议改用 network_mode: "host"（官方文档要求，egress 作为参会者
+    # 拉媒体流会自开高位端口，bridge 下可能连不上）；届时注释掉 networks 段。
+    # Docker Desktop ≥ 4.34 开 hostNetworking 后同理。本机冒烟先走 bridge。
+
+networks:
+  mwb-infra-network:
+    external: true

@@ -15,6 +15,7 @@
   _audit        审计日志
   _async_task   异步任务调度参数
   _mem0         Mem0 长期记忆服务（本地私有化部署）
+  _livekit      LiveKit 视频会议（自建 SFU）
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +32,7 @@ from ._otel import OTelSettings
 from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
 from ._mem0 import Mem0Settings
+from ._livekit import LiveKitSettings
 from ._semantica import SemanticaSettings
 from ._cross_mode_recorder import CrossModeRecorderSettings
 
@@ -47,6 +49,7 @@ class Settings(
     AuditSettings,
     AsyncTaskSettings,
     Mem0Settings,
+    LiveKitSettings,
     SemanticaSettings,
     CrossModeRecorderSettings,
     BaseSettings,

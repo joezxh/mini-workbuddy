@@ -220,6 +220,10 @@ ROUTER_SPECS: List[RouterSpec] = [
     # 顺序不可颠倒也不可插到其它清单之间：本仓库的注册顺序即 Starlette 的匹配顺序。
     RouterSpec("app.routers.twin.twin", attr="router", tags=["孪生应用"]),
     RouterSpec("app.routers.twin.twin", attr="publish_router", tags=["孪生应用·只读页"]),
+
+    # --- 34. 视频会议（自带完整 prefix /api/v1/meeting，故此处不叠加）---
+    # LiveKit 入会 token 签发，见 docs/LIVEKIT_SELF_HOSTED_DEPLOYMENT_GUIDE.md
+    RouterSpec("app.routers.meeting", tags=["视频会议"]),
 ]
 
 

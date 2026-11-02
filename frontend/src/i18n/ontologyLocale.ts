@@ -47,6 +47,7 @@ const UI_EN: Record<string, string> = {
   // 元数据 / 送数
   '元数据浏览': 'Metadata Browse',
   '资产送数': 'Asset Scoping',
+  '按类型浏览数据资产，勾选表后送入本体建模作用域': 'Browse data assets by type; select tables to send into an ontology modeling scope',
   '全部来源': 'All sources',
   '暂无已接入数据源': 'No connected data sources',
   '搜索表名 / 字段名 / 注释': 'Search table / column / comment',
@@ -149,6 +150,7 @@ const UI_JA: Record<string, string> = {
   '应用发布': 'アプリ公開',
   '元数据浏览': 'メタデータ閲覧',
   '资产送数': 'アセットスコープ',
+  '按类型浏览数据资产，勾选表后送入本体建模作用域': 'タイプ別にデータ資産を閲覧し、テーブルを選択してオントロジー構築スコープへ送る',
   '刷新': '更新',
   '取消': 'キャンセル',
   '名称': '名称',

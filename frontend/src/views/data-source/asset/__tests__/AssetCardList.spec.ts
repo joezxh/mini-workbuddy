@@ -28,7 +28,7 @@ describe('assetText 纯函数', () => {
 })
 
 const ITEMS = [
-  { table_id: 1, source_id: 5, db_name: 'sales', table_name: 'sales_order', table_comment: '销售订单', column_digest: 'x', column_count: 6, row_count: 1284550, pii_max_level: 'L1', bound_object_code: 'obj_order', score: 3, tags: [] },
+  { table_id: 1, source_id: 5, db_name: 'sales', table_name: 'sales_order', table_comment: '销售订单', column_digest: 'x', columns: [{ name: 'id_card', type: 'VARCHAR', comment: '身份证号', pii: 'L3' }], column_count: 6, row_count: 1284550, pii_max_level: 'L1', bound_object_code: 'obj_order', score: 3, tags: [] },
   { table_id: 2, source_id: 5, db_name: 'sales', table_name: 'crm_customer', table_comment: '客户', column_digest: 'y', column_count: 5, row_count: 284300, pii_max_level: 'L3', bound_object_code: null, score: 2, tags: [] },
 ]
 
@@ -79,7 +79,21 @@ describe('renderColumnDigest（AF-05）', () => {
     expect(html).toContain('<mark>id</mark>_card')
     expect(html).toContain('qty INT')
   })
-  it('空列返回空串', () => {
+  it('renderColumnDigest 空列返回空串', () => {
     expect(renderColumnDigest([], 'x')).toBe('')
+  })
+})
+
+describe('AssetCardList 集成渲染（AF-03/05）', () => {
+  it('结构化列摘要：PII 标红 + 高亮', async () => {
+    const html = await render()
+    expect(html).toContain('cc-pii')
+    expect(html).toContain('COMMENT')
+  })
+  it('标签 chip 渲染（可点筛选数据就绪）', async () => {
+    const html = await render({
+      items: [{ ...ITEMS[0], tags: [{ id: 9, code: 'core', name: '核心表', color: '#3371fc' }] }],
+    })
+    expect(html).toContain('核心表')
   })
 })

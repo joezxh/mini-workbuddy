@@ -33,11 +33,15 @@
             :class="{ exp: isExp(it.table_id) }"
             :title="it.column_digest"
             @click="toggleExp(it.table_id)"
-          >{{ it.column_digest || t2('（无字段摘要）') }}</div>
+          >
+            <span v-if="it.columns && it.columns.length" v-html="digestHtml(it)" />
+            <template v-else>{{ it.column_digest || t2('（无字段摘要）') }}</template>
+          </div>
           <div class="asset-cards__foot">
             <span>{{ t2('列') }} {{ it.column_count ?? '-' }} · {{ t2('行') }} {{ fmtRows(it.row_count) }}</span>
             <span class="asset-cards__tags">
-              <a-tag v-for="tg in it.tags || []" :key="tg.code" :color="tg.color || undefined">{{ tg.name }}</a-tag>
+              <a-tag v-for="tg in it.tags || []" :key="tg.id" :color="tg.color || undefined"
+                style="cursor: pointer" @click="emit('filter-tag', tg.id)">{{ tg.name }}</a-tag>
             </span>
           </div>
           <div class="asset-cards__ops">
@@ -59,7 +63,8 @@
         :page-size="size"
         :total="total"
         size="small"
-        :show-total="(n: number) => `${t2('共')} ${n} ${t2('条')}`"
+        show-quick-jumper
+        :show-total="(n: number) => `${t2('共')} ${n} ${t2('条')} / ${Math.ceil(total / size) || 1} ${t2('页')} · size ${size}`"
         @change="(p: number) => emit('page-change', p)"
       />
     </div>
@@ -74,7 +79,7 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { t2 } from '../ontology/ontologyText'
-import { hl, fmtRows } from './assetText'
+import { hl, fmtRows, renderColumnDigest } from './assetText'
 import { probeView } from './assetOps'
 import { CROSS_SOURCE_BLOCK_MSG } from './assetSend'
 
@@ -97,6 +102,7 @@ const emit = defineEmits<{
   (e: 'test', row: any): void
   (e: 'edit', row: any): void
   (e: 'tag', row: any): void
+  (e: 'filter-tag', tagId: number): void
 }>()
 
 /** 正在探活的表 ID（按钮 loading 态，与回填结果独立） */
@@ -109,6 +115,11 @@ defineExpose({
     probing.value = next
   },
 })
+
+/** 逐列摘要 HTML（结构化列就绪时逐列渲染，否则回退扁平串） */
+function digestHtml(it: any): string {
+  return renderColumnDigest(it.columns || [], props.kw || '')
+}
 
 /** PII 配色（原型口径）：L2/L3 → 错误(红)，其余（L1）→ 告警(黄) */
 function piiTone(level: string) {
@@ -208,6 +219,15 @@ function toggleExp(id: number) {
     -webkit-box-orient: vertical;
     word-break: break-all;
     cursor: pointer;
+    :deep(.cc-pii) {
+      color: #cf1322;
+    }
+    :deep(.cc) {
+      color: #8a6d3b;
+    }
+    :deep(.dot) {
+      opacity: 0.4;
+    }
     &.exp {
       -webkit-line-clamp: unset;
       display: block;
