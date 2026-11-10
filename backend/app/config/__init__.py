@@ -16,6 +16,7 @@
   _async_task   异步任务调度参数
   _mem0         Mem0 长期记忆服务（本地私有化部署）
   _livekit      LiveKit 视频会议（自建 SFU）
+  _mcp          MCP Server 端点开关（/mcp 挂载，默认关闭）
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,7 @@ from ._database import DatabaseSettings
 from ._redis import RedisSettings
 from ._search import SearchSettings
 from ._voice import VoiceSettings
+from ._voice_demo import VoiceDemoSettings
 from ._embedding import EmbeddingSettings
 from ._media import MediaSettings
 from ._otel import OTelSettings
@@ -33,6 +35,7 @@ from ._audit import AuditSettings
 from ._async_task import AsyncTaskSettings
 from ._mem0 import Mem0Settings
 from ._livekit import LiveKitSettings
+from ._mcp import MCPServerSettings
 from ._semantica import SemanticaSettings
 from ._cross_mode_recorder import CrossModeRecorderSettings
 
@@ -43,6 +46,7 @@ class Settings(
     RedisSettings,
     SearchSettings,
     VoiceSettings,
+    VoiceDemoSettings,
     EmbeddingSettings,
     MediaSettings,
     OTelSettings,
@@ -50,6 +54,7 @@ class Settings(
     AsyncTaskSettings,
     Mem0Settings,
     LiveKitSettings,
+    MCPServerSettings,
     SemanticaSettings,
     CrossModeRecorderSettings,
     BaseSettings,

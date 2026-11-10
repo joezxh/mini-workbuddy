@@ -118,6 +118,7 @@ ROUTER_SPECS: List[RouterSpec] = [
     ),
     # 以下 3 个模块自带完整 prefix（含 /api/v1），故此处不叠加
     RouterSpec("app.routers.agent.agent_config", tags=["Agent配置管理"]),
+    RouterSpec("app.routers.agent.hitl", tags=["Agent HITL 审批"]),
     RouterSpec("app.routers.agent.agent_execution", tags=["Agent执行查询"]),
     RouterSpec("app.routers.agent.agent_scheduled_task", tags=["Agent定时任务"]),
     RouterSpec("app.routers.agent.agent_team", prefix=API_V1_PREFIX, tags=["AI Team 多智能体团队"]),
@@ -224,6 +225,18 @@ ROUTER_SPECS: List[RouterSpec] = [
     # --- 34. 视频会议（自带完整 prefix /api/v1/meeting，故此处不叠加）---
     # LiveKit 入会 token 签发，见 docs/LIVEKIT_SELF_HOSTED_DEPLOYMENT_GUIDE.md
     RouterSpec("app.routers.meeting", tags=["视频会议"]),
+
+    # --- 35. SuperAgent 引擎（Task 1.4 2026-11-08）---
+    # 自带 prefix /super-agent，此处叠加 /api/v1 → 实际 /api/v1/super-agent/*
+    RouterSpec("app.routers.superagent", prefix=API_V1_PREFIX, tags=["SuperAgent 引擎"]),
+
+    # --- 36. SuperAgent 工作台（Task 4.6 2026-11-08）---
+    # 自带 prefix /super-agent，此处叠加 /api/v1 → 实际 /api/v1/super-agent/*
+    RouterSpec("app.routers.superagent_workbench", prefix=API_V1_PREFIX, tags=["SuperAgent 工作台"]),
+
+    # --- 37. 语音能力 Demo（2026-11-10，spec docs/superpowers/specs/2026-11-10-voice-demo-design.md）---
+    # REST 转发 + WS 桥接 s2s /v1/realtime；Mock 默认开启，与 duplex 语音演示相互独立
+    RouterSpec("app.routers.voice_demo", prefix=f"{API_V1_PREFIX}/voice-demo", tags=["语音演示"]),
 ]
 
 
