@@ -5,6 +5,8 @@ REST：/health、/asr/transcribe、/tts/synthesize（JWT 头鉴权）；
 WS：/ws?token=<JWT>（query 鉴权，对齐 duplex/voice 网关先例，真正校验 JWT）。
 Mock 默认开启（VOICE_DEMO_MOCK=true），事件/响应形状与真实 s2s 逐一同构。
 """
+import asyncio
+import json
 import time
 
 from fastapi import (
@@ -15,12 +17,15 @@ from fastapi import (
     HTTPException,
     Response,
     UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
 )
 from loguru import logger
 
 from app.config import settings
 from app.deps import get_current_user
 from app.services.voice_demo import gateway, mock
+from app.services.voice_demo import realtime_bridge as bridge
 
 router = APIRouter(tags=["语音演示"])
 
@@ -96,6 +101,37 @@ async def tts_synthesize(payload: dict, _user=Depends(get_current_user)):
         media_type="audio/wav",
         headers={"Content-Disposition": 'inline; filename="tts.wav"'},
     )
+
+
+@router.websocket("/ws")
+async def voice_demo_ws(websocket: WebSocket):
+    """WS 桥接入口：query JWT 鉴权 → 并发闸 → Mock 会话或真实泵（spec §3.3）。"""
+    user_id = bridge._jwt_user_id(websocket.query_params.get("token", ""))
+    if user_id is None:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    if settings.VOICE_DEMO_MOCK:
+        await bridge.run_mock_session(websocket)
+        return
+    # 并发闸：0.1s 内抢不到 → UPSTREAM_BUSY（对齐 s2s pool size 1）
+    acquired = False
+    try:
+        acquired = await asyncio.wait_for(
+            bridge.BRIDGE_SEMAPHORE.acquire(), timeout=0.1
+        )
+    except asyncio.TimeoutError:
+        pass
+    if not acquired:
+        await websocket.send_text(json.dumps({"type": "error", "code": "UPSTREAM_BUSY"}))
+        await websocket.close(code=1013)
+        return
+    try:
+        await bridge.run_bridge(websocket)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        bridge.BRIDGE_SEMAPHORE.release()
 
 
 # 总开关守卫（spec §3.5）：VOICE_DEMO_ENABLED=false 时以空 router 替换端点 router，
