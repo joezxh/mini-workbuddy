@@ -27,7 +27,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: () => import('@/views/Dashboard.vue'),
+        // 登录首页直接以控制台 Tab 外壳呈现（首屏即页签栏，控制台页签不可关闭并默认激活）
+        component: () => import('@/views/admin/index.vue'),
         meta: { title: '控制台', icon: 'DashboardOutlined' }
       },
       {
@@ -68,9 +69,9 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'RAG 测试', hidden: true }
       },
       {
+        // 历史入口：控制台壳已迁到 /dashboard，/admin 仅带 query 透传重定向（/admin?tab=apikey 照旧可用）
         path: 'admin',
-        name: 'Admin',
-        component: () => import('@/views/admin/index.vue'),
+        redirect: to => ({ path: '/dashboard', query: to.query }),
         meta: { title: '管理员', icon: 'SettingOutlined', requiresAdmin: true }
       },
       {
@@ -105,14 +106,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/workflow/WorkflowManagement.vue'),
         meta: { title: '工作流管理', icon: 'ApiOutlined', requiresAdmin: true }
       },
-      // ── 数据资产目录（AF-01~AF-08）：独立路由，等价于 /admin?tab=data-asset 的外壳 Tab ──
+      // ── 数据资产目录（AF-01~AF-08）：独立路由，等价于 /dashboard?tab=data-asset 的外壳 Tab ──
       {
         path: 'admin/data-asset',
         name: 'DataAsset',
         component: () => import('@/views/data-source/DataAssetPanel.vue'),
         meta: { title: '数据资产', icon: 'DatabaseOutlined', requiresAdmin: true }
       },
-      // ── 推演沙盘（沙箱域 S1–S21）：独立路由，等价于 /admin?tab=simulation 的外壳 Tab ──
+      // ── 推演沙盘（沙箱域 S1–S21）：独立路由，等价于 /dashboard?tab=simulation 的外壳 Tab ──
       {
         path: 'admin/simulation',
         name: 'SimulationSandbox',
@@ -134,11 +135,76 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '调解语音 RTC 演示' }
       },
       {
+        // 语音能力 Demo（2026-11-10，spec docs/superpowers/specs/2026-11-10-voice-demo-design.md）
+        path: 'voice-demo',
+        name: 'VoiceDemo',
+        component: () => import('@/views/voice-demo/VoiceDemo.vue'),
+        meta: { title: '语音演示', icon: 'AudioOutlined' }
+      },
+      {
         // 视频会议（LiveKit 自建 SFU，docs/LIVEKIT_SELF_HOSTED_DEPLOYMENT_GUIDE.md）
         path: 'meeting',
         name: 'MeetingRoom',
         component: () => import('@/views/meeting/MeetingRoom.vue'),
         meta: { title: '视频会议', icon: 'VideoCameraOutlined' }
+      },
+      // ── SuperAgent（Task 4：前端入口 + Demo）──
+      {
+        path: 'super-agent',
+        name: 'SuperAgentBoard',
+        component: () => import('@/views/super-agent/board.vue'),
+        meta: { title: 'SuperAgent 看板', icon: 'RobotOutlined' }
+      },
+      {
+        path: 'super-agent/detail/:id',
+        name: 'SuperAgentTicketDetail',
+        component: () => import('@/views/super-agent/detail.vue'),
+        props: true,
+        meta: { title: 'Ticket 详情', hidden: true }
+      },
+      {
+        path: 'super-agent/demo',
+        name: 'SuperAgentDemo',
+        component: () => import('@/views/super-agent/demo.vue'),
+        meta: { title: 'SuperAgent Demo', hidden: true }
+      },
+      {
+        path: 'super-agent/config-source',
+        name: 'SuperAgentConfigSource',
+        component: () => import('@/views/super-agent/config-source.vue'),
+        meta: { title: 'Source 配置', hidden: true }
+      },
+      {
+        // HITL 审批列表（spec 步骤三 4.4）：agent_hitl_pause 只读表格
+        path: 'super-agent/hitl',
+        name: 'SuperAgentHitl',
+        component: () => import('@/views/super-agent/hitl.vue'),
+        meta: { title: 'HITL 审批', icon: 'AuditOutlined' }
+      },
+      // ── SuperAgent Agent 工作台（Task 4.6：Chat/Feed/Ideas/Goals）──
+      {
+        path: 'super-agent/chat',
+        name: 'SuperAgentChat',
+        component: () => import('@/views/super-agent/workbench/chat.vue'),
+        meta: { title: 'Agent 对话', icon: 'CommentOutlined' }
+      },
+      {
+        path: 'super-agent/feed',
+        name: 'SuperAgentFeed',
+        component: () => import('@/views/super-agent/workbench/feed.vue'),
+        meta: { title: '动态 Feed', icon: 'UnorderedListOutlined' }
+      },
+      {
+        path: 'super-agent/ideas',
+        name: 'SuperAgentIdeas',
+        component: () => import('@/views/super-agent/workbench/ideas.vue'),
+        meta: { title: '点子库', icon: 'BulbOutlined' }
+      },
+      {
+        path: 'super-agent/goals',
+        name: 'SuperAgentGoals',
+        component: () => import('@/views/super-agent/workbench/goals.vue'),
+        meta: { title: '目标', icon: 'AimOutlined' }
       }
     ]
   },
