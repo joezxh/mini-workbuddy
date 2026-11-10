@@ -39,6 +39,7 @@ import WikiIndex from '@/views/kms/wiki/index.vue'
 import KnowledgeBaseManager from '@/views/kms/KnowledgeBaseManager.vue'
 // 调解语音 RTC（迁移自 risk_control）
 import VoiceDemo from '@/views/duplex/VoiceDemo.vue'
+import VoiceDemoLab from '@/views/voice-demo/VoiceDemo.vue'
 import VoiceSessionConfig from '@/views/admin/duplex/config/VoiceSessionConfig.vue'
 import VoiceModelConfig from '@/views/admin/duplex/config/VoiceModelConfig.vue'
 import AgentConfigPanel from '@/views/admin/ai-config/agents/AgentConfigPanel.vue'
@@ -84,6 +85,8 @@ export const componentMap: Record<string, Component> = {
   'kg-knowledge-manager': markRaw(KnowledgeBaseManager),
   // 调解语音 RTC（迁移自 risk_control）
   'voice-demo': markRaw(VoiceDemo),
+  // 语音能力 Demo（2026-11-10，docs/sql/menu_voice_demo.sql 2608；key 避开 duplex 的 voice-demo）
+  'voice-demo-lab': markRaw(VoiceDemoLab),
   'voice-roles': markRaw(VoiceSessionConfig),
   'voice-models': markRaw(VoiceModelConfig),
   'voice-agents': markRaw(AgentConfigPanel),
