@@ -11,6 +11,7 @@ import { resolveIcon } from '@/utils/icons'
 import { localise } from '@/i18n'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { isMenuActive } from '@/utils/shellTab'
 
 const props = defineProps<{ node: MenuNode; collapsed?: boolean }>()
 const emit = defineEmits<{ (e: 'select', path: string): void }>()
@@ -35,8 +36,11 @@ const label = computed(() => {
 })
 
 function isActive(node: MenuNode): boolean {
-  if (node.path) return route.path === node.path || route.path.startsWith(node.path + '/')
-  return false
+  // 壳内（/dashboard?tab=<key>）按菜单路径末段与当前 tab 比对，
+  // 非壳路由（真实深链）维持等值/前缀判定
+  const raw = route.query.tab
+  const tab = Array.isArray(raw) ? raw[0] : raw
+  return isMenuActive(node.path, route.path, typeof tab === 'string' ? tab : undefined)
 }
 
 function onLeafClick(node: MenuNode) {

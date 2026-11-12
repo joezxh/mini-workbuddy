@@ -4,8 +4,8 @@
     <table class="seg">
       <thead><tr><th>Tab</th><th>能力</th><th>通信方式</th><th>依赖</th></tr></thead>
       <tbody>
-        <tr><td>语音转写（ASR）</td><td>上传转写 / 录音 VAD 分段转写（起止 ms + 文本）</td><td>HTTP REST（multipart）</td><td>ASR 端点或 Mock</td></tr>
-        <tr><td>语音合成（TTS）</td><td>文本→音频，9 音色按语种分组，播放 / 下载</td><td>HTTP REST（JSON→blob）</td><td>TTS 端点或 Mock</td></tr>
+        <tr><td>语音转写（ASR）</td><td>上传转写 / 录音 VAD 分段转写（起止 ms + 文本）</td><td>HTTP REST（multipart）</td><td>s2s /v1/audio/transcriptions</td></tr>
+        <tr><td>语音合成（TTS）</td><td>文本→音频，9 音色按语种分组，播放 / 下载</td><td>HTTP REST（JSON→blob）</td><td>s2s /v1/audio/speech</td></tr>
         <tr><td>语音对话（S2S）</td><td>连续语音对话：服务端 VAD 切轮次、逐句转录上屏、流式音频回放、可打断</td><td>WebSocket（OpenAI Realtime 事件集）</td><td>s2s /v1/realtime</td></tr>
         <tr><td>使用手册</td><td>静态说明（本页内容）</td><td>—</td><td>无</td></tr>
       </tbody>
@@ -41,21 +41,16 @@
         <tr><td><code>VOICE_DEMO_BASE_URL</code></td><td>http://127.0.0.1:8765</td><td>REST 基址（探测 /v1/pool + ASR/TTS 转发）</td></tr>
         <tr><td><code>VOICE_DEMO_REALTIME_WS_URL</code></td><td>ws://127.0.0.1:8765/v1/realtime</td><td>实时对话上游</td></tr>
         <tr><td><code>VOICE_DEMO_API_KEY</code></td><td>not-needed</td><td>上游鉴权占位</td></tr>
-        <tr><td><code>VOICE_DEMO_MOCK</code></td><td>true</td><td>Mock 模式（无真实服务也可跑）</td></tr>
         <tr><td><code>VOICE_DEMO_TTS_VOICE</code> / <code>_TTS_LANGUAGE</code> / <code>_INSTRUCTIONS</code></td><td>Aiden / auto / 工作台助手人设</td><td>TTS 与会话默认值</td></tr>
         <tr><td><code>VOICE_DEMO_CONNECT_TIMEOUT_MS</code> / <code>_READ_TIMEOUT_MS</code> / <code>_WS_IDLE_TIMEOUT_S</code></td><td>5000 / 30000 / 300</td><td>HTTP 超时与 WS 空闲超时</td></tr>
       </tbody>
     </table>
 
-    <h3>Mock 模式</h3>
-    <p>默认开启：REST 返回样例转写 / 合成 WAV（正弦提示音），WS 由后端模拟 Realtime 事件序列（session.created → speech_started → 转录 → audio.delta → response.done），前后端联调不依赖任何真实模型服务。开关以后端 <code>VOICE_DEMO_MOCK</code> 配置为准。</p>
-
-    <h3>切换真实服务（2026-11-10 已实测）</h3>
+    <h3>真实服务（2026-11-10 已实测，直连）</h3>
     <p>本地 <code>127.0.0.1:8765</code> 同主机提供 OpenAI 兼容 REST 与 <code>/v1/realtime</code>，默认配置即真实全功能：<br />
       ASR：<code>POST /v1/audio/transcriptions</code>（multipart file+language）→ <code>{"text","language"}</code>（language 为语言名，如 "Chinese"）；<br />
       TTS：<code>POST /v1/audio/speech</code>（JSON input/voice/response_format，仅 wav，无 speed 字段）→ WAV 字节；voice=Aiden 实测有效；<br />
-      WS 容器内 E2E：<code>docker exec speech-to-speech-thirdparty-pipeline-1 python3 /tmp/e2e_realtime_test.py --url ws://127.0.0.1:8765/v1/realtime --audio /tmp/prompt.wav --out-dir /tmp/e2e --timeout 90</code>；<br />
-      切换：置 <code>VOICE_DEMO_MOCK=false</code> 即可（默认 BASE_URL / WS 已指向本机，无需改）。</p>
+      WS 容器内 E2E：<code>docker exec speech-to-speech-thirdparty-pipeline-1 python3 /tmp/e2e_realtime_test.py --url ws://127.0.0.1:8765/v1/realtime --audio /tmp/prompt.wav --out-dir /tmp/e2e --timeout 90</code>。</p>
 
     <h3>主题</h3>
     <p>浅色 / 深色双主题可切换（顶栏按钮），与控制台一致：<code>&lt;html data-theme="light|dark"&gt;</code> + <code>localStorage['app-theme']</code>，默认浅色。复用 <code>useAppStore().toggleTheme()</code> 与 <code>styles/tokens.css</code> 双皮肤变量，不另建主题机制。</p>

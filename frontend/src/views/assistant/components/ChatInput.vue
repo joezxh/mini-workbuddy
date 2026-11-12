@@ -144,6 +144,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   SendOutlined, PaperClipOutlined, CloseCircleOutlined, QuestionCircleOutlined, StopOutlined,
 } from '@ant-design/icons-vue'
@@ -153,6 +154,8 @@ import { MODEL_SELECTABLE_TYPES } from './types'
 import type { DictionaryItem } from '@/api/dictionary'
 import type { SqlbotDatasource } from '@/api/aiSession'
 import { useDictionary } from '@/composables/useDictionary'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   inputText: string
@@ -208,7 +211,7 @@ const modelSelectVisible = computed(() => {
   return MODEL_SELECTABLE_TYPES.includes(props.sessionType) && !!props.modelOptions && props.modelOptions.length > 0
 })
 
-/** 会话类型下拉项：确保“专家团(team)”“云端调度(scheduled)”始终存在，便于从侧边栏直接切换 */
+/** 会话类型下拉项：确保“专家团(team)”“云端调度(scheduled)”“计划模式(plan)”始终存在，便于从侧边栏直接切换 */
 const sessionTypeOptionsWithFallback = computed<DictionaryItem[]>(() => {
   const list = props.sessionTypeOptions || []
   const exists = (code: string) => list.some(o => (o.item_value || o.item_code) === code)
@@ -218,6 +221,10 @@ const sessionTypeOptionsWithFallback = computed<DictionaryItem[]>(() => {
   }
   if (!exists('scheduled')) {
     extra.push({ item_code: 'scheduled', item_value: 'scheduled', item_name: '云端调度', color: 'volcano', is_active: true } as DictionaryItem)
+  }
+  if (!exists('plan')) {
+    // 计划模式（spec F4/T9）：先规划任务清单（plan_approval 审批）再执行
+    extra.push({ item_code: 'plan', item_value: 'plan', item_name: t('assistantChat.sessionPlan'), color: 'purple', is_active: true } as DictionaryItem)
   }
   return extra.length ? [...list, ...extra] : list
 })

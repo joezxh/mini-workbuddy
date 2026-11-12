@@ -1,13 +1,28 @@
 """MCPAdapter - MCP 工具适配器
 
 注册和调用 MCP 工具，提供统一的工具调用接口。
+
+【传输路径分析】（对照 superagent MCPClient 的两项 stdio 修复）
+MCPAdapter 是纯进程内注册器：call_tool() 直接调用本地 Python handler
+（DatabaseTools 封装），不 spawn stdio 子进程、也不经 agentscope.mcp
+等外部客户端 —— 没有任何传输层。因此 superagent MCPClient 已修复的两项
+缺陷在本适配器的调用路径上不存在，无需（也不应）在此修改：
+  1. Windows 可执行解析 —— 裸 npx 需 shutil.which() 解析为 .cmd 绝对路径；
+  2. asyncio StreamReader 单行 64KB 限制 —— 截图类 base64 响应需
+     create_subprocess_exec(..., limit=32MB)。
+ai 包内真正做 stdio spawn 的是 app/ai/superagent/tools/mcp_adapter.py
+的 MCPClient（两项修复已在该层落地）；经 agentscope AiMcpClient 的外部
+MCP 路径（app/ai/workspace/manager.py）属第三方库层。回归测试见
+tests/ai/mcp/test_mcp_stdio_transport.py。
 """
 from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 from pydantic import BaseModel
 
-# Optional imports for backward compatibility (DatabaseTools was removed)
+# DatabaseTools 导入：先探新路径 app.ai.tools.database（2026-11 核对：该模块尚不存在），
+# 再回落到当前实际所在的 app.ai.tool_manager.database（存在，为生效分支）；
+# 两处均缺失时才置 None，下方默认工具退化为空结果
 try:
     # Try new location first
     from app.ai.tools.database import DatabaseTools

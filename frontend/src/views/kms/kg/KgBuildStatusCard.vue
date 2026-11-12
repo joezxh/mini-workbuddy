@@ -34,16 +34,24 @@
         :description="t('kbMgmt.kg.buildPendingDesc')"
       />
 
-      <template v-if="failed.length">
+      <template v-if="failedRows.length">
         <a-divider orientation="left">{{ t('kbMgmt.kg.failedList') }}</a-divider>
-        <a-list size="small" bordered :data-source="failed">
-          <template #renderItem="{ item }">
+        <a-list size="small" bordered :data-source="failedRows">
+          <template #renderItem="{ item: row }">
             <a-list-item>
               <div class="kg-build-status__failed">
                 <span class="kg-build-status__failed-meta">
-                  #{{ item.chunk_index }} · {{ item.document_id }}
+                  #{{ row.item.chunk_index }} · {{ row.item.document_id }}
+                  · {{ row.reason.stage === 'vector' ? t('kbMgmt.kg.failedVector') : t('kbMgmt.kg.failedStructure') }}
                 </span>
-                <span class="kg-build-status__failed-reason">{{ failedReason(item) }}</span>
+                <a-tooltip v-if="row.reason.detail">
+                  <template #title>
+                    <div class="kg-build-status__tip">{{ row.reason.detail }}</div>
+                  </template>
+                  <span class="kg-build-status__failed-reason">{{ t(row.reason.textKey) }}</span>
+                </a-tooltip>
+                <span v-else class="kg-build-status__failed-reason">{{ t(row.reason.textKey) }}</span>
+                <span class="kg-build-status__failed-fix">{{ t(row.reason.fixKey) }}</span>
               </div>
             </a-list-item>
           </template>
@@ -58,6 +66,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as api from '@/api/kg'
 import type { KgBuildStatus, KgFailedSegment } from '@/api/kg'
+import { resolveKgFailure } from '@/utils/kgFailureReason'
 
 const props = defineProps<{ knowledgeId: number }>()
 
@@ -87,13 +96,15 @@ const statusColor = computed(() => {
   }
 })
 
-/** 失败原因：优先取 details.error，其次退化为阶段说明 */
-function failedReason(item: KgFailedSegment) {
-  const err = (item.details as any)?.error
-  if (err) return String(err)
-  if (item.structure_indexed === false) return t('kbMgmt.kg.failedStructure')
-  return t('kbMgmt.kg.failedVector')
-}
+/**
+ * 失败行：把切片预先归一成「码 → 文案」，一份数据只解一次。
+ *
+ * 主行说人话（分类文案），次行给处置建议，悬浮保留后端原始串——
+ * 旧数据没有 error_code 时统一回落 unknown，界面不至于空白。
+ */
+const failedRows = computed(() =>
+  failed.value.map((item) => ({ item, reason: resolveKgFailure(item) })),
+)
 
 async function load() {
   loading.value = true
@@ -128,5 +139,15 @@ onMounted(load)
 .kg-build-status__failed-reason {
   color: #cf1322;
   font-size: 12px;
+}
+.kg-build-status__failed-fix {
+  color: #666;
+  font-size: 12px;
+}
+.kg-build-status__tip {
+  max-width: 420px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

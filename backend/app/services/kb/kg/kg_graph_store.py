@@ -90,7 +90,11 @@ def project_entity(
         logger.debug(f"[kg] Neo4j 不可用，跳过实体投影 entity={entity.id}: {exc}")
         return False
     except Exception as exc:  # noqa: BLE001 - 投影失败不得阻断 PG 事实写入
-        logger.warning(f"[kg] 实体投影失败 entity={entity.id}: {exc}")
+        # 带堆栈：Neo4j 驱动对属性类型（dict/list）会直接报 TypeError，只留
+        # str(exc) 看不出是哪个字段、哪一层调用炸的。
+        logger.opt(exception=True).warning(
+            f"[kg] 实体投影失败 entity={entity.id}: {exc}"
+        )
         return False
 
 
@@ -130,7 +134,9 @@ def project_relation(
         logger.debug(f"[kg] Neo4j 不可用，跳过关系投影 triple={triple.id}: {exc}")
         return False
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] 关系投影失败 triple={triple.id}: {exc}")
+        logger.opt(exception=True).warning(
+            f"[kg] 关系投影失败 triple={triple.id}: {exc}"
+        )
         return False
 
 
@@ -166,7 +172,10 @@ def project_mention(
     except KgNeo4jUnavailable:
         return False
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] 提及投影失败 doc={document_id}: {exc}")
+        logger.opt(exception=True).warning(
+            f"[kg] 提及投影失败 doc={document_id} chunk={chunk_index}"
+            f" entity={entity.id}: {exc}"
+        )
         return False
 
 
@@ -184,7 +193,7 @@ def unproject_entities(
     except KgNeo4jUnavailable:
         return 0
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] 实体撤销投影失败: {exc}")
+        logger.opt(exception=True).warning(f"[kg] 实体撤销投影失败: {exc}")
         return 0
 
 
@@ -202,7 +211,9 @@ def unproject_chunks(
     except KgNeo4jUnavailable:
         return 0
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] Chunk 撤销投影失败 doc={document_id}: {exc}")
+        logger.opt(exception=True).warning(
+            f"[kg] Chunk 撤销投影失败 doc={document_id}: {exc}"
+        )
         return 0
 
 
@@ -228,7 +239,7 @@ def unproject_relations(
     except KgNeo4jUnavailable:
         return 0
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] 关系撤销投影失败: {exc}")
+        logger.opt(exception=True).warning(f"[kg] 关系撤销投影失败: {exc}")
         return 0
 
 
@@ -240,7 +251,9 @@ def unproject_kb(kb_id: int, *, store: Optional[KgNeo4jStore] = None) -> bool:
     except KgNeo4jUnavailable:
         return False
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[kg] 知识库撤销投影失败 kb={kb_id}: {exc}")
+        logger.opt(exception=True).warning(
+            f"[kg] 知识库撤销投影失败 kb={kb_id}: {exc}"
+        )
         return False
 
 
@@ -278,7 +291,7 @@ def reconcile(
     try:
         neo4j_stats = _store(kb_id, store).stats()
     except Exception as exc:  # noqa: BLE001 - 统计失败不影响对账结论
-        logger.debug(f"[kg] 对账取 Neo4j 统计失败: {exc}")
+        logger.opt(exception=True).debug(f"[kg] 对账取 Neo4j 统计失败: {exc}")
 
     return {
         "entities": len(entities),

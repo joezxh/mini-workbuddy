@@ -10,6 +10,36 @@
       @pointerleave="onPointerUp"
     >
       <g :transform="`translate(${view.tx} ${view.ty}) scale(${view.scale})`">
+        <!-- 关系方向箭头模板：两条边（常规 / 高亮）共用同一几何，只是填色不同 -->
+        <defs>
+          <marker
+            id="kg-arrow"
+            class="kg-arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            markerUnits="userSpaceOnUse"
+            orient="auto"
+          >
+            <path d="M0,0 L10,5 L0,10 Z" />
+          </marker>
+          <marker
+            id="kg-arrow-hl"
+            class="kg-arrow kg-arrow--hl"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            markerUnits="userSpaceOnUse"
+            orient="auto"
+          >
+            <path d="M0,0 L10,5 L0,10 Z" />
+          </marker>
+        </defs>
+
         <g
           v-for="e in visEdges"
           :key="`e-${e.id}`"
@@ -17,7 +47,7 @@
           :class="{ 'is-hl': isAdjacentEdge(e), 'is-on': e.id === selectedEdgeId, 'is-hit': hitEdgeIds.has(e.id) }"
         >
           <path class="kg-edge__hit" :d="e.d" @click.stop="selectEdge(e.id)" />
-          <path class="kg-edge__line" :d="e.d" />
+          <path class="kg-edge__line" :d="e.d" :marker-end="edgeMarker(e)" />
           <text v-if="showEdgeLabel(e)" class="kg-edge__label" :x="e.lx" :y="e.ly" text-anchor="middle">
             {{ e.label }}
           </text>
@@ -100,7 +130,13 @@ const VB_H = 490
 const MIN_SCALE = 0.6
 const MAX_SCALE = 3.2
 /** 超过该节点数时只给枢纽/选中/邻居画标签，避免文字糊成一团 */
-const LABEL_ALL_MAX = 60
+const LABEL_ALL_MAX = 120
+/** 超过该边数时同理，只给选中/邻边画关系标签 */
+const EDGE_LABEL_MAX = 120
+/** 放大到该倍数视为「凑近看」：标签一律画出来，不再按数量抑制 */
+const ZOOM_REVEAL = 1.6
+/** 箭头尖端离节点边缘的留白（用户单位，与缩放同步） */
+const ARROW_GAP = 3
 
 interface VisNode {
   id: number
@@ -163,11 +199,24 @@ const visEdges = computed<VisEdge[]>(() => {
     const a = map.get(edge.from)
     const b = map.get(edge.to)
     if (!a || !b) return
+    // 端点沿各自半径外推：路径若画到圆心，箭头与线头都埋在圆盘底下，关系就「看不见方向」
+    const vx = b.x - a.x
+    const vy = b.y - a.y
+    const dist = Math.hypot(vx, vy)
+    if (dist < 0.01) return // 重合到分不清方向，宁可不画
+    const ux = vx / dist
+    const uy = vy / dist
+    const tail = Math.min(dist * 0.45, a.r + 1)
+    const head = Math.min(dist * 0.45, b.r + ARROW_GAP)
+    const ax = a.x + ux * tail
+    const ay = a.y + uy * tail
+    const bx = b.x - ux * head
+    const by = b.y - uy * head
     // 二次贝塞尔：控制点沿法线偏移 12%，与原型曲率一致
-    const mx = (a.x + b.x) / 2
-    const my = (a.y + b.y) / 2
-    const dx = b.x - a.x
-    const dy = b.y - a.y
+    const mx = (ax + bx) / 2
+    const my = (ay + by) / 2
+    const dx = bx - ax
+    const dy = by - ay
     const cx = mx - dy * 0.12
     const cy = my + dx * 0.12
     out.push({
@@ -175,9 +224,9 @@ const visEdges = computed<VisEdge[]>(() => {
       from: edge.from,
       to: edge.to,
       label: edge.label,
-      d: `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`,
-      lx: 0.25 * a.x + 0.5 * cx + 0.25 * b.x,
-      ly: 0.25 * a.y + 0.5 * cy + 0.25 * b.y,
+      d: `M${ax.toFixed(1)},${ay.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`,
+      lx: 0.25 * ax + 0.5 * cx + 0.25 * bx,
+      ly: 0.25 * ay + 0.5 * cy + 0.25 * by,
     })
   })
   return out
@@ -185,6 +234,8 @@ const visEdges = computed<VisEdge[]>(() => {
 
 const selectedNodeId = computed(() => (props.selection?.kind === 'node' ? props.selection.id : null))
 const selectedEdgeId = computed(() => (props.selection?.kind === 'edge' ? props.selection.id : null))
+/** 用户放大即视为要读文字：标签不再按数量抑制 */
+const zoomReveal = computed(() => view.value.scale >= ZOOM_REVEAL)
 
 const neighborIds = computed(() => {
   const id = selectedNodeId.value
@@ -247,7 +298,7 @@ function nodeOpacity(node: VisNode) {
 }
 
 function showNodeLabel(node: VisNode) {
-  if (visNodes.value.length <= LABEL_ALL_MAX) return true
+  if (visNodes.value.length <= LABEL_ALL_MAX || zoomReveal.value) return true
   return (
     node.id === selectedNodeId.value ||
     node.id === hoverId.value ||
@@ -259,9 +310,18 @@ function showNodeLabel(node: VisNode) {
 
 function showEdgeLabel(edge: VisEdge) {
   if (edge.id === selectedEdgeId.value) return true
-  if (visEdges.value.length <= 40) return true
+  if (visEdges.value.length <= EDGE_LABEL_MAX || zoomReveal.value) return true
   const id = selectedNodeId.value
   return id !== null && (edge.from === id || edge.to === id)
+}
+
+/** 箭头跟线走同一套强调语言：选中/邻接/命中的边用主色箭头 */
+function edgeMarker(edge: VisEdge) {
+  const hl =
+    edge.id === selectedEdgeId.value ||
+    isAdjacentEdge(edge) ||
+    hitEdgeIds.value.has(edge.id)
+  return hl ? 'url(#kg-arrow-hl)' : 'url(#kg-arrow)'
 }
 
 function isAdjacentEdge(edge: VisEdge) {

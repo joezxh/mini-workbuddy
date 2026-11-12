@@ -37,36 +37,3 @@ class VoiceReadyPayload(BaseModel):
     output_sample_rate: int = 24000
     provider: str
     provider_label: str
-
-
-# ── M3 配置化：三张配置表的写入 Schema ──────────────────────
-
-
-class AgentConfigIn(BaseModel):
-    agent_id: str
-    name: str
-    type: str = "agentscope"
-    model: str = "qwen-plus"
-    system_prompt: str = ""
-    tool_bindings: List = []
-    mcp_bindings: List = []
-    max_react_iters: int = 5
-    enable_plan: bool = True
-
-
-class VoiceRoleConfigIn(BaseModel):
-    role_id: str
-    role_name: str
-    greeting: str = ""
-    voice_identity: str = ""
-    language: str = "zh-CN"
-    agent_id: Optional[str] = None
-    case_type: Optional[str] = None
-
-
-class ToolPolicyIn(BaseModel):
-    tool_name: str
-    enabled: bool = True
-    timeout_ms: int = 8000
-    max_calls_per_turn: int = 2
-    max_result_bytes: int = 32768

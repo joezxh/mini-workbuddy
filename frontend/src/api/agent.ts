@@ -66,7 +66,7 @@ export interface AgentItem {
   id: number
   agent_code: string
   name: string
-  agent_type: string // CHAT / WORKFLOW / SKILL
+  agent_type: string // CHAT / WORKFLOW / SUPERAGENT
   category?: string | null
   description?: string | null
   is_active: boolean

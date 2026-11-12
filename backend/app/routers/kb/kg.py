@@ -386,10 +386,29 @@ def failed_segments(
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_VIEW)),
 ):
-    """抽取失败/未就绪的切片清单（含失败原因，供「溯源」Tab 重试）。"""
+    """抽取失败/未就绪的切片清单（含失败原因，供「溯源」Tab 重试）。
+
+    每条平级给出 ``stage`` / ``error_code`` / ``error``：前端按码取 i18n 文案，
+    ``error`` 是技术原文（只作悬浮详情），不必钻 `details` 里的旧形状。
+    阶段以两个标志位为准（结构是根因，优先报结构），`details` 内的两组键只作存证。
+    """
     from sqlalchemy import select
 
     from app.models.kb.kb_segment import KbSegment
+    from app.services.kb.kg import kg_failure
+
+    def _failure(s) -> dict:
+        details = s.graph_extraction_details or {}
+        if s.graph_structure_indexed is False:
+            stage, keys = kg_failure.STAGE_STRUCTURE, ("error", "error_code")
+        else:
+            stage, keys = kg_failure.STAGE_VECTOR, ("vector_error", "vector_error_code")
+        error = details.get(keys[0]) or ""
+        code = details.get(keys[1]) or (
+            kg_failure.classify_message(error, stage=stage) if error
+            else kg_failure.UNKNOWN
+        )
+        return {"stage": stage, "error_code": code, "error": error}
 
     tenant_id = _tenant_id(current_user)
     stmt = select(KbSegment).where(
@@ -406,6 +425,7 @@ def failed_segments(
                 "structure_indexed": s.graph_structure_indexed,
                 "vector_indexed": s.graph_indexed,
                 "details": s.graph_extraction_details,
+                **_failure(s),
             }
             for s in rows
             if s.graph_structure_indexed is False or s.graph_indexed is False
@@ -434,6 +454,8 @@ def rebuild_document_graph(
     图谱是从**切片**抽的：文档摄取失败时 ``kms_segment`` 为空，后台任务会
     扫到 0 个切片并"成功"结束（entities=0），前端却拿到 200 被误导——
     故此处对「无切片」直接 409，把「先重试解析」显式交回用户。
+    解析**进行中**也 409：此时可能已有部分切片，直接放行会与摄取完成后
+    自动提交的图谱构建撞锁（后台静默吞掉，前端不知道图谱没自动建）。
     """
     from sqlalchemy import select
 
@@ -441,18 +463,20 @@ def rebuild_document_graph(
     from app.services.kb.kg.kg_build_service import KgBuildService, submit_build
 
     tenant_id = _tenant_id(current_user)
-    if KgBuildService(db, tenant_id, kid).count_segments(body.document_uuid) == 0:
-        doc = db.execute(
-            select(KbDocument).where(
-                KbDocument.uuid_code == body.document_uuid,
-                KbDocument.knowledge_id == kid,
-                KbDocument.tenant_id == tenant_id,
-            )
-        ).scalar_one_or_none()
-        reason = (doc.error_detail if doc is not None else None) or (
-            "文档仍在解析中" if doc is not None and doc.status == "processing"
-            else "文档尚无切片"
+    doc = db.execute(
+        select(KbDocument).where(
+            KbDocument.uuid_code == body.document_uuid,
+            KbDocument.knowledge_id == kid,
+            KbDocument.tenant_id == tenant_id,
         )
+    ).scalar_one_or_none()
+    if doc is not None and doc.status == "processing":
+        raise HTTPException(
+            status_code=409,
+            detail="文档仍在解析中，请等解析完成后再抽取图谱",
+        )
+    if KgBuildService(db, tenant_id, kid).count_segments(body.document_uuid) == 0:
+        reason = (doc.error_detail if doc is not None else None) or "文档尚无切片"
         raise HTTPException(
             status_code=409,
             detail=f"该文档没有可抽取的切片（{reason}）；"

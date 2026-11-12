@@ -82,6 +82,7 @@ import {
 import { getRecentAuditLogs, getDashboardStats } from '@/api/admin'
 import type { AuditLogItem } from '@/api/admin'
 import { getDictionaryItems } from '@/api/dictionary'
+import { SHELL_PATH } from '@/utils/shellTab'
 
 
 // ========================
@@ -132,7 +133,8 @@ function formatNumber(n: number): string {
 }
 
 function navigateTo(target: string) {
-  router.push({ path: '/admin', query: { tab: target } })
+  // 本页已以内嵌 Tab 形式跑在外壳里，跳转等价于在外壳中开/激活另一个 Tab
+  router.push({ path: SHELL_PATH, query: { tab: target } })
 }
 
 const statsLoading = ref(false)
@@ -157,9 +159,9 @@ const fetchStats = async () => {
 // 快捷操作
 // ========================
 const quickActions = computed(() => [
-  { key: 'ai-chat', label: t('dashboard.actionAiChat'), icon: RobotOutlined, to: '/admin?tab=ai-chat', type: 'primary' as const },
+  { key: 'ai-chat', label: t('dashboard.actionAiChat'), icon: RobotOutlined, to: `${SHELL_PATH}?tab=ai-chat`, type: 'primary' as const },
   { key: 'wiki', label: t('dashboard.actionWiki'), icon: BookOutlined, to: '/wiki', type: 'default' as const },
-  { key: 'agent-management', label: t('dashboard.actionAgentMgmt'), icon: ApartmentOutlined, to: '/admin?tab=agent-management', type: 'default' as const },
+  { key: 'agent-management', label: t('dashboard.actionAgentMgmt'), icon: ApartmentOutlined, to: `${SHELL_PATH}?tab=agent-management`, type: 'default' as const },
 ])
 
 function handleAction(to: string) {
@@ -284,60 +286,6 @@ onMounted(() => {
 .dashboard-panel {
   width: 100%;
   height: 100%;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.tab-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0;
-  min-height: 36px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.tab-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px 6px 0 0;
-  border: 1px solid var(--border-glow);
-  border-bottom: none;
-  background: var(--bg-surface);
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--fg-secondary);
-  transition: all 0.2s;
-  user-select: none;
-  max-width: 180px;
-
-  &.active {
-    background: var(--bg-active);
-    color: var(--accent-cyan);
-    border-color: var(--accent-cyan);
-    font-weight: 600;
-  }
-}
-
-.tab-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.tab-title {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dashboard-content {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
   padding: 20px;
 }

@@ -218,6 +218,49 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
     async def configure_session(self, **kwargs) -> None:
         return None  # 会话在 connect 一次性配置
 
+    async def update_session(self, instructions: str = "",
+                              mcp_tools: Optional[list] = None) -> None:
+        """运行时热更新会话配置（instructions + tools）。
+
+        编排器在 Agent 切换时调用此方法，将新 Agent 的 system_prompt
+        和 tools 注入到已连接的 RealtimeAgent，实现零代码热切换。
+
+        策略：
+        1. 更新内部状态 _system_prompt / _mcp_tool_schemas
+        2. 尝试动态设置 agent 的 system_prompt 属性
+        3. 重新构建 toolkit 并更新 agent
+        4. 若 AgentScope 版本不支持动态更新，记录日志，下次 reconnect 生效
+        """
+        if instructions:
+            self._system_prompt = instructions
+        if mcp_tools is not None:
+            self._mcp_tool_schemas = mcp_tools
+
+        if self._agent is None:
+            return
+
+        # 尝试动态更新 agent 的 system_prompt
+        try:
+            if hasattr(self._agent, "system_prompt"):
+                self._agent.system_prompt = instructions or self._system_prompt
+            elif hasattr(self._agent, "_system_prompt"):
+                self._agent._system_prompt = instructions or self._system_prompt
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[Provider] 更新 agent system_prompt 失败（可能不支持）: {e}")
+
+        # 尝试动态更新 agent 的 toolkit
+        try:
+            new_toolkit = self._toolkit_factory()
+            if hasattr(self._agent, "toolkit"):
+                self._agent.toolkit = new_toolkit
+            elif hasattr(self._agent, "_toolkit"):
+                self._agent._toolkit = new_toolkit
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"[Provider] 更新 agent toolkit 失败（可能不支持）: {e}")
+
+        logger.info(f"[Provider] 会话热更新: instructions={len(instructions)} chars, "
+                     f"tools={len(self._mcp_tool_schemas)}")
+
     async def events(self) -> AsyncGenerator[ProviderEvent, None]:
         while True:
             item = await self._queue.get()

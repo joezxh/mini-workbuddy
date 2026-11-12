@@ -96,13 +96,20 @@ import {
   CloudSyncOutlined,
   QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
-import DashboardPanel from '@/views/Dashboard.vue' // 默认门户占位（登录后首页，合并自原 dashboard/index + DashboardPanel）
 import { componentMap, dynamicComponentRegistry } from './componentMap'
-import { ADMIN_SHELL_ACTIVE } from '@/utils/shellTab'
+import {
+  ADMIN_SHELL_ACTIVE,
+  CONSOLE_TAB_KEY,
+  consoleTabDefinition,
+  resolveInitialTab,
+} from '@/utils/shellTab'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+
+// componentMap 的键集：URL `?tab=` 合法性判定的单一事实来源
+const TAB_KEYS = Object.keys(componentMap)
 
 // ---- Tab 管理 ----
 interface TabItem {
@@ -205,19 +212,18 @@ function activateTab(key: string) {
 
 // 始终保留「控制台」页签（不可关闭），作为首页默认展示
 function openConsoleTab() {
-  if (openTabs.value.some(tab => tab.key === 'dashboard')) return
-  openTabs.value.push({
-    key: 'dashboard',
-    titleKey: 'userMenu.dashboard',
-    name: 'Dashboard',
-    icon: 'DashboardOutlined',
-    component: markRaw(DashboardPanel),
-    closable: false,
-  })
-  if (!activeTab.value) activeTab.value = 'dashboard'
+  if (openTabs.value.some(tab => tab.key === CONSOLE_TAB_KEY)) return
+  const def = consoleTabDefinition()
+  openTabs.value.unshift({ ...def, component: markRaw(componentMap[def.key]) })
+  if (!activeTab.value) activeTab.value = def.key
 }
-// 同步初始化「控制台」页签，确保首屏即带 Tab（与菜单打开行为一致）
+// 同步初始化「控制台」页签，确保首屏即带 Tab（不等菜单接口，也不等其他 Tab 启用）
 openConsoleTab()
+
+/** 按 URL 的 ?tab= 打开/激活页签；缺省或非法值都落到控制台页签 */
+function syncTabFromQuery() {
+  openOrActivateTab(resolveInitialTab(route.query.tab, TAB_KEYS))
+}
 
 // 提供给子组件的调用链路过滤器（来自 AgentManagement「链路」按钮跳转）
 const executionFilter = reactive<{ mode?: string; targetId?: string; label?: string }>({})
@@ -350,20 +356,28 @@ async function fetchMenus() {
     menuTree.value = (res.data?.data || res.data || []) as MenuItem[]
   } catch (e) {
     console.error('获取菜单失败', e)
+    return
+  }
+  // 菜单树不阻塞首屏，因此可能晚于 Tab 创建到达：回填已有 Tab 的名称与图标
+  backfillTabsFromMenus()
+}
+
+/** 用菜单树补齐 Tab 的 i18n 键/名称/图标（仅填缺省项，不覆盖动态命名） */
+function backfillTabsFromMenus() {
+  for (const tab of openTabs.value) {
+    const item = findMenuItem(tab.key)
+    if (!item) continue
+    if (!tab.titleKey) tab.titleKey = item.i18nKey
+    // 创建时菜单未就绪会把 name 退化成原始 key，此时才用菜单名纠正
+    if (!tab.name || tab.name === tab.key) tab.name = item.name || tab.name
+    if (!tab.icon) tab.icon = item.icon || ''
   }
 }
 
-onMounted(async () => {
-  await fetchMenus()
-  // 始终保留「控制台」页签（不可关闭）
+onMounted(() => {
+  // 首屏页签已由 setup 阶段的 openConsoleTab() 建好，这里只按 URL 激活目标页签
   openConsoleTab()
-  // 根据 URL 参数（来自左侧 rail 的点击）打开初始 Tab
-  const tab = route.query.tab as string
-  if (tab && componentMap[tab]) {
-    openOrActivateTab(tab)
-  } else if (!activeTab.value) {
-    activeTab.value = 'dashboard'
-  }
+  syncTabFromQuery()
 
   // 监听来自子组件的“打开技能管理”事件（如推理规则页点击 skill_code）
   window.addEventListener('open-skill-tab', handleOpenSkillTab)
@@ -380,6 +394,8 @@ onMounted(async () => {
   window.addEventListener('set-shell-tab-title', handleSetShellTabTitle)
   // 标记外壳在线，供子组件的 shellTab 工具判断能否以 Tab 形式打开
   ADMIN_SHELL_ACTIVE.value = true
+  // 菜单树只用于解析 Tab 的名称/图标：后台拉取，慢或失败都不压首屏页签
+  void fetchMenus()
 })
 function handleOpenSkillTab(e: Event) {
   const detail = (e as CustomEvent).detail as { packageId: string }
@@ -467,11 +483,8 @@ onUnmounted(() => {
 })
 
 // 监听 URL 参数（来自左侧 rail 的点击）：打开/激活对应 Tab
-watch(() => route.query.tab, (newTab) => {
-  const tab = newTab as string
-  if (tab && componentMap[tab]) {
-    openOrActivateTab(tab)
-  }
+watch(() => route.query.tab, () => {
+  syncTabFromQuery()
 })
 </script>
 

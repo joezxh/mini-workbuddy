@@ -38,12 +38,9 @@ import WikiIndex from '@/views/kms/wiki/index.vue'
 // 统一知识库工作台（spec 知识库统一化 §6）
 import KnowledgeBaseManager from '@/views/kms/KnowledgeBaseManager.vue'
 // 调解语音 RTC（迁移自 risk_control）
-import VoiceDemo from '@/views/duplex/VoiceDemo.vue'
+import DuplexDemo from '@/views/duplex/DuplexDemo.vue'
 import VoiceDemoLab from '@/views/voice-demo/VoiceDemo.vue'
-import VoiceSessionConfig from '@/views/admin/duplex/config/VoiceSessionConfig.vue'
 import VoiceModelConfig from '@/views/admin/duplex/config/VoiceModelConfig.vue'
-import AgentConfigPanel from '@/views/admin/ai-config/agents/AgentConfigPanel.vue'
-import ToolPolicyEditor from '@/views/admin/ai/components/ToolPolicyEditor.vue'
 // Wiki 文章查看 / 编辑 / RAG 测试：带动态参数（slug / id），由外壳 Tab 系统按需打开
 import WikiArticleView from '@/views/kms/wiki/ArticleView.vue'
 import WikiArticleEdit from '@/views/kms/wiki/ArticleEdit.vue'
@@ -84,13 +81,10 @@ export const componentMap: Record<string, Component> = {
   'kg-private-kb': markRaw(WikiIndex),
   'kg-knowledge-manager': markRaw(KnowledgeBaseManager),
   // 调解语音 RTC（迁移自 risk_control）
-  'voice-demo': markRaw(VoiceDemo),
+  'voice-demo': markRaw(DuplexDemo),
   // 语音能力 Demo（2026-11-10，docs/sql/menu_voice_demo.sql 2608；key 避开 duplex 的 voice-demo）
   'voice-demo-lab': markRaw(VoiceDemoLab),
-  'voice-roles': markRaw(VoiceSessionConfig),
   'voice-models': markRaw(VoiceModelConfig),
-  'voice-agents': markRaw(AgentConfigPanel),
-  'voice-tool-policy': markRaw(ToolPolicyEditor),
   // 孪生应用：sys_menu 2407 (/admin/digital-twin)，path 末段 = menuKey = i18n_key 末段
   'digital-twin': markRaw(TwinWorkspace),
 }

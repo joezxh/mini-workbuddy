@@ -9,6 +9,7 @@ import { useMenuStore } from '@/stores/menu'
 import type { MenuNode } from '@/types/menu'
 import SidebarItem from './SidebarItem.vue'
 import AppLogo from './AppLogo.vue'
+import { resolveMenuTarget, SHELL_PATH } from '@/utils/shellTab'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -27,19 +28,14 @@ function toggle() {
 }
 function onSelect(path: string) {
   if (!path) return
-  // 在控制台（/admin）中以 Tab 形式打开对应页面；菜单导航统一由左侧 rail 承担，不再重复菜单层
-  const m = path.match(/^\/admin\/([^/]+)/)
-  if (m) {
-    router.push({ path: '/admin', query: { tab: m[1] } })
-  } else {
-    router.push(path)
-  }
+  // 菜单导航统一由左侧 rail 承担：壳内页面在 /dashboard 以 Tab 打开，其余走真实路由
+  router.push(resolveMenuTarget(path))
 }
 </script>
 
 <template>
   <aside class="rail" :class="{ 'rail--collapsed': collapsed }">
-    <div class="rail-brand" @click="router.push('/admin?tab=dashboard')">
+    <div class="rail-brand" @click="router.push(SHELL_PATH)">
       <img v-if="!collapsed" src="/brand/logo-full.svg" style="width: 100%; height: 100%; object-fit: contain; display: block;" alt="MiniWorkBuddy" />
       <img v-else src="/brand/logo-icon.svg" class="rail-brand__icon" alt="MiniWorkBuddy" />
     </div>

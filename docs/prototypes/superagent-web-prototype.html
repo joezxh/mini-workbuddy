@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超级智能体 · Demo-web 原型（Chat/Feed/Ideas/Goals）</title>
+<style>
+:root{
+  --primary:#165DFF; --primary-l:#E8F1FF; --purple:#7B61FF; --purple-l:#F0EBFF;
+  --warn:#FF7D00; --warn-l:#FFF3E8; --danger:#F53F3F; --danger-l:#FFECE8;
+  --ok:#00B42A; --ok-l:#E8FFEA; --cyan:#0FC6C2; --cyan-l:#E8FFFE;
+  --text:#1D2129; --sub:#4E5969; --muted:#86909C; --line:#E5E6EB; --bg:#F2F3F5;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);background:var(--bg);font-size:14px}
+.shell{min-height:100vh;display:flex;flex-direction:column}
+/* 顶栏 */
+.topbar{height:52px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:20}
+.topbar .logo{font-weight:700;font-size:16px;color:var(--primary)}
+.topbar .crumb{color:var(--muted);font-size:13px}
+.topbar .sp{flex:1}
+.tag{font-size:12px;padding:2px 10px;border-radius:10px}
+.tag.ok{background:var(--ok-l);color:var(--ok)}
+.badge{background:var(--danger);color:#fff;border-radius:8px;font-size:11px;padding:1px 6px;margin-left:4px}
+/* 主体 */
+.main{flex:1;display:flex;min-height:0}
+.sidebar{width:220px;background:#101E42;color:#C9D1E5;flex-shrink:0;padding:12px 0;overflow-y:auto}
+.nav-group{padding:10px 16px 6px;font-size:12px;color:#6B7A99}
+.nav-item{padding:10px 20px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:14px;border-left:3px solid transparent}
+.nav-item:hover{color:#fff}
+.nav-item.active{background:#1A2C5E;color:#fff;border-left-color:var(--primary)}
+.nav-sub{padding-left:14px}
+.nav-sub .nav-item{padding:8px 16px;font-size:13px}
+.side-user{margin:16px 16px 0;padding:10px;border-radius:8px;background:#1A2C5E;font-size:12px;line-height:1.6}
+.content{flex:1;min-width:0;padding:16px;overflow-y:auto}
+/* 通用卡片 */
+.card{background:#fff;border-radius:8px;border:1px solid var(--line);padding:16px}
+.row{display:flex;align-items:center;gap:10px}
+.muted{color:var(--muted);font-size:12px}
+.sub{color:var(--sub);font-size:13px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 14px;font-size:13px;cursor:pointer}
+.btn:hover{border-color:var(--primary);color:var(--primary)}
+.btn.p{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn.p:hover{opacity:.85;color:#fff}
+.btn.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.btn.mini{padding:2px 10px;font-size:12px}
+.btn.danger-o{color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.view{display:none}
+.view.show{display:block}
+/* ===== Chat ===== */
+.chat-wrap{display:flex;gap:12px;height:calc(100vh - 52px - 32px)}
+.chat-sessions{width:200px;background:#fff;border:1px solid var(--line);border-radius:8px;flex-shrink:0;display:flex;flex-direction:column}
+.chat-sessions h4{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.sess{padding:10px 14px;border-bottom:1px solid #F7F8FA;cursor:pointer;font-size:13px}
+.sess.active{background:var(--primary-l);color:var(--primary)}
+.sess .muted{display:block;margin-top:2px}
+.chat-main{flex:1;min-width:0;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:8px}
+.chat-body{flex:1;overflow-y:auto;padding:18px}
+.chat-ctx{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.msg{display:flex;gap:10px;margin-bottom:16px}
+.msg .avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
+.msg.user{flex-direction:row-reverse}
+.msg.user .avatar{background:var(--primary)}
+.msg.ai .avatar{background:var(--purple)}
+.bubble{max-width:76%;background:#F2F3F5;border-radius:8px;padding:10px 14px;line-height:1.7}
+.msg.user .bubble{background:var(--primary);color:#fff}
+.toolcard{border:1px solid var(--cyan);background:var(--cyan-l);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:13px}
+.toolcard .head{cursor:pointer;font-weight:600;color:#0B8E8B;display:flex;gap:8px;align-items:center}
+.toolcard .body{margin-top:8px;display:none;border-top:1px dashed var(--cyan);padding-top:8px}
+.toolcard.open .body{display:block}
+.toolcard code{background:#fff;padding:1px 6px;border-radius:4px;font-size:12px}
+.confirmcard{border:1px solid var(--warn);background:var(--warn-l);border-radius:8px;padding:12px 14px;margin:8px 0}
+.confirmcard.l4{border-color:var(--purple);background:var(--purple-l)}
+.confirmcard .lv{font-size:11px;font-weight:700;padding:1px 8px;border-radius:8px;background:var(--warn);color:#fff;margin-right:6px}
+.confirmcard.l4 .lv{background:var(--purple)}
+.confirmcard .acts{margin-top:10px;display:flex;gap:8px}
+.audit-line{font-size:11px;color:var(--muted);margin-top:6px}
+.chat-input{border-top:1px solid var(--line);padding:12px;display:flex;gap:8px}
+.chat-input textarea{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px 12px;resize:none;font-family:inherit;height:64px;font-size:13px}
+.typing{display:inline-block}
+.typing i{display:inline-block;width:5px;height:5px;background:var(--muted);border-radius:50%;margin-right:3px;animation:b 1s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes b{0%,100%{opacity:.2}50%{opacity:1}}
+/* ===== Feed ===== */
+.feed-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.feed-filter{display:flex;gap:6px}
+.chip{border:1px solid var(--line);border-radius:14px;padding:3px 12px;font-size:12px;cursor:pointer;background:#fff}
+.chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.feed-list{max-width:760px;display:flex;flex-direction:column;gap:12px}
+.fcard{background:#fff;border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:14px 16px}
+.fcard.system{border-left-color:var(--primary)}
+.fcard.ai_batch{border-left-color:var(--purple)}
+.fcard.reminder{border-left-color:var(--cyan)}
+.fcard.approval{border-left-color:var(--warn)}
+.fcard.read{opacity:.6}
+.fcard .k{font-size:11px;font-weight:700;padding:1px 8px;border-radius:8px;margin-right:8px;color:#fff}
+.fcard.system .k{background:var(--primary)}.fcard.ai_batch .k{background:var(--purple)}
+.fcard.reminder .k{background:var(--cyan)}.fcard.approval .k{background:var(--warn)}
+.fcard .title{font-weight:600;font-size:14px}
+.fcard .body{color:var(--sub);margin-top:6px;line-height:1.7;font-size:13px}
+.fcard .acts{margin-top:10px;display:flex;gap:8px;align-items:center}
+.quiet-note{font-size:12px;color:var(--muted);background:#F7F8FA;border-radius:6px;padding:6px 10px;max-width:760px;margin-bottom:12px}
+/* ===== Ideas ===== */
+.ideas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.ocard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;cursor:pointer;transition:box-shadow .2s;position:relative}
+.ocard:hover{box-shadow:0 4px 16px rgba(22,93,255,.12)}
+.ocard.pinned::before{content:"置顶";position:absolute;top:10px;right:10px;font-size:11px;color:var(--warn);background:var(--warn-l);padding:1px 8px;border-radius:8px}
+.ocard .emo{font-size:26px}
+.ocard .pitch{font-weight:700;font-size:15px;margin:8px 0 4px}
+.ocard .detail{color:var(--sub);font-size:13px;line-height:1.6}
+.ocard .meta{margin-top:10px;display:flex;gap:6px;align-items:center}
+.kindtag{font-size:11px;padding:1px 8px;border-radius:8px}
+.kindtag.chat{background:var(--primary-l);color:var(--primary)}
+.kindtag.goal{background:var(--purple-l);color:var(--purple)}
+.kindtag.routine{background:var(--cyan-l);color:#0B8E8B}
+.kindtag.starter{background:#F2F3F5;color:var(--muted)}
+.sheet-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:40}
+.sheet-mask.show{display:flex;align-items:center;justify-content:center}
+.sheet{width:440px;background:#fff;border-radius:12px;padding:20px}
+.sheet h3{font-size:16px;margin-bottom:6px}
+.sheet .prompt{background:#F7F8FA;border-radius:8px;padding:10px 12px;font-size:13px;color:var(--sub);margin:12px 0;line-height:1.6}
+.sheet .acts{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.sheet .acts .btn{text-align:left;padding:10px 14px}
+/* ===== Goals ===== */
+.goal-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+.gcard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;cursor:pointer}
+.gcard:hover{border-color:var(--primary)}
+.gcard .t{font-weight:700;font-size:15px}
+.gcard .ctx{font-size:12px;color:var(--muted);margin:4px 0 10px}
+.prog{height:8px;background:#F2F3F5;border-radius:4px;overflow:hidden}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),#6AA1FF);border-radius:4px;transition:width .4s}
+.gcard .foot{display:flex;justify-content:space-between;margin-top:10px;align-items:center}
+.st{font-size:11px;padding:1px 8px;border-radius:8px}
+.st.active{background:var(--primary-l);color:var(--primary)}
+.st.paused{background:var(--warn-l);color:var(--warn)}
+.st.done{background:var(--ok-l);color:var(--ok)}
+.st.cancelled{background:#F2F3F5;color:var(--muted)}
+/* 抽屉 */
+.drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:30}
+.drawer-mask.show{display:block}
+.drawer{position:fixed;top:0;right:-520px;width:520px;height:100vh;background:#fff;box-shadow:-6px 0 24px rgba(0,0,0,.12);z-index:31;transition:right .25s;display:flex;flex-direction:column}
+.drawer.show{right:0}
+.drawer .dh{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.drawer .db{flex:1;overflow-y:auto;padding:16px 20px}
+.step{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.step input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--primary)}
+.step .s-t{font-size:14px}
+.step.done .s-t,.step.skipped .s-t{color:var(--muted);text-decoration:line-through}
+.step .s-tag{font-size:11px;padding:0 6px;border-radius:6px;background:#F2F3F5;color:var(--muted)}
+.h5{font-size:13px;font-weight:700;margin:18px 0 8px;color:var(--sub)}
+.note{font-size:13px;padding:8px 10px;border-left:3px solid var(--line);margin-bottom:8px;background:#FAFBFC;border-radius:0 6px 6px 0}
+.note.agent{border-left-color:var(--purple)}
+.note.system{border-left-color:var(--cyan)}
+.proposal{border:1px solid var(--purple);background:var(--purple-l);border-radius:8px;padding:12px;margin-bottom:10px}
+.proposal .ph{font-weight:600;font-size:13px}
+.proposal .pr{color:var(--sub);font-size:12px;margin-top:4px}
+.toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#1D2129;color:#fff;padding:9px 22px;border-radius:6px;font-size:13px;z-index:99;display:none}
+.evidence{background:#F7F8FA;border:1px dashed var(--line);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--sub);line-height:1.8;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <span class="logo">天阙民商事Demo工作平台</span>
+    <span class="crumb">超级智能体 › <b id="crumbItem">对话</b></span>
+    <span class="sp"></span>
+    <span class="tag ok" id="llmTag">模型就绪 llm_ready=true</span>
+    <button class="btn mini" onclick="degrade()">演示：切换无模型降级</button>
+    <span style="position:relative">🔔<span class="badge" id="unreadBadge">4</span></span>
+    <span class="muted">李Demo · 滨江Demo中心</span>
+  </div>
+  <div class="main">
+    <div class="sidebar">
+      <div class="nav-group">Case管理</div>
+      <div class="nav-item">📁 Case列表</div>
+      <div class="nav-item">📋 待办任务</div>
+      <div class="nav-group">超级智能体</div>
+      <div class="nav-sub">
+        <div class="nav-item active" data-v="chat" onclick="go('chat')">💬 对话</div>
+        <div class="nav-item" data-v="feed" onclick="go('feed')">🌊 动态<span class="badge" id="feedBadge">4</span></div>
+        <div class="nav-item" data-v="ideas" onclick="go('ideas')">💡 点子</div>
+        <div class="nav-item" data-v="goals" onclick="go('goals')">🎯 目标</div>
+      </div>
+      <div class="nav-group">系统管理</div>
+      <div class="nav-item">⚙️ 操作日志（审计）</div>
+      <div class="side-user">tenant_id=1003 滨江Demo中心<br>角色：mediator（承办Case可见）<br>灰度：superagent.enabled=✓ feed/goals/chat/ideas</div>
+    </div>
+    <div class="content">
+
+      <!-- ============ Chat ============ -->
+      <div class="view show" id="v-chat">
+        <div class="chat-wrap">
+          <div class="chat-sessions">
+            <h4>会话（scene=superagent）</h4>
+            <div class="sess active">漏水纠纷·案20261028001<span class="muted">带Case上下文 · 10-02</span></div>
+            <div class="sess">赡养纠纷·案20260930012<span class="muted">昨日</span></div>
+            <div class="sess">欠薪系列案<span class="muted">上周</span></div>
+          </div>
+          <div class="chat-main">
+            <div class="chat-body" id="chatBody">
+              <div class="msg user"><div class="avatar">李</div><div class="bubble">这起漏水纠纷的争议焦点和证据缺口是什么？</div></div>
+              <div class="msg ai"><div class="avatar">智</div><div class="bubble">
+                根据案卷，本案争议焦点为<b>损失金额认定</b>：楼上传方认可漏水事实但对 12,000 元维修报价存疑。证据缺口有三：①缺第三方定损报告；②物业勘查记录未附现场照片；③沙发受损价值无凭证。建议先委托评估，参照同类判例（(2025)杭滨民初字第X号）赔偿区间约 6,000–9,000 元。
+                <div class="toolcard open"><div class="head" onclick="this.parentNode.classList.toggle('open')">🔧 工具调用轨迹（MCP）<span class="muted">3 次 · 点击折叠</span></div>
+                  <div class="body">
+                    ① <code>case.get(caseId=20261028001)</code> → Case要素/状态 MEDIATING ✓ 92ms<br>
+                    ② <code>Demo_record.list(caseId)</code> → 2 条纪要 ✓ 45ms<br>
+                    ③ <code>case.search_similar(disputeType=财产损害赔偿)</code> → 5 件同类案 ✓ 130ms
+                  </div></div>
+              </div></div>
+              <div class="msg ai"><div class="avatar">智</div><div class="bubble">
+                我可以把这份<b>争议焦点与证据缺口清单</b>回写为Case纪要（L3 需您确认）：
+                <div class="confirmcard"><span class="lv">L3</span><b>回写 Demo_record</b>
+                  <div class="sub" style="margin-top:6px">内容：争议焦点=损失金额；缺口=定损报告/照片/沙发凭证；引用判例 2 则。</div>
+                  <div class="acts"><button class="btn ok mini" onclick="l3Confirm(this)">确认回写</button><button class="btn mini" onclick="l3Dismiss(this)">不写入</button></div>
+                  <div class="audit-line" id="l3audit"></div>
+                </div>
+              </div></div>
+            </div>
+            <div class="chat-input">
+              <textarea id="chatText" placeholder="向智能体提问，工具将经 MCP 调用业务模块（SSE 流式：TEXT_DELTA/TOOL_CALL/…）">参照同类判例，帮我起草漏水纠纷的Demo开场白</textarea>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <button class="btn p" onclick="sendChat()">发送</button>
+                <button class="btn danger-o" onclick="abortChat()">中断</button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-ctx">
+            <div class="card"><b>Case上下文</b><span class="st active" style="margin-left:6px">MEDIATING</span>
+              <div class="sub" style="margin-top:8px;line-height:1.8">案号 20261028001<br>类型：邻里漏水·财产损害<br>标的：12,000 元<br>双方：3 楼张某 ↔ 4 楼王某<br>承办：李Demo</div>
+              <div class="muted" style="margin-top:6px">context_type=case · context_id=20261028001</div>
+            </div>
+            <div class="card"><b>关联目标</b>
+              <div class="sub" style="margin-top:8px">促成一次性赔偿并签协议</div>
+              <div class="prog" style="margin-top:8px"><i style="width:33%"></i></div>
+              <div class="muted" style="margin-top:4px">进度 33% · check-in daily 09:00</div>
+              <button class="btn mini" style="margin-top:10px" onclick="go('goals');openGoal(0)">查看目标详情</button>
+            </div>
+            <div class="card"><b>会话产物</b>
+              <div class="muted" style="margin-top:8px;line-height:2">📄 争议焦点清单（待确认）<br>📄 Demo话术初稿 ×1<br>📄 问题清单 issue_list ×1</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Feed ============ -->
+      <div class="view" id="v-feed">
+        <div class="feed-head">
+          <h3 style="font-size:17px">动态时间线</h3>
+          <button class="btn p" id="refreshBtn" onclick="refreshFeed()">换一批（触发 /feed/refresh）</button>
+          <button class="btn" onclick="location.reload()">标记全部已读</button>
+          <div class="sp" style="flex:1"></div>
+          <span class="muted">FEED_DEFAULT_TIME=08:00 · 去抖 4h · KEEP=200</span>
+        </div>
+        <div class="quiet-note">quiet 语义：新批次仅产生<b>一条通知</b>（顶栏铃铛 + 桌面/微信推送），不向对话流插入任何消息，不打扰当前 Chat。</div>
+        <div class="feed-filter" style="margin-bottom:12px">
+          <span class="chip active" onclick="feedFilter(this,'all')">全部</span><span class="chip" onclick="feedFilter(this,'system')">系统事件</span><span class="chip" onclick="feedFilter(this,'ai_batch')">AI 建议</span><span class="chip" onclick="feedFilter(this,'reminder')">check-in</span><span class="chip" onclick="feedFilter(this,'approval')">审批</span>
+        </div>
+        <div class="feed-list" id="feedList"></div>
+        <div class="evidence">SSE <code>GET /feed/stream</code> 长连接接收 <code>feed_posts / proposal_created / goal_updated</code> 事件；断线自动重连并以 <code>GET /feed/page</code> 拉取兜底。系统事件经 <code>ai_agent_event.dedup_key</code> 去重。</div>
+      </div>
+
+      <!-- ============ Ideas ============ -->
+      <div class="view" id="v-ideas">
+        <div class="feed-head">
+          <h3 style="font-size:17px">点子（策略沉淀与复用）</h3>
+          <button class="btn p" onclick="refreshIdeas()">🎲 换一批（LLM 生成）</button>
+          <button class="btn" onclick="addIdea()">＋ 手动记录经验</button>
+          <div class="sp" style="flex:1"></div>
+          <span class="muted" id="ideasHint">无模型时自动回落 STARTER 预置卡</span>
+        </div>
+        <div class="ideas-grid" id="ideasGrid"></div>
+        <div class="evidence">生成链路：IdeaRefreshJob 拼上下文（MCP <code>case.get</code> + <code>Demo_record.list</code> + 活跃 goals + 近期会话摘要）→ IDEAS_PROMPT → JSON 卡片（kind=chat/routine/goal）→ <code>fingerprint=sha1(context_id+kind+title)</code> 去重落库；LLM 失败回落 STARTER。</div>
+      </div>
+
+      <!-- ============ Goals ============ -->
+      <div class="view" id="v-goals">
+        <div class="feed-head">
+          <h3 style="font-size:17px">目标（结构化推进）</h3>
+          <button class="btn p" onclick="toast('原型演示：正式实现走 POST /goal/create')">＋ 新建目标</button>
+          <div class="sp" style="flex:1"></div>
+          <span class="muted">点卡片查看详情：step 勾选(L2) / 提案审批(L4) / 完案联动建议</span>
+        </div>
+        <div class="goal-list" id="goalList"></div>
+        <div class="evidence">状态机 <code>active ⇄ paused → done | cancelled</code>；step 五态，全 done/skipped 自动完案；Agent 改计划仅写 <code>ai_goal_proposal</code>（base_version 乐观锁），accept 才生效并 version+1，<b>永不背用户改写</b>。</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 目标详情抽屉 -->
+<div class="drawer-mask" id="drawerMask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dh"><h3 id="dTitle" style="font-size:16px">目标详情</h3><span class="sp" style="flex:1"></span><button class="btn mini" onclick="closeDrawer()">✕ 关闭</button></div>
+  <div class="db" id="drawerBody"></div>
+</div>
+
+<!-- 点子动作 sheet -->
+<div class="sheet-mask" id="sheetMask">
+  <div class="sheet">
+    <h3 id="sheetTitle">点子</h3>
+    <div class="sub" id="sheetDetail"></div>
+    <div class="prompt" id="sheetPrompt"></div>
+    <div class="acts">
+      <button class="btn" onclick="ideaApply('chat')">💬 发送到对话（预填 prompt 打开 Chat）</button>
+      <button class="btn" onclick="ideaApply('goal')">🎯 创建目标（转多步 Goal，L3 确认）</button>
+      <button class="btn" onclick="ideaApply('routine')">⏰ 建立节律提醒（routine · weekly check-in）</button>
+      <button class="btn" onclick="ideaApply('pin')">📌 置顶 / 忽略</button>
+    </div>
+    <div style="margin-top:12px;text-align:right"><button class="btn" onclick="closeSheet()">关闭</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ========= 导航 ========= */
+const names={chat:'对话',feed:'动态',ideas:'点子',goals:'目标'};
+function go(v){
+  document.querySelectorAll('.view').forEach(e=>e.classList.remove('show'));
+  document.getElementById('v-'+v).classList.add('show');
+  document.querySelectorAll('.nav-sub .nav-item').forEach(e=>e.classList.toggle('active',e.dataset.v===v));
+  document.getElementById('crumbItem').textContent=names[v];
+}
+function toast(s){const t=document.getElementById('toast');t.textContent=s;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600)}
+let llmReady=true;
+function degrade(){
+  llmReady=!llmReady;
+  document.getElementById('llmTag').textContent=llmReady?'模型就绪 llm_ready=true':'⚠ llm_ready=false（无模型降级中）';
+  document.getElementById('llmTag').style.background=llmReady?'':'var(--danger-l)';
+  document.getElementById('llmTag').style.color=llmReady?'':'var(--danger)';
+  document.getElementById('refreshBtn').disabled=!llmReady;
+  document.getElementById('ideasHint').textContent=llmReady?'无模型时自动回落 STARTER 预置卡':'当前无模型：已回落 STARTER 预置卡，Feed 批次跳过并记录';
+  toast(llmReady?'恢复：模型就绪':'演示降级：llm_ready=false → Chat 置灰入口保留但生成中断、Feed 批次跳过、Ideas 回落预置');
+}
+
+/* ========= Chat ========= */
+let streamTimer=null;
+function sendChat(){
+  if(!llmReady){toast('无模型可用：Chat 生成入口已置灰（降级演示）');return}
+  const body=document.getElementById('chatBody');
+  const text=document.getElementById('chatText').value.trim()||'（空）';
+  body.insertAdjacentHTML('beforeend',`<div class="msg user"><div class="avatar">李</div><div class="bubble">${text}</div></div>`);
+  const d=document.createElement('div');d.className='msg ai';
+  d.innerHTML='<div class="avatar">智</div><div class="bubble"><span class="typing"><i></i><i></i><i></i></span><span class="delta"></span></div>';
+  body.appendChild(d);body.scrollTop=body.scrollHeight;
+  const full='好的。开场白草稿：\u201c两位邻居好，今天请两位来，是把漏水的事一次说清。先确认勘查事实，再参照同类判例协商一个都能接受的数额，目标是今天定下方案、下周签协议。\u201d\n（已完成 TOOL_CALL: case.search_similar → 命中 5 件同类案）\n需要我把这段初稿写入Case沟通纪要吗？（L3）';
+  const delta=d.querySelector('.delta');let i=0;
+  streamTimer=setInterval(()=>{
+    delta.textContent=full.slice(0,i+=3).replace(/\n/g,'\n');
+    delta.style.whiteSpace='pre-wrap';
+    body.scrollTop=body.scrollHeight;
+    if(i>=full.length){clearInterval(streamTimer);
+      d.querySelector('.bubble').insertAdjacentHTML('beforeend',
+      `<div class="toolcard"><div class="head" onclick="this.parentNode.classList.toggle('open')">🔧 TOOL_CALL → TOOL_RESULT（SSE 事件流）</div><div class="body"><code>case.search_similar(disputeType=财产损害赔偿, area=杭州)</code> → 5 件同类案（平均赔偿 7,400 元）✓ 121ms</div></div>`);}
+  },28);
+}
+function abortChat(){if(streamTimer){clearInterval(streamTimer);toast('已发送 POST /chat/abort(runId) → 中断生成（InterruptedReply）')}}
+function l3Confirm(btn){
+  btn.parentNode.querySelector('.acts').innerHTML='<span class="st done">✓ 已确认，经 MCP Demo_record.append 写入</span>';
+  document.getElementById('l3audit').textContent='审计：ai_agent_operation_log · actor=李Demo · level=L3 · tool=Demo_record.append · idem_key=rec_20261102_a17 · result=success';
+  toast('L3 闭环：确认 → 写入业务 → 审计留痕');
+}
+function l3Dismiss(btn){btn.parentNode.parentNode.querySelector('.acts').innerHTML='<span class="st cancelled">已忽略，未写入</span>'}
+
+/* ========= Feed ========= */
+const feedData=[
+ {kind:'approval',title:'待确认：赡养纠纷目标计划修订提案（L4）',body:'Agent 建议新增步骤\u201c组织一次上门探亲预演\u201d，基于 goal.version=3 生成，等待您 accept/dismiss。',time:'09:12',ctx:'案20260930012'},
+ {kind:'system',title:'新派单：物业群诉系列案（23 户）',body:'dispatch=DISPATCHED，争议焦点：电梯广告收益分配。已生成本案上下文，可一键发起对话。',time:'08:47',ctx:'案20261102007'},
+ {kind:'ai_batch',title:'今日 3 件待签协议Case到期提醒',body:'08:00 主动批次：①漏水案评估报告已到，可约双方定签约时间；②家事案情绪缓和，建议本周跟进；③欠薪案分期方案反馈正向。',time:'08:00',ctx:'每日批次',prompt:'梳理我今天到期的待签协议Case并给出跟进顺序'},
+ {kind:'reminder',title:'check-in 到期：漏水赔偿目标',body:'daily 09:00 · 今日应推进\u201c提出赔偿区间\u201d：可先联系保险公司调取定损，再按同类判例 6,000–9,000 元区间拟方案。',time:'09:00',ctx:'目标·漏水案',prompt:'帮我按判例区间起草赔偿方案对比表'},
+ {kind:'system',title:'司法确认结果回传：10-28 协议获裁定有效',body:'Case状态 MEDIATING → JUDICIAL_CONFIRMING 通过，目标\u201c促成签署并司法确认\u201d已自动完案（全 step done）。',time:'昨日 17:20',ctx:'案20261015003'},
+ {kind:'ai_batch',title:'停滞提示：案20260930012 在 MEDIATING 已 16 天无推进',body:'超 15 天阈值。建议行动：先单独约谈两兄弟厘清经济补偿诉求，再安排家庭会议。',time:'昨日 08:00',ctx:'案20260930012',prompt:'为赡养纠纷单独约谈起草提问清单'},
+];
+const kindName={system:'系统',ai_batch:'AI建议',reminder:'提醒',approval:'审批'};
+function renderFeed(filter){
+  const box=document.getElementById('feedList');box.innerHTML='';
+  feedData.forEach((f,idx)=>{
+    if(filter&&filter!=='all'&&f.kind!==filter)return;
+    const el=document.createElement('div');
+    el.className='fcard '+f.kind+(f._read?' read':'');
+    el.dataset.k=f.kind;
+    el.innerHTML=`<div class="row"><span><span class="k">${kindName[f.kind]}</span><span class="title">${f.title}</span></span>
+      <span class="sp" style="flex:1"></span><span class="muted">${f.time} · ${f.ctx}</span></div>
+      <div class="body">${f.body}</div>
+      <div class="acts">
+        ${f.prompt?`<button class="btn p mini" onclick="feedToChat(${idx})">带 prompt 发起对话</button>`:''}
+        ${f.kind==='approval'?`<button class="btn mini" onclick="go('goals');openGoal(1)">去审批</button>`:''}
+        <button class="btn mini" onclick="feedRead(${idx},this)">标记已读</button>
+        <span class="muted">status=unread</span>
+      </div>`;
+    box.appendChild(el);
+  });
+}
+function feedFilter(el,k){document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderFeed(k)}
+function feedRead(idx,btn){feedData[idx]._read=true;btn.parentNode.querySelector('.span')
+  ;renderFeedCurrent();updUnread(-1);toast('POST /feed/read → status: unread → read')}
+function renderFeedCurrent(){const a=document.querySelector('.chip.active');renderFeed(a?a.textContent==='全部'?'all':Object.keys(kindName).find(k=>kindName[k]===a.textContent):'all')}
+function feedToChat(idx){go('chat');document.getElementById('chatText').value=feedData[idx].prompt||feedData[idx].title;feedData[idx]._read=true;updUnread(-1);toast('已带入 prompt（卡片动作→chat/send 预填），点\u201c发送\u201d即流式');document.getElementById('chatText').focus()}
+function refreshFeed(){
+  if(!llmReady)return;
+  feedData.unshift({kind:'ai_batch',title:'（新批次）漏水案：可参考同类判例给出评估区间',body:'刚生成的主动建议：双方对报价分歧大，判例显示以第三方定损为准的Demo成功率更高。',time:'刚刚',ctx:'每日批次',prompt:'列出漏水定损相关的同类判例与赔偿区间'});
+  updUnread(1);renderFeed('all');document.querySelector('.chip').click();toast('POST /feed/refresh：LLM 批次产生 → 落 ai_feed_post(kind=ai) → SSE push + 微信/企微通知（quiet：不进 chat）');
+}
+function updUnread(d){const n=Math.max(0,4+d);document.getElementById('unreadBadge').textContent=n;document.getElementById('feedBadge').textContent=n}
+
+/* ========= Ideas ========= */
+const ideaData=[
+ {emo:'🔍',pitch:'先评估、后议价：漏水损失三步定损',detail:'争议焦点在损失金额时，先安抚情绪，引入第三方评估锁定基数，再参照同类判例给出赔偿区间，避免各执一词。',kind:'chat',prompt:'帮我起草漏水纠纷Demo开场白并列出争议焦点与可引用判例',src:'AI·依据案20261028001要素',pinned:true},
+ {emo:'🏠',pitch:'亲情修复 + 一次性补偿组合方案',detail:'从赡养案纪要提炼：当事人对经济补偿敏感、更看重探望频率。转为目标可拆：单独沟通→探亲预演→补偿协议→回访。',kind:'goal',prompt:'',src:'AI·纪要提炼',pinned:false},
+ {emo:'💰',pitch:'欠薪分期支付模板协议',detail:'Demo员沉淀：小额多数欠薪案用分期支付模板达成率高，可复用到同类Case并沉淀为团队共享。',kind:'routine',prompt:'',src:'手动·团队共享',pinned:false},
+ {emo:'👥',pitch:'群体纠纷代表人谈判框架',detail:'群体性物业纠纷：先推举 3 名代表、分别背对背摸底诉求底线，再集中谈判，防止情绪传染。',kind:'chat',prompt:'为物业群诉案起草代表人谈判流程与背对背摸底问题清单',src:'STARTER 预置',pinned:false},
+ {emo:'🧾',pitch:'证据缺口清单先行',detail:'正式Demo前用问题清单工具生成双方证据缺口，缺什么先补什么，减少当庭（现场）僵持。',kind:'chat',prompt:'为本案生成争议焦点与证据缺口清单',src:'AI·近期会话摘要',pinned:false},
+ {emo:'⏰',pitch:'每周回访高风险家事案',detail:'签署协议后 4 周内每周一回访，履约率显著提升；转为 weekly:MON 09:00 check-in。',kind:'routine',prompt:'',src:'AI·同类案例统计',pinned:false},
+];
+function renderIdeas(){
+  const g=document.getElementById('ideasGrid');g.innerHTML='';
+  ideaData.forEach((d,i)=>{
+    g.insertAdjacentHTML('beforeend',`<div class="ocard ${d.pinned?'pinned':''}" onclick="openSheet(${i})">
+      <div class="emo">${d.emo}</div><div class="pitch">${d.pitch}</div>
+      <div class="detail">${d.detail}</div>
+      <div class="meta"><span class="kindtag ${d.kind}">${{chat:'转对话',goal:'转目标',routine:'转提醒'}[d.kind]}</span>
+      <span class="kindtag starter">${d.src}</span></div></div>`);
+  });
+}
+let curIdea=0;
+function openSheet(i){curIdea=i;const d=ideaData[i];
+  document.getElementById('sheetTitle').textContent=d.emo+' '+d.pitch;
+  document.getElementById('sheetDetail').textContent=d.detail;
+  document.getElementById('sheetPrompt').textContent='prompt：'+(d.prompt||'（'+{goal:'将转为多步目标，创建前 L3 确认拆解方案',routine:'将建立 weekly:MON 09:00 节律提醒'}[d.kind]+'）');
+  document.getElementById('sheetMask').classList.add('show');}
+function closeSheet(){document.getElementById('sheetMask').classList.remove('show')}
+function ideaApply(a){
+  const m={chat:'POST /idea/apply(kind=chat) → 打开 Chat 并预填 prompt',goal:'POST /idea/apply(kind=goal) → 建目标拆步骤（L3 确认后落 ai_goal，idea.status=applied, applied_ref=goal:{id}）',routine:'POST /idea/apply(kind=routine) → 写 check_in_cron=weekly:MON 09:00',pin:'PUT /idea/pin → status: new → pinned'};
+  closeSheet();go(a==='chat'?'chat':a==='goal'?'goals':'feed');toast('点子动作：'+m[a]);
+}
+function refreshIdeas(){
+  if(!llmReady){toast('llm_ready=false：回落 STARTER 预置卡');return}
+  ideaData.unshift({emo:'🤖',pitch:'（新生成）评估报告到手，先约保险公司谈判',detail:'根据最新纪要：保险公司定损 7,800 元已出具，可作为议价锚点，建议先与楼上方确认投保理赔流程。',kind:'chat',prompt:'帮我把保险定损结果整理成双方都能接受的赔偿方案',src:'AI·刚生成',pinned:false});
+  renderIdeas();toast('POST /idea/refresh：IDEAS_PROMPT→JSON 卡片→fingerprint 去重→落库');
+}
+function addIdea(){ideaData.unshift({emo:'✍️',pitch:'（手动）背对背先谈赔偿底数',detail:'Demo员经验：双方见面前各自单独谈预期底数，能显著缩短现场拉锯。',kind:'chat',prompt:'',src:'手动',pinned:false});renderIdeas();toast('POST /idea/create：手动记录，source=manual')}
+
+/* ========= Goals ========= */
+const goalData=[
+ {title:'促成漏水纠纷一次性赔偿并签协议',ctx:'case·20261028001',status:'active',progress:33,cron:'daily 09:00',next:'明日 09:00',due:'2026-11-15',source:'idea 转化',
+  steps:[{t:'联系双方确认到场',s:'done'},{t:'现场勘查/委托评估损失',s:'done'},{t:'提出赔偿区间',s:'in_progress'},{t:'草拟Demo协议',s:'pending'},{t:'双方签署',s:'pending'},{t:'申请司法确认',s:'pending'}],
+  notes:[{k:'agent',c:'Agent：评估报告已到（7,800 元），建议以此为锚点提出区间（L2 自动记录）'},{k:'progress',c:'李Demo：已完成现场勘查，物业记录归档'},{k:'system',c:'check-in daily 09:00 触发 Feed 提醒 + 企微应用消息'}],
+  proposals:[{txt:'建议新增步骤：委托伤残鉴定（预计 7 天）',reason:'出现新病历主张人身损害；base_version=2',st:'pending'}]},
+ {title:'赡养纠纷：亲情修复 + 补偿方案落地',ctx:'case·20260930012',status:'active',progress:50,cron:'weekly:MON 09:00',next:'11-09 09:00',due:'2026-12-01',source:'手动',
+  steps:[{t:'单独沟通两兄弟底线',s:'done'},{t:'组织家庭会议',s:'done'},{t:'拟定探望+补偿组合协议',s:'in_progress'},{t:'签署并回访 4 次',s:'pending'}],
+  notes:[{k:'agent',c:'Agent 检测到停滞 16 天 → 已生成 Feed 提示（不代办）'}],
+  proposals:[{txt:'建议将 due 顺延至 2026-12-20 并新增步骤\u201c探亲预演\u201d',reason:'当事人出差；L4 提案等待 accept',st:'pending'}]},
+ {title:'欠薪系列案（23 户）分期方案签署',ctx:'case·20261102007',status:'paused',progress:16,cron:'weekdays 09:00',next:'暂停中',due:'2026-11-30',source:'chat 建议（L3 已确认）',
+  steps:[{t:'推举职工代表 3 名',s:'done'},{t:'企业偿付能力摸底',s:'blocked'},{t:'分期支付模板谈判',s:'pending'},{t:'分批签署',s:'pending'}],
+  notes:[{k:'system',c:'step\u201c企业偿付能力摸底\u201d转 blocked：等待财务报表'}],proposals:[]},
+ {title:'10·15 协议签署并司法确认',ctx:'case·20261015003',status:'done',progress:100,cron:'—',next:'—',due:'2026-10-30',source:'手动',
+  steps:[{t:'草拟协议',s:'done'},{t:'双方签署',s:'done'},{t:'申请司法确认',s:'done'}],
+  notes:[{k:'system',c:'全部 step done/skipped → 目标自动完案 → Case状态推进建议（人工确认后落库）'}],proposals:[]},
+];
+const stepTag={done:'done',pending:'pending',in_progress:'in_progress',blocked:'blocked',skipped:'skipped'};
+function renderGoals(){
+  const g=document.getElementById('goalList');g.innerHTML='';
+  goalData.forEach((d,i)=>{
+    g.insertAdjacentHTML('beforeend',`<div class="gcard" onclick="openGoal(${i})">
+      <div class="row"><span class="t">${d.title}</span><span class="sp" style="flex:1"></span><span class="st ${d.status}">${d.status}</span></div>
+      <div class="ctx">🔗 ${d.ctx} · source=${d.source} · due ${d.due}</div>
+      <div class="prog"><i style="width:${d.progress}%"></i></div>
+      <div class="foot"><span class="muted">进度 ${d.progress}% · ${d.steps.filter(s=>s.s==='done').length}/${d.steps.length} 步</span>
+      <span class="muted">⏰ ${d.cron} · 下次 ${d.next}</span></div>
+      ${d.proposals.filter(p=>p.st==='pending').length?`<div class="foot"><span class="st" style="background:var(--purple-l);color:var(--purple)">📋 ${d.proposals.filter(p=>p.st==='pending').length} 条提案待审</span></div>`:''}
+    </div>`);
+  });
+}
+let curGoal=0;
+function openGoal(i){curGoal=i;const d=goalData[i];
+  document.getElementById('dTitle').textContent=d.title;
+  let h=`<div class="row"><span class="st ${d.status}">${d.status}</span><span class="muted">${d.ctx} · source=${d.source} · version=${d.version||0}</span></div>
+   <div class="prog" style="margin:12px 0 4px"><i style="width:${d.progress}%"></i></div>
+   <div class="muted">进度 ${d.progress}% · check-in ${d.cron} · 下次 ${d.next} · due ${d.due}</div>
+   <div style="margin:10px 0;display:flex;gap:8px">
+     <button class="btn mini" onclick="setStatus('paused')">⏸ 暂停</button><button class="btn mini" onclick="setStatus('active')">▶ 恢复</button>
+     <button class="btn mini" onclick="setStatus('cancelled')">✕ 取消（L3 确认）</button></div>
+   <div class="h5">步骤（勾选= L2 直执 + 审计；全 done/skipped 自动完案）</div>`;
+  d.steps.forEach((s,j)=>{
+    const settled=s.s==='done'||s.s==='skipped';
+    h+=`<div class="step ${s.s}"><input type="checkbox" ${s.s==='done'?'checked':''} ${settled?'disabled':''} onchange="toggleStep(${j},this)">
+      <div style="flex:1"><div class="s-t">${j+1}. ${s.t}</div></div><span class="s-tag">${stepTag[s.s]}</span>
+      <button class="btn mini" ${s.s==='skipped'||settled?'disabled':''} onclick="skipStep(${j})">跳过</button></div>`;
+  });
+  const pend=d.proposals.filter(p=>p.st==='pending');
+  h+=`<div class="h5">计划修订提案（L4 · Agent 只 propose，不改写）</div>`;
+  if(!pend.length)h+='<div class="muted">暂无待审提案</div>';
+  d.proposals.forEach((p,j)=>{
+    h+=`<div class="proposal" id="pp${j}"><div class="ph">${p.st==='pending'?'🟣':p.st==='accepted'?'✅':'🚫'} ${p.txt}</div>
+    <div class="pr">${p.reason} · status=${p.st}</div>
+    ${p.st==='pending'?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn ok mini" onclick="acceptProp(${j},this)">accept</button><button class="btn mini" onclick="dismissProp(${j},this)">dismiss</button></div>`:''}
+    <div class="audit-line"></div></div>`;
+  });
+  h+='<div class="h5">进展时间线（note）</div>';
+  d.notes.forEach(n=>{h+=`<div class="note ${n.k}">[${n.k}] ${n.c}</div>`});
+  h+=`<button class="btn" style="margin-top:8px" onclick="addNote()">＋ 记一笔进展（note/add · L1）</button>`;
+  document.getElementById('drawerBody').innerHTML=h;
+  document.getElementById('drawer').classList.add('show');document.getElementById('drawerMask').classList.add('show');
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('show');document.getElementById('drawerMask').classList.remove('show')}
+function refreshProgress(d){
+  const done=d.steps.filter(s=>s.s==='done'||s.s==='skipped').length;
+  d.progress=Math.round(done*100/d.steps.length);
+  if(done===d.steps.length&&d.status==='active'){
+    d.status='done';
+    d.notes.unshift({k:'system',c:'全部 step 已终结 → 目标自动完案；已向Case状态推进\u201c协议待签/Demo成功\u201d发出建议（L3，人工确认，不静默改业务表）'});
+    toast('自动完案：status→done，Case推进建议已产生（待人工确认）');
+  }
+}
+function toggleStep(j,cb){const d=goalData[curGoal];d.steps[j].s=cb.checked?'done':'pending';
+  if(cb.checked)d.steps[j].done_at='刚刚';refreshProgress(d);renderGoals();openGoal(curGoal);
+  toast(`POST /goal/step/update · L2 直执+留痕 · progress→${d.progress}%`);}
+function skipStep(j){const d=goalData[curGoal];d.steps[j].s='skipped';refreshProgress(d);renderGoals();openGoal(curGoal);toast('step→skipped，参与完案判定')}
+function acceptProp(j,btn){const d=goalData[curGoal];const p=d.proposals[j];p.st='accepted';
+  d.steps.push({t:p.txt.replace('建议新增步骤：','').replace('（预计 7 天）',''),s:'pending'});
+  d.version=(d.version||0)+1;
+  d.notes.unshift({k:'agent',c:'提案 accepted → 应用变更（追加步骤），goal.version+1='+d.version});
+  btn.parentNode.parentNode.querySelector('.audit-line').textContent='审计：/goal/proposal/accept · base_version 校验通过 · version+1';
+  renderGoals();openGoal(curGoal);toast('L4：accept 后按 payload 应用并把后续步骤顺延');}
+function dismissProp(j,btn){const d=goalData[curGoal];d.proposals[j].st='dismissed';
+  d.notes.unshift({k:'system',c:'提案 dismissed（留痕，不改计划）'});
+  renderGoals();openGoal(curGoal);toast('dismiss 仅留痕，Agent 永不背用户改写计划');}
+function addNote(){const d=goalData[curGoal];d.notes.unshift({k:'progress',c:'李Demo：手动记录一条进展（原型演示）'});openGoal(curGoal)}
+function setStatus(s){
+  if(s==='cancelled'){toast('L3：取消目标需确认弹层（原型简化为直接演示）');goalData[curGoal].status='cancelled';goalData[curGoal].notes.unshift({k:'system',c:'人工取消 → cancelled（终态）'});}
+  else{goalData[curGoal].status=s;}
+  renderGoals();openGoal(curGoal);
+}
+
+/* init */
+renderFeed('all');renderIdeas();renderGoals();
+</script>
+</body>
+</html>

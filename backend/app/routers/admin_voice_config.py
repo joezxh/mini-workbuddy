@@ -1,151 +1,25 @@
-"""调解语音配置管理端点（M3 配置化，差距分析 §9）。
+"""语音模型配置管理端点。
 
 挂载后路径：
-    /api/v1/admin/duplex/config/voice-roles
-    /api/v1/admin/duplex/config/agents
-    /api/v1/admin/duplex/config/tool-policy
+    /api/v1/admin/duplex/config/voice-models
 
-均为 UPSERT 语义（按唯一键 role_id / agent_id / tool_name 更新或新建）。
+数据来源：ai_api_key（API 密钥） + ai_chat_model（模型，type=7 语音实时）。
 """
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.db.database import SessionLocal
 from app.duplex.voice.voice_config import (
     list_voice_models,
     resolve_voice_config,
     create_voice_model,
     update_voice_model,
     set_default_voice_model,
-)
-from app.models.duplex.duplex_voice_config import (
-    AiAgentConfig,
-    DuplexVoiceConfig,
-    ToolPolicy,
-)
-from app.schemas.duplex.voice import (
-    AgentConfigIn,
-    ToolPolicyIn,
-    VoiceRoleConfigIn,
+    list_voice_provider_catalog,
 )
 
 router = APIRouter(prefix="/duplex", tags=["语音配置"])
-
-
-def _upsert(db, model, key_field: str, key_value: str, payload: Dict[str, Any]):
-    """按唯一键 UPSERT。"""
-    obj = db.query(model).filter_by(**{key_field: key_value}).first()
-    if not obj:
-        obj = model(**{key_field: key_value})
-    for k, v in payload.items():
-        if k == key_field:
-            continue
-        setattr(obj, k, v)
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
-
-
-# ── 角色语音配置 ──────────────────────────────────────────
-
-
-@router.post("/config/voice-roles")
-def upsert_voice_role(cfg: VoiceRoleConfigIn) -> Dict[str, Any]:
-    with SessionLocal() as db:
-        obj = _upsert(db, DuplexVoiceConfig, "role_id", cfg.role_id,
-                      cfg.model_dump())
-        return {"role_id": obj.role_id, "role_name": obj.role_name}
-
-
-@router.get("/config/voice-roles")
-def list_voice_roles() -> List[Dict[str, Any]]:
-    with SessionLocal() as db:
-        rows = db.query(DuplexVoiceConfig).all()
-        return [
-            {
-                "role_id": r.role_id,
-                "role_name": r.role_name,
-                "greeting": r.greeting,
-                "voice_identity": r.voice_identity,
-                "language": r.language,
-                "agent_id": r.agent_id,
-                "case_type": r.case_type,
-            }
-            for r in rows
-        ]
-
-
-@router.get("/config/voice-roles/{role_id}")
-def get_voice_role(role_id: str) -> Dict[str, Any]:
-    with SessionLocal() as db:
-        r = db.query(DuplexVoiceConfig).filter_by(role_id=role_id).first()
-        if not r:
-            raise HTTPException(status_code=404, detail="role not found")
-        return {
-            "role_id": r.role_id,
-            "role_name": r.role_name,
-            "greeting": r.greeting,
-            "voice_identity": r.voice_identity,
-            "language": r.language,
-            "agent_id": r.agent_id,
-            "case_type": r.case_type,
-        }
-
-
-# ── Agent 配置 ────────────────────────────────────────────
-
-
-@router.post("/config/agents")
-def upsert_agent(cfg: AgentConfigIn) -> Dict[str, Any]:
-    with SessionLocal() as db:
-        obj = _upsert(db, AiAgentConfig, "agent_id", cfg.agent_id, cfg.model_dump())
-        return {"agent_id": obj.agent_id, "name": obj.name}
-
-
-@router.get("/config/agents")
-def list_agents() -> List[Dict[str, Any]]:
-    with SessionLocal() as db:
-        rows = db.query(AiAgentConfig).all()
-        return [
-            {
-                "agent_id": r.agent_id,
-                "name": r.name,
-                "type": r.type,
-                "model": r.model,
-                "max_react_iters": r.max_react_iters,
-                "enable_plan": r.enable_plan,
-            }
-            for r in rows
-        ]
-
-
-# ── 工具调用策略 ──────────────────────────────────────────
-
-
-@router.post("/config/tool-policy")
-def upsert_tool_policy(cfg: ToolPolicyIn) -> Dict[str, Any]:
-    with SessionLocal() as db:
-        obj = _upsert(db, ToolPolicy, "tool_name", cfg.tool_name, cfg.model_dump())
-        return {"tool_name": obj.tool_name, "enabled": obj.enabled}
-
-
-@router.get("/config/tool-policy")
-def list_tool_policies() -> List[Dict[str, Any]]:
-    with SessionLocal() as db:
-        rows = db.query(ToolPolicy).all()
-        return [
-            {
-                "tool_name": r.tool_name,
-                "enabled": r.enabled,
-                "timeout_ms": r.timeout_ms,
-                "max_calls_per_turn": r.max_calls_per_turn,
-                "max_result_bytes": r.max_result_bytes,
-            }
-            for r in rows
-        ]
 
 
 # ── 语音模型配置（来自 ai_api_key / ai_chat_model）──────────
@@ -170,6 +44,16 @@ class VoiceModelSetDefaultIn(BaseModel):
 def get_voice_models() -> List[Dict[str, Any]]:
     """列出所有启用的语音模型（前端下拉 / 配置页使用）。"""
     return list_voice_models()
+
+
+@router.get("/config/voice-models/provider-catalog")
+def get_voice_provider_catalog() -> Dict[str, Any]:
+    """返回全双工语音厂商目录（含各厂商官方模型清单）。
+
+    供前端「语音模型配置」页按厂商过滤模型下拉，以及 VoiceDemo 页
+    Provider 列表仅展示有可用全双工模型的厂商。
+    """
+    return list_voice_provider_catalog()
 
 
 @router.get("/config/voice-models/default")

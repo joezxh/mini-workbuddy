@@ -8,25 +8,56 @@
 /** 轮次语音状态（对应后端 VoiceState） */
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'speaking'
 
-/** 下行协议帧类型（对应后端 EventType） */
+/** 下行协议帧类型（对应后端 EventType）
+ *
+ * 注意：handleFrame 会把点号帧名归一化为下划线（见 useVoiceChannel.ts），
+ * 因此点号版本（如 tool.confirm_required）和下划线版本（如 tool_confirm_required）
+ * 都需要在类型中声明，switch case 才可正常分发。
+ */
 export type VoiceEventType =
   | 'voice.ready'
+  | 'voice_ready'
   | 'audio'
   | 'audio.delta'
+  | 'audio_delta'
   | 'transcript'
   | 'transcript.delta'
+  | 'transcript_delta'
   | 'transcript.final'
+  | 'transcript_final'
   | 'response_started'
   | 'playback_cancelled'
   | 'tool_call'
   | 'tool_result'
   | 'tool.confirm_required'
+  | 'tool_confirm_required'
   | 'turn_update'
+  | 'agent_switched'
   | 'error'
   | 'pong'
 
-/** Provider 标识（对应后端 ProviderKey：dashscope | openai） */
-export type VoiceProvider = 'dashscope' | 'openai'
+/** Provider 标识（对应后端厂商目录 voice_catalog.VOICE_PROVIDER_CATALOG） */
+export type VoiceProvider = 'dashscope' | 'openai' | 'google' | 'volcengine' | 'iflytek'
+
+/** 厂商目录中的单个全双工语音模型 */
+export interface VoiceProviderCatalogModel {
+  code: string
+  name: string
+  is_default: boolean
+}
+
+/** 厂商目录条目（含官方全双工语音模型清单 + 文档链接） */
+export interface VoiceProviderCatalogItem {
+  key: VoiceProvider
+  label: string
+  default_base_url: string
+  api_key_url: string
+  docs_url: string
+  models: VoiceProviderCatalogModel[]
+}
+
+/** 厂商目录（key -> 条目） */
+export type VoiceProviderCatalog = Record<VoiceProvider, VoiceProviderCatalogItem>
 
 /** 协商后的能力集合（对应后端 build_ready_payload） */
 export interface VoiceCapabilities {
@@ -101,11 +132,15 @@ export interface VoiceModel {
   name: string
   model: string
   platform?: string
+  /** 归一化后的厂商 key（与目录对齐，如 dashscope / openai） */
+  provider_key?: VoiceProvider | string
   key_id?: number
   key_name?: string
   is_default: boolean
   status: number
   sort: number
+  /** 是否可用于建立实时连接（需为目录内全双工模型且 Key 非空） */
+  usable?: boolean
 }
 
 /** 默认语音模型解析结果 */
@@ -116,39 +151,4 @@ export interface VoiceModelDefault {
   key_name?: string
   platform?: string
   is_default?: boolean
-}
-
-// ── M3 配置化：三张配置表 ────────────────────────────────
-
-/** Agent 配置（ai_agent_config） */
-export interface AgentConfig {
-  agent_id: string
-  name: string
-  type: string
-  model: string
-  system_prompt: string
-  tool_bindings: string[]
-  mcp_bindings: string[]
-  max_react_iters: number
-  enable_plan: boolean
-}
-
-/** 角色语音配置（duplex_voice_config） */
-export interface VoiceRoleConfig {
-  role_id: string
-  role_name: string
-  greeting: string
-  voice_identity: string
-  language: string
-  agent_id?: string
-  case_type?: string
-}
-
-/** 工具调用策略（tool_policy） */
-export interface ToolPolicy {
-  tool_name: string
-  enabled: boolean
-  timeout_ms: number
-  max_calls_per_turn: number
-  max_result_bytes: number
 }

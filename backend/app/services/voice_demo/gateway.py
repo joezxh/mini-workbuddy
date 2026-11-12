@@ -46,7 +46,7 @@ async def probe_pool() -> Optional[dict]:
             r = await c.get("/v1/pool")
         return r.json() if r.status_code == 200 else None
     except httpx.HTTPError as exc:
-        logger.warning(f"voice-demo pool 探测失败: {exc}")
+        logger.warning(f"voice-demo pool 探测失败: {exc!r}")
         return None
 
 
@@ -63,7 +63,7 @@ async def transcribe(data: bytes, filename: str, language: str) -> dict:
                 files={"file": (filename, data, "application/octet-stream")},
             )
     except httpx.HTTPError as exc:
-        logger.warning(f"voice-demo ASR 转发失败: {exc}")
+        logger.warning(f"voice-demo ASR 转发失败: {exc!r}")
         raise UpstreamUnavailable(str(exc)) from exc
     return _unwrap_json(r)
 
@@ -74,7 +74,7 @@ async def synthesize(payload: dict) -> bytes:
         async with _client() as c:
             r = await c.post("/v1/audio/speech", json=payload)
     except httpx.HTTPError as exc:
-        logger.warning(f"voice-demo TTS 转发失败: {exc}")
+        logger.warning(f"voice-demo TTS 转发失败: {exc!r}")
         raise UpstreamUnavailable(str(exc)) from exc
     if r.status_code >= 500:
         raise UpstreamUnavailable(r.text[:300])

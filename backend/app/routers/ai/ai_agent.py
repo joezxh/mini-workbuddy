@@ -4,6 +4,9 @@
 使用 AgentFactory + SSEBridge 替代原 Gateway/Engine 架构。
 """
 from typing import List, Optional
+from datetime import datetime
+
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -186,6 +189,10 @@ async def chat_stream(
     except Exception as _brief_exc:
         logger.warning(f"[chat_stream] cross-mode brief inject failed: {_brief_exc}")
 
+    # P1 统一事件通道（spec §5.2）：execution_id 提前生成，经响应头
+    # X-Execution-Id + _gateway_meta 双通道下发（防前端吞 meta 事件）。
+    execution_id = str(uuid.uuid4())
+
     async def event_generator():
         """SSE 事件生成器"""
         try:
@@ -199,8 +206,6 @@ async def chat_stream(
 
             # P1 统一事件通道（spec §5.2）：生成 execution_id 并经 bus 发布统一信封，
             # 供 /stream 订阅与断线重放。此处不写 DB（仅 SSEHandler 环形缓冲）。
-            import uuid
-            execution_id = str(uuid.uuid4())
             from app.ai.events.bus import EventBus
             bus = EventBus()
             # 通知前端 execution_id，供其打开 /stream 与 HITL 面板
@@ -223,15 +228,264 @@ async def chat_stream(
                     collector.feed(sse_event)
                     yield sse_event
             else:
-                # 通过 SSEBridge 流式输出（同时发布统一信封到 bus）
+                # ── consumer + out_q + registry（spec B4/B5/B6）─────────
+                # 注册 RunRegistry：/cancel 真实中断；拦截 RequireUserConfirm/
+                # RequireExternalExecution 事件实现 chat 链路 HITL 多轮。
+                import asyncio as _asyncio
+                import json as _json
+
+                from agentscope.event import (
+                    RequireExternalExecutionEvent,
+                    RequireUserConfirmEvent,
+                    ToolCallStartEvent,
+                )
+
+                from app.ai.events.adapter import AgentScopeEventAdapter
+                from app.ai.events.hitl import (
+                    PAUSE_TIMEOUT_MINUTES,
+                    monitor_pause_timeout,
+                    record_pause,
+                )
+                from app.ai.events.registry import get_run_registry
+                from app.ai.skills.execution import SkillEvent
+                from app.schemas.agent.event_types import (
+                    EventCategory,
+                    EventEnvelope,
+                    EventLevel,
+                )
+
+                out_q: _asyncio.Queue = _asyncio.Queue()
                 bridge = SSEBridge()
-                async for sse_event in bridge.stream_agent_reply(
-                    agent, user_msg, bus=bus,
+                adapter = AgentScopeEventAdapter(
                     execution_id=execution_id, trace_id=None,
-                    source_id=agent_config.get("name"),
-                ):
-                    collector.feed(sse_event)
-                    yield sse_event
+                    source="agent", source_id=agent_config.get("name"),
+                    bus=bus,
+                )
+                hitl_cfg = getattr(agent, "_hitl_config", None) or {}
+                plan_tools = {"TaskCreate", "TaskUpdate", "TaskGet", "TaskList"}
+
+                def _serialize_tool_calls(tool_calls) -> list:
+                    return [{
+                        "id": getattr(tc, "id", None),
+                        "name": getattr(tc, "name", None),
+                        "input": getattr(tc, "input", None),
+                    } for tc in (tool_calls or [])]
+
+                def _pause_type_of(tool_calls) -> str:
+                    names = {tc.get("name") for tc in tool_calls}
+                    if "AskUser" in names:
+                        return "ask_user"
+                    if session_type == "plan" and "TaskUpdate" in names:
+                        return "plan_approval"
+                    return "tool_confirm"
+
+                async def _pump(event) -> None:
+                    """原生/dict 事件 → SSE 文本入队（含统一信封发布）。"""
+                    if isinstance(event, dict):
+                        event_type = event.get("type", "message")
+                        event_data = event.get("data", event)
+                        text = (f"event: {event_type}\n"
+                                f"data: {_json.dumps(event_data, ensure_ascii=False)}\n\n")
+                        collector.feed(text)
+                        for env in adapter.to_envelopes_from_dict(event):
+                            bus.publish(env)
+                        await out_q.put(("sse", text))
+                        return
+                    sse_event = bridge._convert_event(event)
+                    if sse_event:
+                        text = (f"event: {sse_event['type']}\n"
+                                f"data: {_json.dumps(sse_event['data'], ensure_ascii=False)}\n\n")
+                        collector.feed(text)
+                        adapter.handle(event)
+                        await out_q.put(("sse", text))
+
+                class _ChatHandler:
+                    """resume 路径的 handler shim：恢复后事件继续转 SSE 入队。"""
+                    def __init__(self) -> None:
+                        self.reply_id = None
+                        self.hitl_tool_calls: list = []
+                        self.interrupted_flag = False
+
+                    async def handle(self, event) -> None:
+                        await _pump(event)
+
+                handler = _ChatHandler()
+
+                async def _consume() -> None:
+                    async for event in agent.reply_stream(inputs=user_msg):
+                        # HITL 拦截（F13 缺口）：确认/外部执行请求 → 暂停事件，
+                        # reply 流在此悬挂，等 /confirm resume 换新 consumer。
+                        if isinstance(event, (RequireUserConfirmEvent,
+                                              RequireExternalExecutionEvent)):
+                            tcs = _serialize_tool_calls(event.tool_calls)
+                            ptype = ("ask_user"
+                                     if isinstance(event, RequireExternalExecutionEvent)
+                                     else _pause_type_of(tcs))
+                            handler.reply_id = getattr(event, "reply_id", None)
+                            handler.hitl_tool_calls = tcs
+                            await out_q.put(("hitl_pause", {
+                                "tool_calls": tcs,
+                                "reply_id": handler.reply_id,
+                                "pause_type": ptype,
+                            }))
+                            return
+                        # 计划活动事件（plan 会话，spec B6）
+                        if (session_type == "plan"
+                                and isinstance(event, ToolCallStartEvent)
+                                and event.tool_name in plan_tools):
+                            await out_q.put(("plan_task", {
+                                "tool_name": event.tool_name,
+                                "tool_call_id": event.tool_call_id,
+                            }))
+                        await _pump(event)
+
+                consumer = _asyncio.create_task(_consume())
+
+                def _on_consumer_done(_task) -> None:
+                    # consumer 结束（含取消）投递哨兵，唤醒阻塞在 out_q.get() 的主循环
+                    try:
+                        out_q.put_nowait(None)
+                    except Exception:
+                        pass
+
+                consumer.add_done_callback(_on_consumer_done)
+                handle = get_run_registry().register(
+                    execution_id, consumer, out_q=out_q, agent=agent,
+                    handler=handler, user_id=uid,
+                )
+                current_pause_type = None
+
+                while True:
+                    if (consumer.done() and out_q.empty()
+                            and handle.status != "waiting_hitl"):
+                        break
+                    try:
+                        item = await _asyncio.wait_for(
+                            _asyncio.shield(out_q.get()), timeout=30)
+                    except _asyncio.TimeoutError:
+                        if (consumer.done() and out_q.empty()
+                                and handle.status != "waiting_hitl"):
+                            break
+                        continue
+                    if item is None:
+                        # 哨兵：HITL 暂停中不算结束，等 resume 换新 consumer
+                        if handle.status == "waiting_hitl":
+                            continue
+                        break
+                    if isinstance(item, SkillEvent):
+                        # resume_hitl 投递的恢复控制事件（skill 路径复用同一通道）
+                        if item.type == "hitl_resume":
+                            action = (item.data or {}).get("action")
+                            # 计划审批通过：恢复 TaskUpdate 原权限，后续不再重复确认
+                            if (current_pause_type == "plan_approval"
+                                    and action == "approve"):
+                                restore = getattr(agent, "_plan_approval_restore", None)
+                                if restore:
+                                    AgentFactory._restore_tool_permission(restore[0])
+                            bus.publish(EventEnvelope(
+                                execution_id=execution_id, trace_id=None,
+                                event_type="hitl_resume",
+                                category=EventCategory.HITL,
+                                levels=[EventLevel.DB, EventLevel.STREAM],
+                                content={"action": action},
+                                reply_id=handle.reply_id, ui_hint="confirm",
+                                source="agent", source_id=agent_config.get("name"),
+                            ))
+                            yield create_sse_response("hitl_resume", {
+                                "execution_id": execution_id,
+                                "action": action,
+                            })
+                        continue
+                    kind, data = item
+                    if kind == "sse":
+                        yield data
+                    elif kind == "hitl_pause":
+                        current_pause_type = data.get("pause_type") or "tool_confirm"
+                        pause_time = datetime.now()
+                        try:
+                            record_pause(db, execution_id=execution_id,
+                                         reply_id=data.get("reply_id"),
+                                         tool_calls=data.get("tool_calls"),
+                                         pause_type=current_pause_type)
+                        except Exception as _rp_exc:
+                            logger.warning(f"[chat_stream] record_pause failed: {_rp_exc}")
+                        handle.status = "waiting_hitl"
+                        handle.reply_id = data.get("reply_id")
+                        _asyncio.create_task(monitor_pause_timeout(
+                            db, execution_id, handle.reply_id, pause_time,
+                            PAUSE_TIMEOUT_MINUTES))
+                        bus.publish(EventEnvelope(
+                            execution_id=execution_id, trace_id=None,
+                            event_type="hitl_pause",
+                            category=EventCategory.HITL,
+                            levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                            content={"tool_calls": data.get("tool_calls"),
+                                     "pause_type": current_pause_type,
+                                     "timeout_minutes": PAUSE_TIMEOUT_MINUTES},
+                            reply_id=handle.reply_id, ui_hint="confirm",
+                            source="agent", source_id=agent_config.get("name"),
+                        ))
+                        yield create_sse_response("hitl_pause", {
+                            "execution_id": execution_id,
+                            "tool_calls": data.get("tool_calls"),
+                            "pause_type": current_pause_type,
+                            "reply_id": data.get("reply_id"),
+                            "timeout_minutes": PAUSE_TIMEOUT_MINUTES,
+                        })
+                    elif kind == "plan_task":
+                        bus.publish(EventEnvelope(
+                            execution_id=execution_id, trace_id=None,
+                            event_type="plan_task_activity",
+                            category=EventCategory.TOOL,
+                            levels=[EventLevel.STREAM, EventLevel.UI],
+                            content=data, ui_hint="timeline",
+                            source="agent", source_id=agent_config.get("name"),
+                        ))
+                        yield create_sse_response("plan_task_activity", data)
+
+                # 传播消费者异常 / 中断标记 / 计划快照
+                _active = handle.task if handle is not None else consumer
+                exc = (_active.exception()
+                       if _active.done() and not _active.cancelled() else None)
+                if exc is not None:
+                    raise exc
+                _cancelled = handle is not None and (
+                    handle.task.cancelled() or bool(handle.interrupt_reason))
+                if _cancelled:
+                    yield create_sse_response("reply_interrupted", {
+                        "execution_id": execution_id,
+                        "reason": handle.interrupt_reason or "user_cancel",
+                    })
+                elif session_type == "plan":
+                    # 计划快照（spec B6）：tasks_context → plan_snapshot 信封
+                    try:
+                        tasks = []
+                        _tc = getattr(getattr(agent, "state", None),
+                                      "tasks_context", None)
+                        for t in getattr(_tc, "tasks", None) or []:
+                            tasks.append({
+                                "id": getattr(t, "id", None),
+                                "subject": getattr(t, "subject", ""),
+                                "description": getattr(t, "description", ""),
+                                "state": getattr(t, "state", "pending"),
+                                "blocked_by": list(
+                                    getattr(t, "blocked_by", []) or []),
+                            })
+                        if tasks:
+                            bus.publish(EventEnvelope(
+                                execution_id=execution_id, trace_id=None,
+                                event_type="plan_snapshot",
+                                category=EventCategory.AGENT,
+                                levels=[EventLevel.DB, EventLevel.STREAM, EventLevel.UI],
+                                content={"tasks": tasks}, ui_hint="panel",
+                                source="agent", source_id=agent_config.get("name"),
+                            ))
+                            yield create_sse_response("plan_snapshot", {
+                                "execution_id": execution_id,
+                                "tasks": tasks,
+                            })
+                    except Exception as _snap_exc:
+                        logger.warning(f"[chat_stream] plan snapshot failed: {_snap_exc}")
 
             # 跨模式上下文收尾:按策略写 L2 + Mem0 + 审计(失败静默,不阻断 SSE)
             try:
@@ -257,6 +511,15 @@ async def chat_stream(
         except Exception as e:
             logger.error(f"Agent 执行失败: {e}")
             yield create_error_event(str(e))
+        finally:
+            # registry 清理：注销运行 + 取消残留 consumer/恢复任务
+            try:
+                from app.ai.events.registry import get_run_registry
+                _h = get_run_registry().unregister(execution_id)
+                if _h is not None and _h.task is not None and not _h.task.done():
+                    _h.task.cancel()
+            except Exception as _fin_reg_exc:
+                logger.warning(f"[chat_stream] registry cleanup failed: {_fin_reg_exc}")
 
     return StreamingResponse(
         event_generator(),
@@ -265,6 +528,7 @@ async def chat_stream(
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Execution-Id": execution_id,
         },
     )
 
@@ -299,6 +563,14 @@ def _build_agent_config(req: ChatRequest, session_type: str, db: Session) -> dic
             config["execution_mode"] = agent_cfg.execution_mode or "llm"
             config["react_config"] = agent_cfg.react_config or {}
             config["skills"] = agent_cfg.skills or []
+            # 完整透传：模型/资源/HITL/上下文/身份（spec B4）
+            config["model_config"] = agent_cfg.llm_config or {}
+            config["mcp_servers"] = agent_cfg.mcp_servers or []
+            config["knowledge_bases"] = agent_cfg.knowledge_bases or []
+            config["hitl_config"] = agent_cfg.hitl_config or {}
+            config["context_config"] = agent_cfg.context_config or {}
+            config["agent_code"] = agent_cfg.agent_code
+            config["tenant_id"] = agent_cfg.tenant_id
 
     # 团队模式：传递 team_id
     if req.team_id and session_type == "team":

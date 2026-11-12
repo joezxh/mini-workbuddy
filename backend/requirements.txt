@@ -69,7 +69,7 @@ playwright>=1.40.0
 markdown>=3.5.0
 
 # 日志
-loguru==0.7.2
+loguru>=0.7.3  # semantica 0.7.0 要求 loguru>=0.7.3，原 ==0.7.2 会让 pip 依赖解析直接失败
 
 # ASGI 服务器（生产环境）
 gunicorn==21.2.0
@@ -97,13 +97,17 @@ opentelemetry-instrumentation-sqlalchemy>=0.46b0
 opentelemetry-instrumentation-httpx>=0.46b0
 opentelemetry-instrumentation-logging>=0.46b0
 
-# MCP 协议（知识库 MCP Server）
-# agentscope 2.0.x 需要 streamable_http_client（mcp>=1.15.0 引入），且要求 mcp<2.0.0
-mcp>=1.15.0,<2.0.0
+# MCP 协议（/mcp 端点 + agentscope MCP 客户端）
+# agentscope 2.0.11 硬依赖 mcp>=2.0.0，不可回落 v1（否则 pip 解析直接失败）。
+# 2026-11-09：app/ai/mcp/server.py 已迁移到 v2 API（FastMCP → MCPServer，
+# host/streamable_http_path/transport_security 下沉到 streamable_http_app()）；
+# 子应用 lifespan 由 main.py 的 start/stop_mcp_endpoint 显式启停，回归见 tests/ai/mcp/test_mcp_server_endpoint.py。
+# 端点默认不挂载，需 settings.MCP_SERVER_ENABLED=True（见 env.example）。
+mcp>=2.0.0,<3.0.0
 
 # AgentScope 2.x 运行时（realtime 语音内核：RealtimeAgent + DashScope 实时模型）
 # 注意：2.0.8 发布版不含 OpenAIRealtimeModel（gpt-realtime 需升级框架，见 duplex/voice spec §2.3）
-agentscope==2.0.11  # 固定 2.0.9：原生 Agent Team API + 流式修复
+agentscope==2.0.11  # 固定 2.0.11：原生 Agent Team API + 流式修复
 # Windows 无 ripgrep>=15 预编译 wheel（需 Rust 源码构建会挂起），本地 venv 已降级安装 14.1.0
 #ripgrep>=15.0.0
 

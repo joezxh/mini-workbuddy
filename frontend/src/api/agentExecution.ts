@@ -188,7 +188,13 @@ export async function cancelExecution(executionId: string): Promise<{ ok: boolea
 
 export async function confirmExecution(
   executionId: string,
-  payload: { action: 'approve' | 'reject' | 'interrupt'; tool_calls?: any[]; accept_rules?: boolean },
+  payload: {
+    action: 'approve' | 'reject' | 'interrupt'
+    tool_calls?: any[]
+    accept_rules?: boolean
+    /** 人工意见：ask_user 回答 / plan_approval 驳回原因（spec §5.4 / B3） */
+    message?: string
+  },
 ): Promise<{ ok: boolean; action: string; execution_id: string }> {
   const res = await fetch(`${baseUrl}/api/v1/agents/executions/${executionId}/confirm`, {
     method: 'POST',

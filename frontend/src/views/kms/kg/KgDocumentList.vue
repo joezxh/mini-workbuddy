@@ -311,9 +311,11 @@ function formatTime(value?: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-async function reloadQuiet() {
+async function reloadQuiet(): Promise<any[]> {
   const res = await kbApi.listDocuments(props.knowledgeId)
-  docs.value = (res as any)?.data || (res as any) || []
+  const rows = (res as any)?.data || (res as any) || []
+  docs.value = rows
+  return rows
 }
 
 async function reload() {
@@ -341,24 +343,47 @@ function stopPolling() {
  * 后台任务（重抽/重试/上传）期间短轮询：阶段进度自动出现，
  * 避免用户提交后看到自己那行「未抽取」而误以为没生效。
  * 静默刷新（不动表格 loading 遮罩），轮询结束后仍可手动刷新。
+ *
+ * 停止条件 = **进度收敛**（列表里没有任何进行中的行）或达到上限——
+ * 固定轮询 30 秒会在长文本 LLM 抽取（分钟级）中把进度冻结在半路。
+ * 前 MIN_TICKS 次无条件轮询：提交瞬间后端可能还没清零标志位，不能拿
+ * 旧状态当「无活动」提前收手。12 轮后间隔翻倍退避，减少无效请求。
  */
-function pollProgress(times = 6, interval = 5000) {
+function hasInFlight(rows: any[]): boolean {
+  return (rows || []).some((r) => {
+    const st = String(r?.status || '')
+    if (st === 'processing' || st === 'pending') return true
+    const g = r?.graph
+    if (!g) return false
+    const total = Number(g.segments || 0)
+    const structure = Number(g.structure || 0)
+    const vector = Number(g.vector || 0)
+    return total > 0 && (structure < total || vector < total)
+  })
+}
+
+function pollProgress(maxTicks = 36, interval = 5000) {
   stopPolling()
-  let left = times
-  const tick = async () => {
-    if (left <= 0) {
-      pollTimer = null
-      return
-    }
-    left -= 1
+  const MIN_TICKS = 6
+  let tick = 0
+  const tickFn = async () => {
+    tick += 1
     try {
-      await reloadQuiet()
+      const rows = await reloadQuiet()
+      if (tick >= MIN_TICKS && !hasInFlight(rows)) {
+        pollTimer = null
+        return
+      }
     } catch {
       // 单次轮询失败不打断：下次 tick 继续
     }
-    pollTimer = setTimeout(tick, interval)
+    if (tick >= maxTicks) {
+      pollTimer = null
+      return
+    }
+    pollTimer = setTimeout(tickFn, tick < 12 ? interval : interval * 2)
   }
-  pollTimer = setTimeout(tick, interval)
+  pollTimer = setTimeout(tickFn, interval)
 }
 
 onUnmounted(stopPolling)
@@ -421,8 +446,9 @@ async function onRetry(record: any) {
     await kbApi.retryDocument(record.document_id)
     message.success(t('kbMgmt.retryStarted'))
     await reload()
-    // 重试＝整条管线重跑，成功后图谱库会自动提交抽取：多轮询几轮
-    pollProgress(12, 5000)
+    // 重试＝整条管线重跑，成功后图谱库会自动提交抽取：上限拉长，
+    // 实际停止仍由进度收敛决定
+    pollProgress(60, 5000)
   } catch (e: any) {
     message.error(e?.response?.data?.detail || t('kbMgmt.retryFailed'))
   } finally {

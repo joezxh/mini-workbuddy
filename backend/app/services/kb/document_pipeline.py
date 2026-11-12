@@ -142,10 +142,14 @@ def run_document_ingest(
         if detect_media_kind(filename) is not None:
             from app.services.kb.media.ingest import run_media_ingest
 
-            return run_media_ingest(
+            count = run_media_ingest(
                 db, tenant_id, doc_id, file_bytes or b"", filename,
                 session_factory=None, kb_factory=knowledge_factory,
             )
+            # 媒体路径与普通文档对齐：切片就绪后同样提交图谱构建（仅 type=4 生效），
+            # 否则图谱库里的媒体文档永远只更新切片、图谱不自动建
+            _maybe_submit_graph_build(db, tenant_id, doc_id)
+            return count
 
         # 1)-3) 解析 → 清洗 → 切块：与 dry-run 共用的编排执行器（spec §10.7）
         #    知识库 pipeline_config 优先，扁平 chunker_* 参数作兜底

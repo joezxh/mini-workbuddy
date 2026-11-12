@@ -131,7 +131,7 @@ const routes: RouteRecordRaw[] = [
         // 调解语音 RTC 演示（迁移自 risk_control）
         path: 'duplex/voice-demo',
         name: 'DuplexVoiceDemo',
-        component: () => import('@/views/duplex/VoiceDemo.vue'),
+        component: () => import('@/views/duplex/DuplexDemo.vue'),
         meta: { title: '调解语音 RTC 演示' }
       },
       {

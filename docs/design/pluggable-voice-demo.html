@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>可插拔全双工语音交互 — 电商跨境贸易架构原型</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --panel-2: #1f2937;
+    --border: #374151;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --green: #10b981;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .header {
+    max-width: 1400px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header .badge {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .grid {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .panel-title {
+    padding: 14px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .voice-main { display: flex; flex-direction: column; height: 640px; }
+  .voice-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    position: relative;
+    background: radial-gradient(ellipse at center, rgba(99,102,241,0.08) 0%, transparent 70%);
+  }
+  .agent-ring {
+    position: relative;
+    width: 160px; height: 160px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .agent-ring .ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+  }
+  .agent-ring .ring.active {
+    border-color: var(--accent);
+    animation: spin 4s linear infinite;
+    border-top-color: transparent;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .agent-ring .core {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 0 40px rgba(99,102,241,0.4);
+    transition: transform 0.3s;
+  }
+  .agent-ring.listening .core {
+    transform: scale(1.1);
+    box-shadow: 0 0 60px rgba(16,185,129,0.6);
+  }
+  .agent-ring.speaking .core {
+    background: linear-gradient(135deg, var(--green), var(--blue));
+    box-shadow: 0 0 60px rgba(59,130,246,0.6);
+  }
+  .agent-label { margin-top: 20px; text-align: center; }
+  .agent-label .name { font-size: 18px; font-weight: 600; }
+  .agent-label .status { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+  .waveform {
+    display: flex; align-items: center; justify-content: center;
+    gap: 3px; height: 40px; margin-top: 24px;
+  }
+  .waveform .bar {
+    width: 4px; background: var(--accent); border-radius: 2px; transition: height 0.1s;
+  }
+
+  .transcript-area {
+    max-height: 220px; overflow-y: auto; padding: 16px 20px;
+    border-top: 1px solid var(--border); background: rgba(0,0,0,0.2);
+  }
+  .turn { margin-bottom: 12px; }
+  .turn .role {
+    font-size: 11px; color: var(--text-dim); margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .turn .role .tag {
+    background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 10px;
+  }
+  .turn.user .role .tag { background: var(--blue); color: white; }
+  .turn.assistant .role .tag { background: var(--accent); color: white; }
+  .turn .text {
+    font-size: 14px; line-height: 1.6; padding: 8px 12px;
+    background: var(--panel-2); border-radius: 8px;
+    display: inline-block; max-width: 85%;
+  }
+  .turn.assistant .text { background: rgba(99,102,241,0.15); }
+
+  .controls {
+    padding: 16px 20px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .btn {
+    padding: 10px 20px; border-radius: 10px; border: none; cursor: pointer;
+    font-size: 14px; font-weight: 500; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-2); }
+  .btn-danger { background: var(--red); color: white; }
+  .btn-ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--border); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .latency { margin-left: auto; font-size: 12px; color: var(--text-dim); font-family: monospace; }
+
+  .agent-panel { display: flex; flex-direction: column; }
+  .tab-bar {
+    display: flex; border-bottom: 1px solid var(--border); padding: 0 16px;
+  }
+  .tab-bar .tab {
+    padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
+    color: var(--text-dim); border-bottom: 2px solid transparent;
+    transition: all 0.2s; user-select: none;
+  }
+  .tab-bar .tab:hover { color: var(--text); }
+  .tab-bar .tab.active {
+    color: var(--accent); border-bottom-color: var(--accent);
+  }
+  .tab-bar .tab .badge {
+    background: var(--accent); color: white; font-size: 10px;
+    padding: 1px 6px; border-radius: 8px; margin-left: 4px;
+  }
+  .tab-content { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: flex; flex-direction: column; gap: 10px; }
+  .agent-list { display: flex; flex-direction: column; gap: 10px; }
+
+  /* 渠道列表 */
+  .channel-list { display: flex; flex-direction: column; gap: 10px; }
+  .channel-card {
+    padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 10px; display: flex; align-items: center; gap: 12px;
+    transition: all 0.25s; position: relative;
+  }
+  .channel-card.active {
+    border-color: var(--green); background: rgba(16,185,129,0.08);
+    box-shadow: 0 0 16px rgba(16,185,129,0.15);
+  }
+  .channel-card.active::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--green); border-radius: 3px 0 0 3px;
+  }
+  .channel-card .ch-icon {
+    width: 32px; height: 32px; border-radius: 8px; display: flex;
+    align-items: center; justify-content: center; font-size: 16px;
+    background: var(--panel); flex-shrink: 0;
+  }
+  .channel-card .ch-info { flex: 1; min-width: 0; }
+  .channel-card .ch-name { font-weight: 600; font-size: 13px; }
+  .channel-card .ch-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .channel-card .ch-toggle {
+    width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--border);
+    cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .channel-card.active .ch-toggle {
+    background: var(--green); border-color: var(--green);
+  }
+  .channel-card .ch-toggle::after {
+    content: "✓"; color: white; font-size: 12px; opacity: 0; transition: opacity 0.2s;
+  }
+  .channel-card.active .ch-toggle::after { opacity: 1; }
+  .channel-card .ch-output {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    outline: none; flex-shrink: 0;
+  }
+  .channel-card .ch-output:focus { border-color: var(--accent); }
+  .channel-summary {
+    font-size: 11px; color: var(--text-dim); padding: 8px 14px;
+    background: rgba(0,0,0,0.2); border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .channel-summary .active-count { color: var(--green); font-weight: 600; }
+  .agent-card {
+    padding: 14px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 12px; transition: all 0.3s; position: relative;
+  }
+  .agent-card.active {
+    border-color: var(--accent); background: rgba(99,102,241,0.1);
+    box-shadow: 0 0 20px rgba(99,102,241,0.2);
+  }
+  .agent-card.active::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--accent); border-radius: 3px 0 0 3px;
+  }
+  .agent-card .head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+  }
+  .agent-card .name { font-weight: 600; font-size: 14px; }
+  .agent-card .icon { font-size: 18px; }
+  .agent-card .desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .agent-card .switch-hint {
+    font-size: 11px; color: var(--orange); margin-top: 6px; display: none;
+  }
+  .agent-card.switching .switch-hint { display: block; }
+
+  .arch-panel { grid-column: 1 / -1; }
+  .arch-content { padding: 24px; }
+  .arch-layers { display: flex; flex-direction: column; gap: 12px; }
+  .arch-layer {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; background: var(--panel-2);
+    border-radius: 10px; border: 1px solid var(--border);
+  }
+  .arch-layer .layer-label {
+    width: 120px; font-size: 12px; font-weight: 600;
+    color: var(--text-dim); text-transform: uppercase;
+  }
+  .arch-layer .layer-body { flex: 1; display: flex; gap: 8px; flex-wrap: wrap; }
+  .arch-node {
+    padding: 8px 14px; background: rgba(99,102,241,0.15);
+    border: 1px solid var(--accent); border-radius: 8px; font-size: 13px;
+  }
+  .arch-node.existing { background: rgba(16,185,129,0.1); border-color: var(--green); }
+  .arch-node.new { background: rgba(245,158,11,0.1); border-color: var(--orange); }
+  .arch-arrow { color: var(--text-dim); font-size: 18px; }
+
+  .event-log {
+    max-height: 200px; overflow-y: auto; padding: 12px 16px;
+    background: rgba(0,0,0,0.3); font-family: monospace; font-size: 12px;
+  }
+  .event-line {
+    padding: 3px 0; display: flex; gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .event-line .ts { color: var(--text-dim); }
+  .event-line .evt { color: var(--accent); }
+  .event-line .msg { color: var(--text); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🛒 可插拔全双工语音交互 — 电商跨境贸易架构原型</h1>
+  <span class="badge">Demo v1.4 · 模拟全双工 + 多 Agent 编排 + 多渠道输出</span>
+</div>
+
+<div class="grid">
+  <div class="panel voice-main">
+    <div class="panel-title"><span class="dot"></span> 语音通道 (VoiceChannel)</div>
+    <div class="voice-stage" id="voiceStage">
+      <div class="agent-ring" id="agentRing">
+        <div class="ring"></div>
+        <div class="ring active"></div>
+        <div class="core" id="agentCore">🛒</div>
+      </div>
+      <div class="agent-label">
+        <div class="name" id="agentName">电商销售顾问</div>
+        <div class="status" id="agentStatus">待机中 · 等待语音输入</div>
+      </div>
+      <div class="waveform" id="waveform"></div>
+    </div>
+    <div class="transcript-area" id="transcriptArea"></div>
+    <div class="controls">
+      <button class="btn btn-primary" id="btnStart">🎤 开始对话</button>
+      <button class="btn btn-danger" id="btnBarge" disabled>⏹ 打断</button>
+      <button class="btn btn-ghost" id="btnScenario">🎬 演示场景</button>
+      <span class="latency" id="latency">RTT: --</span>
+    </div>
+  </div>
+
+  <div class="panel agent-panel">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="agents">🧩 Agent 编排器</div>
+      <div class="tab" data-tab="channels">📡 输出渠道<span class="badge" id="chBadge">0</span></div>
+    </div>
+
+    <!-- Agent 编排 Tab -->
+    <div class="tab-pane active" id="tab-agents">
+      <div class="agent-list" id="agentList">
+        <div class="agent-card active" data-key="ecommerce_sales">
+          <div class="head"><span class="icon">🛒</span><span class="name">电商销售顾问</span></div>
+          <div class="desc">默认活跃 Agent，推荐商品、促成交易、提升转化率</div>
+          <div class="switch-hint">← 活跃中</div>
+        </div>
+        <div class="agent-card" data-key="product_catalog">
+          <div class="head"><span class="icon">📦</span><span class="name">商品知识库助手</span></div>
+          <div class="desc">检索商品详情、规格、价格、库存</div>
+          <div class="switch-hint">切换中...</div>
+        </div>
+        <div class="agent-card" data-key="cross_border">
+          <div class="head"><span class="icon">🌍</span><span class="name">跨境贸易助手</span></div>
+          <div class="desc">跨境物流、关税计算、清关、海外仓</div>
+          <div class="switch-hint">切换中...</div>
+        </div>
+        <div class="agent-card" data-key="marketing">
+          <div class="head"><span class="icon">🎯</span><span class="name">市场推广助手</span></div>
+          <div class="desc">促销活动、优惠券、会员权益、积分</div>
+          <div class="switch-hint">切换中...</div>
+        </div>
+        <div class="agent-card" data-key="dispute_resolution">
+          <div class="head"><span class="icon">⚖️</span><span class="name">销售纠纷解决助手</span></div>
+          <div class="desc">AI 自动处理投诉：分类、方案、补偿、升级人工</div>
+          <div class="switch-hint">切换中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 输出渠道 Tab -->
+    <div class="tab-pane" id="tab-channels">
+      <div class="channel-list" id="channelList">
+        <div class="channel-card active" data-key="wechat">
+          <div class="ch-icon">💬</div>
+          <div class="ch-info">
+            <div class="ch-name">微信 (WeChat)</div>
+            <div class="ch-desc">国内主流即时通信，支持文字/语音消息</div>
+          </div>
+          <select class="ch-output" data-key="wechat">
+            <option value="text">文字</option>
+            <option value="voice" selected>语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+        <div class="channel-card active" data-key="whatsapp">
+          <div class="ch-icon">🟢</div>
+          <div class="ch-info">
+            <div class="ch-name">WhatsApp</div>
+            <div class="ch-desc">全球主流即时通信，覆盖 180+ 国家</div>
+          </div>
+          <select class="ch-output" data-key="whatsapp">
+            <option value="text" selected>文字</option>
+            <option value="voice">语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+        <div class="channel-card" data-key="telegram">
+          <div class="ch-icon">✈️</div>
+          <div class="ch-info">
+            <div class="ch-name">Telegram</div>
+            <div class="ch-desc">海外加密即时通信，支持 Bot API</div>
+          </div>
+          <select class="ch-output" data-key="telegram">
+            <option value="text">文字</option>
+            <option value="voice" selected>语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+        <div class="channel-card" data-key="messenger">
+          <div class="ch-icon">💙</div>
+          <div class="ch-info">
+            <div class="ch-name">Facebook Messenger</div>
+            <div class="ch-desc">Meta 旗下即时通信，北美/东南亚主流</div>
+          </div>
+          <select class="ch-output" data-key="messenger">
+            <option value="text" selected>文字</option>
+            <option value="voice">语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+        <div class="channel-card" data-key="line">
+          <div class="ch-icon">🟢</div>
+          <div class="ch-info">
+            <div class="ch-name">LINE</div>
+            <div class="ch-desc">日韩/东南亚主流即时通信</div>
+          </div>
+          <select class="ch-output" data-key="line">
+            <option value="text" selected>文字</option>
+            <option value="voice">语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+        <div class="channel-card" data-key="sms">
+          <div class="ch-icon">📱</div>
+          <div class="ch-info">
+            <div class="ch-name">短信 (SMS)</div>
+            <div class="ch-desc">全球短信触达，适合订单通知/验证码</div>
+          </div>
+          <select class="ch-output" data-key="sms">
+            <option value="text" selected>文字</option>
+            <option value="voice">语音</option>
+            <option value="both">文字+语音</option>
+          </select>
+          <div class="ch-toggle"></div>
+        </div>
+      </div>
+    </div>
+    <div class="channel-summary">
+      <span>已选中 <span class="active-count" id="chActiveCount">2</span> 个输出渠道</span>
+      <span id="chSummaryText">微信(语音) + WhatsApp(文字)</span>
+    </div>
+  </div>
+
+  <div class="panel arch-panel">
+    <div class="panel-title">🏗️ 架构分层 (可插拔多 Agent 编排)</div>
+    <div class="arch-content">
+      <div class="arch-layers">
+        <div class="arch-layer">
+          <span class="layer-label">前端</span>
+          <div class="layer-body">
+            <span class="arch-node existing">useVoiceChannel</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node existing">DSP (去直流/噪声门/重采样)</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node existing">WebSocket PCM16</span>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <span class="layer-label">网关</span>
+          <div class="layer-body">
+            <span class="arch-node existing">websocket_gateway.py</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node existing">能力协商 + 事件归一化</span>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <span class="layer-label" style="color:var(--orange)">编排层 (新)</span>
+          <div class="layer-body">
+            <span class="arch-node new">VoiceAgentOrchestrator</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node new">IntentRouter (意图分类)</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node new">ContextSync (含购物车状态)</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node new">PluginRegistry</span>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <span class="layer-label" style="color:var(--orange)">可插拔 Agent (新)</span>
+          <div class="layer-body">
+            <span class="arch-node new">EcommerceSalesAgent</span>
+            <span class="arch-node new">ProductCatalogAgent</span>
+            <span class="arch-node new">CrossBorderAgent</span>
+            <span class="arch-node new">MarketingAgent</span>
+            <span class="arch-node new">DisputeResolutionAgent</span>
+            <span style="color:var(--text-dim);font-size:12px;align-self:center;">... 动态注册，零代码热切换</span>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <span class="layer-label">执行器</span>
+          <div class="layer-body">
+            <span class="arch-node existing">AgentscopeRealtimeProvider</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node existing">RealtimeAgent (Qwen-Omni)</span>
+            <span class="arch-arrow">→</span>
+            <span class="arch-node existing">server VAD + barge-in + 流式 STT/TTS</span>
+          </div>
+        </div>
+        <div class="arch-layer">
+          <span class="layer-label">复用层</span>
+          <div class="layer-body">
+            <span class="arch-node existing">KbRetrievalService</span>
+            <span class="arch-node existing">AgentFactory</span>
+            <span class="arch-node existing">ToolManager</span>
+            <span class="arch-node existing">RAGMiddleware</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel arch-panel">
+    <div class="panel-title">📜 运行时事件流</div>
+    <div class="event-log" id="eventLog">
+      <div class="event-line"><span class="ts">[00:00]</span><span class="evt">init</span><span class="msg">Orchestrator 启动，激活 EcommerceSalesAgent</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const agents = {
+  ecommerce_sales: { name: "电商销售顾问", icon: "🛒", prompt: "推荐商品、促成交易" },
+  product_catalog: { name: "商品知识库助手", icon: "📦", prompt: "检索商品详情/价格/库存" },
+  cross_border: { name: "跨境贸易助手", icon: "🌍", prompt: "跨境物流/关税/清关" },
+  marketing: { name: "市场推广助手", icon: "🎯", prompt: "促销/优惠券/会员权益" },
+  dispute_resolution: { name: "销售纠纷解决助手", icon: "⚖️", prompt: "AI 自动处理投诉/补偿" },
+};
+
+let isRunning = false, isListening = false, isSpeaking = false;
+let currentAgent = "ecommerce_sales";
+let waveTimer = null;
+
+const $ = (id) => document.getElementById(id);
+const transcriptArea = $("transcriptArea");
+const eventLogEl = $("eventLog");
+const agentRing = $("agentRing");
+const agentCore = $("agentCore");
+const agentName = $("agentName");
+const agentStatus = $("agentStatus");
+const waveform = $("waveform");
+
+for (let i = 0; i < 32; i++) {
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.style.height = "4px";
+  waveform.appendChild(bar);
+}
+const bars = waveform.querySelectorAll(".bar");
+
+function startWave(color) {
+  if (waveTimer) clearInterval(waveTimer);
+  waveTimer = setInterval(() => {
+    bars.forEach((b) => {
+      b.style.height = (Math.random() * 30 + 4) + "px";
+      b.style.background = color;
+    });
+  }, 80);
+}
+function stopWave() {
+  if (waveTimer) clearInterval(waveTimer);
+  bars.forEach(b => b.style.height = "4px");
+}
+
+let ts = 0;
+function logEvent(evt, msg) {
+  const time = `[${String(Math.floor(ts/60)).padStart(2,"0")}:${String(ts%60).padStart(2,"0")}]`;
+  ts += 2;
+  const line = document.createElement("div");
+  line.className = "event-line";
+  line.innerHTML = `<span class="ts">${time}</span><span class="evt">${evt}</span><span class="msg">${msg}</span>`;
+  eventLogEl.appendChild(line);
+  eventLogEl.scrollTop = eventLogEl.scrollHeight;
+}
+
+function addTurn(role, text, tag) {
+  const turn = document.createElement("div");
+  turn.className = "turn " + role;
+  turn.innerHTML = `
+    <div class="role"><span class="tag">${tag || (role === "user" ? "客户" : "助手")}</span><span>${new Date().toLocaleTimeString()}</span></div>
+    <div class="text"></div>
+  `;
+  transcriptArea.appendChild(turn);
+  transcriptArea.scrollTop = transcriptArea.scrollHeight;
+  const textEl = turn.querySelector(".text");
+  let i = 0;
+  const typeIt = setInterval(() => {
+    if (i < text.length) {
+      textEl.textContent += text[i];
+      i++;
+      transcriptArea.scrollTop = transcriptArea.scrollHeight;
+    } else clearInterval(typeIt);
+  }, 30);
+}
+
+function switchAgent(key, reason) {
+  if (key === currentAgent) return;
+  const oldCard = document.querySelector(`.agent-card[data-key="${currentAgent}"]`);
+  const newCard = document.querySelector(`.agent-card[data-key="${key}"]`);
+  if (oldCard) oldCard.classList.remove("active");
+  if (newCard) {
+    newCard.classList.add("switching");
+    setTimeout(() => {
+      newCard.classList.add("active");
+      newCard.classList.remove("switching");
+    }, 600);
+  }
+  const a = agents[key];
+  agentCore.textContent = a.icon;
+  agentName.textContent = a.name;
+  logEvent("agent_switch", `${currentAgent} → ${key} (reason: ${reason})`);
+  currentAgent = key;
+}
+
+function setState(s) {
+  agentRing.className = "agent-ring " + s;
+  const statusMap = {
+    idle: "待机中 · 等待语音输入",
+    listening: "正在聆听...",
+    thinking: "理解中...",
+    speaking: "正在回复...",
+    switching: "Agent 切换中...",
+  };
+  agentStatus.textContent = statusMap[s] || s;
+}
+
+async function runScenario() {
+  if (isRunning) return;
+  isRunning = true;
+  $("btnStart").disabled = true;
+  $("btnScenario").disabled = true;
+
+  const scenario = [
+    { type: "user", text: "你好，我想买一款降噪耳机，有什么推荐吗？" },
+    { type: "assistant", text: "您好！很高兴为您服务。我们有几款热销的降噪耳机，我先帮您查一下商品详情和库存。", agent: null },
+    { type: "switch", to: "product_catalog", reason: "state: 需查询商品信息" },
+    { type: "user", text: "那款索尼 WH-1000XM5 多少钱，有现货吗？" },
+    { type: "assistant", text: "索尼 WH-1000XM5 目前售价 2399 元，黑色有现货 128 件，银色预售 3 天发货。续航 30 小时，支持 LDAC 高清音质。", agent: "product_catalog" },
+    { type: "switch", to: "ecommerce_sales", reason: "state: 商品信息查询完毕" },
+    { type: "assistant", text: "这款耳机口碑非常好，您是自己用还是送人呢？另外如果您需要寄到海外，我们也支持跨境配送。", agent: "ecommerce_sales" },
+    { type: "user", text: "我要寄到美国，运费大概多少，几天能到？" },
+    { type: "switch", to: "cross_border", reason: "intent: 命中跨境/美国" },
+    { type: "assistant", text: "寄到美国有两种方案：DHL 特快 3-5 天送达，运费约 180 元；邮政小包 10-15 天，运费约 60 元。关税方面，耳机申报价值低于 800 美元可免税。", agent: "cross_border" },
+    { type: "switch", to: "ecommerce_sales", reason: "state: 跨境咨询完毕" },
+    { type: "user", text: "行，那现在买有什么优惠吗？" },
+    { type: "switch", to: "marketing", reason: "intent: 命中优惠/促销" },
+    { type: "assistant", text: "现在正值双11活动，这款耳机立减 300 元，到手价 2099 元！Plus 会员还可叠加 95 折，并赠送 200 元配件券。活动今天 24 点结束哦。", agent: "marketing" },
+    { type: "switch", to: "ecommerce_sales", reason: "state: 优惠信息介绍完毕" },
+    { type: "assistant", text: "优惠力度非常大，建议您趁活动下单。需要我现在帮您下单吗？", agent: "ecommerce_sales" },
+    { type: "user", text: "好的，下单吧。" },
+    { type: "assistant", text: "已为您下单成功，订单号 SO20261111001。预计 3-5 天送达，请注意查收。", agent: "ecommerce_sales" },
+    { type: "user", text: "（几天后）耳机收到了，但是左耳有杂音，质量有问题！我要投诉退款！" },
+    { type: "switch", to: "dispute_resolution", reason: "intent: 命中投诉/质量问题/退款" },
+    { type: "assistant", text: "非常抱歉给您带来不好的体验！我马上为您处理。经 AI 纠纷分类，判定为商品质量问题，符合七天无理由退换货政策。", agent: "dispute_resolution" },
+    { type: "assistant", text: "已为您自动申请：全额退款 2099 元 + 补偿 50 元优惠券。退款将在 1-3 个工作日到账，优惠券已发放至您的账户。", agent: "dispute_resolution" },
+    { type: "user", text: "好吧，那退款什么时候能到账？" },
+    { type: "assistant", text: "退款已发起，预计 1-3 个工作日原路退回您的支付账户。如有延迟可随时联系我，我会为您加急处理。", agent: "dispute_resolution" },
+    { type: "switch", to: "ecommerce_sales", reason: "state: 纠纷已解决，主动让权" },
+    { type: "assistant", text: "再次为此次购物体验致歉，期待下次为您提供更好的服务。还有其他可以帮您的吗？", agent: "ecommerce_sales" },
+  ];
+
+  for (const step of scenario) {
+    if (step.type === "switch") {
+      setState("switching");
+      await sleep(800);
+      switchAgent(step.to, step.reason);
+      await sleep(600);
+      continue;
+    }
+    if (step.type === "user") {
+      setState("listening");
+      isListening = true;
+      startWave("var(--green)");
+      await sleep(1500);
+      isListening = false;
+      stopWave();
+      setState("thinking");
+      await sleep(600);
+      addTurn("user", step.text);
+      logEvent("speech_stopped", `final_transcript: "${step.text.slice(0,20)}..."`);
+    } else {
+      setState("speaking");
+      isSpeaking = true;
+      startWave("var(--blue)");
+      $("btnBarge").disabled = false;
+      addTurn("assistant", step.text, agents[currentAgent].name);
+      logEvent("tts_play", `assistant response (agent=${currentAgent})`);
+      await sleep(2500);
+      isSpeaking = false;
+      stopWave();
+      $("btnBarge").disabled = true;
+      dispatchToChannels(step.text);
+    }
+    await sleep(400);
+  }
+
+  setState("idle");
+  isRunning = false;
+  $("btnStart").disabled = false;
+  $("btnScenario").disabled = false;
+  logEvent("session_end", "演示场景完成");
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ============ 渠道列表模块 ============ */
+const channelLabels = {
+  wechat: "微信", whatsapp: "WhatsApp", telegram: "Telegram",
+  messenger: "Messenger", line: "LINE", sms: "短信",
+};
+const outputLabels = { text: "文字", voice: "语音", both: "文字+语音" };
+const channelState = {}; // { wechat: {active:bool, output:'text'|'voice'|'both'} }
+
+function initChannelState() {
+  document.querySelectorAll(".channel-card").forEach((card) => {
+    const key = card.dataset.key;
+    const sel = card.querySelector(".ch-output");
+    channelState[key] = {
+      active: card.classList.contains("active"),
+      output: sel.value,
+    };
+  });
+  updateChannelSummary();
+}
+
+function updateChannelSummary() {
+  const activeKeys = Object.keys(channelState).filter((k) => channelState[k].active);
+  const count = activeKeys.length;
+  const chBadge = $("chBadge");
+  if (chBadge) chBadge.textContent = count;
+  $("chActiveCount").textContent = count;
+  if (count === 0) {
+    $("chSummaryText").textContent = "未选中任何渠道，Agent 将仅在语音通道回复";
+  } else {
+    const parts = activeKeys.map((k) => `${channelLabels[k]}(${outputLabels[channelState[k].output]})`);
+    $("chSummaryText").textContent = parts.join(" + ");
+  }
+}
+
+// Tab 切换
+document.querySelectorAll(".tab-bar .tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll(".tab-bar .tab").forEach((t) => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".tab-pane").forEach((p) => {
+      p.classList.toggle("active", p.id === `tab-${target}`);
+    });
+  });
+});
+
+// 渠道卡片点击 -> 切换选中（点击 select 时不触发卡片切换）
+document.querySelectorAll(".channel-card").forEach((card) => {
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".ch-output")) return;
+    const key = card.dataset.key;
+    card.classList.toggle("active");
+    channelState[key].active = card.classList.contains("active");
+    logEvent("channel_toggle", `${channelLabels[key]} ${channelState[key].active ? "已选中" : "已取消"}`);
+    updateChannelSummary();
+  });
+});
+
+// 输出模式下拉
+document.querySelectorAll(".ch-output").forEach((sel) => {
+  sel.addEventListener("change", (e) => {
+    e.stopPropagation();
+    const key = sel.dataset.key;
+    channelState[key].output = sel.value;
+    logEvent("channel_output_mode", `${channelLabels[key]} → ${outputLabels[sel.value]}`);
+    updateChannelSummary();
+  });
+});
+
+// Agent 回复后向已选中渠道分发输出
+function dispatchToChannels(text) {
+  const activeKeys = Object.keys(channelState).filter((k) => channelState[k].active);
+  if (activeKeys.length === 0) {
+    logEvent("channel_output", "无选中渠道，跳过分发（仅语音通道回复）");
+    return;
+  }
+  activeKeys.forEach((k) => {
+    const mode = channelState[k].output;
+    const modeText = mode === "both" ? "文字+语音" : outputLabels[mode];
+    logEvent("channel_output", `→ ${channelLabels[k]} [${modeText}]: "${text.slice(0, 18)}..."`);
+  });
+}
+
+$("btnStart").onclick = runScenario;
+$("btnScenario").onclick = runScenario;
+$("btnBarge").onclick = () => {
+  if (!isSpeaking) return;
+  logEvent("barge_in", "客户打断，取消当前 TTS");
+  stopWave();
+  setState("listening");
+  isSpeaking = false;
+  $("btnBarge").disabled = true;
+  addTurn("user", "（打断）等等，有没有更便宜的？");
+};
+
+initChannelState();
+setState("idle");
+</script>
+</body>
+</html>

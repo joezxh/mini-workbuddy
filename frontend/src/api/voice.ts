@@ -7,11 +7,9 @@
 import request from '@/utils/request'
 import type {
   ConnectConfig,
-  AgentConfig,
-  VoiceRoleConfig,
-  ToolPolicy,
   VoiceModel,
   VoiceModelDefault,
+  VoiceProviderCatalog,
 } from '@/types/voice'
 
 const BASE = '/api/v1/duplex'
@@ -33,43 +31,16 @@ export function buildVoiceWsUrl(cfg: ConnectConfig): string {
   return url.toString().replace(/^http/, 'ws')
 }
 
-// ── M3 语音配置管理（角色语音 / Agent / 工具策略） ──────────
-
-/** 保存（UPSERT）角色语音配置 */
-export function upsertVoiceRole(cfg: VoiceRoleConfig) {
-  return request.post(`${ADMIN_BASE}/voice-roles`, cfg)
-}
-
-/** 获取角色语音配置列表 */
-export function listVoiceRoles() {
-  return request.get<VoiceRoleConfig[]>(`${ADMIN_BASE}/voice-roles`)
-}
-
-/** 保存（UPSERT）Agent 配置 */
-export function upsertAgentConfig(cfg: AgentConfig) {
-  return request.post(`${ADMIN_BASE}/agents`, cfg)
-}
-
-/** 获取 Agent 配置列表 */
-export function listAgentConfigs() {
-  return request.get<AgentConfig[]>(`${ADMIN_BASE}/agents`)
-}
-
-/** 保存（UPSERT）工具调用策略 */
-export function upsertToolPolicy(cfg: ToolPolicy) {
-  return request.post(`${ADMIN_BASE}/tool-policy`, cfg)
-}
-
-/** 获取工具调用策略列表 */
-export function listToolPolicies() {
-  return request.get<ToolPolicy[]>(`${ADMIN_BASE}/tool-policy`)
-}
-
 // ── 语音模型配置（来自 ai_api_key / ai_chat_model） ──────────
 
 /** 列出所有启用的语音模型 */
 export function listVoiceModels() {
   return request.get<VoiceModel[]>(`${ADMIN_BASE}/voice-models`)
+}
+
+/** 获取全双工语音厂商目录（含各厂商官方模型清单 + 文档链接） */
+export function getVoiceProviderCatalog() {
+  return request.get<VoiceProviderCatalog>(`${ADMIN_BASE}/voice-models/provider-catalog`)
 }
 
 /** 获取当前默认语音模型解析结果 */

@@ -96,9 +96,11 @@ scikit-fuzzy>=0.5.0
 # Graphiti 长期记忆
 graphiti-core>=0.5.0
 
-# MCP 协议（知识库 MCP Server）
-# agentscope 2.0.4 需要 streamable_http_client（mcp>=1.15.0 引入）
-mcp>=1.15.0
+# MCP 协议（/mcp 端点 + agentscope MCP 客户端）—— 口径与 requirements.txt 保持一致
+# agentscope 2.0.11 硬依赖 mcp>=2.0.0，不可回落 v1；app/ai/mcp/server.py 已迁移到
+# v2 API（FastMCP → MCPServer），原 “mcp>=1.15.0（agentscope 2.0.4 需 streamable_http_client）”
+# 的约束已失效，按此安装可能拉到 1.x 使 /mcp 端点重新退化为不挂载
+mcp>=2.0.0,<3.0.0
 
 # AgentScope 2.x 运行时
 agentscope>=2.0.11,<3.0

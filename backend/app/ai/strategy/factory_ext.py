@@ -150,6 +150,12 @@ def build_model(cfg: Dict[str, Any]):
 
     agentscope 2.x 的模型构造函数签名为 ``(credential, model, parameters=...)``，
     凭据是 pydantic 模型（而非裸 api_key 字符串）。
+
+    ``cfg["stream"]``：显式传 True/False 时透传给构造器（仅当该模型类支持
+    ``stream`` 形参）。**缺省不传**：agentscope 各 ChatModel 的 ``stream`` 默认
+    为 True，``await model(...)`` 返回 async_generator 而非 ChatResponse：
+    agent 侧（reply_stream）自行消费不受影响，但后台一次性补全（图谱抽取等）
+    必须显式 ``stream=False``，否则拿到的是生成器 repr 而非正文。
     """
     from agentscope.credential import (
         AnthropicCredential,
@@ -204,6 +210,24 @@ def build_model(cfg: Dict[str, Any]):
     parameters = _build_parameters(model_cls, cfg)
     if parameters is not None:
         kwargs["parameters"] = parameters
+
+    stream = cfg.get("stream")
+    extra_body = cfg.get("extra_body")
+    if stream is not None or isinstance(extra_body, dict):
+        import inspect
+
+        try:
+            init_params = inspect.signature(model_cls.__init__).parameters
+        except (TypeError, ValueError):  # noqa: BLE001 - 签名不可省时不冒泡
+            init_params = {}
+        # 只透传显式配置；构造器不支持的模型类（自定义/新版）忽略，不硬传 TypeError。
+        if stream is not None and "stream" in init_params:
+            kwargs["stream"] = bool(stream)
+        if isinstance(extra_body, dict) and extra_body and "extra_body" in init_params:
+            # extra_body 会被 openai SDK 合入请求体（非 create() 的具名参数），
+            # 是向 vLLM/SGLang 一类自托管后端传 ``chat_template_kwargs`` 等
+            # 专有字段的唯一合法通道（直传会 TypeError）。
+            kwargs["extra_body"] = dict(extra_body)
 
     logger.info(
         "构建模型 provider=%s model=%s base_url=%s api_key_set=%s",

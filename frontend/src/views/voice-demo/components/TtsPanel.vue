@@ -2,7 +2,7 @@
   <div class="tts-panel">
     <div class="field">
       <label class="f">待合成文本</label>
-      <textarea v-model="text" rows="3">你好，我是 MinWorkBuddy 语音助手。今天有三项待办，需要我按时间顺序为你读一遍吗？</textarea>
+      <textarea v-model="text" rows="3">你好，我是 MiniWorkBuddy 语音助手。今天有三项待办，需要我按时间顺序为你读一遍吗？</textarea>
     </div>
     <div class="row" style="align-items: flex-end; margin-bottom: 12px">
       <div style="min-width: 230px">
@@ -56,7 +56,7 @@ import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { synthesizeTts, VOICES_BY_LANG } from '@/api/voiceDemo'
 
-const text = ref('你好，我是 MinWorkBuddy 语音助手。今天有三项待办，需要我按时间顺序为你读一遍吗？')
+const text = ref('你好，我是 MiniWorkBuddy 语音助手。今天有三项待办，需要我按时间顺序为你读一遍吗？')
 const voice = ref('Aiden')
 const customVoice = ref('')
 const busy = ref(false)

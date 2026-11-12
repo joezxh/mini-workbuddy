@@ -1,0 +1,1432 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>会议室 UI 原型 · 腾讯会议同构（一次性评审产物）</title>
+    <style>
+      :root {
+        --chrome: #fff;
+        --line: #e5e6eb;
+        --text: #1d2129;
+        --sub: #86909c;
+        --tint: #f2f3f5;
+        --stage: #14161a;
+        --tile: #1f2226;
+        --accent: #00a870;
+        --danger: #f53f3f;
+        --warn: #ff7d00;
+        --top: 48px;
+        --bar: 68px;
+        --side: 320px;
+        --strip: 96px;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        font: 14px/1.5 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background: var(--stage);
+        overflow: hidden;
+      }
+      button { font: inherit; color: inherit; cursor: pointer; }
+
+      /* ── 四区骨架 ───────────────────────────────── */
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: var(--top) 1fr var(--bar);
+        grid-template-areas: "top top" "stage side" "bar bar";
+      }
+      .app[data-side="closed"] { --side: 0px; }
+
+      /* ── 顶栏 ───────────────────────────────────── */
+      .topbar {
+        grid-area: top;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        min-width: 0;
+      }
+      .brand { display: flex; align-items: center; gap: 8px; color: var(--sub); flex: none; }
+      .brand svg { width: 20px; height: 20px; }
+      .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .case {
+        color: var(--accent);
+        background: #e8fbf4;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 12px;
+        flex: none;
+      }
+      .clock { font-variant-numeric: tabular-nums; color: var(--sub); flex: none; }
+      .spacer { flex: 1 1 auto; }
+      .quality { display: flex; align-items: flex-end; gap: 2px; height: 16px; flex: none; }
+      .quality i { width: 3px; background: var(--line); border-radius: 1px; }
+      .quality i:nth-child(1) { height: 5px; }
+      .quality i:nth-child(2) { height: 8px; }
+      .quality i:nth-child(3) { height: 12px; }
+      .quality i:nth-child(4) { height: 16px; }
+      .quality[data-lv="3"] i, .quality[data-lv="2"] i:nth-child(-n + 3), .quality[data-lv="1"] i:nth-child(-n + 2) { background: var(--accent); }
+      .quality[data-lv="1"] i:nth-child(n + 3) { background: var(--line); }
+      .rec { display: none; align-items: center; gap: 4px; color: var(--danger); font-size: 12px; flex: none; }
+      .rec[data-on="1"] { display: flex; }
+      .rec b { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: blink 1.2s infinite; }
+      @keyframes blink { 50% { opacity: 0.15; } }
+      .tbtn {
+        border: none; background: transparent; border-radius: 4px; padding: 6px 8px;
+        display: flex; align-items: center; gap: 6px; color: var(--text); flex: none;
+      }
+      .tbtn:hover { background: var(--tint); }
+      .tbtn svg { width: 16px; height: 16px; }
+
+      /* ── 舞台 ───────────────────────────────────── */
+      .stage { grid-area: stage; position: relative; background: var(--stage); min-width: 0; display: flex; flex-direction: column; }
+      .stage-main { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; padding: 16px; position: relative; }
+      .stage-main[data-layout="gallery"] { place-items: stretch; }
+      .gallery { width: 100%; height: 100%; display: grid; gap: 10px; align-content: center; justify-content: center; }
+      .speaker { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
+      .tile {
+        position: relative; background: var(--tile); border-radius: 8px; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .tile video { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
+      .tile[data-off="1"] video { display: none; }
+      .tile[data-cam="1"] { box-shadow: 0 0 0 2px var(--accent); }
+      .tile .ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #c9cdd4; }
+      .tile .ph .av { width: 72px; height: 72px; border-radius: 50%; background: linear-gradient(140deg, #4b5563, #2b3138); display: grid; place-items: center; font-size: 26px; color: #e5e6eb; overflow: hidden; }
+      .tile .ph .av img { width: 100%; height: 100%; object-fit: cover; }
+      .tile .nm { position: absolute; left: 10px; bottom: 8px; font-size: 12px; color: #fff; background: rgba(0, 0, 0, 0.45); padding: 2px 8px; border-radius: 4px; display: flex; align-items: center; gap: 5px; max-width: calc(100% - 20px); }
+      .tile .nm svg { width: 13px; height: 13px; flex: none; }
+      .tile .nm[data-mute="1"] svg.mic { color: var(--danger); }
+      .tile .tag { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: #fff; background: rgba(0, 0, 0, 0.45); border-radius: 4px; padding: 2px 7px; }
+      .tile .mask { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: #86909c; font-size: 12px; background: rgba(20, 22, 26, 0.6); }
+      .tile[data-off="1"] .mask { display: flex; }
+
+      .thumb-strip { flex: none; height: var(--strip); display: flex; gap: 8px; padding: 8px 16px 12px; overflow-x: auto; scrollbar-width: thin; }
+      .thumb-strip .tile { flex: none; width: 152px; cursor: pointer; }
+      .thumb-strip .tile .ph .av { width: 44px; height: 44px; font-size: 17px; }
+      .thumb-strip .tile .nm { font-size: 11px; left: 6px; bottom: 5px; padding: 1px 6px; }
+      .thumb-strip .tile[data-focus="1"] { box-shadow: 0 0 0 2px #4080ff; }
+
+      .pip { position: absolute; right: 20px; top: 20px; width: 200px; aspect-ratio: 16/9; cursor: grab; z-index: 3; display: none; }
+      .stage[data-mode="speaker"] .pip[data-self="1"] { display: block; }
+      .pip .tile { width: 100%; height: 100%; }
+      .pip .tile .ph .av { width: 40px; height: 40px; font-size: 15px; }
+
+      /* 字幕叠加条 */
+      .cap {
+        position: absolute; left: 50%; bottom: calc(var(--strip) + 18px); transform: translateX(-50%);
+        max-width: min(760px, 88%); z-index: 4; display: none; flex-direction: column; align-items: center; gap: 6px;
+      }
+      .stage[data-cap="1"] .cap { display: flex; }
+      .cap .who { font-size: 12px; color: #c9cdd4; background: rgba(0, 0, 0, 0.5); border-radius: 10px; padding: 2px 10px; }
+      .cap .say {
+        background: rgba(0, 0, 0, 0.66); color: #fff; padding: 8px 16px; border-radius: 6px;
+        font-size: 16px; line-height: 1.45; text-align: center; transition: opacity 0.4s;
+      }
+      .cap .say[data-dim="1"] { opacity: 0.25; }
+      .banner {
+        position: absolute; left: 50%; top: 16px; transform: translateX(-50%); z-index: 4;
+        background: #eaf2ff; color: #1d2129; border-radius: 6px; padding: 6px 14px; font-size: 13px;
+        display: none;
+      }
+      .stage[data-talk="1"] .banner { display: block; }
+
+      /* ── 右侧面板 ──────────────────────────────── */
+      .side {
+        grid-area: side; width: var(--side); background: var(--chrome); border-left: 1px solid var(--line);
+        display: flex; flex-direction: column; overflow: hidden; transition: width 0.18s ease;
+      }
+      .app[data-side="closed"] .side { border-left: none; }
+      .side-head { flex: none; display: flex; align-items: center; gap: 2px; padding: 8px 8px 0 10px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+      .side-head::-webkit-scrollbar { display: none; }
+      .tab { flex: none; border: none; background: transparent; padding: 8px 7px; font-size: 13px; color: var(--sub); border-bottom: 2px solid transparent; white-space: nowrap; }
+      .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+      .side-body { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+      .pane { display: none; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+      .pane[data-on="1"] { display: flex; }
+      .subtabs { flex: none; display: flex; gap: 6px; padding: 10px 12px; }
+      .subtab { flex: 1; border: none; background: var(--tint); border-radius: 4px; padding: 6px; font-size: 13px; color: var(--sub); }
+      .subtab[aria-selected="true"] { background: #eaf2ff; color: #4080ff; font-weight: 600; }
+      .search { flex: none; margin: 0 12px 8px; display: flex; align-items: center; gap: 6px; background: var(--tint); border-radius: 4px; padding: 5px 8px; }
+      .search svg { width: 14px; height: 14px; color: var(--sub); flex: none; }
+      .search input { border: none; background: transparent; outline: none; flex: 1; min-width: 0; font: inherit; }
+      .list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 6px 10px; }
+      .row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 6px; }
+      .row:hover { background: var(--tint); }
+      .row .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(140deg, #4b5563, #2b3138); display: grid; place-items: center; color: #e5e6eb; font-size: 13px; flex: none; overflow: hidden; }
+      .row .av img { width: 100%; height: 100%; object-fit: cover; }
+      .row .who { flex: 1 1 auto; min-width: 0; }
+      .row .who .n { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .row .who .r { font-size: 12px; color: var(--sub); }
+      .chip { font-size: 11px; border-radius: 3px; padding: 1px 5px; background: var(--tint); color: var(--sub); }
+      .chip.host { background: #e8fbf4; color: var(--accent); }
+      .chip.me { background: #eaf2ff; color: #4080ff; }
+      .chip.sys { background: #fff3e8; color: var(--warn); }
+      .row .ic { display: flex; gap: 4px; flex: none; color: var(--sub); }
+      .row .ic svg { width: 15px; height: 15px; }
+      .row .ic svg.off { color: var(--danger); }
+      .row .act { flex: none; display: none; gap: 4px; }
+      .row:hover .act { display: flex; }
+      .mini { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 3px 7px; font-size: 12px; }
+      .mini:hover { border-color: var(--accent); color: var(--accent); }
+      .mini[disabled] { opacity: 0.45; cursor: not-allowed; }
+      .mini[disabled]:hover { border-color: var(--line); color: inherit; }
+
+      .tr { padding: 8px 12px; border-bottom: 1px solid #f5f6f7; }
+      .tr .h { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); margin-bottom: 3px; }
+      .tr .h b { color: var(--text); font-weight: 600; }
+      .tr .h .anchor { margin-left: auto; color: #4080ff; cursor: pointer; }
+      .tr .x { color: var(--text); }
+      .tr[data-partial="1"] .x::after { content: "▍"; color: var(--accent); }
+      .empty { padding: 40px 12px; text-align: center; color: var(--sub); font-size: 13px; }
+
+      .info { padding: 12px; overflow-y: auto; }
+      .kv { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px dashed #f0f1f2; font-size: 13px; }
+      .kv span { color: var(--sub); flex: none; }
+      .kv b { font-weight: 500; text-align: right; }
+      .notice { margin-top: 12px; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; padding: 10px; font-size: 12px; color: #4a4a48; line-height: 1.6; }
+
+      /* ── 底部工具栏 ────────────────────────────── */
+      .bar {
+        grid-area: bar; background: var(--chrome); border-top: 1px solid var(--line);
+        display: flex; align-items: center; gap: 10px; padding: 0 14px;
+      }
+      .draft { flex: none; display: flex; align-items: center; gap: 6px; background: var(--tint); border-radius: 16px; padding: 6px 12px; width: 190px; color: var(--sub); }
+      .draft svg { width: 16px; height: 16px; flex: none; }
+      .grp { display: flex; align-items: center; gap: 2px; }
+      .divider { width: 1px; height: 26px; background: var(--line); flex: none; }
+      .cb { border: none; background: transparent; border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 62px; position: relative; }
+      .cb:hover { background: var(--tint); }
+      .cb svg { width: 20px; height: 20px; }
+      .cb .lb { font-size: 12px; color: var(--text); }
+      .cb[data-off="1"] svg { color: var(--danger); }
+      .cb[data-off="1"]::after { content: ""; position: absolute; left: 50%; top: 4px; width: 22px; height: 2px; background: var(--danger); transform: translateX(-50%) rotate(-38deg); }
+      .cb[data-on="1"] { background: #e8fbf4; }
+      .cb[disabled] { opacity: 0.4; cursor: not-allowed; }
+      .cb[disabled]:hover { background: transparent; }
+      .cb.end .lb, .cb.end svg { color: var(--danger); }
+      .cb.end { background: #ffece8; min-width: 76px; }
+      .cb.end:hover { background: #ffdcd6; }
+      [data-phase] .ph-lb { position: absolute; top: 2px; right: 4px; font-size: 9px; line-height: 1; padding: 1px 3px; border-radius: 2px; background: var(--tint); color: var(--sub); }
+      [data-phase="P1"] .ph-lb { background: #eaf2ff; color: #4080ff; }
+      [data-phase="P2"] .ph-lb { background: #fff3e8; color: var(--warn); }
+
+      /* ── 图例 / toast ──────────────────────────── */
+      .legend { position: fixed; left: 12px; bottom: calc(var(--bar) + 10px); background: rgba(255, 255, 255, 0.94); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--sub); max-width: 340px; z-index: 20; }
+      .legend b { color: var(--text); }
+      .legend .x { float: right; border: none; background: none; color: var(--sub); cursor: pointer; }
+      .legend[hidden] { display: none; }
+      .toast { position: fixed; left: 50%; bottom: calc(var(--bar) + 22px); transform: translateX(-50%); background: rgba(29, 33, 41, 0.9); color: #fff; padding: 8px 16px; border-radius: 6px; font-size: 13px; z-index: 30; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+      .toast[data-on="1"] { opacity: 1; }
+
+      /* SP-1 · AI 分析面板 */
+      .know { margin: 0 12px 10px; background: #eaf2ff; border: 1px solid #bedaff; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #1d2129; line-height: 1.6; }
+      .deg { margin: 0 12px 10px; background: #fff3e8; border: 1px solid #ffcf8b; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #a25a00; }
+      .acard { margin: 0 12px 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+      .acard[data-on="1"] { border-color: var(--accent); background: #f6fff9; }
+      .acard .hd { display: flex; align-items: center; gap: 8px; }
+      .acard .hd b { font-size: 13px; }
+      .acard .sp { font-size: 10px; color: var(--sub); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+      .acard .hd .sw { margin-left: auto; }
+      .acard .ds { font-size: 12px; color: var(--sub); margin: 6px 0; line-height: 1.5; }
+      .acard .st { font-size: 12px; color: var(--sub); }
+      .acard[data-on="1"] .st { color: var(--accent); }
+      .acard .err { font-size: 12px; color: var(--warn); background: #fff7e8; border-radius: 4px; padding: 5px 7px; margin: 6px 0; line-height: 1.5; }
+      .sw { width: 38px; height: 20px; border-radius: 10px; background: var(--line); border: none; position: relative; flex: none; padding: 0; }
+      .sw i { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+      .acard[data-on="1"] .sw { background: var(--accent); }
+      .acard[data-on="1"] .sw i { left: 21px; }
+      .sw[disabled] { opacity: 0.5; cursor: not-allowed; }
+      .stats { display: flex; gap: 6px; padding: 0 12px 8px; flex-wrap: wrap; }
+      .sc { font-size: 11px; border-radius: 3px; padding: 2px 7px; }
+      .sc.d { background: #ffece8; color: var(--danger); }
+      .sc.w { background: #fff3e8; color: var(--warn); }
+      .sc.i { background: #eaf2ff; color: #4080ff; }
+      .bywho { padding: 0 12px 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+      .alist { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px 8px; }
+      .al { border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+      .al[data-lv="info"] { border-left-color: #4080ff; }
+      .al[data-lv="warn"] { border-left-color: var(--warn); }
+      .al[data-lv="danger"] { border-left-color: var(--danger); background: #fff8f7; }
+      .al .t1 { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+      .al .lv { font-size: 11px; border-radius: 3px; padding: 1px 6px; background: var(--tint); color: var(--sub); }
+      .al[data-lv="danger"] .lv { background: #ffece8; color: var(--danger); }
+      .al[data-lv="warn"] .lv { background: #fff3e8; color: var(--warn); }
+      .al[data-lv="info"] .lv { background: #eaf2ff; color: #4080ff; }
+      .al .t1 .tm { margin-left: auto; color: var(--sub); font-variant-numeric: tabular-nums; }
+      .al .t2 { margin: 5px 0; font-size: 13px; }
+      .al .t3 { font-size: 11px; color: var(--sub); }
+      .al .t4 { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+      .al .ok { font-size: 12px; color: var(--accent); }
+      .dev { flex: none; border-top: 1px solid var(--line); padding: 8px 12px; display: flex; gap: 6px; }
+      .risk-banner { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); z-index: 5; display: none; background: var(--danger); color: #fff; border-radius: 6px; padding: 7px 14px; font-size: 13px; box-shadow: 0 4px 14px rgba(245, 63, 63, 0.35); }
+      .stage[data-risk="danger"] .risk-banner { display: block; }
+      .stage[data-risk="danger"] .stage-main { box-shadow: inset 0 0 0 3px var(--danger); }
+      .apane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
+      .tab .acnt { font-style: normal; font-size: 10px; background: var(--danger); color: #fff; border-radius: 8px; padding: 0 5px; margin-left: 4px; }
+      .mini[data-f-on="1"] { border-color: var(--accent); color: var(--accent); background: #f6fff9; }
+      .tr[data-hit="1"] { background: #fffbe6; }
+      .al code, .know code { font-size: 11px; background: var(--tint); border-radius: 3px; padding: 0 3px; }
+
+      /* SP-6 · Jev 会话辅助（悬浮面板） */
+      .jevpanel {
+        position: fixed; right: calc(var(--side) + 16px); bottom: calc(var(--bar) + 16px); width: 340px;
+        max-height: min(560px, calc(100vh - var(--top) - var(--bar) - 32px)); background: var(--chrome);
+        border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+        display: none; flex-direction: column; overflow: hidden; z-index: 40;
+      }
+      .jevpanel[data-on="1"] { display: flex; }
+      .jev-hd { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+      .jev-hd b { font-size: 13px; }
+      .jev-hd svg { width: 15px; height: 15px; color: var(--accent); }
+      .jev-hd .x { margin-left: auto; border: none; background: none; color: var(--sub); cursor: pointer; font-size: 13px; }
+      .jev-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px 12px; }
+      .jev-sec { margin-bottom: 12px; }
+      .jev-sec > .t { font-size: 11px; color: var(--sub); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+      .jev-st { font-size: 12px; color: var(--text); background: var(--tint); border-radius: 6px; padding: 7px 9px; line-height: 1.6; }
+      .jev-st[data-tone="info"] { background: #eaf2ff; color: #2b5fd9; }
+      .jev-st[data-tone="warn"] { background: #fff7e8; color: #a25a00; }
+      .jev-st[data-tone="danger"] { background: #ffece8; color: var(--danger); }
+      .jev-line { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+      .jev-line .k { color: var(--sub); width: 66px; flex: none; }
+      .jev-line .v { font-weight: 500; flex: none; }
+      .jev-meter { flex: 1 1 auto; height: 6px; border-radius: 3px; background: var(--tint); overflow: hidden; min-width: 40px; }
+      .jev-meter i { display: block; height: 100%; background: var(--accent); }
+      .jev-meter[data-lv="warn"] i { background: var(--warn); }
+      .jev-meter[data-lv="danger"] i { background: var(--danger); }
+      .jev-draft { border: 1px solid var(--line); border-radius: 8px; padding: 8px 9px; margin-bottom: 8px; }
+      .jev-draft[data-best="1"] { border-color: var(--accent); background: #f6fff9; }
+      .jev-draft .r1 { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sub); margin-bottom: 5px; }
+      .jev-draft .r1 .no { font-size: 12px; font-weight: 600; color: var(--text); }
+      .jev-draft .r1 .sc { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+      .jev-draft .r1 .bar { width: 46px; height: 5px; border-radius: 3px; background: var(--tint); overflow: hidden; }
+      .jev-draft .r1 .bar i { display: block; height: 100%; background: var(--accent); }
+      .jev-draft .tx { font-size: 13px; line-height: 1.55; }
+      .jev-draft .mt { font-size: 11px; color: var(--sub); margin-top: 5px; }
+      .jev-draft .ops { display: flex; gap: 6px; margin-top: 7px; }
+      .jev-prev textarea {
+        width: 100%; min-height: 62px; border: 1px solid var(--line); border-radius: 6px;
+        padding: 6px 8px; font: inherit; font-size: 13px; resize: vertical; color: var(--text);
+      }
+      .jev-note { font-size: 11px; color: var(--sub); line-height: 1.6; margin-top: 7px; }
+      .jev-phase { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--sub); padding: 3px 0; }
+      .jev-phase b { color: var(--accent); }
+      .jev-spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: jevspin 0.8s linear infinite; flex: none; }
+      @keyframes jevspin { to { transform: rotate(360deg); } }
+      .jevbtn { border: 1px solid var(--line); background: #fff; border-radius: 4px; padding: 4px 9px; font-size: 12px; }
+      .jevbtn:hover { border-color: var(--accent); color: var(--accent); }
+      .jevbtn[disabled] { opacity: 0.45; cursor: not-allowed; }
+      .jevbtn[disabled]:hover { border-color: var(--line); color: inherit; }
+      .jevbtn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .jevbtn.pri:hover { color: #fff; opacity: 0.88; }
+      .jev-row { display: flex; gap: 6px; flex-wrap: wrap; }
+      /* 会中消息输入框（原型本地 mock：data channel 待 P1） */
+      .chatbox { flex: none; position: relative; display: flex; align-items: flex-end; gap: 6px; background: var(--tint); border-radius: 16px; padding: 4px 5px 4px 12px; width: 300px; }
+      .chatbox textarea { flex: 1 1 auto; min-width: 0; border: none; background: transparent; outline: none; resize: none; font: inherit; font-size: 13px; max-height: 72px; padding: 5px 0; color: var(--text); }
+      .chatbox .send { border: none; background: var(--accent); color: #fff; border-radius: 14px; padding: 5px 12px; font-size: 12px; flex: none; }
+      .chatbox .send[disabled] { opacity: 0.45; cursor: not-allowed; }
+      .chatlog { position: absolute; left: 16px; bottom: calc(var(--strip) + 18px); width: 250px; display: flex; flex-direction: column; gap: 6px; z-index: 4; }
+      .chatlog .m { background: rgba(255, 255, 255, 0.96); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+      .chatlog .m b { color: #4080ff; margin-right: 4px; }
+
+      /* ── 断点 ──────────────────────────────────── */
+      @media (max-width: 1439px) {
+        .app:not([data-side="closed"]) { position: relative; }
+        .app:not([data-side="closed"]) .side { position: absolute; right: 0; top: var(--top); bottom: var(--bar); z-index: 12; box-shadow: -6px 0 18px rgba(0, 0, 0, 0.12); }
+      }
+      @media (max-width: 1023px) {
+        :root { --strip: 72px; }
+        .thumb-strip .tile { width: 116px; }
+        .draft { display: none; }
+        .chatbox { display: none; }
+        .cb { min-width: 54px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app" id="app" data-side="open">
+      <!-- 顶栏 -->
+      <header class="topbar">
+        <div class="brand"><span data-icon="logo"></span>会议详情</div>
+        <div class="title" id="mTitle">「借贷纠纷」第 2 次在线Demo</div>
+        <div class="case" id="mCase">Case 2026-HZ-0381</div>
+        <div class="clock" id="mClock">00:00:00</div>
+        <div class="rec" id="mRec"><b></b>录制中</div>
+        <div class="spacer"></div>
+        <div class="quality" id="mQ" data-lv="3" title="连接质量"><i></i><i></i><i></i><i></i></div>
+        <button class="tbtn" id="btnView" title="切换视图（演讲者 / 宫格）"><span data-icon="grid"></span><span id="viewLb">宫格</span></button>
+        <button class="tbtn" data-phase="P2" title="设置 · P2 未实现"><span data-icon="gear"></span>设置<span class="ph-lb">P2</span></button>
+        <button class="tbtn" id="btnFull" title="全屏（F）"><span data-icon="full"></span></button>
+        <button class="tbtn" id="btnSide" title="收起/展开侧栏"><span data-icon="panel"></span></button>
+      </header>
+
+      <!-- 舞台 -->
+      <main class="stage" id="stage" data-mode="speaker" data-cap="1" data-talk="0">
+        <div class="stage-main" id="stageMain" data-layout="speaker"></div>
+        <div class="thumb-strip" id="thumbStrip"></div>
+        <div class="pip" id="pip" data-self="1"></div>
+        <div class="banner" id="banner">正在讲话：<b></b></div>
+        <div class="risk-banner" id="riskBanner">⚠ <b></b></div>
+        <div class="cap" id="cap">
+          <div class="who" id="capWho"></div>
+          <div class="say" id="capSay"></div>
+        </div>
+        <div class="chatlog" id="chatLog"></div>
+      </main>
+
+      <!-- 右侧面板 -->
+      <aside class="side" id="side">
+        <div class="side-head">
+          <button class="tab" data-tab="members" aria-selected="true">成员</button>
+          <button class="tab" data-tab="transcript" aria-selected="false">转录</button>
+          <button class="tab" data-tab="info" aria-selected="false">会议信息</button>
+          <button class="tab" data-tab="analysis" aria-selected="false">AI 分析<i class="acnt" id="acnt" hidden>0</i></button>
+          <div class="spacer"></div>
+          <button class="tbtn" id="btnInvite" data-phase="P1" title="邀请参会人 · P1 需后端名单接口"><span data-icon="useradd"></span><span class="ph-lb">P1</span></button>
+        </div>
+        <div class="side-body">
+          <section class="pane" data-pane="members" data-on="1">
+            <div class="subtabs">
+              <button class="subtab" data-sub="joined" aria-selected="true">会议中(<span id="nJoined">0</span>)</button>
+              <button class="subtab" data-sub="waiting" aria-selected="false">未入会(<span id="nWaiting">0</span>)</button>
+            </div>
+            <div class="search"><span data-icon="search"></span><input id="mSearch" placeholder="搜索成员" /></div>
+            <div class="list" id="mList"></div>
+          </section>
+          <section class="pane" data-pane="transcript">
+            <div class="list" id="tList"></div>
+          </section>
+          <section class="pane" data-pane="info">
+            <div class="info" id="iBody"></div>
+          </section>
+          <section class="pane" data-pane="analysis">
+            <div class="apane" id="aBody"></div>
+          </section>
+        </div>
+      </aside>
+
+      <!-- SP-6 · Jev 会话辅助（悬浮面板：判定 → 草稿 → 排序 → 一键填入；永不自动发送） -->
+      <div class="jevpanel" id="jevPanel" data-on="0">
+        <div class="jev-hd">
+          <span data-icon="spark"></span>
+          <b>Jev 会话辅助</b>
+          <span class="chip host" id="jevRole">主持人</span>
+          <button class="x" id="jevClose" title="收起">✕</button>
+        </div>
+        <div class="jev-body" id="jevBody"></div>
+      </div>
+
+      <!-- 底部工具栏 -->
+      <footer class="bar">
+        <div class="chatbox" data-phase="P1" title="会中消息 · P1 走 LiveKit data channel；本原型仅本地演示，发送必须手动点击">
+          <textarea id="chatInput" rows="1" placeholder="说点什么…（Jev 草稿可一键填入，发送需手动点）"></textarea>
+          <button class="send" id="chatSend" disabled>发送</button>
+          <span class="ph-lb">P1</span>
+        </div>
+        <div class="divider"></div>
+        <div class="grp">
+          <button class="cb" id="btnMic" title="静音 / 取消静音（M）"><span data-icon="mic"></span><span class="lb">静音</span></button>
+          <button class="cb" id="btnCam" title="开启 / 关闭视频（E）"><span data-icon="cam"></span><span class="lb">开启视频</span></button>
+          <button class="cb" id="btnShare" title="共享屏幕（P0 纯前端 getDisplayMedia）"><span data-icon="screen"></span><span class="lb">共享屏幕</span></button>
+        </div>
+        <div class="divider"></div>
+        <div class="grp">
+          <button class="cb" data-phase="P1" title="邀请 · P1 需后端名单接口"><span data-icon="useradd"></span><span class="lb">邀请</span><span class="ph-lb">P1</span></button>
+          <button class="cb" id="btnMembers" title="成员面板"><span data-icon="users"></span><span class="lb">成员</span></button>
+          <button class="cb" data-phase="P1" title="聊天 · P1 需 data channel 协议"><span data-icon="chat"></span><span class="lb">聊天</span><span class="ph-lb">P1</span></button>
+          <button class="cb" data-phase="P1" title="举手 · P1 需 data channel 协议"><span data-icon="hand"></span><span class="lb">举手</span><span class="ph-lb">P1</span></button>
+        </div>
+        <div class="divider"></div>
+        <div class="grp">
+          <button class="cb" id="btnAi" title="AI 风险分析面板"><span data-icon="scan"></span><span class="lb">AI 分析</span></button>
+          <button class="cb" id="btnJev" title="Jev 会话辅助：先判定再生成草稿，一键填入，发送需手动点"><span data-icon="spark"></span><span class="lb">Jev 辅助</span></button>
+          <button class="cb" id="btnCap" data-on="1" title="字幕叠加条开关"><span data-icon="caption"></span><span class="lb">字幕</span></button>
+          <button class="cb" id="btnMinutes" title="会议纪要（会后草稿→确认回写）"><span data-icon="doc"></span><span class="lb">纪要</span></button>
+          <button class="cb" data-phase="P2" disabled title="录制需 LiveKit Egress，本期非目标"><span data-icon="record"></span><span class="lb">录制</span><span class="ph-lb">P2</span></button>
+          <button class="cb" data-phase="P2" disabled title="会控需 token roomAdmin=true + LiveKit Server API"><span data-icon="shield"></span><span class="lb">会议管控</span><span class="ph-lb">P2</span></button>
+        </div>
+        <div class="spacer"></div>
+        <button class="cb end" id="btnEnd" title="结束会议并生成纪要草稿"><span data-icon="leave"></span><span class="lb">结束会议</span></button>
+      </footer>
+    </div>
+
+    <div class="legend" id="legend">
+      <button class="x" id="legendX">✕</button>
+      <b>原型说明</b> 本地画面为真实摄像头（<code>getUserMedia</code>），其余均为 mock。
+      <b>P0</b> 本次实现 · <b>P1</b> 原型可点但需后端 · <b>P2</b> 置灰（需改 token 权限/Egress）。
+      子项目划分：<b>SP-1</b> 分析外壳 · <b>SP-2</b> 文本情感+音量（本次 P0） · <b>SP-3</b> 人脸+视觉 · <b>SP-4</b> 声学情感 · <b>SP-5</b> 身份证核验 · <b>SP-6</b> Jev 会话辅助（本次新增）。
+      <b>SP-6</b> 用法：点「Jev 辅助」打开悬浮面板 → 开启助手 → 「插入一段发言」→「分析当前会话」→ 看判定与 3 条候选 → 「填入输入框」只写文案，<b>发送必须手动点底部发送键</b>（Jev 永不自动发送）。真实契约见「Jev 能力 Demo」<code>POST {base}/v1/systemone</code>，本原型为 mock（可加 <code>?jevBase=</code> 切真实服务）。
+      快捷键 <b>M</b> 麦 · <b>E</b> 像 · <b>F</b> 全屏 · <b>Esc</b> 退全屏。
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+      /* ── 图标（线性 SVG，够用即可） ─────────────── */
+      const I = {
+        logo: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
+        mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+        cam: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 11l6-3v8l-6-3"/>',
+        screen: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        useradd: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M18 8v6M15 11h6"/>',
+        users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 11a3 3 0 1 0-2-5.2M18 20a5 5 0 0 0-2-4"/>',
+        chat: '<path d="M4 5h16v10H9l-5 4z"/>',
+        hand: '<path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6H10a5 5 0 0 1-5-5v-3a1.5 1.5 0 0 1 3 0"/>',
+        caption: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 12h4M6 15h7M15 12h3M15 15h3"/>',
+        doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7"/>',
+        record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/>',
+        shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+        leave: '<path d="M15 4h4v16h-4M11 8l-4 4 4 4M7 12h9"/>',
+        grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+        speaker: '<rect x="3" y="6" width="18" height="12" rx="2"/>',
+        gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+        full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+        panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/>',
+        search: '<circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/>',
+        smile: '<circle cx="12" cy="12" r="9"/><path d="M9 14a4 4 0 0 0 6 0M9 9h.01M15 9h.01"/>',
+        scan: '<path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/><path d="M7 12h10"/>',
+        spark: '<path d="M11 3l1.7 5.3L18 10l-5.3 1.7L11 17l-1.7-5.3L4 10l5.3-1.7z"/><path d="M18.5 15.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7z"/>',
+      };
+      const svg = (n, cls) =>
+        '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + I[n] + '</svg>';
+      document.querySelectorAll('[data-icon]').forEach((el) => (el.outerHTML = svg(el.dataset.icon)));
+
+      /* ── 状态 ───────────────────────────────────── */
+      const LS = 'lkproto.';
+      const load = (k, d) => { try { const v = localStorage.getItem(LS + k); return v === null ? d : v } catch { return d } };
+      const save = (k, v) => { try { localStorage.setItem(LS + k, v) } catch {} };
+      const st = {
+        mode: load('mode', 'speaker'),
+        side: load('side', 'open'),
+        tab: load('tab', 'members'),
+        sub: 'joined',
+        cap: load('cap', '1'),
+        mic: true, cam: true, sharing: false,
+        focus: 'p1',
+        query: '',
+        started: Date.now(),
+      };
+
+      /* ── mock 参会者（对齐 ai_meeting_participant.role：0主持人 1参会人 2转录worker）── */
+      const P = [
+        { id: 'p1', name: '张旭辉（平名）', role: '主持人 · Demo员', code: 'host', self: true, mic: true, cam: true, joined: true },
+        { id: 'p2', name: '李某某', role: '申请人', code: 'party', mic: true, cam: true, joined: true },
+        { id: 'p3', name: '王某某', role: '被申请人', code: 'party', mic: false, cam: true, joined: true },
+        { id: 'w1', name: 'AI 实时转录', role: '系统（worker）', code: 'sys', sys: true, mic: false, cam: false, joined: true },
+        { id: 'p4', name: '陈某某', role: '申请人代理人', code: 'party', mic: true, cam: true, joined: false },
+      ];
+      const byId = (id) => P.find((x) => x.id === id);
+      const joined = () => P.filter((x) => x.joined);
+
+      /* ── 摄像头（真实流，失败回落占位） ────────── */
+      let camStream = null;
+      let shareStream = null;
+      async function initCam() {
+        if (!navigator.mediaDevices?.getUserMedia) return toast('非安全上下文（请用 http://localhost 打开），已回落占位画面');
+        try {
+          camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280 }, audio: false });
+          camStream.getVideoTracks()[0].addEventListener('ended', () => { st.cam = false; render(); });
+          bindMedia();
+          render();
+        } catch (e) {
+          toast('摄像头不可用（' + (e && e.name) + '），已回落占位画面');
+        }
+      }
+      function bindMedia() {
+        document.querySelectorAll('[data-media="cam"]').forEach((v) => { if (camStream && v.srcObject !== camStream) v.srcObject = camStream; });
+        document.querySelectorAll('[data-media="share"]').forEach((v) => { if (shareStream && v.srcObject !== shareStream) v.srcObject = shareStream; });
+      }
+
+      /* ── 渲染：tile ─────────────────────────────── */
+      function tile(p, opt) {
+        const showCam = opt.kind === 'share' ? true : p.cam && !p.sys;
+        const nm = opt.hideName ? '' :
+          '<div class="nm" data-mute="' + (p.mic ? 0 : 1) + '">' + svg('mic', 'mic') + (p.name || '') + '</div>';
+        const tag = opt.kind === 'share' ? '<div class="tag">共享屏幕</div>'
+          : p.sys ? '<div class="tag">AI 转录</div>' : '';
+        // 本地走真实摄像头流；远端一律占位图。绝不给没流的 tile 渲染空 <video>——
+        // 那会呈现一整块黑，与刚修好的“摄像头黑屏”缺陷表象一致，评审时无法区分。
+        let inner;
+        if (opt.kind === 'share') inner = '<video autoplay muted playsinline data-media="share"></video>';
+        else if (showCam && p.self && camStream) inner = '<video autoplay muted playsinline data-media="cam"></video>';
+        else inner = '<div class="ph"><div class="av">' + (p.name || '').slice(0, 1) + '</div>'
+          + (showCam && !p.self ? '<span style="font-size:11px">模拟画面（原型 mock）</span>' : '') + '</div>';
+        const mask = opt.kind !== 'share' && !showCam
+          ? '<div class="mask">' + (p.sys ? '系统轨（无画面）' : '摄像头已关闭') + '</div>' : '';
+        return '<div class="tile" data-tile="' + p.id + '" data-off="' + (!showCam && opt.kind !== 'share' ? 1 : 0) + '" data-cam="' + (p.speaking ? 1 : 0) + '">'
+          + inner + mask + nm + tag + '</div>';
+      }
+
+      function cols(n) {
+        const cap = window.innerWidth < 1024 ? 2 : 3;
+        return Math.max(1, Math.min(cap, Math.ceil(Math.sqrt(n))));
+      }
+
+      function renderStage() {
+        const main = document.getElementById('stageMain');
+        const strip = document.getElementById('thumbStrip');
+        const pip = document.getElementById('pip');
+        const shareTile = { id: 'share', name: '我的屏幕', cam: true, mic: false, sys: false };
+        if (st.mode === 'gallery') {
+          const list = st.sharing ? [shareTile, ...joined()] : joined();
+          main.dataset.layout = 'gallery';
+          main.innerHTML = '<div class="gallery" style="grid-template-columns:repeat(' + cols(list.length) + ',minmax(0,1fr));grid-auto-rows:1fr;max-width:' + (cols(list.length) * 460) + 'px">'
+            + (st.sharing ? '<div class="tile" style="grid-column:1/-1"><video autoplay muted playsinline data-media="share"></video><div class="nm">共享屏幕</div></div>' : '')
+            + list.map((p) => tile(p, {})).join('') + '</div>';
+          strip.innerHTML = '';
+          pip.dataset.self = '0';
+        } else {
+          const target = st.sharing ? shareTile : (byId(st.focus) || joined()[0]);
+          const others = joined().filter((p) => !st.sharing && p.id !== st.focus);
+          main.dataset.layout = 'speaker';
+          main.innerHTML = '<div class="speaker" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">'
+            + '<div style="width:100%;max-width:1080px;aspect-ratio:16/9;max-height:100%">' + tile(target, { hideName: false }) + '</div></div>';
+          strip.innerHTML = others.map((p) => tile(p, {}).replace('class="tile"', 'class="tile" data-focus="' + (p.id === st.focus ? 1 : 0) + '"')).join('');
+          // 聚焦的正是自己时主画面已是本地流，PiP 再显示一次属重复
+          pip.dataset.self = st.sharing || st.focus === 'p1' ? '0' : '1';
+          pip.innerHTML = tile(byId('p1'), {});
+        }
+        bindMedia();
+      }
+
+      /* 角色匹配按词而非子串：'被申请人' 字面包含 '申请人'，用 includes 会让搜“申请人”
+         命中被申请人——Demo场景里把双方当事人搞混不可接受。 */
+      const roleHit = (role, q) =>
+        role.split(/[·\/（）()\s]+/).some((t) => t && (t === q || t.startsWith(q) || q.startsWith(t)));
+
+      function renderMembers() {
+        const q = st.query.trim();
+        const all = P.filter((p) => (p.joined ? st.sub === 'joined' : st.sub === 'waiting'))
+          .filter((p) => !q || p.name.includes(q) || roleHit(p.role, q));
+        document.getElementById('nJoined').textContent = joined().length;
+        document.getElementById('nWaiting').textContent = P.filter((p) => !p.joined).length;
+        document.getElementById('mList').innerHTML = all.length ? all.map((p) => {
+          const chip = p.code === 'host' ? '<span class="chip host">主持人</span>'
+            : p.code === 'sys' ? '<span class="chip sys">系统</span>' : '<span class="chip">' + p.role + '</span>';
+          const act = p.joined
+            ? '<button class="mini" data-phase="P2" disabled title="需 roomAdmin 权限 + LiveKit Server API">静音</button>'
+              + (p.self ? '' : '<button class="mini" data-phase="P2" disabled title="需 roomAdmin 权限">移出</button>')
+            : '<button class="mini" data-phase="P1" disabled title="需后端名单/邀请接口">呼叫</button>';
+          return '<div class="row"><div class="av">' + p.name.slice(0, 1) + '</div>'
+            + '<div class="who"><div class="n">' + p.name + (p.self ? ' <span class="chip me">我</span>' : '') + '</div><div class="r">' + chip + '</div></div>'
+            + '<div class="ic">' + svg('mic', p.mic ? '' : 'off') + svg('cam', p.cam ? '' : 'off') + '</div>'
+            + '<div class="act">' + act + '</div></div>';
+        }).join('') : '<div class="empty">没有匹配的成员</div>';
+      }
+
+      /* ── 转录：partial→final 覆盖（对齐 dedupeCaptions 语义）── */
+      const T = [];
+      function push(id, who, text, partial) {
+        const hit = T.find((x) => x.id === id);
+        if (hit) { hit.text = text; hit.partial = partial; }
+        else T.push({ id, who, text, partial, ts: Date.now() });
+        const cur = T[T.length - 1];
+        const entry = hit || cur;
+        document.getElementById('banner').querySelector('b').textContent = cur.who + '：' + cur.text;
+        document.getElementById('capWho').textContent = cur.who;
+        document.getElementById('capSay').textContent = cur.text;
+        document.getElementById('capSay').dataset.dim = '0';
+        document.getElementById('stage').dataset.talk = '1';
+        updateSpeaking();
+        clearTimeout(push._t);
+        push._t = setTimeout(() => { document.getElementById('stage').dataset.talk = '0'; document.getElementById('capSay').dataset.dim = '1'; }, 3000);
+        renderTranscript();
+        // 定稿分段才送分析：partial 期间文本不完整，判情感只会白烧模型
+        if (!partial) analyzeSegment(entry);
+      }
+      const clock = (ts) => {
+        const s = Math.max(0, Math.floor((ts - st.started) / 1000));
+        return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      };
+      function renderTranscript() {
+        const el = document.getElementById('tList');
+        el.innerHTML = T.length ? T.map((x) =>
+          '<div class="tr" data-partial="' + (x.partial ? 1 : 0) + '" data-hit="' + (x.id === AN.jump ? 1 : 0) + '"><div class="h"><b>' + x.who + '</b><span>' + clock(x.ts) + '</span>' + (x.emo ? '<span class="chip' + (x.emoLv === 'danger' ? ' sys' : '') + '">' + x.emo + '</span>' : '') + '<span class="anchor">定位原文</span></div><div class="x">' + x.text + '</div></div>'
+        ).join('') : '<div class="empty">暂无字幕（worker 未回推）</div>';
+        const hit = el.querySelector('[data-hit="1"]');
+        if (hit && hit.scrollIntoView) hit.scrollIntoView({ block: 'center' });
+        el.scrollTop = el.scrollHeight;
+      }
+
+      function renderInfo() {
+        const p = document.getElementById('iBody');
+        p.innerHTML =
+          '<div class="kv"><span>会议主题</span><b>「借贷纠纷」第 2 次在线Demo</b></div>' +
+          '<div class="kv"><span>关联Case</span><b>2026-HZ-0381（点击进入）</b></div>' +
+          '<div class="kv"><span>主持人</span><b>张旭辉（平名）</b></div>' +
+          '<div class="kv"><span>开始时间</span><b>' + new Date(st.started).toLocaleString('zh-CN', { hour12: false }) + '</b></div>' +
+          '<div class="kv"><span>已进行</span><b id="iDur">00:00:00</b></div>' +
+          '<div class="kv"><span>参会人数</span><b>' + joined().length + ' 人在会 / ' + P.filter((x) => !x.joined).length + ' 人未入会</b></div>' +
+          '<div class="kv"><span>实时转录</span><b>已开启（AI worker 逐轨转写）</b></div>' +
+          '<div class="kv"><span>AI 风险分析</span><b>' + (AN.on.voice ? '语音情感已开启' : '语音情感未开启（默认）') + ' · 视频行为不可用（SP-3）</b></div>' +
+          '<div class="kv"><span>录制</span><b style="color:var(--warn)">未启用 · P2</b></div>' +
+          '<div class="notice">本次Demo全程由 AI 生成文字转录与纪要草稿；纪要须经主持人<b>确认</b>后才回写CaseDemo记录（草稿状态不写入业务表）。入会前请向各方告知并留存知情记录。<br><span style="color:#a8a29a">知情告知状态落库属 P1，原型仅展示提示文案。</span></div>';
+      }
+
+      /* ── 渲染：外壳状态 ─────────────────────────── */
+      /* ╚─ SP-1 / SP-2 · 会中 AI 风险分析 ╀─────────────────────────
+         1) 开关权威在服务端：真实实现是 POST /ai/meeting/analyze/toggle 返回「实际生效状态 + 不可用原因」，
+            前端只照返回渲染，绝不自行把开关点亮——分析会消耗模型调用且触及当事人权利。
+         2) 服务不可用就写“不可用”，不编造结论：MediaAnalysisServiceImpl 硬编码返回 calm / 空 keyFrames，
+            却在 getCapabilities 里汇报 visionEnabled=true，那是本次设计上要堵死的反面教材。
+         3) 控成本两级门：本地词表 + 音量先筛，命中才送大模型；同一发言人 8s 内不重复送。 */
+      const SVC = {
+        voice: {
+          key: 'voice', title: '语音情感分析', sp: 'SP-2', phase: 'P0', ready: true, reason: '',
+          ds: '对已定稿的转录分段做两级判定：本地规则（冲突词 + 音量等级）先筛，命中才送大模型情感分类；无新部40服务，复用现有转录链路与 callModelForStructuredJson。',
+        },
+        video: {
+          key: 'video', title: '视频行为分析', sp: 'SP-3', phase: 'P1', ready: false,
+          reason: '不可用：人脸检测/比对服务未部署，当事人人像底库表未建。本场不产出任何画面结论，也不展示示例数据。',
+          ds: '开启后按 1 帧/3s 对焦点画面做持续性状态理解（激烈争执、多人站立对峙、遮挡镜头、离席）。瞬时动作（挥臂击打 0.3–1s）在本采样率下不承诺检出；身份归属取参会轨，人脸比对为增强项。',
+        },
+      };
+      const AN = {
+        on: { voice: load('voice', '0') === '1', video: false },
+        perm: true,
+        cost: { seg: 0, rules: 0, models: 0, throttled: 0 },
+        last: {}, alerts: [], filter: 'all', seq: 0, jump: '', demo: 0,
+      };
+      const THROTTLE = 8000;
+      const LV = { danger: '危险', warn: '提醒', info: '信息' };
+      /* 告警一律“疑似 + 请主持人确认”：误报会直接伤害当事人，定性由人负责。 */
+      const MSG = {
+        danger: '疑似威胁性表述——请主持人确认，必要时休会或转线下',
+        warn: '情绪明显激动（anger）——建议主持人安抚或短暂休会',
+        info: '音量升高、语气偏激动——留意冲突升级',
+      };
+      /* 一级门词表宁宽勿漏：漏了就根本没机会送模型，精度交给二级判定与“疑似”措辞兑。 */
+      const LEXICON = [
+        { lv: 'danger', emo: 'anger/威胁', w: ['逼我', '收拾', '弄死', '不客气', '没完', '告你们', '滚'] },
+        { lv: 'warn', emo: 'anger', w: ['凭什么', '闭嘴', '骗', '不讲理', '欺人太甚', '过分'] },
+      ];
+      const lexHit = (t) => LEXICON.find((r) => r.w.some((x) => t.includes(x)));
+      /* 音量：真实实现取 LiveKit ActiveSpeakersChanged 的 audioLevel（换算 dBFS）；
+         原型没有远端真实音频，用标点与风险词推断，只为把“文本 + 音量双信号”这条链演示出来。 */
+      const volumeOf = (t, hit) => Math.round(-34 + (t.match(/[！!？?]/g) || []).length * 7 + (hit ? 9 : 0));
+      const identityOf = (name) => (P.find((x) => x.name === name) || {}).id || 'unknown';
+
+      function analyzeSegment(seg) {
+        if (!AN.on.voice || !seg) return;
+        AN.cost.seg++;
+        const hit = lexHit(seg.text);
+        const vol = volumeOf(seg.text, !!hit);
+        if (!hit && vol < -18) { renderAnalysis(); return; }   // 一级门未命中：本次零模型调用
+        AN.cost.rules++;
+        if (!AN.perm) { renderAnalysis(); return; }            // 无权限：不发起分析（权限判定同样在服务端）
+        const now = Date.now();
+        if (now - (AN.last[seg.who] || 0) < THROTTLE) { AN.cost.throttled++; renderAnalysis(); return; }
+        AN.last[seg.who] = now;
+        AN.cost.models++;
+        seg.emo = hit ? hit.emo : 'agitated';
+        seg.emoLv = hit ? hit.lv : 'info';
+        raiseAlert({ kind: 'voice', sid: seg.id, who: seg.who, text: seg.text, lv: seg.emoLv, emo: seg.emo, vol: vol });
+        renderTranscript();
+        renderAnalysis();
+      }
+
+      function raiseAlert(a) {
+        a.id = 'al' + (++AN.seq);
+        a.ts = Date.now();
+        a.ack = false;
+        a.msg = MSG[a.lv];
+        AN.alerts.unshift(a);
+        if (a.lv === 'danger') showRisk(a);
+        toast('AI 告警 · ' + a.who + '：' + (a.lv === 'danger' ? '疑似威胁性表述' : a.lv === 'warn' ? '情绪激动' : '音量升高'));
+      }
+
+      let riskTimer;
+      function showRisk(a) {
+        const stage = document.getElementById('stage');
+        // 只改 dataset 与文案，不重绘舞台：重绘会重建 <video>，本地真实摄像头画面会反复闪断
+        document.getElementById('riskBanner').querySelector('b').textContent = a.who + '：' + a.msg;
+        stage.dataset.risk = 'danger';
+        clearTimeout(riskTimer);
+        riskTimer = setTimeout(() => (stage.dataset.risk = 'none'), 15000);
+      }
+      const unreadCount = () => AN.alerts.filter((x) => !x.ack).length;
+      function updateAlertBadge() {
+        const el = document.getElementById('acnt');
+        const n = unreadCount();
+        el.hidden = n === 0;
+        el.textContent = String(n);
+      }
+
+      /* 开关点击 → 请求服务端；服务端说不可用就保持关闭，并如实回显原因 */
+      function toggleAnalyze(kind) {
+        const s = SVC[kind];
+        if (!AN.perm) return toast('无权限：需「会中风险分析」权限点');
+        if (!s.ready) {
+          AN.on[kind] = false;
+          renderAnalysis();
+          return toast(s.title + '：服务端返回不可用（' + s.sp + ' 未交付），开关保持关闭');
+        }
+        AN.on[kind] = !AN.on[kind];
+        save(kind, AN.on[kind] ? '1' : '0');
+        renderAnalysis();
+        toast(AN.on[kind] ? s.title + ' 已开启（toggle 接口回写生效状态）' : s.title + ' 已关闭，停止全部模型调用');
+      }
+
+      function renderAnalysis() {
+        const body = document.getElementById('aBody');
+        if (!body) return;
+        const anyOn = AN.on.voice || AN.on.video;
+        const card = (s) => {
+          const on = AN.on[s.key];
+          const run = on
+            ? '分析中 · 已送模型 ' + AN.cost.models + ' 次（规则命中 ' + AN.cost.rules + '，8s 节流跳过 ' + AN.cost.throttled + '）'
+            : s.ready ? '未开启（默认关闭，不会产生任何模型调用）' : '未开启';
+          return '<div class="acard" data-on="' + (on ? 1 : 0) + '" data-svc="' + s.key + '">'
+            + '<div class="hd"><b>' + s.title + '</b><span class="sp">' + s.sp + ' · ' + s.phase + '</span>'
+            + '<button class="sw" data-sw="' + s.key + '"' + (AN.perm ? '' : ' disabled')
+            + ' title="' + (AN.perm ? (on ? '关闭' : '开启') : '需 ai:meeting:analyze 权限') + '"><i></i></button></div>'
+            + '<div class="ds">' + s.ds + '</div>'
+            + (s.ready ? '' : '<div class="err">' + s.reason + '</div>')
+            + '<div class="st">' + run + '</div></div>';
+        };
+        const cnt = (lv) => AN.alerts.filter((a) => a.lv === lv).length;
+        const speakers = AN.alerts.map((a) => a.who).filter((n, i, arr) => arr.indexOf(n) === i);
+        const chip = (k, lb) => '<button class="mini" data-f="' + k + '"' + (AN.filter === k ? ' data-f-on="1"' : '') + '>' + lb + '</button>';
+        const shown = AN.alerts.filter((a) => AN.filter === 'all'
+          || (AN.filter.indexOf('who:') === 0 ? 'who:' + a.who === AN.filter : a.lv === AN.filter));
+        body.innerHTML =
+          (anyOn ? '<div class="know">本会议已开启 <b>AI 风险分析</b>：告警与依据随纪要留存并写入审计日志，仅供主持人研判，<b>不作为定性依据</b>。开启前请向各方告知。</div>' : '')
+          + (AN.perm ? '' : '<div class="deg">当前账号无「会中风险分析」权限：开关不可操作，仅可查看历史告警。</div>')
+          + card(SVC.voice) + card(SVC.video)
+          + '<div class="stats"><span class="sc i">已分析 ' + AN.cost.seg + ' 段</span>'
+          + '<span class="sc d">危险 ' + cnt('danger') + '</span>'
+          + '<span class="sc w">提醒 ' + cnt('warn') + '</span>'
+          + '<span class="sc i">信息 ' + cnt('info') + '</span></div>'
+          + '<div class="bywho">' + chip('all', '全部') + chip('danger', '危险') + chip('warn', '提醒') + chip('info', '信息')
+          + speakers.map((n) => chip('who:' + n, n)).join('') + '</div>'
+          + (!AN.alerts.length
+            ? '<div class="empty">' + (anyOn ? '暂无风险告警（已分析 ' + AN.cost.seg + ' 段转录）' : '两项分析均未开启：不采集额外画面，也不产生任何模型调用。') + '</div>'
+            : (shown.length ? '<div class="alist">' + shown.map((a) =>
+              '<div class="al" data-lv="' + a.lv + '">'
+              + '<div class="t1"><span class="lv">' + LV[a.lv] + '</span><b>' + a.who + '</b>'
+              + '<span class="chip">' + (a.kind === 'voice' ? '语音情感' : '视频行为') + '</span>'
+              + '<span class="tm">' + clock(a.ts) + '</span></div>'
+              + '<div class="t2">' + a.msg + '</div>'
+              + '<div class="t3">依据：转录「' + a.text + '」 · 音量 ' + a.vol + ' dBFS · 情感 ' + a.emo
+              + ' · 身份取自参会轨 <code>identity=' + identityOf(a.who) + '</code>（非人脸推断）</div>'
+              + '<div class="t4">' + (a.ack ? '<span class="ok">已知悉 · 随纪要留存</span>'
+                : '<button class="mini" data-ack="' + a.id + '">已知悉</button><button class="mini" data-jump="' + a.id + '">定位原文</button>')
+              + '</div></div>').join('') + '</div>'
+              : '<div class="empty">该筛选下暂无告警</div>'))
+          + '<div class="dev"><button class="mini" id="aDemo">模拟一段高风险发言</button>'
+          + '<button class="mini" id="aPerm">' + (AN.perm ? '以无权限账号预览' : '以有权限账号预览') + '</button>'
+          + '<button class="mini" id="aClear">清除筛选</button></div>';
+        updateAlertBadge();
+      }
+
+      const DEMO = [
+        ['王某某', '你们凭什么不给我分期！再逼我我就收拾你，信不信！'],
+        ['李某某', '你这套说辞就是骗人，不讲理到这个份上也太过分了！'],
+        ['张旭辉（平名）', '双方先冷静，我把这一段记进纪要草稿。'],
+      ];
+      function demoRisk() {
+        if (!AN.on.voice) return toast('请先开启「语音情感分析」（默认关闭）');
+        const d = DEMO[AN.demo++ % DEMO.length];
+        push('demo' + AN.demo, d[0], d[1], false);   // 直接定稿（真实链路是 worker 回推 partial→final）
+      }
+
+      /* ╚═ SP-6 · Jev 会话辅助（判定 → 草稿 → 排序 → 一键填入）══════════
+         契约参考「Jev 能力 Demo」（POST {base}/v1/systemone）：
+           req  {state, model, questions:{key:{type:'noul'|'choice', instructions, criteria}}}
+           ans  choice → {type:'choice', choice, confidence, probabilities:{name:p}}
+                noul   → {type:'noul', noul: p(yes)}
+         Jev 不支持 score 题型：紧张度用 5 档 choice、草稿质量用 4 档 choice，
+         数值一律由本地「概率期望 × 档位分值」线性映射，绝不臆造分数。
+         红线：助手只产出「候选文案」，永不自动发送——填入只写文本框，发送必须本人点。 */
+      const JV_LABELS = {
+        intent: { COOPERATE: '愿意配合', DISPUTE: '坚持争议', QUESTION: '追问澄清', REFUSE: '拒绝推进', EMOTIONAL: '情绪主导', WITHDRAW: '回避退出', SMALL_TALK: '无关话' },
+        risk: { LOW: '低风险', MEDIUM: '中风险', HIGH: '较高风险', CRITICAL: '严重风险' },
+        action: { ACK: '先安抚情绪', CLARIFY: '澄清事实', EXPLAIN: '说明程序', PROPOSE: '提出方案', PAUSE: '建议休会', ESCALATE: '升级处置' },
+        tension: { CALM: '平稳', LOW: '略紧', MID: '明显情绪化', HIGH: '激动', EXTREME: '失控' },
+        quality: { EXCELLENT: '可直接采用', GOOD: '较好，可小改', ACCEPTABLE: '一般，需重写', POOR: '不建议使用' },
+      };
+      const JV_TENSION_SCORE = { CALM: 0, LOW: 25, MID: 50, HIGH: 75, EXTREME: 100 };
+      const JV_QUALITY_SCORE = { EXCELLENT: 92, GOOD: 76, ACCEPTABLE: 58, POOR: 32 };
+      const JV_JUDGE_Q = {
+        party_intent: {
+          type: 'choice', instructions: '判断被判定对象在本次Demo中最新发言的意图。',
+          criteria: { COOPERATE: '愿意配合Demo、表达诉求或同意推进', DISPUTE: '坚持争议立场、不接受对方主张', QUESTION: '追问事实、依据或流程', REFUSE: '明确拒绝推进（不回应、不接受）', EMOTIONAL: '情绪主导、以表达不满为主', WITHDRAW: '回避、退出或转移话题', SMALL_TALK: '与Demo无关的闲谈' },
+        },
+        tension_level: {
+          type: 'choice', instructions: '判断被判定对象当前发言的紧张程度，从低到高五档。',
+          criteria: { CALM: '语气平稳、理性陈述', LOW: '略有情绪但仍在陈述事实', MID: '明显情绪化、语气加重', HIGH: '激动、抬高音量或指责对方', EXTREME: '失控、威胁或人身攻击' },
+        },
+        risk_level: {
+          type: 'choice', instructions: '判断本次Demo的风险等级。',
+          criteria: { LOW: '无升级迹象', MEDIUM: '存在对立但仍可控', HIGH: '明显冲突升级风险，需主持人介入', CRITICAL: '出现威胁或暴力倾向，需立即处置' },
+        },
+        need_immediate_reply: { type: 'noul', instructions: '被判定对象是否需要主持人立即回应？' },
+        suggested_action: {
+          type: 'choice', instructions: '给出此刻对Demo员最合适的一个动作。',
+          criteria: { ACK: '先安抚情绪并复述对方诉求', CLARIFY: '澄清事实与依据', EXPLAIN: '说明程序与下一步', PROPOSE: '提出可讨论的方案', PAUSE: '建议暂时休会', ESCALATE: '升级处置或终止本次Demo' },
+        },
+      };
+      const JV = {
+        on: false, perm: true, phase: 'idle', judge: null, drafts: [], preview: '',
+        degraded: { judge: false, draft: false, rank: false }, err: '', mockFail: false,
+        target: '', targetName: '', evidence: '', bestPick: null, disagree: false, previewDirty: false,
+      };
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      /* Jev 适配器：默认走本地 mock（返回与真实服务同构的 answers），
+         带 ?jevBase=<url> 时改为真实调用 POST {base}/v1/systemone。 */
+      const JEV = {
+        base: (new URLSearchParams(location.search).get('jevBase') || '').replace(/\/+$/, ''),
+        key: new URLSearchParams(location.search).get('jevKey') || '',
+        model: 'jev-latest',
+        async systemOne(state, questions) {
+          if (JV.mockFail) throw new Error('模拟：Jev 服务不可用');
+          if (JEV.base) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (JEV.key) headers.Authorization = 'Bearer ' + JEV.key;
+            const r = await fetch(JEV.base + '/v1/systemone', {
+              method: 'POST', headers, body: JSON.stringify({ state, model: JEV.model, questions }),
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return await r.json();
+          }
+          await sleep(240);
+          return { model: JEV.model, answers: jevMockAnswers(state, questions), usage: { input_tokens: 0, output_tokens: 0 }, latency_ms: 240 };
+        },
+      };
+
+      /* mock 判定：按最近一段非本人发言的措辞给出档位，模拟真实模型的分布输出 */
+      function jevMockAnswers(state, questions) {
+        const conv = (state && state.conversation) || [];
+        const last = conv.length ? conv[conv.length - 1] : null;
+        const text = last ? last.text : '';
+        const hot = ['收拾', '弄死', '不客气', '逼我', '告你们', '滚'].some((w) => text.includes(w));
+        const warm = ['凭什么', '不讲理', '过分', '骗', '闭嘴', '欺人太甚'].some((w) => text.includes(w));
+        const ask = /[？?]|为什么|怎么|什么/.test(text);
+        const dist = (pick, keys, p) => {
+          const o = {}; const rest = (1 - p) / Math.max(1, keys.length - 1);
+          keys.forEach((k) => (o[k] = k === pick ? p : rest));
+          return o;
+        };
+        const answers = {};
+        Object.keys(questions).forEach((key) => {
+          const q = questions[key];
+          const keys = q.type === 'choice' ? Object.keys(q.criteria) : [];
+          if (key === 'party_intent') {
+            const pick = hot || warm ? 'EMOTIONAL' : ask ? 'QUESTION' : /不|没|别/.test(text) ? 'DISPUTE' : 'COOPERATE';
+            answers[key] = { type: 'choice', choice: pick, confidence: 0.58, probabilities: dist(pick, keys, 0.58) };
+          } else if (key === 'tension_level') {
+            const pick = hot ? 'EXTREME' : warm ? 'HIGH' : ask ? 'LOW' : 'CALM';
+            answers[key] = { type: 'choice', choice: pick, confidence: 0.52, probabilities: dist(pick, keys, 0.52) };
+          } else if (key === 'risk_level') {
+            const pick = hot ? 'HIGH' : warm ? 'MEDIUM' : 'LOW';
+            answers[key] = { type: 'choice', choice: pick, confidence: 0.55, probabilities: dist(pick, keys, 0.55) };
+          } else if (key === 'need_immediate_reply') {
+            answers[key] = { type: 'noul', noul: hot ? 0.86 : warm ? 0.55 : 0.18 };
+          } else if (key === 'suggested_action') {
+            const pick = hot ? 'ACK' : warm ? 'PAUSE' : ask ? 'CLARIFY' : 'EXPLAIN';
+            answers[key] = { type: 'choice', choice: pick, confidence: 0.5, probabilities: dist(pick, keys, 0.5) };
+          } else if (/^cand_\d+$/.test(key)) {
+            const idx = Number(key.slice(5)) - 1;
+            const pick = idx === 0 ? 'GOOD' : idx === 1 ? 'ACCEPTABLE' : 'POOR';
+            // 置信度取真实量级（0.8B 实测 0.02~0.11）→ mock 也按低置信呈现，避免演示里显得比真实更可靠
+            answers[key] = { type: 'choice', choice: pick, confidence: 0.09, probabilities: dist(pick, keys, 0.4) };
+          } else if (key === 'best_pick') {
+            answers[key] = { type: 'choice', choice: 'd1', confidence: 0.35, probabilities: dist('d1', keys, 0.44) };
+          } else {
+            answers[key] = { type: 'choice', choice: keys[0] || '', confidence: 0, probabilities: {} };
+          }
+        });
+        return answers;
+      }
+
+      /* 本地映射：概率期望 × 档位分值（Jev 无 score 题型，数值由我方算） */
+      function jevExpect(probs, map) {
+        let sum = 0, w = 0;
+        Object.keys(probs || {}).forEach((k) => {
+          if (map[k] === undefined) return;
+          sum += probs[k] * map[k]; w += probs[k];
+        });
+        return w > 0 ? Math.round(sum / w) : null;
+      }
+      function jevParseJudge(answers) {
+        const g = (k) => answers[k] || {};
+        const t = g('tension_level'), n = g('need_immediate_reply');
+        const tension = jevExpect(t.probabilities, JV_TENSION_SCORE);
+        /* 标签按「概率期望分」落档，而不是模型的 argmax 档：否则会出现 70 分却标「失控」的矛盾 */
+        const band = tension === null ? null
+          : tension <= 12 ? 'CALM' : tension <= 37 ? 'LOW' : tension <= 62 ? 'MID' : tension <= 87 ? 'HIGH' : 'EXTREME';
+        return {
+          intent: g('party_intent').choice || null,
+          intentLabel: JV_LABELS.intent[g('party_intent').choice] || '—',
+          intentConfidence: typeof g('party_intent').confidence === 'number' ? g('party_intent').confidence : null,
+          tension: tension,
+          tensionLabel: band ? JV_LABELS.tension[band] : '—',
+          tensionBand: band,
+          risk: g('risk_level').choice || null,
+          riskLabel: JV_LABELS.risk[g('risk_level').choice] || '—',
+          needImmediateReply: typeof n.noul === 'number' ? n.noul >= 0.5 : null,
+          needConfidence: typeof n.noul === 'number' ? Math.abs(n.noul - 0.5) * 2 : null,
+          action: g('suggested_action').choice || null,
+          actionLabel: JV_LABELS.action[g('suggested_action').choice] || '—',
+        };
+      }
+
+      /* 会话上下文：最近 12 段转录 + 在会参会人 + 场景（真实实现由后端组装） */
+      function jevContext() {
+        return {
+          conversation: T.slice(-12).map((x) => ({ speaker: x.who, identity: identityOf(x.who), role: (byId(identityOf(x.who)) || {}).role || '', text: x.text, ts: x.ts })),
+          participants: P.filter((x) => x.joined).map((x) => ({ identity: x.id, name: x.name, role: x.role })),
+          scene: { domain: 'Demo', caseId: '2026-HZ-0381', caseType: '借贷纠纷', stage: '争议陈述' },
+        };
+      }
+      function jevLastOther() {
+        for (let i = T.length - 1; i >= 0; i--) {
+          const x = T[i];
+          if (x.who === 'AI 实时转录') continue;
+          const p = byId(identityOf(x.who));
+          if (p && p.self) continue;
+          return x;
+        }
+        return T.length ? T[T.length - 1] : null;
+      }
+
+      /* 草稿生成（mock 我方 LLM）：三条不同风格，Demo员口吻，不代表态、不承诺 */
+      function jevMockDrafts(judge) {
+        const bank = {
+          ACK: { style: '安抚+复述', text: '我先把你刚才说的这一点完整记下来，你的诉求我们会逐项回应；先别急，我们一项一项过。', reason: '承接情绪并复述诉求，避免当场对质' },
+          CLARIFY: { style: '澄清事实', text: '这一条我想先跟你确认具体事实：金额、时间和凭证我们按记录逐项核对，核对完再谈方案。', reason: '把争议拉回可核验的事实' },
+          EXPLAIN: { style: '程序推进', text: '接下来按Demo程序走：先确认诉求，再核对证据，达成一致的内容会写进纪要草稿，由双方确认后生效。', reason: '用程序推进替代情绪对抗' },
+          PROPOSE: { style: '提出方案', text: '我先给一个可讨论的方向：把还款节点拆成两到三期，具体金额和期数我们根据你今天的诉求再对齐。', reason: '给一个可讨论的落点，把谈判从对立拉回方案' },
+          PAUSE: { style: '建议休会', text: '情绪先缓一缓，我建议休会十分钟，双方各自整理一下诉求，我们十分钟后继续。', reason: '降低对抗强度，冷却后继续' },
+          ESCALATE: { style: '升级处置', text: '这一段我需要先如实记录并按程序上报，后续由我们按流程处理，先把这一条记录清楚。', reason: '触及红线时按程序处置，不与对方对冲' },
+        };
+        const order = judge.action && bank[judge.action] ? [judge.action] : ['ACK'];
+        ['CLARIFY', 'EXPLAIN', 'PROPOSE'].forEach((k) => { if (order.length < 3 && order.indexOf(k) < 0) order.push(k); });
+        while (order.length < 3) order.push('EXPLAIN');
+        return order.slice(0, 3).map((k, i) => ({ id: 'd' + (i + 1), text: bank[k].text, style: bank[k].style, reason: bank[k].reason, score: null, rank: i + 1 }));
+      }
+      function jevRankQuestions(drafts) {
+        const q = {};
+        drafts.forEach((d, i) => {
+          q['cand_' + (i + 1)] = {
+            type: 'choice',
+            // 实测：题干必须内嵌候选正文，否则 0.8B 对三道同构题给出同一分布（无区分度）
+            instructions: '请评估下面这条由Demo员口吻写出的候选回复是否可用。候选 ' + (i + 1) +
+              '（风格：' + (d.style || '') + '）全文：「' + d.text + '」。判断标准：是否承接了对方情绪；' +
+              '是否未代当事人表态、未承诺任何实体；是否未使用指责、施压、威胁措辞；是否可当场说出。',
+            criteria: { EXCELLENT: '可直接采用', GOOD: '较好，可小改', ACCEPTABLE: '一般，需重写', POOR: '不建议使用' },
+          };
+        });
+        const best = {};
+        drafts.forEach((d, i) => { best[d.id] = '候选 ' + (i + 1) + '（' + (d.style || '') + '）：' + d.text; });
+        q.best_pick = { type: 'choice', instructions: '三条候选中哪一条最适合Demo员当场使用？请勿选择含指责、施压、威胁或代替当事人表态的回复。', criteria: best };
+        return q;
+      }
+      function jevApplyRank(answers) {
+        JV.drafts.forEach((d, i) => {
+          const a = answers['cand_' + (i + 1)];
+          if (a && a.probabilities) {
+            const s = jevExpect(a.probabilities, JV_QUALITY_SCORE);
+            if (s !== null) { d.score = s; d.quality = a.choice; d.qualityLabel = JV_LABELS.quality[a.choice] || '—'; }
+          }
+          if (a && typeof a.confidence === 'number') d.confidence = a.confidence;
+        });
+        JV.drafts.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+        JV.drafts.forEach((d, i) => (d.rank = i + 1));
+        const bp = answers.best_pick;
+        JV.bestPick = bp && bp.choice ? bp.choice : null;
+        JV.disagree = !!(JV.bestPick && JV.drafts[0] && JV.bestPick !== 'draft_' + JV.drafts[0].rank);
+      }
+
+      /* 编排：judge → draft → rank；任一环失败都按「不伪造」降级 */
+      async function jevAnalyze() {
+        if (!JV.perm) return toast('无权限：需「ai:meeting:analyze」权限点');
+        if (!JV.on) return toast('请先开启 Jev 会话辅助（默认关闭，不产生任何模型调用）');
+        const ctx = jevContext();
+        if (!ctx.conversation.length) return toast('暂无会话内容可分析');
+        const last = jevLastOther();
+        JV.target = last ? identityOf(last.who) : '';
+        JV.targetName = last ? last.who : '';
+        JV.evidence = last ? last.text : '';
+        JV.err = ''; JV.degraded = { judge: false, draft: false, rank: false }; JV.disagree = false;
+        JV.phase = 'judge'; renderJev();
+        let judge;
+        try {
+          const r = await JEV.systemOne(ctx, JV_JUDGE_Q);
+          judge = jevParseJudge(r.answers || {});
+          if (!judge.intent && judge.tension === null && !judge.risk) throw new Error('判定结果为空');
+        } catch (e) {
+          JV.judge = null; JV.drafts = []; JV.degraded.judge = true;
+          JV.phase = 'error'; JV.err = '判定服务不可用：' + ((e && e.message) || e);
+          renderJev();
+          return toast('Jev 判定不可用：本次不生成任何草稿');
+        }
+        JV.judge = judge; JV.phase = 'draft'; renderJev();
+        let drafts;
+        try {
+          drafts = jevMockDrafts(judge);
+          if (drafts.length !== 3) throw new Error('草稿数量异常');
+        } catch (e) {
+          JV.drafts = []; JV.degraded.draft = true; JV.phase = 'ready'; renderJev();
+          return toast('草稿生成失败：仅保留判定结论');
+        }
+        JV.drafts = drafts; JV.phase = 'rank'; renderJev();
+        try {
+          const r2 = await JEV.systemOne(ctx, jevRankQuestions(drafts));
+          jevApplyRank(r2.answers || {});
+        } catch (e) {
+          JV.degraded.rank = true;
+        }
+        JV.phase = 'ready'; renderJev();
+      }
+
+      /* 一键填入：只写文本（面板预览 + 底部会中消息框），绝不发送 */
+      function jevFill(text) {
+        JV.preview = text;
+        JV.previewDirty = false;
+        const box = document.getElementById('chatInput');
+        if (box) { box.value = text; box.dispatchEvent(new Event('input')); }
+        renderJev();
+        toast('已填入输入框：发送需你手动点击「发送」');
+      }
+      function jevCopy(text) {
+        if (!text) return toast('没有可复制的内容');
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => toast('已复制'), () => toast('复制失败，请手动选中复制'));
+          } else toast('复制失败，请手动选中复制');
+        } catch (e) { toast('复制失败，请手动选中复制'); }
+      }
+
+      function renderJev() {
+        const el = document.getElementById('jevBody');
+        if (!el) return;
+        const roleEl = document.getElementById('jevRole');
+        if (roleEl) {
+          roleEl.textContent = JV.perm ? 'Demo员' : '无权限';
+          roleEl.className = 'chip ' + (JV.perm ? 'host' : 'sys');
+        }
+        const prev = el.querySelector('#jevPrev');       // 只在用户手改过预览框时才回读，避免覆盖程序填入的文案
+        if (JV.previewDirty && prev) { JV.preview = prev.value; JV.previewDirty = false; }
+        const d = JV.degraded || {};
+        let h = '';
+        if (!JV.perm) {
+          h += '<div class="jev-st" data-tone="danger">当前账号无「ai:meeting:analyze」权限：助手不可用，也不会产出任何判定或草稿。</div>';
+        } else if (!JV.on) {
+          h += '<div class="jev-st" data-tone="info"><b>默认关闭</b>：开启后按需把最近会话文本提交给院内授权的判定模型（Jev），用于生成<b>候选回复</b>。助手永不自动发送消息，发送动作始终由你手动完成。</div>';
+        } else if (JV.phase === 'error') {
+          h += '<div class="jev-st" data-tone="danger">' + JV.err + '：本次不产出任何判定与草稿。</div>';
+        } else if (JV.phase === 'judge' || JV.phase === 'draft' || JV.phase === 'rank') {
+          const steps = [['judge', '判定对方意图 / 紧张度 / 风险'], ['draft', '生成 3 条候选草稿'], ['rank', 'Jev 打分并排序']];
+          h += steps.map((s) => '<div class="jev-phase">' + (JV.phase === s[0] ? '<span class="jev-spin"></span>' : '<span>·</span>') + '<span>' + s[1] + (JV.phase === s[0] ? ' <b>进行中</b>' : '') + '</span></div>').join('');
+        } else {
+          h += '<div class="jev-st" data-tone="info">已开启 · 判定与草稿<b>按需</b>触发，不随转录自动调用模型（每次分析 = 2 次 Jev + 1 次 LLM）。</div>';
+        }
+        if (JV.judge) {
+          const j = JV.judge;
+          const lv = j.tension === null ? 'ok' : j.tension >= 75 ? 'danger' : j.tension >= 50 ? 'warn' : 'ok';
+          h += '<div class="jev-sec"><div class="t">分析结论 · 疑似，供主持人研判</div>'
+            + '<div class="jev-line"><span class="k">对方意图</span><span class="v">' + j.intentLabel + '</span></div>'
+            + '<div class="jev-line"><span class="k">紧张程度</span><span class="v">' + (j.tension === null ? '—' : j.tension + ' · ' + j.tensionLabel) + '</span>'
+            + '<span class="jev-meter" data-lv="' + lv + '"><i style="width:' + (j.tension === null ? 0 : j.tension) + '%"></i></span></div>'
+            + '<div class="jev-line"><span class="k">风险等级</span><span class="v">' + j.riskLabel + '</span></div>'
+            + '<div class="jev-line"><span class="k">需立即回复</span><span class="v">' + (j.needImmediateReply === null ? '—' : j.needImmediateReply ? '是' : '否') + '</span></div>'
+            + '<div class="jev-line"><span class="k">建议动作</span><span class="v">' + j.actionLabel + '</span></div>'
+            + '<div class="jev-note">依据：转录「' + (JV.evidence || '') + '」· 判定对象 ' + (JV.targetName || '—') + '（身份取自参会轨，非人脸推断）</div></div>';
+        }
+        if (JV.drafts.length) {
+          h += '<div class="jev-sec"><div class="t">候选回复 · Jev 打分排序（' + JV.drafts.length + ' 条）'
+            + (JV.disagree ? ' · <b style="color:var(--warn)">与 best_pick 不一致，以分数为准</b>' : '') + '</div>';
+          h += JV.drafts.map((x) => {
+            const nos = x.score === null || x.score === undefined;
+            return '<div class="jev-draft" data-best="' + (x.rank === 1 ? 1 : 0) + '">'
+              + '<div class="r1"><span class="no">#' + x.rank + '</span><span>' + (x.style || '') + '</span>'
+              + '<span class="sc">' + (nos ? '<span>未评分</span>' : '<span class="bar"><i style="width:' + x.score + '%"></i></span><span>' + x.score + '</span>')
+              + (typeof x.confidence === 'number' ? '<span class="chip">置信度 ' + Math.round(x.confidence * 100) + '%</span>' : '') + '</span></div>'
+              + '<div class="tx">' + x.text + '</div>'
+              + '<div class="mt">' + (x.reason || '') + '</div>'
+              + '<div class="ops"><button class="jevbtn" data-jev="fill" data-id="' + x.id + '">填入输入框</button>'
+              + '<button class="jevbtn" data-jev="copy" data-id="' + x.id + '">复制</button></div></div>';
+          }).join('');
+          h += '</div>';
+        }
+        h += '<div class="jev-sec"><div class="t">面板内预览（可改文案）</div><div class="jev-prev">'
+          + '<textarea id="jevPrev" placeholder="点击候选的「填入输入框」，文案会同步到下方会中消息框">' + (JV.preview || '') + '</textarea></div>'
+          + '<div class="jev-row" style="margin-top:6px"><button class="jevbtn" data-jev="copyPrev">复制全文</button>'
+          + '<button class="jevbtn" data-jev="clear">清空</button></div></div>';
+        h += '<div class="jev-sec"><div class="t">操作</div><div class="jev-row">'
+          + '<button class="jevbtn pri" data-jev="analyze"' + (JV.on && JV.perm ? '' : ' disabled') + '>分析当前会话</button>'
+          + '<button class="jevbtn" data-jev="toggle"' + (JV.perm ? '' : ' disabled') + '>' + (JV.on ? '关闭助手' : '开启助手') + '</button>'
+          + '</div><div class="jev-row" style="margin-top:6px">'
+          + '<button class="jevbtn" data-jev="demoSpeech">插入一段发言</button>'
+          + '<button class="jevbtn" data-jev="demoFail">' + (JV.mockFail ? '恢复 Jev 可用' : '模拟 Jev 不可用') + '</button>'
+          + '</div>';
+        if (d.judge) h += '<div class="jev-note" style="color:var(--danger)">判定不可用：未生成草稿（避免无依据的建议）。</div>';
+        if (d.draft) h += '<div class="jev-note" style="color:var(--warn)">草稿生成失败：仅保留判定结论。</div>';
+        if (d.rank) h += '<div class="jev-note" style="color:var(--warn)">排序不可用：候选按生成顺序展示，未评分。</div>';
+        h += '<div class="jev-note">点击「填入输入框」只写入文本，<b>不会自动发送</b>：请在底部会中消息框手动点击发送。</div>';
+        h += '<div class="jev-note">排序为 Jev 0.8B 的<b>低置信参考</b>（实测置信度常低于 20%）；含威胁、施压、指责或代当事人表态的草稿已由本地合规规则剔除。</div></div>';
+        el.innerHTML = h;
+      }
+
+      /* Jev 演示发言（直接定稿，模拟 worker 回推 final） */
+      const JV_DEMO = [
+        ['王某某', '你们再逼我一次，我就收拾你们，别怪我不客气！'],
+        ['李某某', '我这本金十二万一分不能少，今天必须给个说法。'],
+        ['王某某', '一次性还清我做不到，最多两期，再多我真拿不出。'],
+      ];
+      let jevDemoIdx = 0;
+      function jevDemoSpeech() {
+        const d = JV_DEMO[jevDemoIdx++ % JV_DEMO.length];
+        push('jevdemo' + jevDemoIdx, d[0], d[1], false);
+        toast('已插入一段发言（' + d[0] + '），可点「分析当前会话」');
+      }
+
+      /* 面板交互（事件委托，避免重绘后失效） */
+      document.getElementById('jevBody').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-jev]');
+        if (!b) return;
+        const act = b.dataset.jev;
+        if (act === 'analyze') return jevAnalyze();
+        if (act === 'toggle') {
+          JV.on = !JV.on;
+          JV.judge = null; JV.drafts = []; JV.preview = ''; JV.phase = 'idle'; JV.err = '';
+          renderJev();
+          return toast(JV.on ? 'Jev 会话辅助已开启（真实实现由服务端开关权威控制）' : '已关闭，停止全部模型调用');
+        }
+        if (act === 'fill') {
+          const d = JV.drafts.find((x) => x.id === b.dataset.id);
+          if (d) jevFill(d.text);
+          return;
+        }
+        if (act === 'copy') {
+          const d = JV.drafts.find((x) => x.id === b.dataset.id);
+          if (d) jevCopy(d.text);
+          return;
+        }
+        if (act === 'copyPrev') return jevCopy(JV.preview || '');
+        if (act === 'clear') { JV.preview = ''; JV.previewDirty = false; renderJev(); return; }
+        if (act === 'demoSpeech') return jevDemoSpeech();
+        if (act === 'demoFail') {
+          JV.mockFail = !JV.mockFail; renderJev();
+          return toast(JV.mockFail ? '已切换为 Jev 不可用（演示降级：不出判定、不出草稿）' : 'Jev 已恢复可用');
+        }
+      });
+      document.getElementById('jevBody').addEventListener('input', (e) => {
+        if (e.target.id === 'jevPrev') { JV.preview = e.target.value; JV.previewDirty = true; }
+      });
+      document.getElementById('btnJev').onclick = () => {
+        const p = document.getElementById('jevPanel');
+        p.dataset.on = p.dataset.on === '1' ? '0' : '1';
+        document.getElementById('btnJev').dataset.on = p.dataset.on;
+        if (p.dataset.on === '1') renderJev();
+      };
+      document.getElementById('jevClose').onclick = () => {
+        document.getElementById('jevPanel').dataset.on = '0';
+        document.getElementById('btnJev').dataset.on = '0';
+      };
+
+      /* ── 会中消息输入框：只有用户点发送/回车才发出（助手只填入，不发送） ── */
+      const chatInput = document.getElementById('chatInput');
+      const chatSend = document.getElementById('chatSend');
+      function chatSync() { if (chatSend) chatSend.disabled = !(chatInput && chatInput.value.trim()); }
+      function chatSendMessage() {
+        if (!chatInput) return;
+        const v = chatInput.value.trim();
+        if (!v) return;
+        const log = document.getElementById('chatLog');
+        if (log) {
+          const el = document.createElement('div');
+          el.className = 'm';
+          el.innerHTML = '<b>我</b>' + v;
+          log.appendChild(el);
+          while (log.children.length > 3) log.removeChild(log.firstChild);
+        }
+        chatInput.value = ''; chatSync();
+        toast('已发送（本地演示：data channel 待 P1）');
+      }
+      if (chatInput) {
+        chatInput.addEventListener('input', chatSync);
+        chatInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSendMessage(); }
+        });
+      }
+      if (chatSend) chatSend.onclick = () => chatSendMessage();
+
+      /* ── 渲染：外壳状态 ─────────────────────── */
+      function renderChrome() {
+        const app = document.getElementById('app');
+        app.dataset.side = st.side;
+        const stage = document.getElementById('stage');
+        stage.dataset.mode = st.mode;
+        stage.dataset.cap = st.cap;
+        document.getElementById('btnView').querySelector('#viewLb').textContent = st.mode === 'speaker' ? '宫格' : '演讲者';
+        document.getElementById('btnView').querySelector('svg').outerHTML = svg(st.mode === 'speaker' ? 'grid' : 'speaker');
+        document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === st.tab)));
+        document.querySelectorAll('.pane').forEach((p) => (p.dataset.on = p.dataset.pane === st.tab ? '1' : '0'));
+        document.querySelectorAll('.subtab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sub === st.sub)));
+        const mic = document.getElementById('btnMic');
+        mic.dataset.off = st.mic ? '0' : '1';
+        mic.querySelector('.lb').textContent = st.mic ? '静音' : '取消静音';
+        const cam = document.getElementById('btnCam');
+        cam.dataset.off = st.cam ? '0' : '1';
+        cam.querySelector('.lb').textContent = st.cam ? '开启视频' : '开启摄像头';
+        const sh = document.getElementById('btnShare');
+        sh.dataset.on = st.sharing ? '1' : '0';
+        sh.querySelector('.lb').textContent = st.sharing ? '停止共享' : '共享屏幕';
+        document.getElementById('btnMembers').dataset.on = st.side === 'open' && st.tab === 'members' ? '1' : '0';
+        document.getElementById('btnAi').dataset.on = st.side === 'open' && st.tab === 'analysis' ? '1' : '0';
+        byId('p1').mic = st.mic;
+        byId('p1').cam = st.cam;
+      }
+
+      function render() { renderChrome(); renderStage(); renderMembers(); renderInfo(); renderAnalysis(); renderJev(); }
+
+      /* ── 交互 ───────────────────────────────────── */
+      let tt;
+      function toast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg; el.dataset.on = '1';
+        clearTimeout(tt); tt = setTimeout(() => (el.dataset.on = '0'), 2600);
+      }
+      document.getElementById('btnView').onclick = () => { st.mode = st.mode === 'speaker' ? 'gallery' : 'speaker'; save('mode', st.mode); render(); };
+      document.getElementById('btnSide').onclick = () => { st.side = st.side === 'open' ? 'closed' : 'open'; save('side', st.side); render(); };
+      document.getElementById('btnFull').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+      document.getElementById('btnMic').onclick = () => { st.mic = !st.mic; render(); toast(st.mic ? '麦克风已开（P0：room.localParticipant.setMicrophoneEnabled）' : '麦克风已关'); };
+      document.getElementById('btnCam').onclick = () => { st.cam = !st.cam; if (st.cam && !camStream) initCam(); render(); };
+      document.getElementById('btnCap').onclick = () => { st.cap = st.cap === '1' ? '0' : '1'; save('cap', st.cap); renderChrome(); };
+      document.getElementById('btnMinutes').onclick = () => toast('纪要抽屉（会后 草稿→确认→回写，复用现有 MinutesDrawer）');
+      document.getElementById('btnEnd').onclick = () => toast('结束后异步生成纪要草稿 · 需二次确认（沿用现有 popconfirm）');
+      document.getElementById('btnMembers').onclick = () => { st.tab = 'members'; st.side = 'open'; save('tab', st.tab); save('side', st.side); renderChrome(); };
+      document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => { st.tab = b.dataset.tab; st.side = 'open'; save('tab', st.tab); renderChrome(); }));
+      document.querySelectorAll('.subtab').forEach((b) => (b.onclick = () => { st.sub = b.dataset.sub; renderMembers(); renderChrome(); }));
+      document.getElementById('mSearch').oninput = (e) => { st.query = e.target.value; renderMembers(); };
+      document.getElementById('legendX').onclick = () => (document.getElementById('legend').hidden = true);
+      document.getElementById('stageMain').addEventListener('click', (e) => {
+        const t = e.target.closest('[data-tile]');
+        if (t && st.mode === 'speaker') { st.focus = t.dataset.tile; render(); }
+      });
+      document.getElementById('thumbStrip').addEventListener('click', (e) => {
+        const t = e.target.closest('[data-tile]');
+        if (t) { st.focus = t.dataset.tile; render(); }
+      });
+      document.getElementById('pip').addEventListener('click', () => { st.focus = 'p1'; render(); });
+
+      /* AI 分析面板：内容每次重绘，事件走委派（避免重复绑定） */
+      document.getElementById('aBody').addEventListener('click', (e) => {
+        const sw = e.target.closest('[data-sw]');
+        if (sw) return toggleAnalyze(sw.dataset.sw);
+        const f = e.target.closest('[data-f]');
+        if (f) { AN.filter = f.dataset.f; renderAnalysis(); return; }
+        const ack = e.target.closest('[data-ack]');
+        if (ack) {
+          const a = AN.alerts.find((x) => x.id === ack.dataset.ack);
+          if (a) {
+            a.ack = true;
+            if (!unreadCount()) document.getElementById('stage').dataset.risk = 'none';
+            renderAnalysis();
+            toast('已知悉：告警与依据随纪要留存（P0 落库 + 审计日志）');
+          }
+          return;
+        }
+        const jp = e.target.closest('[data-jump]');
+        if (jp) {
+          const a = AN.alerts.find((x) => x.id === jp.dataset.jump);
+          if (a) { AN.jump = a.sid; st.tab = 'transcript'; save('tab', st.tab); renderChrome(); renderTranscript(); }
+          return;
+        }
+        if (e.target.closest('#aPerm')) {
+          AN.perm = !AN.perm;
+          JV.perm = AN.perm;          // 助手与风险分析共用同一权限点（ai:meeting:analyze）
+          renderAnalysis();
+          renderJev();
+          toast(AN.perm ? '已切换为有权限账号（可开启分析）' : '已切换为无权限账号（开关置灰，仅可查看）');
+          return;
+        }
+        if (e.target.closest('#aDemo')) return demoRisk();
+        if (e.target.closest('#aClear')) { AN.filter = 'all'; renderAnalysis(); }
+      });
+      document.getElementById('btnAi').onclick = () => { st.tab = 'analysis'; st.side = 'open'; save('tab', st.tab); save('side', st.side); renderChrome(); };
+
+      /* 屏幕共享：真实 getDisplayMedia（P0 可落地路径） */
+      document.getElementById('btnShare').onclick = async () => {
+        if (st.sharing) { shareStream?.getTracks().forEach((t) => t.stop()); shareStream = null; st.sharing = false; render(); return toast('已停止共享'); }
+        if (!navigator.mediaDevices?.getDisplayMedia) return toast('非安全上下文，无法共享（请用 http://localhost 打开）');
+        try {
+          shareStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          shareStream.getVideoTracks()[0].addEventListener('ended', () => { st.sharing = false; shareStream = null; render(); toast('共享已被系统终止'); });
+          st.sharing = true; render(); toast('开始共享屏幕');
+        } catch (e) { st.sharing = false; render(); toast('共享已取消（' + (e && e.name) + '）'); }
+      };
+
+      document.addEventListener('keydown', (e) => {
+        if (/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+        const k = e.key.toLowerCase();
+        if (k === 'm') document.getElementById('btnMic').click();
+        else if (k === 'e') document.getElementById('btnCam').click();
+        else if (k === 'f') document.getElementById('btnFull').click();
+      });
+
+      /* ── 计时 + 质量抖动 ───────────────────────── */
+      const hms = (s) => [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
+      setInterval(() => {
+        const s = Math.floor((Date.now() - st.started) / 1000);
+        document.getElementById('mClock').textContent = hms(s);
+        const d = document.getElementById('iDur');
+        if (d) d.textContent = hms(s);
+      }, 1000);
+      setInterval(() => { document.getElementById('mQ').dataset.lv = String(2 + Math.floor(Math.random() * 2)); }, 5000);
+
+      /* ── mock 转录脚本（partial 逐段增长 → final 定稿）── */
+      const SCRIPT = [
+        ['张旭辉（平名）', '各位当事人好，现在核对本次Demo的身份信息。'],
+        ['李某某', '我是申请人李某，这笔借款本金十二万元，有转账凭证。'],
+        ['王某某', '我对本金数额没有异议，但希望分期偿还。'],
+        ['李某某', '分期可以，但需要明确违约条款。'],
+        ['张旭辉（平名）', '我把双方意见整理进纪要草稿，确认后回写Case记录。'],
+        ['王某某', '凭什么要我一次性还清，你们根本不讲理！'],
+        ['张旭辉（平名）', '你先别激动，有话慢慢说，我们按规则来。'],
+        ['王某某', '你们再逼我，别怪我不客气，我收拾你！'],
+      ];
+      function speak(i) {
+        if (i >= SCRIPT.length) return;
+        const [who, full] = SCRIPT[i];
+        const id = 'seg' + i;
+        let n = 4;
+        const step = () => {
+          n += 6;
+          push(id, who, full.slice(0, n), n < full.length);
+          if (n < full.length) setTimeout(step, 420);
+          else setTimeout(() => speak(i + 1), 2600);
+        };
+        push(id, who, full.slice(0, 4), true);
+        setTimeout(step, 420);
+      }
+
+      /* ── 说话高亮：就地改描边，绝不整台重绘 ─────────
+         定时器重绘 stage 会重建 <video>，真实摄像头画面随之反复闪断（srcObject 重新加载）。 */
+      function updateSpeaking() {
+        const cur = T[T.length - 1];
+        const hit = P.find((x) => x.name === (cur ? cur.who : ''));
+        P.forEach((x) => (x.speaking = !!(hit && x.id === hit.id)));
+        document.querySelectorAll('[data-tile]').forEach((el) => {
+          const p = byId(el.dataset.tile);
+          el.dataset.cam = p && p.speaking ? '1' : '0';
+        });
+      }
+
+      /* ── 启动 ───────────────────────────────────── */
+      render();
+      renderTranscript();
+      initCam();
+      speak(0);
+    </script>
+  </body>
+</html>

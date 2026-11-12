@@ -1,0 +1,1921 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-content-type" content="presentation" />
+<meta name="x-presentation-version" content="1.0" />
+<meta name="x-presentation-indicator" content=".sa-root" />
+<title>SuperAgent 工作台 · MinWorkBuddy</title>
+<link rel="stylesheet" href="./_shared/fonts.css">
+<style>
+/* ===== SuperAgent Workbench — SPA 风格前端界面 ===== */
+:root{
+  --bg:#1e1e2e;--surface:#252538;--surface-2:#2d2d44;--surface-3:#363653;
+  --border:#3d3d5c;--border-light:#4a4a6e;
+  --text-1:#f5f5ff;--text-2:#b8b8d0;--text-3:#8888a8;--text-dim:#606080;
+  --accent:#89b4fa;--accent-dim:rgba(137,180,250,.15);
+  --green:#a6e3a1;--peach:#fab387;--yellow:#f9e2af;--red:#f38ba8;
+  --mauve:#cba6f7;--teal:#94e2d5;--pink:#f5c2e7;
+  --shadow:0 2px 8px rgba(0,0,0,.35);--radius:10px;--radius-sm:6px;
+  --sidebar-w:240px;--topbar-h:56px;
+  font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Noto Sans CJK SC";
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text-1);overflow:hidden}
+body{display:flex;flex-direction:column}
+
+/* ====== 顶栏 ====== */
+.topbar{height:var(--topbar-h);background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0;z-index:100}
+.topbar .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.topbar .brand-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--mauve));
+  display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:800}
+.topbar .brand-sub{color:var(--text-3);font-size:12px;margin-left:4px;padding-left:12px;border-left:1px solid var(--border)}
+.topbar .spacer{flex:1}
+.topbar .status-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;
+  background:var(--surface-2);font-size:12px;color:var(--text-2);border:1px solid var(--border)}
+.topbar .status-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--text-3)}
+.topbar .status-pill.on .dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.topbar .status-pill.accent{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,var(--border))}
+.topbar .status-pill.peach{color:var(--peach);border-color:color-mix(in srgb,var(--peach) 30%,var(--border))}
+.topbar .btn{padding:7px 14px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text-2);font-size:13px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.topbar .btn:hover{background:var(--surface-3);border-color:var(--border-light);color:var(--text-1)}
+.topbar .btn-primary{background:var(--accent);color:#1a1a2e;border-color:var(--accent);font-weight:600}
+.topbar .btn-primary:hover{filter:brightness(1.1)}
+
+/* ====== 主布局 ====== */
+.sa-root{display:flex;flex:1;overflow:hidden}
+
+/* ====== 侧边栏 ====== */
+.sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);
+  padding:16px 10px;display:flex;flex-direction:column;gap:6px;flex-shrink:0;overflow-y:auto}
+.sidebar .nav-group{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;
+  padding:16px 10px 6px}
+.sidebar .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);
+  font-size:13px;color:var(--text-2);cursor:pointer;transition:all .15s;border:1px solid transparent}
+.sidebar .nav-item:hover{background:var(--surface-2);color:var(--text-1)}
+.sidebar .nav-item.active{background:color-mix(in srgb,var(--accent) 15%,var(--surface-2));
+  color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,var(--border));font-weight:600}
+.sidebar .nav-item .ic{font-size:16px;width:20px;text-align:center}
+.sidebar .nav-item .badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:10px}
+.sidebar .nav-item .badge.green{background:var(--green);color:#1a1a2e}
+.sidebar-bottom{margin-top:auto;padding:12px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3)}
+
+/* ====== 主内容区 ====== */
+.main{flex:1;overflow-y:auto;padding:20px;background:var(--bg)}
+.page-head{margin-bottom:20px}
+.page-head h1{font-size:22px;font-weight:700;color:var(--text-1)}
+.page-head p{font-size:13px;color:var(--text-3);margin-top:4px}
+
+/* ====== 通用卡片 ====== */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);font-size:14px;font-weight:600;
+  display:flex;align-items:center;gap:8px;color:var(--text-1)}
+.card-header .sub{color:var(--text-3);font-size:12px;font-weight:400;margin-left:8px}
+.card-body{padding:16px 18px}
+
+/* ====== Dashboard 统计卡 ====== */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;
+  display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden}
+.stat::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--mauve))}
+.stat.peach::before{background:linear-gradient(90deg,var(--peach),var(--yellow))}
+.stat.green::before{background:linear-gradient(90deg,var(--green),var(--teal))}
+.stat.red::before{background:linear-gradient(90deg,var(--red),var(--pink))}
+.stat .label{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em}
+.stat .val{font-size:32px;font-weight:800;color:var(--text-1);font-variant-numeric:tabular-nums}
+.stat .delta{font-size:12px;color:var(--green)}
+.stat .delta.down{color:var(--red)}
+
+/* ====== Kanban ====== */
+.kanban{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.kanban .col{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;min-height:200px;display:flex;flex-direction:column;gap:8px}
+.kanban .col .col-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.kanban .col h4{font-size:12px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.kanban .col .count{background:var(--surface-3);color:var(--text-2);font-size:11px;padding:1px 8px;border-radius:10px;font-weight:700}
+.kanban .tc{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:10px 12px;cursor:pointer;transition:all .15s;font-size:12px;line-height:1.55}
+.kanban .tc:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.kanban .tc .t{font-weight:600;color:var(--text-1);margin-bottom:4px}
+.kanban .tc .m{color:var(--text-3);font-size:11px;margin-bottom:6px}
+.kanban .tc .tags{display:flex;gap:4px;flex-wrap:wrap}
+.kanban .tc .tg{font-size:10px;padding:1px 6px;border-radius:3px;background:var(--surface-3);color:var(--text-3)}
+.kanban .tc .tg.browser{background:color-mix(in srgb,var(--blue) 20%,var(--surface-3));color:var(--blue)}
+.kanban .tc .tg.desktop{background:color-mix(in srgb,var(--peach) 20%,var(--surface-3));color:var(--peach)}
+.kanban .tc .tg.kb{background:color-mix(in srgb,var(--green) 20%,var(--surface-3));color:var(--green)}
+.kanban .tc.tg{border-left:3px solid var(--accent)}
+.kanban .col.col-green{border-top:2px solid var(--green)}
+.kanban .col.col-yellow{border-top:2px solid var(--yellow)}
+.kanban .col.col-red{border-top:2px solid var(--red)}
+.kanban .col.col-blue{border-top:2px solid var(--accent)}
+.kanban .col.col-mauve{border-top:2px solid var(--mauve)}
+
+/* ====== 时间线 / 执行日志 ====== */
+.tl{font-family:ui-monospace,"JetBrains Mono","Menlo",monospace;font-size:12px;line-height:1.7;
+  background:var(--surface-2);border-radius:var(--radius-sm);padding:14px;max-height:500px;overflow:auto;border:1px solid var(--border)}
+.tl .row{display:flex;gap:10px}
+.tl .ts{color:var(--text-3);flex-shrink:0;width:76px;font-variant-numeric:tabular-nums}
+.tl .ic{flex-shrink:0;width:18px;text-align:center}
+.tl .txt{color:var(--text-2)}
+.tl .txt.ok{color:var(--green)}
+.tl .txt.warn{color:var(--yellow)}
+.tl .txt.err{color:var(--red)}
+.tl .txt.info{color:var(--accent)}
+.tl .txt.tool{color:var(--teal)}
+.tl .txt.jev{color:var(--peach);font-weight:600}
+.tl .dim{color:var(--text-3)}
+
+/* ====== Pipeline 可视化 ====== */
+.pipe{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.pipe .pn{padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);
+  background:var(--surface-2);font-size:12px;font-weight:600;color:var(--text-2);text-align:center;min-width:80px}
+.pipe .pn.hl{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface-2))}
+.pipe .pn.done{border-color:var(--green);color:var(--green);background:color-mix(in srgb,var(--green) 12%,var(--surface-2))}
+.pipe .pn.wait{opacity:.5}
+.pipe .arr{color:var(--text-3);font-weight:700;font-size:16px}
+.pipe .jv{padding:6px 10px;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--peach),var(--yellow));
+  color:#1a1a2e;font-size:11px;font-weight:700;margin-left:auto;display:flex;align-items:center;gap:4px}
+
+/* ====== 标签 / pill ====== */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;
+  background:var(--surface-2);font-size:11px;color:var(--text-3);border:1px solid var(--border)}
+.pill.green{background:color-mix(in srgb,var(--green) 15%,var(--surface-2));color:var(--green);border-color:color-mix(in srgb,var(--green) 30%,var(--border))}
+.pill.blue{background:color-mix(in srgb,var(--accent) 15%,var(--surface-2));color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,var(--border))}
+.pill.peach{background:color-mix(in srgb,var(--peach) 15%,var(--surface-2));color:var(--peach);border-color:color-mix(in srgb,var(--peach) 30%,var(--border))}
+.pill.red{background:color-mix(in srgb,var(--red) 15%,var(--surface-2));color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,var(--border))}
+.pill.yellow{background:color-mix(in srgb,var(--yellow) 15%,var(--surface-2));color:var(--yellow);border-color:color-mix(in srgb,var(--yellow) 30%,var(--border))}
+.pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* ====== Tabs ====== */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+.tabs .tb{padding:10px 18px;font-size:13px;color:var(--text-3);cursor:pointer;border-bottom:2px solid transparent;
+  transition:all .15s;white-space:nowrap}
+.tabs .tb:hover{color:var(--text-2)}
+.tabs .tb.active{color:var(--accent);border-color:var(--accent);font-weight:600}
+
+/* ====== 配置表单 ====== */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row.three{grid-template-columns:1fr 1fr 1fr}
+.form-row.full{grid-template-columns:1fr}
+.form-field{display:flex;flex-direction:column;gap:6px}
+.form-field label{font-size:12px;color:var(--text-2);font-weight:600}
+.form-field label .hint{color:var(--text-3);font-weight:400;margin-left:6px}
+.form-field input,.form-field select,.form-field textarea{padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text-1);font-size:13px;font-family:inherit;outline:none;transition:border-color .15s}
+.form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:var(--accent)}
+.form-field textarea{min-height:80px;resize:vertical}
+.form-field .switch{position:relative;width:40px;height:22px;background:var(--surface-3);border-radius:20px;cursor:pointer;
+  transition:background .15s;display:inline-block}
+.form-field .switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .15s}
+.form-field .switch.on{background:var(--green)}
+.form-field .switch.on::after{left:21px}
+.config-section{margin-bottom:20px}
+.config-section h3{font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+
+/* ====== 营销 Demo 专属 ====== */
+.demo-trigger{display:flex;gap:10px;margin-bottom:16px}
+.demo-trigger input{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--surface-2);color:var(--text-1);font-size:13px;outline:none}
+.demo-trigger .btn-primary{padding:10px 22px}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.result-card h4{font-size:14px;font-weight:600;color:var(--text-1);margin-bottom:10px}
+.result-card .md{font-size:12px;line-height:1.7;color:var(--text-2);background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);
+  max-height:250px;overflow:auto;border:1px solid var(--border);white-space:pre-wrap;font-family:inherit}
+.screenshot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:8px}
+.thumb{aspect-ratio:16/10;background:linear-gradient(135deg,var(--surface-3),var(--surface-2));
+  border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .15s;font-size:11px;color:var(--text-3)}
+.thumb:hover{border-color:var(--accent);transform:translateY(-1px)}
+.reflect-score{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.reflect-score .sc{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:center}
+.reflect-score .sc .lb{font-size:11px;color:var(--text-3);margin-bottom:4px}
+.reflect-score .sc .v{font-size:22px;font-weight:800;color:var(--text-1)}
+.reflect-score .sc .v.high{color:var(--green)}
+.reflect-score .sc .v.mid{color:var(--yellow)}
+.reflect-score .sc .v.low{color:var(--red)}
+
+/* ====== Jev vs LLM 对比卡片 ====== */
+.jev-row{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:10px;align-items:center;margin-top:10px}
+.jev-row .h{font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;padding:6px 10px}
+.jev-row .c{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px}
+.jev-row .c.jev{border-color:var(--peach);background:color-mix(in srgb,var(--peach) 10%,var(--surface-2))}
+.jev-row .c.llm{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface-2))}
+.jev-row .c .num{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.jev-row .c.jev .num{color:var(--peach)}
+.jev-row .c.llm .num{color:var(--accent)}
+.jev-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:var(--peach);color:#1a1a2e;font-size:10px;font-weight:700}
+.jev-badge.llm{background:var(--accent)}
+
+/* ====== 滚动条 ====== */
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#5a5a7e}
+
+/* ====== 隐藏 ====== */
+.hidden{display:none !important}
+
+/* ====== SuperAgent Chat 三栏 ====== */
+.sa-chat-wrap{display:flex;gap:14px;height:calc(100vh - var(--topbar-h) - 40px)}
+.sa-chat-sessions{width:220px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;flex-direction:column;flex-shrink:0}
+.sa-chat-sessions h4{padding:12px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-2);text-transform:uppercase;letter-spacing:.1em}
+.sa-sess{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;font-size:13px;color:var(--text-2);transition:all .15s}
+.sa-sess:hover{background:var(--surface-2);color:var(--text-1)}
+.sa-sess.active{background:color-mix(in srgb,var(--accent) 15%,var(--surface-2));color:var(--accent);border-left:2px solid var(--accent);padding-left:12px}
+.sa-sess .muted{display:block;margin-top:2px;font-size:11px;color:var(--text-3)}
+.sa-chat-main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.sa-chat-body{flex:1;overflow-y:auto;padding:20px}
+.sa-chat-ctx{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.sa-msg{display:flex;gap:10px;margin-bottom:16px}
+.sa-msg.user{flex-direction:row-reverse}
+.sa-msg-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;font-weight:700}
+.sa-msg.user .sa-msg-avatar{background:linear-gradient(135deg,var(--accent),var(--mauve))}
+.sa-msg.ai .sa-msg-avatar{background:linear-gradient(135deg,var(--peach),var(--red))}
+.sa-bubble{max-width:76%;background:var(--surface-2);border-radius:10px;padding:10px 14px;line-height:1.7;font-size:13px}
+.sa-msg.user .sa-bubble{background:color-mix(in srgb,var(--accent) 20%,var(--surface-2));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border))}
+.sa-toolcard{border:1px solid var(--cyan);background:color-mix(in srgb,var(--cyan) 10%,var(--surface-2));border-radius:8px;padding:10px 14px;margin:8px 0;font-size:12px}
+.sa-toolcard .hd{cursor:pointer;font-weight:600;color:var(--cyan);display:flex;gap:8px;align-items:center;font-size:12px}
+.sa-toolcard .bd{margin-top:8px;display:none;border-top:1px dashed var(--cyan);padding-top:8px;color:var(--text-2);font-family:ui-monospace,monospace;line-height:1.7}
+.sa-toolcard.open .bd{display:block}
+.sa-confirmcard{border:1px solid var(--yellow);background:color-mix(in srgb,var(--yellow) 10%,var(--surface-2));border-radius:8px;padding:12px 14px;margin:8px 0}
+.sa-confirmcard.l4{border-color:var(--mauve);background:color-mix(in srgb,var(--mauve) 10%,var(--surface-2))}
+.sa-confirmcard .lv{font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;background:var(--yellow);color:#1a1a2e;margin-right:6px}
+.sa-confirmcard.l4 .lv{background:var(--mauve);color:#fff}
+.sa-confirmcard .acts{margin-top:10px;display:flex;gap:8px}
+.sa-chat-input{border-top:1px solid var(--border);padding:12px;display:flex;gap:8px;background:var(--surface-2)}
+.sa-chat-input textarea{flex:1;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;resize:none;font-family:inherit;height:64px;font-size:13px;background:var(--surface);color:var(--text-1)}
+.sa-chat-input textarea:focus{outline:none;border-color:var(--accent)}
+.sa-typing{display:inline-block}
+.sa-typing i{display:inline-block;width:5px;height:5px;background:var(--text-3);border-radius:50%;margin-right:3px;animation:sa-b 1s infinite}
+.sa-typing i:nth-child(2){animation-delay:.2s}.sa-typing i:nth-child(3){animation-delay:.4s}
+@keyframes sa-b{0%,100%{opacity:.2}50%{opacity:1}}
+
+/* ====== Feed 动态 ====== */
+.sa-feed-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.sa-feed-filter{display:flex;gap:6px;flex-wrap:wrap}
+.sa-chip{border:1px solid var(--border);border-radius:14px;padding:3px 12px;font-size:12px;cursor:pointer;background:var(--surface-2);color:var(--text-2);transition:all .15s}
+.sa-chip.active{background:var(--accent);color:#1a1a2e;border-color:var(--accent);font-weight:600}
+.sa-feed-list{max-width:800px;display:flex;flex-direction:column;gap:12px}
+.sa-fcard{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:var(--radius-sm);padding:14px 16px}
+.sa-fcard.system{border-left-color:var(--accent)}
+.sa-fcard.ai_batch{border-left-color:var(--mauve)}
+.sa-fcard.reminder{border-left-color:var(--teal)}
+.sa-fcard.approval{border-left-color:var(--peach)}
+.sa-fcard.read{opacity:.55}
+.sa-fcard .fk{font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;margin-right:8px;color:#fff;text-transform:uppercase;letter-spacing:.05em}
+.sa-fcard.system .fk{background:var(--accent)}.sa-fcard.ai_batch .fk{background:var(--mauve)}
+.sa-fcard.reminder .fk{background:var(--teal)}.sa-fcard.approval .fk{background:var(--peach)}
+.sa-fcard .ftitle{font-weight:600;font-size:14px}
+.sa-fcard .fbody{color:var(--text-2);margin-top:6px;line-height:1.7;font-size:13px}
+.sa-fcard .facts{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sa-quiet-note{font-size:12px;color:var(--text-3);background:var(--surface-2);border-radius:var(--radius-sm);padding:8px 12px;max-width:800px;margin-bottom:12px;border:1px dashed var(--border)}
+
+/* ====== Ideas 点子 ====== */
+.sa-ideas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.sa-ocard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .2s;position:relative}
+.sa-ocard:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(137,180,250,.12)}
+.sa-ocard.pinned::before{content:"📌 置顶";position:absolute;top:10px;right:10px;font-size:10px;color:var(--peach);background:color-mix(in srgb,var(--peach) 15%,var(--surface-2));padding:2px 8px;border-radius:8px}
+.sa-ocard .emo{font-size:26px}
+.sa-ocard .pitch{font-weight:700;font-size:14px;margin:8px 0 4px;color:var(--text-1)}
+.sa-ocard .detail{color:var(--text-2);font-size:13px;line-height:1.6}
+.sa-ocard .meta{margin-top:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sa-kindtag{font-size:10px;padding:1px 8px;border-radius:8px;font-weight:600}
+.sa-kindtag.chat{background:color-mix(in srgb,var(--accent) 20%,var(--surface-2));color:var(--accent)}
+.sa-kindtag.goal{background:color-mix(in srgb,var(--mauve) 20%,var(--surface-2));color:var(--mauve)}
+.sa-kindtag.routine{background:color-mix(in srgb,var(--teal) 20%,var(--surface-2));color:var(--teal)}
+.sa-kindtag.starter{background:var(--surface-2);color:var(--text-3)}
+.sa-sheet-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:40;align-items:center;justify-content:center}
+.sa-sheet-mask.show{display:flex}
+.sa-sheet{width:460px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.sa-sheet h3{font-size:16px;margin-bottom:6px;color:var(--text-1)}
+.sa-sheet .prompt{background:var(--surface-2);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text-2);margin:12px 0;line-height:1.6;font-family:ui-monospace,monospace}
+.sa-sheet .acts{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.sa-sheet .acts .btn{text-align:left;padding:10px 14px}
+
+/* ====== Goals 目标 ====== */
+.sa-goal-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+.sa-gcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .15s}
+.sa-gcard:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(137,180,250,.1)}
+.sa-gcard .gtitle{font-weight:700;font-size:15px;color:var(--text-1)}
+.sa-gcard .gctx{font-size:12px;color:var(--text-3);margin:4px 0 10px}
+.sa-prog{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.sa-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--mauve));border-radius:3px;transition:width .4s}
+.sa-gcard .gfoot{display:flex;justify-content:space-between;margin-top:10px;align-items:center;font-size:12px;color:var(--text-3)}
+.sa-st{font-size:10px;padding:2px 10px;border-radius:8px;font-weight:700}
+.sa-st.active{background:color-mix(in srgb,var(--accent) 20%,var(--surface-2));color:var(--accent)}
+.sa-st.paused{background:color-mix(in srgb,var(--yellow) 20%,var(--surface-2));color:var(--yellow)}
+.sa-st.done{background:color-mix(in srgb,var(--green) 20%,var(--surface-2));color:var(--green)}
+.sa-st.cancelled{background:var(--surface-2);color:var(--text-3)}
+.sa-drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:30}
+.sa-drawer-mask.show{display:block}
+.sa-drawer{position:fixed;top:0;right:-540px;width:540px;height:100vh;background:var(--surface);border-left:1px solid var(--border);box-shadow:-6px 0 24px rgba(0,0,0,.3);z-index:31;transition:right .25s;display:flex;flex-direction:column}
+.sa-drawer.show{right:0}
+.sa-drawer .dh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center}
+.sa-drawer .db{flex:1;overflow-y:auto;padding:16px 20px}
+.sa-step{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px dashed var(--border)}
+.sa-step input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--accent)}
+.sa-step .s-t{font-size:13px;color:var(--text-1)}
+.sa-step.done .s-t,.sa-step.skipped .s-t{color:var(--text-3);text-decoration:line-through}
+.sa-step .s-tag{font-size:10px;padding:0 6px;border-radius:6px;background:var(--surface-2);color:var(--text-3)}
+.sa-h5{font-size:12px;font-weight:700;margin:18px 0 8px;color:var(--text-2);text-transform:uppercase;letter-spacing:.08em}
+.sa-note{font-size:12px;padding:8px 10px;border-left:3px solid var(--border);margin-bottom:8px;background:var(--surface-2);border-radius:0 var(--radius-sm) var(--radius-sm) 0;line-height:1.6}
+.sa-note.agent{border-left-color:var(--mauve)}
+.sa-note.system{border-left-color:var(--teal)}
+.sa-note.progress{border-left-color:var(--accent)}
+.sa-proposal{border:1px solid var(--mauve);background:color-mix(in srgb,var(--mauve) 10%,var(--surface-2));border-radius:var(--radius-sm);padding:12px;margin-bottom:10px}
+.sa-proposal .ph{font-weight:600;font-size:13px;color:var(--mauve)}
+.sa-proposal .pr{color:var(--text-2);font-size:12px;margin-top:4px}
+.sa-toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--surface-3);color:var(--text-1);padding:9px 22px;border-radius:var(--radius-sm);font-size:13px;z-index:99;display:none;border:1px solid var(--border);box-shadow:var(--shadow)}
+</style>
+</head>
+<body>
+
+<!-- ========== 顶栏 ========== -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-logo">SA</div>
+    SuperAgent 工作台
+    <div class="brand-sub">MinWorkBuddy · AgentScope 2.0.11 · <span style="color:var(--peach)">绑定 Workspace</span></div>
+  </div>
+  <div class="spacer"></div>
+  <select style="padding:7px 12px;border-radius:var(--radius-sm);border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface-2));color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">
+    <option>🏢 电商营销工作空间（活跃）</option>
+    <option>🔬 知识库增强空间</option>
+    <option>💻 ERP 自动化空间</option>
+    <option>⚙️ 默认工作空间</option>
+  </select>
+  <div class="status-pill on"><span class="dot"></span> WorkspaceManager PER_TICKET</div>
+  <div class="status-pill on"><span class="dot"></span> Worker 2/3</div>
+  <div class="status-pill accent"><span class="dot"></span> windows-mcp ✓</div>
+  <div class="status-pill accent"><span class="dot"></span> kira-mcp ✓</div>
+  <div class="status-pill accent"><span class="dot"></span> Playwright ✓</div>
+  <div class="status-pill peach"><span class="dot"></span> Jev 1.14 就绪</div>
+  <button class="btn">🔔 <span class="badge" style="margin-left:4px;background:var(--red);color:#fff;padding:1px 6px;border-radius:10px;font-size:10px">3</span></button>
+  <button class="btn-primary btn" onclick="switchPage('demo')">➕ 新建 Ticket</button>
+</div>
+
+<!-- ========== 主 ========== -->
+<div class="sa-root">
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="nav-group">SuperAgent</div>
+    <div class="nav-item active" onclick="switchPage('dashboard')"><span class="ic">📊</span> Dashboard 看板<span class="badge green">2</span></div>
+    <div class="nav-item" onclick="switchPage('demo')"><span class="ic">🎯</span> 电商营销 Demo</div>
+    <div class="nav-item" onclick="switchPage('detail')"><span class="ic">📋</span> 执行详情<span class="badge">5</span></div>
+    <div class="nav-group">Agent 工作台（独立对话空间）</div>
+    <div class="nav-item" onclick="switchPage('sa-chat')"><span class="ic">💬</span> SuperAgent 对话</div>
+    <div class="nav-item" onclick="switchPage('sa-feed')"><span class="ic">🌊</span> 动态<span class="badge green" id="saFeedBadge">3</span></div>
+    <div class="nav-item" onclick="switchPage('sa-ideas')"><span class="ic">💡</span> 点子</div>
+    <div class="nav-item" onclick="switchPage('sa-goals')"><span class="ic">🎯</span> 目标</div>
+    <div class="nav-group">配置</div>
+    <div class="nav-item" onclick="switchPage('config-model')"><span class="ic">🧠</span> 模型配置</div>
+    <div class="nav-item" onclick="switchPage('config-mcp')"><span class="ic">🔌</span> MCP Server</div>
+    <div class="nav-item" onclick="switchPage('config-policy')"><span class="ic">🛡️</span> Policy 规则</div>
+    <div class="nav-item" onclick="switchPage('config-kb')"><span class="ic">📚</span> 知识库绑定</div>
+    <div class="nav-item" onclick="switchPage('config-exec')"><span class="ic">⚙️</span> 执行参数</div>
+    <div class="nav-item" onclick="switchPage('config-security')"><span class="ic">🔒</span> 安全设置</div>
+    <div class="nav-item" onclick="switchPage('config-source')"><span class="ic">🔗</span> Source 管理<span class="badge green">new</span></div>
+    <div class="sidebar-bottom">
+      v0.1.0 · 2026.11.08<br>基于 spec.md · A+C 双 MCP 方案
+    </div>
+  </div>
+
+  <!-- 内容 -->
+  <div class="main">
+
+    <!-- ====== Dashboard ====== -->
+    <div id="page-dashboard">
+      <div class="page-head">
+        <h1>Dashboard 看板</h1>
+        <p>实时查看所有 Ticket 状态，快速进入执行详情</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="label">执行中</div><div class="val">3</div><div class="delta">▼ 1 较昨日</div>
+        </div>
+        <div class="stat peach">
+          <div class="label">待决策</div><div class="val">2</div><div class="delta">需要你审批</div>
+        </div>
+        <div class="stat green">
+          <div class="label">本周完成</div><div class="val">18</div><div class="delta">▲ 40% vs 上周</div>
+        </div>
+        <div class="stat red">
+          <div class="label">等待人工</div><div class="val">1</div><div class="delta down">1 个被阻塞</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Ticket 看板 <span class="sub">按 Stage 分组 · 实时刷新（5s）</span>
+          <span class="pill green" style="margin-left:auto"><span class="dot"></span> Jev 决策中</span>
+        </div>
+        <div class="card-body">
+          <div class="kanban">
+            <!-- 等准入 -->
+            <div class="col col-yellow">
+              <div class="col-head"><h4>等准入</h4><span class="count">2</span></div>
+              <div class="tc" onclick="switchPage('demo')">
+                <div class="t">供应商价格抓取</div>
+                <div class="m">source: http · 2 分钟前</div>
+                <div class="tags"><span class="tg browser">browser</span><span class="tg desktop">desktop</span></div>
+              </div>
+              <div class="tc">
+                <div class="t">客户跟进 SOP</div>
+                <div class="m">source: manual · 5 分钟前</div>
+                <div class="tags"><span class="tg kb">kb: [5,8]</span></div>
+              </div>
+            </div>
+            <!-- 执行中 -->
+            <div class="col col-blue">
+              <div class="col-head"><h4>执行中</h4><span class="count">3</span></div>
+              <div class="tc" onclick="switchPage('detail')">
+                <div class="t">📈 电商营销周更 · 本周方案</div>
+                <div class="m">运行 2m34s · events 47 · browser+desktop+kb</div>
+                <div class="tags"><span class="tg browser">browser</span><span class="tg desktop">desktop</span><span class="tg kb">kb</span></div>
+              </div>
+              <div class="tc" onclick="switchPage('detail')">
+                <div class="t">知识入库队列</div>
+                <div class="m">运行 5m12s · 反思中 · kb 8</div>
+                <div class="tags"><span class="tg kb">kb</span></div>
+              </div>
+              <div class="tc">
+                <div class="t">浏览器截图批量采集</div>
+                <div class="m">运行 1m08s · 正在填表单</div>
+                <div class="tags"><span class="tg browser">browser</span></div>
+              </div>
+            </div>
+            <!-- 反思中 -->
+            <div class="col col-mauve">
+              <div class="col-head"><h4>反思中</h4><span class="count">1</span></div>
+              <div class="tc">
+                <div class="t">竞品分析报告 · draft v3</div>
+                <div class="m">GoalPipeline 第 2 轮 · verifier 评估中</div>
+                <div class="tags"><span class="tg peach">jev scoring</span></div>
+              </div>
+            </div>
+            <!-- 等待人 -->
+            <div class="col col-red">
+              <div class="col-head"><h4>等人类</h4><span class="count">1</span></div>
+              <div class="tc">
+                <div class="t">⚠️ ERP 提交失败</div>
+                <div class="m">windows__Click 失败 · UIPI 权限隔离 · 需 elevated</div>
+                <div class="tags"><span class="tg desktop">desktop</span></div>
+              </div>
+            </div>
+            <!-- 已完成 -->
+            <div class="col col-green">
+              <div class="col-head"><h4>已完成</h4><span class="count">12</span></div>
+              <div class="tc">
+                <div class="t">✅ 飞书消息自动回复</div>
+                <div class="m">3 分钟前 · reflect pass</div>
+              </div>
+              <div class="tc">
+                <div class="t">✅ 文档 RAG 增强</div>
+                <div class="m">20 分钟前 · 入库 48 条</div>
+              </div>
+              <div class="tc">
+                <div class="t">✅ Playwright 截图采集</div>
+                <div class="m">1 小时前 · 12 页 · 零错误</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 电商营销 Demo ====== -->
+    <div id="page-demo" class="hidden">
+      <div class="page-head">
+        <h1>🎯 电商营销 Demo · 完整端到端范例</h1>
+        <p>数据采集 → 竞品分析 → 方案生成 → 反思校验 → ERP 执行，完整跑通 SuperAgent 流水线</p>
+      </div>
+
+      <!-- 触发 -->
+      <div class="demo-trigger">
+        <input placeholder="描述你的营销任务，例如：帮我抓竞品上周活动页面 + 自家销售数据 + 结合历史爆款，产出本周营销方案并写入 ERP">
+        <button class="btn btn-primary" style="padding:10px 22px">🚀 立即运行</button>
+        <button class="btn">📅 定时（每周一早 9:00）</button>
+      </div>
+
+      <!-- Pipeline 可视化 -->
+      <div style="margin-bottom:16px">
+        <div class="pipe">
+          <div class="pn done">1. Intake 入库</div><div class="arr">→</div>
+          <div class="pn done">2. Assess Jev accept</div><div class="arr">→</div>
+          <div class="pn done">3. Launch Worker</div><div class="arr">→</div>
+          <div class="pn hl">4. Execute ReAct</div><div class="arr">→</div>
+          <div class="pn wait">5. Reflect</div><div class="arr">→</div>
+          <div class="pn wait">6. Deliver</div>
+          <div class="jv">🧠 Jev 1.14 决策加速 5×</div>
+        </div>
+      </div>
+
+      <!-- 两栏 -->
+      <div class="demo-grid">
+        <!-- 左：执行时间线 -->
+        <div>
+          <div class="card">
+            <div class="card-header">⚡ Worker 执行时间线 · SSE 实时推送 <span class="sub">T-20261108-0017 · 电商营销 Demo</span>
+              <span class="pill peach" style="margin-left:auto"><span class="dot"></span> Jev 决策加速中</span>
+            </div>
+            <div class="tl card-body" style="padding:14px">
+<div class="row"><span class="ts">14:22:03.12</span><span class="ic">🟢</span><span class="txt ok">Launch — Playwright + windows-mcp + kira-mcp 3 个 MCP Server 已连接</span></div>
+<div class="row"><span class="ts">14:22:03.18</span><span class="ic">🧠</span><span class="txt jev">Jev classify(accept/ignore/stop) <span class="dim">→ accept · 置信度 0.97 · 耗时 412ms vs LLM 3.2s</span></span></div>
+<div class="row"><span class="ts">14:22:04.01</span><span class="ic">🔁</span><span class="txt">ReAct 开始 — 目标：抓取竞品活动页 + 自家销售 + KB 历史爆款 → 方案</span></div>
+<div class="row"><span class="ts">14:22:05.23</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate("https://competitor-a.example/campaign/w50")</span></div>
+<div class="row"><span class="ts">14:22:07.44</span><span class="ic">📸</span><span class="txt info">playwright__browser_screenshot → workspace/shots/compA-w50.png · 1.2MB</span></div>
+<div class="row"><span class="ts">14:22:09.01</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_get_dom → 发现 18 行价格表 · 提取"限时 50% off"</span></div>
+<div class="row"><span class="ts">14:22:10.33</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate("https://competitor-b.example/promo")</span></div>
+<div class="row"><span class="ts">14:22:12.55</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate("https://ours.example/sales/w50")</span></div>
+<div class="row"><span class="ts">14:22:14.20</span><span class="ic">🧠</span><span class="txt jev">Jev classify(next_step) <span class="dim">→ kb_search · 置信度 0.92 · 耗时 388ms</span></span></div>
+<div class="row"><span class="ts">14:22:14.90</span><span class="ic">🔧</span><span class="txt tool">knowledge_base__rag_search("历史爆款营销活动", kb_ids=[5]) → 23 条 top-5 入库</span></div>
+<div class="row"><span class="ts">14:22:18.10</span><span class="ic">🔧</span><span class="txt tool">python__sandbox_exec("""
+import pandas as pd
+a = pd.read_csv("competitor_a.csv")  # 50 rows
+b = pd.read_csv("competitor_b.csv")  # 38 rows
+ours = pd.read_csv("ours.csv")       # 120 rows
+# 对比 + 趋势 + 预测...
+""")</span></div>
+<div class="row"><span class="ts">14:22:22.55</span><span class="ic">✨</span><span class="txt ok">Sandbox 产出 markdown 方案草稿 · 1248 字</span></div>
+<div class="row"><span class="ts">14:22:23.11</span><span class="ic">🧠</span><span class="txt jev">Jev classify(erp_confirm) <span class="dim">→ auto-submit · 置信度 0.88</span></span></div>
+<div class="row"><span class="ts">14:22:23.80</span><span class="ic">🔧</span><span class="txt tool">windows__State() → 发现窗口 "ERP 营销管理" · 14 个 UIA 元素</span></div>
+<div class="row"><span class="ts">14:22:24.20</span><span class="ic">🔧</span><span class="txt tool">windows__Click(name="新建方案") <span class="dim">→ 精准命中 (UIAutomationCore)</span></span></div>
+<div class="row"><span class="ts">14:22:25.60</span><span class="ic">🔧</span><span class="txt tool">windows__Type(markdown_content)</span></div>
+<div class="row"><span class="ts">14:22:27.22</span><span class="ic">⚠️</span><span class="txt warn">自绘表格无 UIA 元素 · 回退 kira-mcp</span></div>
+<div class="row"><span class="ts">14:22:27.55</span><span class="ic">🔧</span><span class="txt tool">desktop__screenshot + desktop__ocr_read(region=表格区域)</span></div>
+<div class="row"><span class="ts">14:22:29.80</span><span class="ic">🔧</span><span class="txt tool">desktop__mouse_click(x=712, y=455) <span class="dim">→ YOLO OmniParser-v2 命中自绘控件 (0.83)</span></span></div>
+<div class="row"><span class="ts">14:22:31.00</span><span class="ic">🔧</span><span class="txt tool">windows__Click(name="提交") → OK</span></div>
+<div class="row"><span class="ts">14:22:31.50</span><span class="ic">🪞</span><span class="txt info">Reflect — GoalPipeline 反思校验开始（独立 verifier Agent）</span></div>
+<div class="row"><span class="ts">14:22:32.00</span><span class="ic">🧠</span><span class="txt jev">Jev score(pass/fail + 5 维评分) <span class="dim">→ 预评分 quality=8.7, completeness=9.1 · 48ms</span></span></div>
+<div class="row"><span class="ts">14:22:35.22</span><span class="ic">✅</span><span class="txt ok">Reflect 通过 · pass thresholds · 无 residual risks</span></div>
+<div class="row"><span class="ts">14:22:35.90</span><span class="ic">📤</span><span class="txt ok">Deliver — Outbox → SSE + Feishu + ERP 确认 · 全部成功</span></div>
+<div class="row"><span class="ts">14:22:36.00</span><span class="ic">🎉</span><span class="txt ok">Ticket T-0017 COMPLETED · 总耗时 32s · 3 次 MCP Server · 0 retry</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右：结果 + 反思 + Jev 对比 -->
+        <div>
+          <!-- 方案结果 -->
+          <div class="result-card" style="margin-bottom:14px">
+            <h4>📄 本周营销方案 · Draft v1</h4>
+            <div class="md">## 本周营销方案（W51）
+
+### 竞品对比
+- **Competitor A**：50% 限时折扣 · 活动页 CTA 红底白字 · 已抓到 DOM 确认
+- **Competitor B**：满 200 减 80 · 新客专享 · 历史爆款 top-3
+
+### 本周策略建议
+1. **主打：新客立减 30%**（高于 Competitor B 的历史有效策略）
+2. **渠道：飞书 + 抖音 + 邮件**（KB 历史数据显示这三渠道 ROAS 最高）
+3. **时机：周三 10:00 发送**（避开周一/周五高峰）
+
+### 投放预算
+- 飞书 40% · 抖音 45% · 邮件 15%
+
+### 风险评估
+- 🟡 Competitor A 已在做 50%，避免价格战
+- 🟢 方案已写入 ERP，等待最终审批</div>
+          </div>
+
+          <!-- 反思评分 -->
+          <div class="result-card" style="margin-bottom:14px">
+            <h4>🪞 GoalPipeline 反思校验 · 5 维评分</h4>
+            <div class="reflect-score">
+              <div class="sc"><div class="lb">质量</div><div class="v high">8.7</div></div>
+              <div class="sc"><div class="lb">完整性</div><div class="v high">9.1</div></div>
+              <div class="sc"><div class="lb">准确性</div><div class="v high">9.0</div></div>
+              <div class="sc"><div class="lb">覆盖度</div><div class="v high">8.5</div></div>
+              <div class="sc"><div class="lb">残余风险</div><div class="v mid">2</div></div>
+            </div>
+          </div>
+
+          <!-- Jev vs LLM 对比 -->
+          <div class="result-card">
+            <h4>🧠 Jev 决策加速对比（本次运行）</h4>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">Jev 1.14 · 结构化决策模型（不生成开放文本，只给分类/评分/提取）</div>
+            <div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:8px;font-size:12px">
+              <div class="h">环节</div>
+              <div class="h" style="color:var(--peach)"><span class="jev-badge">Jev</span></div>
+              <div class="h" style="color:var(--accent)"><span class="jev-badge llm">LLM (GPT-4o)</span></div>
+              <div>准入评估</div>
+              <div class="c jev">412ms · $0.002</div>
+              <div class="c llm">3,200ms · $0.034</div>
+              <div>路由判断</div>
+              <div class="c jev">388ms · $0.001</div>
+              <div class="c llm">2,800ms · $0.028</div>
+              <div>反思评分</div>
+              <div class="c jev">48ms · $0.0003</div>
+              <div class="c llm">1,500ms · $0.012</div>
+              <div style="font-weight:700;border-top:1px solid var(--border);padding-top:8px">合计（本次）</div>
+              <div class="c jev" style="border-color:var(--green);background:color-mix(in srgb,var(--green) 12%,var(--surface-2))">
+                <div class="num" style="color:var(--green);font-size:22px">848ms</div>
+                <div style="font-size:11px;color:var(--text-3);margin-top:2px">$0.0033 · 比 LLM 快 <b style="color:var(--green)">~5×</b></div>
+              </div>
+              <div class="c llm" style="border-color:var(--yellow);background:color-mix(in srgb,var(--yellow) 12%,var(--surface-2))">
+                <div class="num" style="color:var(--yellow);font-size:22px">7,500ms</div>
+                <div style="font-size:11px;color:var(--text-3);margin-top:2px">$0.074 · 成本高 <b style="color:var(--red)">22×</b></div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:10px;padding:10px;background:var(--surface-2);border-radius:var(--radius-sm);line-height:1.6">
+              💡 <b>策略</b>：SuperAgent 默认 <b>jev-first</b>——先用 Jev 快速决策，置信度低于阈值（0.6）时自动回退 LLM。生成环节（方案草稿、反思详细修复建议）保留 LLM，让两类模型各司其职。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 截图 -->
+      <div style="margin-top:16px" class="result-card">
+        <h4>📸 执行过程截图（3 张关键帧）</h4>
+        <div class="screenshot-grid">
+          <div class="thumb" style="background:linear-gradient(135deg,var(--surface-3),color-mix(in srgb,var(--blue) 20%,var(--surface-2)))">Playwright: competitor-a<br>.png · 1.2MB</div>
+          <div class="thumb" style="background:linear-gradient(135deg,var(--surface-3),color-mix(in srgb,var(--accent) 20%,var(--surface-2)))">windows-mcp: ERP 提交<br>UIA 精准命中</div>
+          <div class="thumb" style="background:linear-gradient(135deg,var(--surface-3),color-mix(in srgb,var(--peach) 20%,var(--surface-2)))">kira-mcp: 自绘表格<br>YOLO v2 OCR 兜底</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== 执行详情 ====== -->
+    <div id="page-detail" class="hidden">
+      <div class="page-head">
+        <h1>📋 Ticket 详情 · T-20261108-0017 · 电商营销 Demo</h1>
+        <p>执行详情页 — 包含完整 ReAct 时间线、SSE 事件、MCP Server 调用、反思校验报告</p>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-header">Ticket 基本信息</div>
+        <div class="card-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">Title</div><div style="font-size:13px;margin-top:4px;font-weight:600">电商营销周更 · 本周方案</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">Status</div><div style="margin-top:4px"><span class="pill green"><span class="dot"></span> COMPLETED</span></div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">Source</div><div style="font-size:13px;margin-top:4px">manual · 2026-11-08 14:22:03</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">Mandate</div><div style="margin-top:4px"><span class="pill peach"><span class="dot"></span> explicit</span></div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">KB</div><div style="font-size:13px;margin-top:4px">#5 历史活动 · #8 竞品分析</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">MCP Server</div><div style="font-size:13px;margin-top:4px">Playwright ✓ · windows-mcp ✓ · kira-mcp ✓</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">总耗时</div><div style="font-size:13px;margin-top:4px;font-weight:600">32s</div></div>
+          <div><div style="font-size:11px;color:var(--text-3);text-transform:uppercase">Retries</div><div style="font-size:13px;margin-top:4px">0</div></div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tb active" onclick="detailTab('timeline',this)">⚡ 执行时间线</div>
+        <div class="tb" onclick="detailTab('screenshots',this)">📸 截图证据</div>
+        <div class="tb" onclick="detailTab('reflect',this)">🪞 反思报告</div>
+        <div class="tb" onclick="detailTab('kb',this)">📚 KB 检索记录</div>
+        <div class="tb" onclick="detailTab('audit',this)">📝 审计日志</div>
+      </div>
+
+      <div id="detail-timeline">
+        <div class="tl" style="max-height:600px">
+<div class="row"><span class="ts">14:22:03.05</span><span class="ic">📥</span><span class="txt">Intake — Trigger 入库</span></div>
+<div class="row"><span class="ts">14:22:03.10</span><span class="ic">🧠</span><span class="txt jev">Assess — Jev classify → accept (0.97)</span></div>
+<div class="row"><span class="ts">14:22:03.12</span><span class="ic">✅</span><span class="txt ok">Engine.decide → Ticket created</span></div>
+<div class="row"><span class="ts">14:22:03.15</span><span class="ic">🚀</span><span class="txt ok">Launch — WorkerSession.prepare() + 3 MCP connect</span></div>
+<div class="row"><span class="ts">14:22:04.01</span><span class="ic">🔁</span><span class="txt">Execute — ReAct Loop start (max_iters=50)</span></div>
+<div class="row"><span class="ts">14:22:05</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate → competitor-a</span></div>
+<div class="row"><span class="ts">14:22:07</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_screenshot → shots/compA.png</span></div>
+<div class="row"><span class="ts">14:22:09</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_get_dom → extracted 18 rows</span></div>
+<div class="row"><span class="ts">14:22:10</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate → competitor-b</span></div>
+<div class="row"><span class="ts">14:22:12</span><span class="ic">🔧</span><span class="txt tool">playwright__browser_navigate → ours</span></div>
+<div class="row"><span class="ts">14:22:14</span><span class="ic">🧠</span><span class="txt jev">Jev classify → next=kb_search (0.92)</span></div>
+<div class="row"><span class="ts">14:22:14</span><span class="ic">🔧</span><span class="txt tool">knowledge_base__rag_search → 23 results</span></div>
+<div class="row"><span class="ts">14:22:18</span><span class="ic">🔧</span><span class="txt tool">python__sandbox_exec → pandas compare</span></div>
+<div class="row"><span class="ts">14:22:22</span><span class="ic">✨</span><span class="txt ok">Draft generated · 1248 chars</span></div>
+<div class="row"><span class="ts">14:22:23</span><span class="ic">🧠</span><span class="txt jev">Jev classify → auto_submit (0.88)</span></div>
+<div class="row"><span class="ts">14:22:23</span><span class="ic">🔧</span><span class="txt tool">windows__State → 14 UIA elements</span></div>
+<div class="row"><span class="ts">14:22:24</span><span class="ic">🔧</span><span class="txt tool">windows__Click(name="新建方案") → hit</span></div>
+<div class="row"><span class="ts">14:22:25</span><span class="ic">🔧</span><span class="txt tool">windows__Type(markdown)</span></div>
+<div class="row"><span class="ts">14:22:27</span><span class="ic">⚠️</span><span class="txt warn">自绘表格无 UIA → fallback kira-mcp</span></div>
+<div class="row"><span class="ts">14:22:27</span><span class="ic">🔧</span><span class="txt tool">desktop__ocr_read + desktop__mouse_click</span></div>
+<div class="row"><span class="ts">14:22:31</span><span class="ic">🔧</span><span class="txt tool">windows__Click("提交") → OK</span></div>
+<div class="row"><span class="ts">14:22:31</span><span class="ic">🪞</span><span class="txt info">Reflect — GoalPipeline start</span></div>
+<div class="row"><span class="ts">14:22:32</span><span class="ic">🧠</span><span class="txt jev">Jev score → quality=8.7, completeness=9.1</span></div>
+<div class="row"><span class="ts">14:22:35</span><span class="ic">✅</span><span class="txt ok">Reflect pass · 0 residual risks</span></div>
+<div class="row"><span class="ts">14:22:35</span><span class="ic">📤</span><span class="txt ok">Deliver — Outbox → SSE + Feishu</span></div>
+<div class="row"><span class="ts">14:22:36</span><span class="ic">🎉</span><span class="txt ok">Ticket COMPLETED · 32s</span></div>
+        </div>
+      </div>
+      <div id="detail-screenshots" class="hidden">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          <div class="thumb" style="height:160px;background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 30%,var(--surface)),var(--surface-2))">Playwright: competitor-a<br>w50活动页</div>
+          <div class="thumb" style="height:160px;background:linear-gradient(135deg,color-mix(in srgb,var(--peach) 30%,var(--surface)),var(--surface-2))">windows-mcp: ERP<br>UIA精准命中</div>
+          <div class="thumb" style="height:160px;background:linear-gradient(135deg,color-mix(in srgb,var(--mauve) 30%,var(--surface)),var(--surface-2))">kira-mcp: 自绘表格<br>YOLO OCR兜底</div>
+          <div class="thumb" style="height:160px;background:linear-gradient(135deg,color-mix(in srgb,var(--green) 30%,var(--surface)),var(--surface-2))">Deliver: Feishu<br>通知已送达</div>
+        </div>
+      </div>
+      <div id="detail-reflect" class="hidden">
+        <div style="background:var(--surface-2);padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">🪞 GoalPipeline 反思报告（独立 verifier Agent）</div>
+          <div style="font-size:12px;line-height:1.8;color:var(--text-2);white-space:pre-wrap">## ReflectCheck Result
+- completed: true
+- quality: 8.7/10
+- completeness: 9.1/10（竞品数据 + 自家数据 + KB 历史对比均已覆盖）
+- accuracy: 9.0/10（数据来源：Playwright DOM 提取）
+- source_coverage: true
+- remaining_risks: ["Competitor A 50% 折扣可能引发价格战（低风险）"]
+- fix_suggestions: []
+- pass: true
+- iterations: 1（首次通过，无需 retry）
+
+Verifier 备注：
+> 方案结构清晰，竞品对比到位。建议补充预算分配数据以增强说服力。
+> 当前 pass threshold: quality ≥ 8 && completeness ≥ 9 ✅ 已达成。</div>
+        </div>
+      </div>
+      <div id="detail-kb" class="hidden">
+        <div style="background:var(--surface-2);padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border);font-size:12px;line-height:1.8">
+          <div style="font-weight:600;margin-bottom:8px">📚 KB RAG 检索记录 · kb_ids=[5,8]</div>
+          <div>Query: <b>"历史爆款营销活动"</b> → 23 results, top-5 入库</div>
+          <div style="color:var(--text-3);margin-top:6px">1. "2026 Q3 新品首发周 · 抖音 ROAS 4.2" (score: 0.92)</div>
+          <div style="color:var(--text-3)">2. "飞书群发 vs 邮件群发 对比研究" (score: 0.88)</div>
+          <div style="color:var(--text-3)">3. "新客立减 30% vs 满减策略" (score: 0.85)</div>
+          <div style="color:var(--text-3)">4. "周中 vs 周末发送时机" (score: 0.83)</div>
+          <div style="color:var(--text-3)">5. "Competitor A 历史降价记录" (score: 0.79)</div>
+        </div>
+      </div>
+      <div id="detail-audit" class="hidden">
+        <div class="tl" style="max-height:500px">
+<div class="row"><span class="ts">14:22:03.05</span><span class="ic">📝</span><span class="txt">sa_audit_log · engine.receive_trigger · trigger_hash=md5(trigger_text+source)</span></div>
+<div class="row"><span class="ts">14:22:03.10</span><span class="ic">📝</span><span class="txt">sa_audit_log · jev.classify · options=[accept,ignore,stop,unavailable] → accept · 置信度 0.97</span></div>
+<div class="row"><span class="ts">14:22:03.12</span><span class="ic">📝</span><span class="txt">sa_audit_log · engine.decide · trigger_id=xxx · outcome=accept → Ticket T-0017</span></div>
+<div class="row"><span class="ts">14:22:03.15</span><span class="ic">📝</span><span class="txt">sa_audit_log · effect.enqueue · kind=launch · ticket_id=T-0017</span></div>
+<div class="row"><span class="ts">14:22:23.80</span><span class="ic">📝</span><span class="txt tool">permission.audit · windows__Click · PermissionMode.BYPASS · approved</span></div>
+<div class="row"><span class="ts">14:22:27.55</span><span class="ic">📝</span><span class="txt tool">permission.audit · desktop__mouse_click · PermissionMode.BY_PASS + HITL · auto-approve (configured)</span></div>
+<div class="row"><span class="ts">14:22:36.00</span><span class="ic">📝</span><span class="txt ok">sa_audit_log · engine.ticket_ended · T-0017 → COMPLETED · reason=reflect_pass</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== SuperAgent 工作台：Chat ====== -->
+    <div id="page-sa-chat" class="hidden">
+      <div class="page-head">
+        <h1>💬 SuperAgent 对话 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· 独立对话空间 · Workspace=电商营销工作空间 · AgentScope ReAct 循环</span></h1>
+        <p>与现有 Demo/Detail 对话完全独立。三栏：会话列表 · 对话（SSE 流式 + Toolcard 轨迹 + L3 HITL） · 上下文（Ticket + Goal + Workspace 绑定）</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--accent) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--text-2);display:flex;gap:16px;align-items:center">
+        <span><span style="color:var(--accent)">🗂 Workspace</span> 电商营销工作空间 · 所有 Chat sessions 与 Workspace 绑定隔离</span>
+        <span><span style="color:var(--mauve)">🧠 模型</span> GPT-4o（id=12）+ Jev-1.14 决策路由</span>
+        <span><span style="color:var(--teal)">🔌 MCP</span> Playwright ✓ · windows-mcp ✓ · kira-mcp ✓</span>
+        <span><span style="color:var(--peach)">🔒 隔离</span> LocalWorkspace PER_TICKET</span>
+      </div>
+
+      <div class="sa-chat-wrap">
+        <!-- 会话列表 -->
+        <div class="sa-chat-sessions">
+          <h4>Session（per-Workspace）</h4>
+          <div class="sa-sess active" data-sid="1">双十一促销页面改造 · T-0017<span class="muted">带 Ticket 上下文 · 今天</span></div>
+          <div class="sa-sess" data-sid="2">竞品 A/B 定价分析 · T-0015<span class="muted">昨日</span></div>
+          <div class="sa-sess" data-sid="3">客服消息批量回复 · T-0012<span class="muted">上周</span></div>
+          <div class="sa-sess" data-sid="4">新 SKU 上架清单<span class="muted">草稿 · 无 Ticket</span></div>
+          <div style="padding:12px;border-top:1px solid var(--border)">
+            <button class="btn" style="width:100%" onclick="saChatNew()">＋ 新 Session</button>
+          </div>
+        </div>
+
+        <!-- 对话主区 -->
+        <div class="sa-chat-main">
+          <div class="sa-chat-body" id="saChatBody">
+            <div class="sa-msg user"><div class="sa-msg-avatar">我</div><div class="sa-bubble">帮我分析一下双十一促销页的竞品布局，然后给出我们可以改造的具体建议。</div></div>
+            <div class="sa-msg ai"><div class="sa-msg-avatar">SA</div><div class="sa-bubble">
+              好的，我来先抓取主流竞品的双十一活动页面做对比分析。
+
+              <div class="sa-toolcard open"><div class="hd" onclick="this.parentNode.classList.toggle('open')">🔧 MCP 工具调用轨迹（可折叠）<span style="color:var(--text-3);font-weight:400;font-size:11px">· 4 次调用 · AgentScope MCPClient stdio</span></div>
+                <div class="bd">
+                  ① <code>playwright.browser_navigate(url=https://competitor-a.com/1111)</code> → 页面加载 ✓ 1.2s<br>
+                  ② <code>playwright.browser_screenshot()</code> → 截图 1.8MB ✓ 480ms<br>
+                  ③ <code>windows-mcp.uia_get_tree(root=Desktop)</code> → 桌面布局分析 ✓ 120ms<br>
+                  ④ <code>kira-mcp.desktop__ocr_read(region=主视觉区)</code> → 逐元素 OCR 提取价格标签 ✓ 380ms
+                </div></div>
+
+              <b>分析结论</b>：竞品 A 主打"满300-50"，主视觉用橙色渐变 + 倒计时；竞品 B 走"定金膨胀"路线，主视觉紫色 + 分期免息。<b>建议</b>：我们可以 A+B 组合——橙色渐变主视觉 + "满200-30"轻门槛 + 定金膨胀辅助条。
+
+              <div class="sa-toolcard"><div class="hd" onclick="this.parentNode.classList.toggle('open')">📚 RAG KB 检索命中</div>
+                <div class="bd">
+                  KB #5（历史营销活动）· weight 1.5 · 3 条历史案例<br>
+                  KB #8（竞品分析）· weight 1.0 · 引用竞品 A/B 定价模型
+                </div></div>
+            </div></div>
+
+            <!-- L3 HITL 卡片 -->
+            <div class="sa-msg ai"><div class="sa-msg-avatar">SA</div><div class="sa-bubble">
+              我可以把分析报告自动<b>抓取竞品页面截图 + 生成改造建议清单</b>并写入 Ticket 产物库。需要确认以下操作：
+              <div class="sa-confirmcard">
+                <span class="lv">L3</span><b>执行 Playwright 批量抓取 3 个竞品页面</b>
+                <div style="color:var(--text-2);margin-top:6px;font-size:12px">工具：playwright.browser_navigate + browser_screenshot × 3；产物：3 张截图 + 结构化 JSON；写入：Ticket T-0017 的 LocalWorkspace。</div>
+                <div class="acts">
+                  <button class="btn btn-primary" onclick="saConfirmL3(this)">✅ 确认执行</button>
+                  <button class="btn" onclick="saDismissL3(this)">❌ 跳过</button>
+                </div>
+                <div style="font-size:10px;color:var(--text-3);margin-top:6px" id="saL3audit"></div>
+              </div>
+            </div></div>
+          </div>
+
+          <div class="sa-chat-input">
+            <textarea id="saChatText" placeholder="向 SuperAgent 提问。SSE 流式返回：TEXT_DELTA → TOOL_CALL → TOOL_RESULT → DONE。Ctrl+Enter 发送。">按定金膨胀方案起草一版促销文案主视觉设计说明</textarea>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button class="btn btn-primary" onclick="saSend()">➤ 发送</button>
+              <button class="btn" onclick="saAbort()">⏹ 中断</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧上下文 -->
+        <div class="sa-chat-ctx">
+          <div class="card"><div class="card-header" style="padding:10px 14px">🎫 Ticket 上下文</div>
+            <div class="card-body" style="font-size:12px;line-height:1.8;color:var(--text-2)">
+              <b style="color:var(--text-1)">T-20261108-0017</b><br>
+              标题：双十一促销页竞品分析与改造<br>
+              状态：<span class="status-pill on" style="padding:2px 8px;font-size:10px">RUNNING</span><br>
+              发起：user_marketing_head<br>
+              创建：今日 14:20 · 已运行 2h
+            </div>
+          </div>
+
+          <div class="card"><div class="card-header" style="padding:10px 14px">🎯 关联目标</div>
+            <div class="card-body" style="font-size:12px">
+              <div style="font-weight:600;color:var(--text-1);margin-bottom:6px">促销转化率提升 20%</div>
+              <div class="sa-prog"><i style="width:45%"></i></div>
+              <div style="color:var(--text-3);margin-top:4px">进度 45% · next-step: 主视觉定稿</div>
+              <button class="btn" style="margin-top:10px;width:100%" onclick="switchPage('sa-goals')">查看目标详情</button>
+            </div>
+          </div>
+
+          <div class="card"><div class="card-header" style="padding:10px 14px">📦 Session 产物</div>
+            <div class="card-body" style="font-size:11px;color:var(--text-2);line-height:2">
+              📄 竞品分析报告 v1（待确认）<br>
+              🖼️ 竞品 A/B/C 截图 × 3<br>
+              📝 改造建议清单 JSON<br>
+              📋 文案初稿 × 2 版
+            </div>
+          </div>
+
+          <div class="card" style="border:1px solid color-mix(in srgb,var(--green) 30%,var(--border))">
+            <div class="card-header" style="padding:10px 14px;color:var(--green)">🏢 Workspace 绑定</div>
+            <div class="card-body" style="font-size:11px;color:var(--text-2);line-height:1.8">
+              <code>workspace_id</code>: ws_emarketing_01<br>
+              <code>max_iters</code>: 5 (GoalPipeline)<br>
+              <code>default_permission</code>: confirm<br>
+              <code>jev_router</code>: jev-first
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== SuperAgent 工作台：Feed ====== -->
+    <div id="page-sa-feed" class="hidden">
+      <div class="page-head">
+        <h1>🌊 动态时间线 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace=电商营销工作空间 · quiet 语义：不打扰当前 Chat</span></h1>
+        <p>Agent 主动推送的批次建议、check-in 提醒、Plan 修订提案（L4 审批）、系统事件。全部与 Workspace 隔离，SSE 长连接接收，quiet 模式下仅产生一条通知。</p>
+      </div>
+
+      <div class="sa-quiet-note">
+        🔕 <b>quiet 语义</b>：新批次仅产生 <b>一条顶栏铃铛通知</b>，不向 Chat 插入消息、不中断当前对话流、不推送到桌面。Feed 默认 quiet=on，去抖 4h，最多保留 200 条 per-Workspace。
+      </div>
+
+      <div class="sa-feed-head">
+        <h2 style="font-size:16px">Feed 流</h2>
+        <button class="btn btn-primary" onclick="saFeedRefresh()">🔄 换一批（触发 SSE 推送演示）</button>
+        <button class="btn" onclick="saFeedMarkAll()">全部已读</button>
+        <div style="flex:1"></div>
+        <span style="font-size:11px;color:var(--text-3)">SSE GET /feed/stream?workspace_id=ws_emarketing_01 · 自动重连</span>
+      </div>
+
+      <div class="sa-feed-filter" style="margin-bottom:12px">
+        <span class="sa-chip active" onclick="saFeedFilter(this,'all')">全部</span>
+        <span class="sa-chip" onclick="saFeedFilter(this,'system')">系统事件</span>
+        <span class="sa-chip" onclick="saFeedFilter(this,'ai_batch')">AI 批次建议</span>
+        <span class="sa-chip" onclick="saFeedFilter(this,'reminder')">check-in 提醒</span>
+        <span class="sa-chip" onclick="saFeedFilter(this,'approval')">L4 审批</span>
+      </div>
+
+      <div class="sa-feed-list" id="saFeedList"></div>
+    </div>
+
+    <!-- ====== SuperAgent 工作台：Ideas ====== -->
+    <div id="page-sa-ideas" class="hidden">
+      <div class="page-head">
+        <h1>💡 点子库（策略沉淀与复用） <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace=电商营销工作空间 · LLM 生成 + STARTER 降级</span></h1>
+        <p>Agent 从 Ticket 执行轨迹、KB 检索、历史 Goal 中自动提炼出的可复用策略卡片。可一键转化为对话 prompt、多步 Goal、或 Routine 节律提醒。</p>
+      </div>
+
+      <div class="sa-feed-head">
+        <h2 style="font-size:16px">点子</h2>
+        <button class="btn btn-primary" onclick="saIdeasRefresh()">🎲 换一批（LLM 生成）</button>
+        <button class="btn" onclick="saIdeaAdd()">＋ 手动记录经验</button>
+        <div style="flex:1"></div>
+        <span style="font-size:11px;color:var(--text-3)">fingerprint=sha1(workspace_id+kind+pitch) 去重 · 无模型时自动回落 STARTER 预置卡</span>
+      </div>
+
+      <div class="sa-ideas-grid" id="saIdeasGrid"></div>
+    </div>
+
+    <!-- ====== SuperAgent 工作台：Goals ====== -->
+    <div id="page-sa-goals" class="hidden">
+      <div class="page-head">
+        <h1>🎯 目标（结构化推进） <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace=电商营销工作空间 · step 五态 + L4 proposal + 自动完案</span></h1>
+        <p>Agent 将复杂任务拆分为多步 Goal，check-in cron 自动触发 Feed 提醒；Agent 改计划只写 L4 proposal 等待审批（永不背用户改写）；全 step done/skipped 自动完案。</p>
+      </div>
+
+      <div class="sa-feed-head">
+        <h2 style="font-size:16px">活跃目标</h2>
+        <button class="btn btn-primary" onclick="saToast('POST /goal/create（原型演示）')">＋ 新建目标</button>
+        <div style="flex:1"></div>
+        <span style="font-size:11px;color:var(--text-3)">点卡片查看详情：step 勾选=L2 直执+审计 / proposal=L4 审批 / 自动完案</span>
+      </div>
+
+      <div class="sa-goal-list" id="saGoalList"></div>
+    </div>
+
+    <!-- ====== 配置：模型 ====== -->
+    <div id="page-config-model" class="hidden">
+      <div class="page-head">
+        <h1>🧠 模型配置 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· 重用 MinWorkBuddy <code>ai_api_key</code> + <code>ai_chat_model</code></span></h1>
+        <p>平台新增 <b>Jev / Jev-like</b>（typeSafeai jev-1.14 等），所有配置保存在现有表；绑定到 Workspace：<b style="color:var(--peach)">电商营销工作空间</b></p>
+      </div>
+
+      <!-- 复用提示 -->
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：API Key 复用 <code>ai_api_key</code>（platform 新增 <code>typeSafeai</code>）；模型注册复用 <code>ai_chat_model</code>（model/platform 字段）；Workspace 绑定用 <code>SuperAgentWorkspaceConfig.default_model_id → ai_chat_model.id</code>。AgentScope 构建逻辑复用 <code>backend/app/ai/strategy/factory_ext.py</code>。
+      </div>
+
+      <!-- 现有模型登记表（来自 ai_chat_model 表） -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">📋 已注册模型（来自 <code>ai_chat_model</code> 表）
+          <span class="pill green" style="margin-left:auto"><span class="dot"></span> Jev 已登记 ✓</span>
+          <button class="btn" style="margin-left:8px;font-size:11px;padding:3px 10px">＋ 新建（跳转到模型中心）</button>
+        </div>
+        <div style="padding:0">
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="background:var(--surface-2);color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.08em">
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">ID</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">模型名</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">platform</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">Model ID</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">Temp</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">默认</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">状态</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">12</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">GPT-4o</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">OpenAI</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">gpt-4o</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">0.3</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">—</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> 启用</span></td></tr>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">15</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">Claude 3.5 Sonnet</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">Anthropic</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">claude-3-5-sonnet</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">0.3</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">—</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> 启用</span></td></tr>
+              <tr style="background:color-mix(in srgb,var(--peach) 8%,var(--surface-2))">
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--peach);font-weight:700">24 <span style="font-size:10px">🆕</span></td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border)">Jev 1.14 决策模型</td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--peach);font-weight:700">typeSafeai <span style="font-size:10px">🆕 platform</span></td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border)">jev-1.14</td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border)">—</td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border)">—</td>
+                <td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill peach"><span class="dot"></span> 启用</span></td>
+              </tr>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">26</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">DeepSeek V3</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">DeepSeek</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">deepseek-chat</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">0.7</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">✓ 默认</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> 启用</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Workspace 绑定 + 路由策略（SuperAgent 专属） -->
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · 模型绑定（SuperAgentWorkspaceConfig）</h3>
+        <div class="form-row three">
+          <div class="form-field">
+            <label>default_model_id（绑定 ai_chat_model.id）</label>
+            <select><option>12 — GPT-4o（Worker 主 Agent）</option><option>15 — Claude 3.5 Sonnet</option><option>26 — DeepSeek V3</option></select>
+          </div>
+          <div class="form-field">
+            <label>model_router</label>
+            <select>
+              <option>jev-first（推荐 · 先 Jev，置信度 < 0.6 降级 LLM）</option>
+              <option>llm-only（调试用）</option>
+              <option>jev-only（纯决策）</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>jev_enabled</label><div class="switch on" style="margin-top:4px"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field"><label>Jev 决策模型 ID（绑定 ai_chat_model.id=24）</label><input value="jev-1.14 · 注册于 ai_chat_model (platform=typeSafeai)" readonly></div>
+          <div class="form-field"><label>Jev 置信度阈值</label><input type="number" value="0.6" step="0.05"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config，不修改 ai_api_key / ai_chat_model）</button>
+    </div>
+
+    <!-- ====== 配置：MCP ====== -->
+    <div id="page-config-mcp" class="hidden">
+      <div class="page-head">
+        <h1>🔌 MCP Server 配置 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· 重用 MinWorkBuddy <code>ai_mcp_api_key</code> + ToolManager + AgentScope WorkspaceManager</span></h1>
+        <p>新增 4 种 <code>service_type</code>（playwright / windows-mcp / kira-mcp / stdio-custom），所有配置在现有表登记；绑定到 Workspace：<b style="color:var(--peach)">电商营销工作空间</b></p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：MCP 服务复用 <code>ai_mcp_api_key</code>（新增 <code>service_type</code> + <code>protocol_type=stdio</code> + <code>capabilities</code>）；AgentScope per-Ticket 隔离复用 <code>LocalWorkspace</code> + <code>WorkspaceManager.add_mcp()</code>；Worker 构建逻辑复用 <code>backend/app/ai/tool_manager/manager.py</code> + AgentScope Toolkit。
+      </div>
+
+      <!-- 已登记 MCP 列表 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">📋 已登记 MCP 服务（来自 <code>ai_mcp_api_key</code> 表）
+          <span class="pill green" style="margin-left:auto"><span class="dot"></span> 3 个已启用</span>
+        </div>
+        <div style="padding:0">
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead><tr style="background:var(--surface-2);color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.08em">
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">ID</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">名称</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">service_type</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">协议</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">command + args</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">健康</th>
+              <th style="padding:8px 14px;text-align:left;border-bottom:1px solid var(--border)">绑定</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">12</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">🌐 Playwright Browser MCP</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--accent);font-weight:700">playwright 🆕</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">stdio</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);font-family:ui-monospace,monospace;font-size:11px">npx -y @playwright/mcp</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> healthy</span></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">✅</td></tr>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">15</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">🖱️ windows-mcp (精准 UIA)</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--accent);font-weight:700">windows-mcp 🆕</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">stdio</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);font-family:ui-monospace,monospace;font-size:11px">uvx windows-mcp serve</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> healthy</span></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">✅</td></tr>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">17</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">👀 kira-mcp (YOLO + OCR)</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--accent);font-weight:700">kira-mcp 🆕</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">stdio</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);font-family:ui-monospace,monospace;font-size:11px">python -m kira_mcp.server</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> healthy</span></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">✅</td></tr>
+              <tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)">3</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">🗂️ 文件系统 MCP</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);color:var(--text-3)">http</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">http</td><td style="padding:8px 14px;border-bottom:1px solid var(--border);font-family:ui-monospace,monospace;font-size:11px">mcp-gateway</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="pill green"><span class="dot"></span> healthy</span></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Workspace MCP 绑定（SuperAgentWorkspaceConfig） -->
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · MCP 绑定（Workspace + AgentScope WorkspaceManager）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Workspace 的 <code>mcp_ids</code> 引用上面 <code>ai_mcp_api_key</code> 记录；Worker 执行时 AgentScope <code>WorkspaceManager.add_mcp()</code> 自动绑定到 per-Ticket <code>LocalWorkspace</code>。</div>
+        <div class="form-row">
+          <div class="form-field"><label>已绑定 MCP ID</label><input value="[12, 15, 17]" readonly></div>
+          <div class="form-field"><label>AgentScope 隔离粒度</label><select><option>PER_TICKET（每个 Ticket 独立 LocalWorkspace · 隔离文件 + MCP）</option><option>PER_SESSION（同 Session 复用）</option><option>PER_USER（跨 Ticket 共享）</option></select></div>
+        </div>
+        <div style="background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);font-family:ui-monospace,monospace;font-size:11px;line-height:1.7;margin-top:8px">
+<span style="color:var(--text-3)"># WorkerSession.prepare() 伪代码</span><br>
+<span style="color:var(--peach)">async def</span> prepare(<span style="color:var(--accent)">self</span>, workspace_config):<br>
+&nbsp;&nbsp;self.<span style="color:var(--accent)">workspace</span> = <span style="color:var(--teal)">LocalWorkspace</span>(workdir=f"<span style="color:var(--green)">./workspaces/{ticket.id}</span>")<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># 绑定 Workspace 配置的 MCP</span><br>
+&nbsp;&nbsp;<span style="color:var(--peach)">for</span> mcp_id <span style="color:var(--peach)">in</span> workspace_config.mcp_ids:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;mcp = <span style="color:var(--accent)">session.query</span>(<span style="color:var(--teal)">AiMcpApiKey</span>).get(mcp_id)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--peach)">await</span> <span style="color:var(--accent)">self.workspace.add_mcp</span>(await <span style="color:var(--accent)">connect_mcp</span>(mcp))<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># Toolkit = AgentScope 内置 + MCP + RAG</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">self.toolkit</span> = <span style="color:var(--teal)">Toolkit</span>(tools=[<br>
+&nbsp;&nbsp;&nbsp;&nbsp;*self.workspace.list_tools(),  <span style="color:var(--text-3)"># Bash/PowerShell/Read/Write/Glob</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;*<span style="color:var(--accent)">build_mcp_tools</span>(mcp_ids),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;*<span style="color:var(--accent)">build_kb_tools</span>(workspace_config.kb_ids),<br>
+&nbsp;&nbsp;])
+        </div>
+      </div>
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config.mcp_ids · MCP 本体数据不变）</button>
+    </div>
+
+    <!-- ====== 配置：Policy ====== -->
+    <div id="page-config-policy" class="hidden">
+      <div class="page-head">
+        <h1>🛡️ Policy 规则 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· 全部绑定 Workspace · AgentScope LocalWorkspace + SuperAgentWorkspaceConfig</span></h1>
+        <p>准入规则 · source 白名单 · Jev 决策阈值 — 每个 Workspace 独立配置，隔离执行</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：Policy 规则存储于 <code>sa_workspace_config.policy_rules</code>（JSON 字段），Jev 阈值在 <code>sa_workspace_config.jev_confidence_threshold</code> / <code>jev_accept_threshold</code>。AgentScope <code>LocalWorkspace</code> 在 Ticket 创建时从 Workspace 加载，Worker 执行全程只读此绑定副本。
+      </div>
+
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · Policy 绑定</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">当前 Workspace：<b style="color:var(--peach)">电商营销工作空间</b>（id=<code>ws_emarketing_01</code>）。切换 Workspace 后所有 Policy 配置自动切换。</div>
+        <div class="form-row full">
+          <div class="form-field"><label>policy_rules（JSON）</label>
+            <textarea readonly style="font-family:ui-monospace,monospace;font-size:11px;height:100px">{
+  "source_whitelist": ["http", "manual", "playwright"],
+  "sender_whitelist": ["user_admin", "user_ai_lead", "user_marketing_head"],
+  "jev_confidence_threshold": 0.6,
+  "proactive_auto_accept": true,
+  "ignore_after_auto_drop": true
+}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>📝 规则编辑器</h3>
+        <div class="form-row full">
+          <div class="form-field"><label>允许的 Source</label>
+            <input value="http, manual, playwright" placeholder="逗号分隔" data-bind="source_whitelist">
+          </div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>Allowed senders（前端用户 id）</label>
+            <textarea>user_admin, user_ai_lead, user_marketing_head</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🧠 Jev 准入决策（AgentScope AssessorService 调用）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Jev 决策模型用于 Ticket 准入判定：score ≥ <code>jev_confidence_threshold</code> 进入 pipeline。降级策略 <code>model_router=jev-first</code>：Jev 拒答时回退 GPT-4o-mini。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>jev_confidence_threshold</label><input type="number" value="0.6" step="0.05"></div>
+          <div class="form-field"><label>jev_accept_threshold（自动准入）</label><input type="number" value="0.85" step="0.05"></div>
+          <div class="form-field"><label>model_router 降级策略</label>
+            <select><option>jev-first（默认：Jev 优先，拒答回退 LLM）</option><option>jev-only（严格只走 Jev）</option><option>llm-only（关闭 Jev）</option></select>
+          </div>
+        </div>
+        <div class="form-row three">
+          <div class="form-field"><label>proactive_auto_accept</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>ignore 后自动丢弃</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>Jev 拒答回退模型</label><select><option>GPT-4o-mini（id=12）</option></select></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔗 WorkspaceManager 集成伪代码</h3>
+        <div style="background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);font-family:ui-monospace,monospace;font-size:11px;line-height:1.7">
+<span style="color:var(--peach)">def</span> create_ticket(<span style="color:var(--accent)">self</span>, workspace_id, request):<br>
+&nbsp;&nbsp;ws = <span style="color:var(--accent)">session.query</span>(<span style="color:var(--teal)">AiWorkspace</span>).get(workspace_id)<br>
+&nbsp;&nbsp;cfg = <span style="color:var(--accent)">session.query</span>(<span style="color:var(--teal)">SuperAgentWorkspaceConfig</span>).filter_by(workspace_id=workspace_id).one()<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># AgentScope WorkspaceManager 按隔离粒度创建 LocalWorkspace</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">self.scope_ws</span> = <span style="color:var(--teal)">WorkspaceManager</span>.get_or_create(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;key=f"<span style="color:var(--green)">{ticket.id}</span>",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;isolation=<span style="color:var(--teal)">IsolationLevel</span>.<span style="color:var(--accent)">PER_AGENT</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;workdir=f"<span style="color:var(--green)">./workspaces/{ticket.id}</span>",<br>
+&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># Policy 规则作为 workspace 只读属性注入</span><br>
+&nbsp;&nbsp;<span style="color:var(--accent)">self.scope_ws.policy</span> = cfg.policy_rules  <span style="color:var(--text-3)"># Worker & Assessor 全局可读</span>
+        </div>
+      </div>
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config.policy_rules + jev_* 字段）</button>
+    </div>
+
+    <!-- ====== 配置：KB ====== -->
+    <div id="page-config-kb" class="hidden">
+      <div class="page-head">
+        <h1>📚 知识库绑定 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace 级绑定 · AgentScope RAG 检索可见范围</span></h1>
+        <p>SuperAgent Worker 可见的 KB 列表 · 权重配置 · 自动入库策略 — 与 Workspace 绑定隔离</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：KB 绑定在 <code>sa_workspace_config.kb_ids</code>（JSON 数组）+ <code>kb_weights</code>（JSON 对象），自动入库开关 <code>auto_ingest_worker_output</code>。AgentScope <code>WorkspaceManager</code> 在 Worker 初始化时将 KB 作为 Toolkit 的 RAG 工具注入。
+      </div>
+
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · KB 绑定</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">当前 Workspace：<b style="color:var(--peach)">电商营销工作空间</b>（id=<code>ws_emarketing_01</code>）。</div>
+        <div style="background:var(--surface-2);padding:16px;border-radius:var(--radius-sm);border:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+          <div style="border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));border-radius:var(--radius-sm);padding:12px;background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))">
+            <div style="display:flex;align-items:center;gap:6px"><div style="font-weight:600">KB #5 · 历史营销活动</div><span style="font-size:10px;color:var(--accent);background:color-mix(in srgb,var(--accent) 20%,var(--surface-3));padding:1px 6px;border-radius:8px">🆕 bound</span></div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">kb_id: 5 · weight: <b style="color:var(--yellow)">1.5</b> · pinned=true</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">AgentScope RAG 检索优先 · 覆盖「营销活动」「ROI」「转化率」</div>
+          </div>
+          <div style="border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));border-radius:var(--radius-sm);padding:12px;background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))">
+            <div style="display:flex;align-items:center;gap:6px"><div style="font-weight:600">KB #8 · 竞品分析</div><span style="font-size:10px;color:var(--accent);background:color-mix(in srgb,var(--accent) 20%,var(--surface-3));padding:1px 6px;border-radius:8px">🆕 bound</span></div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">kb_id: 8 · weight: <b style="color:var(--yellow)">1.0</b> · pinned=false</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">默认检索 · 覆盖「竞品」「市场份额」「定价」</div>
+          </div>
+          <div style="border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));border-radius:var(--radius-sm);padding:12px;background:color-mix(in srgb,var(--accent) 8%,var(--surface-2))">
+            <div style="display:flex;align-items:center;gap:6px"><div style="font-weight:600">KB #12 · 供应商</div><span style="font-size:10px;color:var(--accent);background:color-mix(in srgb,var(--accent) 20%,var(--surface-3));padding:1px 6px;border-radius:8px">🆕 bound</span></div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:4px">kb_id: 12 · weight: <b style="color:var(--yellow)">1.2</b> · pinned=true</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:4px">覆盖「供应商名录」「采购条款」「报价历史」</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>📥 自动入库（Worker 产出 → KB）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Worker 在执行中产出的结构化数据（Playwright 抓取、表格提取、文件下载）可自动入库，供后续同 Workspace Ticket 复用。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>auto_ingest_worker_output</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>Sandbox 产出自动入库</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>自动创建 KB（Worker 可自定义）</label><div class="switch" style="margin-top:4px"></div></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔗 AgentScope WorkspaceManager 集成伪代码</h3>
+        <div style="background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);font-family:ui-monospace,monospace;font-size:11px;line-height:1.7">
+<span style="color:var(--peach)">async def</span> build_toolkit(<span style="color:var(--accent)">self</span>, workspace_config):<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># 从 SuperAgentWorkspaceConfig 加载 KB</span><br>
+&nbsp;&nbsp;rag_tools = []<br>
+&nbsp;&nbsp;<span style="color:var(--peach)">for</span> kb_id <span style="color:var(--peach)">in</span> workspace_config.kb_ids:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;kb = <span style="color:var(--accent)">get_kb</span>(kb_id)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;weight = workspace_config.kb_weights.<span style="color:var(--accent)">get</span>(<span style="color:var(--green)">str</span>(kb_id), <span style="color:var(--teal)">1.0</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;rag_tools.<span style="color:var(--accent)">append</span>(<span style="color:var(--teal)">RAGTool</span>(kb=kb, weight=weight))<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># Toolkit = AgentScope 内置 + MCP + RAG</span><br>
+&nbsp;&nbsp;<span style="color:var(--peach)">return</span> <span style="color:var(--teal)">Toolkit</span>(tools=[*rag_tools, *<span style="color:var(--accent)">self.scope_ws</span>.list_tools(), *<span style="color:var(--accent)">self</span>.mcp_tools])
+        </div>
+      </div>
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config.kb_ids + kb_weights + auto_ingest）</button>
+    </div>
+
+    <!-- ====== 配置：执行 ====== -->
+    <div id="page-config-exec" class="hidden">
+      <div class="page-head">
+        <h1>⚙️ 执行参数 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace 级绑定 · AgentScope Pipeline 参数注入</span></h1>
+        <p>Worker 并发 · Retry · Timeout · Effect 队列 — 每个 Workspace 独立配置，per-Ticket LocalWorkspace 隔离</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：所有执行参数存储于 <code>sa_workspace_config</code>（<code>max_workers</code>, <code>max_retries</code>, <code>eval_timeout_ms</code>, <code>effect_concurrency</code>, <code>max_iters</code>）。AgentScope <code>GoalPipeline(max_iters, executor, verifier)</code> 和 <code>TeamPipeline</code> 在 Worker 初始化时加载这些参数。
+      </div>
+
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · 执行参数</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">当前 Workspace：<b style="color:var(--peach)">电商营销工作空间</b>。切换 Workspace 自动加载不同执行参数。</div>
+      </div>
+
+      <div class="config-section">
+        <h3>👷 Worker + AgentScope GoalPipeline</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">AgentScope <code>GoalPipeline(executor=worker, verifier=reflector, max_iters=N)</code> 反思校验循环参数。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>max_workers</label><input type="number" value="3"></div>
+          <div class="form-field"><label>max_iters（GoalPipeline 反思上限）</label><input type="number" value="5" style="border:1px solid var(--yellow)"></div>
+          <div class="form-field"><label>Worker ReAct 循环上限</label><input type="number" value="50"></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔄 Retry + Timeout</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">AgentScope Pipeline 内各阶段超时；超时自动触发 Retry；超过 max_retries 后 Ticket 进入 failed 状态。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>max_retries</label><input type="number" value="3"></div>
+          <div class="form-field"><label>eval_timeout_ms（Reflector 单次校验）</label><input type="number" value="60000"></div>
+          <div class="form-field"><label>MCP call timeout</label><input type="number" value="30000"></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>⚡ Effect 队列并发上限</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">SuperAgent 自研 EffectPipeline 各阶段并发上限；AgentScope 不提供此能力，需在 Worker 外层用 asyncio.Semaphore 实现。</div>
+        <div class="form-row four" style="grid-template-columns:repeat(6,1fr)">
+          <div class="form-field"><label>assess</label><input type="number" value="4"></div>
+          <div class="form-field"><label>launch</label><input type="number" value="3"></div>
+          <div class="form-field"><label>delivery</label><input type="number" value="4"></div>
+          <div class="form-field"><label>reflect</label><input type="number" value="2"></div>
+          <div class="form-field"><label>notice</label><input type="number" value="1"></div>
+          <div class="form-field"><label>reply</label><input type="number" value="1"></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔗 AgentScope Pipeline 构建伪代码</h3>
+        <div style="background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);font-family:ui-monospace,monospace;font-size:11px;line-height:1.7">
+<span style="color:var(--peach)">def</span> build_pipeline(<span style="color:var(--accent)">self</span>, workspace_config, ticket):<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># Worker 构建 AgentScope ReActAgent</span><br>
+&nbsp;&nbsp;worker = <span style="color:var(--teal)">ReActAgent</span>(name=<span style="color:var(--green)">"worker"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;model=<span style="color:var(--accent)">load_model</span>(workspace_config.default_model_id),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;toolkit=<span style="color:var(--accent)">build_toolkit</span>(workspace_config),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;max_iters=workspace_config.max_iters,<br>
+&nbsp;&nbsp;)<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># Reflector 独立 AgentScope Agent</span><br>
+&nbsp;&nbsp;reflector = <span style="color:var(--teal)">ReActAgent</span>(name=<span style="color:var(--green)">"reflector"</span>, model=<span style="color:var(--accent)">...lightweight...</span>)<br>
+&nbsp;&nbsp;<span style="color:var(--text-3)"># AgentScope GoalPipeline — 反思校验循环</span><br>
+&nbsp;&nbsp;<span style="color:var(--peach)">return</span> <span style="color:var(--teal)">GoalPipeline</span>(<br>
+&nbsp;&nbsp;&nbsp;&nbsp;executor=worker, verifier=reflector,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;max_iters=workspace_config.max_retries,  <span style="color:var(--text-3)"># Worker 外层反思轮次</span><br>
+&nbsp;&nbsp;)
+        </div>
+      </div>
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config.max_* / *_timeout_ms / effect_concurrency）</button>
+    </div>
+
+    <!-- ====== 配置：安全 ====== -->
+    <div id="page-config-security" class="hidden">
+      <div class="page-head">
+        <h1>🔒 安全设置 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· Workspace 级绑定 · AgentScope PermissionContext + HITL</span></h1>
+        <p>MCP 工具白名单 · PermissionMode · HITL 策略 · Playwright 域名 — 全部绑定 Workspace，per-Ticket LocalWorkspace 隔离安全边界</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：安全配置存储于 <code>sa_workspace_config</code> 的 <code>default_permission_mode</code> / <code>playwright_domain_whitelist</code> / <code>require_hitl_for_high_risk</code> 字段。AgentScope <code>PermissionContext</code> 在 Worker 每次调用 MCP 工具时检查 Workspace 级安全边界。
+      </div>
+
+      <div class="config-section">
+        <h3>🏢 电商营销工作空间 · 安全绑定</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">当前 Workspace：<b style="color:var(--peach)">电商营销工作空间</b>。所有安全设置与 Workspace 绑定，切换 Workspace 自动切换安全策略。</div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔐 PermissionContext 默认 Mode（AgentScope 原生）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">AgentScope 每个 MCP 工具调用前检查。<code>bypass</code>=静默执行（审计日志），<code>confirm</code>=Agent 自查上下文后决定，<code>readOnly</code>=只允许非破坏工具。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>default_permission_mode（全局）</label>
+            <select><option>confirm（推荐）</option><option>readOnly（最保守）</option><option>bypass（仅开发）</option></select>
+          </div>
+          <div class="form-field"><label>Playwright MCP 工具</label><select><option>confirm（推荐）</option><option>bypass（审计）</option></select></div>
+          <div class="form-field"><label>windows-mcp + kira-mcp 输入工具</label><select><option>bypass（审计，桌面自动化必须）</option><option>confirm（需人类确认）</option></select></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🌐 Playwright 域名白名单（sa_workspace_config.playwright_domain_whitelist）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Playwright <code>goto()</code> 调用前匹配此白名单，不在白名单内的域名直接拒绝。正则匹配。</div>
+        <div class="form-row full">
+          <div class="form-field"><label>允许的 navigate 域名（正则）</label>
+            <textarea>https://[a-z0-9-]+\.example\.com/.*
+https://ourshop\.cn/.*
+https://competitor-[ab]\.com/.*</textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🚨 HITL（require_hitl_for_high_risk）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">高风险操作需要人类确认后 AgentScope 才继续。Ticket 状态暂停为 <code>waiting_hitl</code>，HITL 组件恢复后继续。</div>
+        <div class="form-row three">
+          <div class="form-field"><label>关闭系统窗口</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>桌面高风险 click（UIA 危险动作）</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>UAC 安全桌面</label><div class="switch on" style="margin-top:4px"></div></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>📝 审计</h3>
+        <div class="form-row three">
+          <div class="form-field"><label>sa_audit_log 开启</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>日志保留（天）</label><input type="number" value="90"></div>
+          <div class="form-field"><label>完整 MCP 调用记录</label><div class="switch on" style="margin-top:4px"></div></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🔗 AgentScope LocalWorkspace 安全隔离伪代码</h3>
+        <div style="background:var(--surface-2);padding:12px;border-radius:var(--radius-sm);font-family:ui-monospace,monospace;font-size:11px;line-height:1.7">
+<span style="color:var(--peach)">class</span> <span style="color:var(--teal)">SuperAgentPermissionContext</span>(AgentScope.PermissionContext):<br>
+&nbsp;&nbsp;<span style="color:var(--peach)">async def</span> check(<span style="color:var(--accent)">self</span>, tool_name, args):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;cfg = <span style="color:var(--accent)">self.workspace_config</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-3)"># 1. Playwright 域名检查</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--peach)">if</span> tool_name == <span style="color:var(--green)">"browser_navigate"</span>:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;domain = <span style="color:var(--accent)">extract_domain</span>(args[<span style="color:var(--green)">"url"</span>])<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--peach)">if not</span> <span style="color:var(--accent)">any</span>(<span style="color:var(--accent)">re</span>.match(w, domain) <span style="color:var(--peach)">for</span> w <span style="color:var(--peach)">in</span> cfg.playwright_domain_whitelist):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--peach)">raise</span> <span style="color:var(--teal)">SecurityError</span>(<span style="color:var(--green)">f"domain {domain} not whitelisted"</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--text-3)"># 2. PermissionMode 检查</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--peach)">return await</span> <span style="color:var(--accent)">super</span>().check(tool_name, args)  <span style="color:var(--text-3)"># bypass / confirm / readOnly</span>
+        </div>
+      </div>
+      <button class="btn btn-primary">💾 保存（写入 sa_workspace_config.default_permission_mode / playwright_domain_whitelist / require_hitl_for_high_risk）</button>
+    </div>
+
+    <!-- ====== 配置：Source 管理（GitHub + Feishu + Thread/Subscription/Mandate）====== -->
+    <div id="page-config-source" class="hidden">
+      <div class="page-head">
+        <h1>🔗 Source 管理 <span style="font-size:12px;color:var(--text-3);margin-left:8px">· GitHub + Feishu + Thread/Subscription/Mandate 核心领域模型 · Workspace 绑定</span></h1>
+        <p>完整对齐 dsh-superagent Source 生态：4 种 GitHub Trigger + poll 轮询 + PR lifecycle → followsDone 自动完结；Feishu strict mode bot + 群聊 listen + Policy allowed；Thread 时间序列 + Subscription 多对多扇出 + Mandate 不可变授权</p>
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--green) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        ✅ <b>零新表设计</b>：GitHub/Feishu Source 配置存于 <code>sa_workspace_config.github_source_cfg</code> / <code>sa_workspace_config.feishu_source_cfg</code>（JSON）。但 Thread / Subscription / Mandate / Assignment 4 张<b>运行时表</b>需新建 Alembic migration（非配置表，是 Engine 核心事务载体）。
+      </div>
+
+      <div style="background:color-mix(in srgb,var(--accent) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--text-2)">
+        📋 <b>Source 健康面板</b>：SourceRegistry.health_board() 返回每个 Source 的 status + poll_failures + next_poll_at。右侧预览面板实时显示（见底部 4 张运行时表）。
+      </div>
+
+      <!-- ===== GitHub Source ===== -->
+      <div class="config-section">
+        <h3><span style="font-size:18px">🐙</span> GitHub Source 配置（首期完整实现 · Task 6）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">4 种 Trigger：Issue@mention / PR@mention / PR comment@mention / CI failure。pollRound() 4 步循环：notifications → repository → ticket pulls → threads。Etag + If-None-Match 条件请求节省 rate limit。PR merge/close → Thread closed → Subscription fan-out → Ticket followsDone 自动完结。</div>
+
+        <div class="form-row three">
+          <div class="form-field"><label>repository（owner/name）</label><input type="text" value="dsh-superagent/dsh-superagent"></div>
+          <div class="form-field"><label>gh_cli 路径（agent 账号）</label><input type="text" value="/usr/local/bin/gh-agent"></div>
+          <div class="form-field"><label>poll_seconds（≥60 ≤3600）</label><input type="number" value="60" min="60" max="3600"></div>
+        </div>
+        <div class="form-row three">
+          <div class="form-field"><label>failures_before_error</label><input type="number" value="3" min="1" max="20"></div>
+          <div class="form-field"><label>observe_issues</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>observe_pulls</label><div class="switch on" style="margin-top:4px"></div></div>
+        </div>
+        <div class="form-row three">
+          <div class="form-field"><label>observe_comments</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>observe_ci</label><div class="switch" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>CI 分支（默认 main）</label><input type="text" value="main"></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🛡️ GitHub Source Policy（allowed + bots + AdmissionTable 2×2）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">AdmissionTable 2×2 矩阵：行=Trigger 种类，列=sender 是否在 allowed + 是否 addressed（@ agent）。每个 cell 取值 explicit / inferred / ignore。CI 无 sender → 默认 inferred。</div>
+
+        <div class="form-row full">
+          <div class="form-field"><label>allowed 账号（agent 名称列表）</label>
+            <input type="text" value="agent-name, bot-collaborator" placeholder="逗号分隔 GitHub 用户名">
+          </div>
+        </div>
+        <div class="form-row full">
+          <div class="form-field"><label>bots 名单（推断候选）</label>
+            <input type="text" value="dependabot[bot], renovate[bot]" placeholder="逗号分隔 bot 名称">
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Admission Table（GitHub 默认值 · 与 dsh-superagent githubKind.policy.rows() 对齐）</div>
+          <table style="width:100%;font-size:12px;border-collapse:collapse;background:var(--surface-2);border-radius:var(--radius-sm);overflow:hidden">
+            <thead><tr style="background:var(--surface-3);color:var(--text-2)">
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">Trigger 种类</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">listedUnaddressed（白名单未@）</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">unlistedAddressed（非白名单@）</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">unlistedUnaddressed（非白名单未@）</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">issues</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>ignore</option></select></td></tr>
+              <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">pulls</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>ignore</option></select></td></tr>
+              <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)">comments</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>explicit</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>ignore</option></select></td></tr>
+              <tr><td style="padding:6px 8px">ci</td><td style="padding:6px 8px;text-align:center"><select style="font-size:11px"><option>ignore</option></select></td><td style="padding:6px 8px;text-align:center"><select style="font-size:11px"><option>ignore</option></select></td><td style="padding:6px 8px;text-align:center"><select style="font-size:11px"><option selected>inferred</option></select></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:10px;font-size:11px;color:var(--text-3);line-height:1.6">
+          💡 <b>CI 行特殊处理</b>：CI 失败没有 sender，无法区分 listed/unlisted；默认 <code>unlistedUnaddressed=inferred</code>（Eval 研判是否需要修复）。environment 注入 <code>DSH_SUPERAGENT_GITHUB_REPOSITORY</code> / <code>DSH_SUPERAGENT_GITHUB_NUMBER</code> / <code>DSH_SUPERAGENT_GITHUB_PR_HEAD</code>。
+        </div>
+      </div>
+
+      <!-- ===== Feishu Source ===== -->
+      <div class="config-section">
+        <h3><span style="font-size:18px">🪶</span> Feishu Source 配置（首期核心实现 · Task 6）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">strict mode bot（只有 bot 身份可调用 lark-cli）+ 群聊 listen=mentions/all + 私聊 + Policy allowed + sync_chat 同步名单 + Channel 回复发到 Feishu Topic reply（不刷屏群）。历史回补 backfill + Thread 轮询 pollThreads 作为增量。</div>
+
+        <div class="form-row three">
+          <div class="form-field"><label>lark_cli 路径（strict mode bot）</label><input type="text" value="/usr/local/bin/lark-cli-bot"></div>
+          <div class="form-field"><label>direct_messages</label><div class="switch on" style="margin-top:4px"></div></div>
+          <div class="form-field"><label>other_chats</label><select><option>none（默认，未列出的群不接收）</option><option>mentions（未列出的群只接收 @ bot 消息）</option></select></div>
+        </div>
+        <div class="form-row three">
+          <div class="form-field"><label>read_page_size</label><input type="number" value="20" min="1" max="50"></div>
+          <div class="form-field"><label>link_timeout_ms</label><input type="number" value="5000" min="1000" max="90000"></div>
+          <div class="form-field"><label>历史回补（增量）</label><div class="switch" style="margin-top:4px"></div></div>
+        </div>
+
+        <div style="margin-top:10px">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px"><b>群列表（listen=mentions 只接收 @ bot 消息，listen=all 接收全部消息 Eval 研判）</b></div>
+          <table style="width:100%;font-size:12px;border-collapse:collapse;background:var(--surface-2);border-radius:var(--radius-sm);overflow:hidden">
+            <thead><tr style="background:var(--surface-3);color:var(--text-2)">
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">chat_id</th>
+              <th style="padding:8px;text-align:left;border-bottom:1px solid var(--border)">群名称</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">listen 模式</th>
+              <th style="padding:8px;text-align:center;border-bottom:1px solid var(--border)">操作</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)"><code>oc_abc123def456</code></td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">研发群</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option selected>mentions（仅 @ bot）</option><option>all（全部消息）</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><button class="btn" style="font-size:11px;padding:2px 8px">✏️</button> <button class="btn" style="font-size:11px;padding:2px 8px">🗑️</button></td></tr>
+              <tr><td style="padding:6px 8px;border-bottom:1px solid var(--border)"><code>oc_xyz789uvw012</code></td><td style="padding:6px 8px;border-bottom:1px solid var(--border)">电商运营群</td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><select style="font-size:11px"><option>mentions（仅 @ bot）</option><option selected>all（全部消息）</option></select></td><td style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--border)"><button class="btn" style="font-size:11px;padding:2px 8px">✏️</button> <button class="btn" style="font-size:11px;padding:2px 8px">🗑️</button></td></tr>
+              <tr><td style="padding:6px 8px"><input type="text" placeholder="oc_xxx..." style="font-size:11px;width:100%;background:transparent;border:none;color:var(--text-1)"></td><td style="padding:6px 8px"><input type="text" placeholder="群名称" style="font-size:11px;width:100%;background:transparent;border:none;color:var(--text-1)"></td><td style="padding:6px 8px;text-align:center"><select style="font-size:11px"><option>mentions</option><option>all</option></select></td><td style="padding:6px 8px;text-align:center"><button class="btn" style="font-size:11px;padding:2px 10px;background:var(--accent);color:#fff">➕ 添加群</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>🛡️ Feishu Source Policy（allowed + sync_chat + bots）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">sync_chat 指"点立即同步"用群成员列表自动更新 allowed 名单。bots 名单内的人发消息 → 自动推断为候选（不需 @ bot）。</div>
+
+        <div class="form-row full">
+          <div class="form-field"><label>allowed 用户（ou_xxx 列表 · 逗号分隔）</label>
+            <input type="text" value="ou_abc123 张三, ou_def456 李四">
+          </div>
+        </div>
+        <div class="form-row three">
+          <div class="form-field"><label>sync_chat（用于"立即同步"群）</label>
+            <input type="text" value="oc_sync001">
+          </div>
+          <div class="form-field"><label>bots 名单</label>
+            <input type="text" value="cli_feishu-bot-xyz">
+          </div>
+          <div class="form-field" style="display:flex;align-items:flex-end"><button class="btn" style="width:100%">🔄 立即同步 allowed</button></div>
+        </div>
+      </div>
+
+      <!-- ===== Thread / Subscription / Mandate / Assignment 预览 ===== -->
+      <div class="config-section">
+        <h3>📊 Source 运行时预览（4 张核心运行时表 · Task 6 Alembic migration）</h3>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">以下 4 张表是 Engine 核心事务载体，全部带 <code>workspace_id</code> FK + 索引。切换 Workspace 自动过滤。</div>
+      </div>
+
+      <div class="form-row full" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Thread 表 -->
+        <div class="config-section" style="margin:0">
+          <h3 style="font-size:14px">🧵 Thread 列表（Trigger 时间序列容器）</h3>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">sa_thread · 唯一键 (workspace_id, source, ref_id)</div>
+          <div style="max-height:180px;overflow-y:auto">
+            <table style="width:100%;font-size:11px;border-collapse:collapse">
+              <thead><tr style="color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2)">
+                <th style="padding:4px;text-align:left">ID</th><th style="padding:4px;text-align:left">source</th><th style="padding:4px;text-align:left">title</th><th style="padding:4px;text-align:center">status</th>
+              </tr></thead>
+              <tbody id="srcThreadTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Subscription 表 -->
+        <div class="config-section" style="margin:0">
+          <h3 style="font-size:14px">🔗 Subscription（Ticket ↔ Thread 多对多）</h3>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">sa_subscription · kind=following 借出授权，kind=context_only 仅上下文</div>
+          <div style="max-height:180px;overflow-y:auto">
+            <table style="width:100%;font-size:11px;border-collapse:collapse">
+              <thead><tr style="color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2)">
+                <th style="padding:4px;text-align:left">ticket_id</th><th style="padding:4px;text-align:left">thread_id</th><th style="padding:4px;text-align:center">kind</th>
+              </tr></thead>
+              <tbody id="srcSubTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mandate 表 -->
+        <div class="config-section" style="margin:0">
+          <h3 style="font-size:14px">📜 Mandate（不可变授权 · accept 时创建）</h3>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">sa_mandate · 不可变，Policy 变更只送达 Assignment 通知</div>
+          <div style="max-height:180px;overflow-y:auto">
+            <table style="width:100%;font-size:11px;border-collapse:collapse">
+              <thead><tr style="color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2)">
+                <th style="padding:4px;text-align:left">ticket</th><th style="padding:4px;text-align:left">policy_version</th><th style="padding:4px;text-align:center">strength</th><th style="padding:4px;text-align:left">scope</th>
+              </tr></thead>
+              <tbody id="srcMandateTable"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Assignment 表 -->
+        <div class="config-section" style="margin:0">
+          <h3 style="font-size:14px">⚡ Assignment（Ticket ↔ Executor 绑定）</h3>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:8px">sa_assignment · status=pending/running/ended，WorkerReport 5 种状态回写</div>
+          <div style="max-height:180px;overflow-y:auto">
+            <table style="width:100%;font-size:11px;border-collapse:collapse">
+              <thead><tr style="color:var(--text-3);border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-2)">
+                <th style="padding:4px;text-align:left">ticket</th><th style="padding:4px;text-align:center">status</th><th style="padding:4px;text-align:center">executor</th><th style="padding:4px;text-align:center">report</th>
+              </tr></thead>
+              <tbody id="srcAssignTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;padding:12px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:11px;color:var(--text-3);line-height:1.8">
+        <b>📋 Source 规则速查（与 dsh-superagent 对齐）：</b><br>
+        ① <b>Subscription fan-out 不经过 Eval</b>：Thread 新 Trigger → 自动送达所有活订阅 Ticket 作上下文<br>
+        ② <b>followsDone 自动完结</b>：Ticket 所有 following Subscription Thread 全部 closed → 自动 COMPLETED<br>
+        ③ <b>Mandate 不可变</b>：accept 时创建后不再修改；Policy 变更只送达 Assignment 通知，不撤销 Mandate<br>
+        ④ <b>Policy 版本化热变更</b>：version++ → 计算受影响活 Ticket → 送达 Assignment；运行中 Eval 按新 Policy 重启<br>
+        ⑤ <b>followup handoff</b>：Worker 交还 Trigger → Engine.handback() → Trigger 回到 Thread eval queue（每 Ticket × Trigger 只交还一次）<br>
+        ⑥ <b>Assessment 三条件</b>：matched≥1 rule + directionAllowed + intent_evidence 存在 → 可 accept
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-primary">💾 保存 GitHub + Feishu 配置（写入 sa_workspace_config.github_source_cfg / feishu_source_cfg JSON）</button>
+        <button class="btn" onclick="saSrcHealthCheck()">🔄 立即健康检查（poll Source health_board）</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /sa-root -->
+
+<!-- Goals 详情抽屉 -->
+<div class="sa-drawer-mask" id="saDrawerMask" onclick="saCloseDrawer()"></div>
+<div class="sa-drawer" id="saDrawer">
+  <div class="dh"><h3 id="saDrawerTitle" style="font-size:16px">目标详情</h3><div style="flex:1"></div><button class="btn" onclick="saCloseDrawer()">✕ 关闭</button></div>
+  <div class="db" id="saDrawerBody"></div>
+</div>
+
+<!-- Ideas 动作 sheet -->
+<div class="sa-sheet-mask" id="saSheetMask">
+  <div class="sa-sheet">
+    <h3 id="saSheetTitle">点子</h3>
+    <div id="saSheetDetail" style="color:var(--text-2);font-size:12px;margin-top:6px"></div>
+    <div class="prompt" id="saSheetPrompt"></div>
+    <div class="acts">
+      <button class="btn" onclick="saIdeaApply('chat')">💬 发送到对话（预填 prompt 打开 Chat）</button>
+      <button class="btn" onclick="saIdeaApply('goal')">🎯 创建目标（转多步 Goal，L3 确认）</button>
+      <button class="btn" onclick="saIdeaApply('routine')">⏰ 建立节律提醒</button>
+      <button class="btn" onclick="saIdeaApply('pin')">📌 置顶 / 忽略</button>
+    </div>
+    <div style="margin-top:12px;text-align:right"><button class="btn" onclick="saCloseSheet()">关闭</button></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="sa-toast" id="saToast"></div>
+
+<script>
+// ===== 侧边栏导航 =====
+function switchPage(id){
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.main > div[id^="page-"]').forEach(p=>p.classList.add('hidden'));
+  const map={'dashboard':'Dashboard 看板','demo':'电商营销 Demo','detail':'执行详情','sa-chat':'SuperAgent 对话','sa-feed':'动态','sa-ideas':'点子','sa-goals':'目标','config-model':'模型配置','config-mcp':'MCP Server','config-policy':'Policy 规则','config-kb':'知识库绑定','config-exec':'执行参数','config-security':'安全设置','config-source':'Source 管理'};
+  const navText=map[id]||id;
+  document.querySelectorAll('.nav-item').forEach(n=>{if(n.textContent.trim().includes(navText.split(' · ')[0].split(' ').slice(0,2).join('')))n.classList.add('active')});
+  const page=document.getElementById('page-'+id);
+  if(page)page.classList.remove('hidden');
+  else document.getElementById('page-dashboard').classList.remove('hidden');
+  // 滚动到顶部
+  document.querySelector('.main').scrollTop=0;
+}
+// 侧边栏 active 精确匹配
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+
+// ===== 详情页 Tabs =====
+function detailTab(id,el){
+  document.querySelectorAll('#page-detail .tb').forEach(t=>t.classList.remove('active'));
+  if(el)el.classList.add('active');
+  ['timeline','screenshots','reflect','kb','audit'].forEach(x=>{
+    const e=document.getElementById('detail-'+x);
+    if(e)e.classList.toggle('hidden',x!==id);
+  });
+}
+document.querySelectorAll('#page-detail .tb').forEach(t=>{
+  t.addEventListener('click',()=>detailTab(t.getAttribute('onclick').match(/'([^']+)'/)[1],t));
+});
+
+// ===== 顶栏 nav 精确匹配修复 =====
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+// 修复 switchPage 中的 active 标记
+const origSwitchPage=switchPage;
+switchPage=function(id){
+  origSwitchPage(id);
+  // 手动标记 active
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    n.classList.remove('active');
+    const titleMap={'dashboard':'Dashboard','demo':'Demo','detail':'详情','sa-chat':'SuperAgent','sa-feed':'动态','sa-ideas':'点子','sa-goals':'目标','config-model':'模型','config-mcp':'MCP','config-policy':'Policy','config-kb':'知识库','config-exec':'执行','config-security':'安全','config-source':'Source'};
+    const keyword=titleMap[id]||id;
+    if(n.textContent.includes(keyword))n.classList.add('active');
+  });
+};
+
+// ============================================================
+// ===== SuperAgent Chat（独立对话空间）=====
+// ============================================================
+let saStreamTimer=null;
+function saSend(){
+  const body=document.getElementById('saChatBody');
+  const text=document.getElementById('saChatText').value.trim()||'（空）';
+  body.insertAdjacentHTML('beforeend',`<div class="sa-msg user"><div class="sa-msg-avatar">我</div><div class="sa-bubble">${text}</div></div>`);
+  const d=document.createElement('div');d.className='sa-msg ai';
+  d.innerHTML='<div class="sa-msg-avatar">SA</div><div class="sa-bubble"><span class="sa-typing"><i></i><i></i><i></i></span><span class="sa-delta"></span></div>';
+  body.appendChild(d);body.scrollTop=body.scrollHeight;
+  const full='好的，我来按"定金膨胀"方案起草主视觉设计说明：\n\n🎨 主视觉风格：紫色渐变 + 金色膨胀光效。\n📐 核心信息层：主标题"定金 50 抵 200 膨胀 ×4" + 倒计时 + 价格锚点。\n\n已调用：playwright.browser_navigate（竞品紫色方案截图对比）+ KB #5（weight 1.5 命中 3 条）。\n\n需要把这份设计说明 + 竞品截图写入 Ticket 产物库吗？（L3）';
+  const delta=d.querySelector('.sa-delta');let i=0;
+  saStreamTimer=setInterval(()=>{
+    delta.textContent=full.slice(0,i+=3);delta.style.whiteSpace='pre-wrap';
+    body.scrollTop=body.scrollHeight;
+    if(i>=full.length){clearInterval(saStreamTimer);
+      d.querySelector('.sa-bubble').insertAdjacentHTML('beforeend',
+        `<div class="sa-toolcard open"><div class="hd" onclick="this.parentNode.classList.toggle('open')">🔧 TOOL_CALL 轨迹</div>
+          <div class="bd">① playwright.browser_navigate ✓ 1.1s<br>② KB #5 RAG retrieve → 3 hits ✓ 85ms<br>③ kira-mcp.desktop__ocr_read ✓ 220ms</div></div>`);
+      document.getElementById('saChatText').value='';
+    }
+  },28);
+}
+function saAbort(){if(saStreamTimer){clearInterval(saStreamTimer);saToast('已中断（POST /chat/abort）')}}
+function saChatNew(){saToast('新建 Session · 绑定当前 Workspace')}
+function saConfirmL3(btn){
+  btn.parentNode.querySelector('.acts').innerHTML='<span class="sa-st done" style="color:var(--green);font-weight:600">✓ 已确认 · 执行中</span>';
+  document.getElementById('saL3audit').textContent='审计：actor=user · level=L3 · tool=playwright.bulk_navigate · workspace=ws_emarketing_01 · result=success';
+  saToast('L3 闭环：确认 → 执行 → 审计留痕');
+}
+function saDismissL3(btn){btn.parentNode.parentNode.querySelector('.acts').innerHTML='<span class="sa-st cancelled">已跳过（审计已记录）</span>'}
+
+// ============================================================
+// ===== SuperAgent Feed 动态 =====
+// ============================================================
+const saFeedData=[
+ {kind:'approval',title:'📋 L4 提案待审：目标"转化率提升"新增步骤',body:'Agent 建议新增 step"测试竞品 A/B 主视觉×5"，+3 天；base_version=2，等待 accept/dismiss。',time:'今日 16:32',ctx:'目标·转化率提升',prompt:'帮我看看这个提案'},
+ {kind:'system',title:'🎫 新 Ticket：T-0018 双十一定价方案',body:'source=playwright（竞品 B 定价页监控触发）· LocalWorkspace + 12 MCP + 3 KB 已绑定。',time:'今日 15:08',ctx:'Ticket T-0018'},
+ {kind:'ai_batch',title:'🤖 今日批次：3 个 Goal check-in 到期',body:'① 竞品分析交付框架 · ② 文案定金膨胀模板就绪 · ③ 紫色主视觉可启动。',time:'今日 09:00',ctx:'每日批次',prompt:'梳理今天三个 Goal 的推进优先级'},
+ {kind:'reminder',title:'⏰ check-in：目标"转化率提升"',body:'daily 09:00 · 进度 45% · 当前 step="主视觉定稿" · KB #8 竞品紫色方案可查。',time:'今日 09:00',ctx:'目标·转化率提升',prompt:'写竞品紫色主视觉对比框架'},
+ {kind:'ai_batch',title:'📈 停滞提示：竞品 A 定价页 3 天未更新',body:'playwright monitor=competitor-a.com/pricing · diff=0 · 建议关注双十一预热。',time:'昨日 18:00',ctx:'竞品监控'},
+];
+const saKindName={system:'系统事件',ai_batch:'AI 批次',reminder:'check-in',approval:'L4 审批'};
+function saRenderFeed(filter){
+  const box=document.getElementById('saFeedList');box.innerHTML='';
+  saFeedData.forEach((f,idx)=>{
+    if(filter&&filter!=='all'&&f.kind!==filter)return;
+    const el=document.createElement('div');
+    el.className='sa-fcard '+f.kind+(f._read?' read':'');
+    el.innerHTML=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="fk">${saKindName[f.kind]}</span><span class="ftitle">${f.title}</span><div style="flex:1"></div><span style="font-size:11px;color:var(--text-3)">${f.time} · ${f.ctx}</span></div>
+      <div class="fbody">${f.body}</div>
+      <div class="facts">
+        ${f.prompt?`<button class="btn btn-primary" style="padding:3px 10px;font-size:12px" onclick="saFeedToChat(${idx})">💬 带 prompt 发起对话</button>`:''}
+        ${f.kind==='approval'?`<button class="btn" onclick="switchPage('sa-goals')">🎯 去审批</button>`:''}
+        <button class="btn" onclick="saFeedRead(${idx})">标记已读</button>
+      </div>`;
+    box.appendChild(el);
+  });
+}
+function saFeedFilter(el,k){document.querySelectorAll('.sa-chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');saRenderFeed(k)}
+function saFeedRead(idx){saFeedData[idx]._read=true;saRenderFeedCurrent();saToast('已读')}
+function saRenderFeedCurrent(){const a=document.querySelector('.sa-chip.active');saRenderFeed(a?a.textContent==='全部'?'all':'all':'all')}
+function saFeedToChat(idx){switchPage('sa-chat');document.getElementById('saChatText').value=saFeedData[idx].prompt||saFeedData[idx].title;saFeedData[idx]._read=true;document.getElementById('saChatText').focus()}
+function saFeedRefresh(){
+  saFeedData.unshift({kind:'ai_batch',title:'🤖（新）定金膨胀紫色方案关键词建议',body:'LLM 基于 KB #5 生成：紫色+金色组合关键词密度 = 3.2%（行业均值 1.8%），建议主标题×副标题×按钮三处出现。',time:'刚刚',ctx:'AI 批次',prompt:'写关键词密度控制的文案分配方案'});
+  document.getElementById('saFeedBadge').textContent=parseInt(document.getElementById('saFeedBadge').textContent||'0')+1;
+  saRenderFeedCurrent();saToast('SSE 推送：quiet 模式仅顶栏通知');
+}
+function saFeedMarkAll(){saFeedData.forEach(f=>f._read=true);saRenderFeedCurrent();document.getElementById('saFeedBadge').textContent=0}
+
+// ============================================================
+// ===== SuperAgent Ideas 点子 =====
+// ============================================================
+const saIdeaData=[
+ {emo:'🎨',pitch:'紫色+金色渐变主视觉：定金膨胀视觉语言',detail:'竞品 A/B 定金膨胀均用紫+金渐变，转化率比常规橙红高约 15%。',kind:'chat',prompt:'写紫色+金色渐变主视觉设计方案，含色彩值、布局、动效',src:'AI·KB #5+#8'},
+ {emo:'📊',pitch:'双版本 A/B 测试替代单一定稿',detail:'高预算活动中，A/B 测试比单一定稿 ROI 高 22%。',kind:'goal',prompt:'',src:'AI·竞品提炼'},
+ {emo:'⏰',pitch:'预售预热期 daily 09:00 check-in',detail:'历史 Goal 数据：每日 check-in 让执行延误率降 40%。',kind:'routine',prompt:'',src:'STARTER'},
+ {emo:'📝',pitch:'定价锚点前置：划线原价 ≥2× 膨胀后价',detail:'锚定效应：划线原价至少是膨胀后到手价 2 倍以上。',kind:'chat',prompt:'生成定价锚点表格（原价→膨胀→到手价）',src:'AI·刚生成',pinned:true},
+ {emo:'🧪',pitch:'主视觉首屏必须 <1.5s 加载',detail:'Playwright 性能监控：超 1.5s 转化率降 8%。WebP + 懒加载 + 预连接。',kind:'chat',prompt:'双十一页面性能检查清单',src:'手动·团队共享'},
+];
+function saRenderIdeas(){
+  const g=document.getElementById('saIdeasGrid');g.innerHTML='';
+  saIdeaData.forEach((d,i)=>{
+    g.insertAdjacentHTML('beforeend',`<div class="sa-ocard ${d.pinned?'pinned':''}" onclick="saOpenSheet(${i})">
+      <div class="emo">${d.emo}</div><div class="pitch">${d.pitch}</div>
+      <div class="detail">${d.detail}</div>
+      <div class="meta"><span class="sa-kindtag ${d.kind}">${{chat:'转对话',goal:'转目标',routine:'转提醒'}[d.kind]}</span>
+      <span class="sa-kindtag starter">${d.src}</span></div></div>`);
+  });
+}
+let saCurIdea=0;
+function saOpenSheet(i){saCurIdea=i;const d=saIdeaData[i];
+  document.getElementById('saSheetTitle').textContent=d.emo+' '+d.pitch;
+  document.getElementById('saSheetDetail').textContent=d.detail;
+  document.getElementById('saSheetPrompt').textContent='prompt：'+(d.prompt||(d.kind==='goal'?'L3 确认后创建多步 Goal':d.kind==='routine'?'将建 daily 09:00 check-in':'直接应用'));
+  document.getElementById('saSheetMask').classList.add('show');}
+function saCloseSheet(){document.getElementById('saSheetMask').classList.remove('show')}
+function saIdeaApply(a){
+  saCloseSheet();
+  if(a==='chat'){switchPage('sa-chat');document.getElementById('saChatText').value=saIdeaData[saCurIdea].prompt||saIdeaData[saCurIdea].pitch;document.getElementById('saChatText').focus();saToast('点子→Chat 预填 prompt')}
+  else if(a==='goal'){switchPage('sa-goals');saToast('点子→Goal：多步拆解（L3 确认）')}
+  else if(a==='routine')saToast('点子→Routine：daily 09:00 check-in')
+  else if(a==='pin'){saIdeaData[saCurIdea].pinned=!saIdeaData[saCurIdea].pinned;saRenderIdeas();saToast('📌 pinned='+saIdeaData[saCurIdea].pinned)}
+}
+function saIdeasRefresh(){
+  saIdeaData.unshift({emo:'🎯',pitch:'（新）定金膨胀 × 分期免息双促组合',detail:'Agent 从 KB #5 提炼：双促组合比单一促销 ROI 高 28%，注意价格锚点一致性。',kind:'chat',prompt:'双促组合完整方案：主视觉+定价+分期+风控',src:'AI·LLM'});
+  saRenderIdeas();saToast('POST /idea/refresh → JSON 卡片 → 去重落库');
+}
+function saIdeaAdd(){saIdeaData.unshift({emo:'✍️',pitch:'（手动）预算分配 设计40%+投放60%',detail:'手动经验：双十一预算 4:6 设计/投放分配。',kind:'chat',prompt:'',src:'手动'});saRenderIdeas();saToast('POST /idea/create · source=manual')}
+
+// ============================================================
+// ===== SuperAgent Goals 目标 =====
+// ============================================================
+const saGoalData=[
+ {title:'双十一促销转化率提升 20%',ctx:'workspace=ws_emarketing_01',status:'active',progress:45,cron:'daily 09:00',next:'明日 09:00',due:'2026-11-11',source:'idea 转化',version:3,
+  steps:[{t:'竞品 A/B 主视觉分析',s:'done'},{t:'定金膨胀+满减双方案定稿',s:'done'},{t:'紫色+金色主视觉设计',s:'in_progress'},{t:'定价锚点表格生成',s:'pending'},{t:'性能优化 <1.5s',s:'pending'},{t:'A/B 测试数据收集',s:'pending'}],
+  notes:[{k:'agent',c:'KB #5 历史案例：紫色主视觉比橙色高 15% 转化率'},{k:'progress',c:'主视觉紫色版本 v1 已出 · 下午设计师 review'},{k:'system',c:'check-in daily 09:00'}],
+  proposals:[{txt:'建议新增 step"主视觉动画 2s 渐变加载"',reason:'竞品 A 主视觉 2s 渐变动画 → 停留时间 +20%',st:'pending'}]},
+ {title:'客服消息批量自动回复',ctx:'workspace=ws_emarketing_01',status:'active',progress:60,cron:'daily 08:00',next:'明日 08:00',due:'2026-11-15',source:'chat L3 已确认',version:1,
+  steps:[{t:'常见问题 TOP20 分类',s:'done'},{t:'Jev 分类阈值调优至 0.65',s:'done'},{t:'自动回复文案模板',s:'in_progress'},{t:'HITL 抽检机制',s:'pending'}],
+  notes:[{k:'agent',c:'Jev 分类准确率 94.2% · LLM fallback 3.8%'}],proposals:[]},
+ {title:'SKU 上架清单批量生成',ctx:'workspace=ws_emarketing_01',status:'paused',progress:25,cron:'—',next:'暂停中',due:'2026-11-10',source:'手动',version:0,
+  steps:[{t:'SKU 分类整理',s:'done'},{t:'产品描述标准化',s:'blocked'},{t:'主图规格化',s:'pending'}],
+  notes:[{k:'system',c:'step blocked：等运营部标准模板'}],proposals:[]},
+];
+const saStepTag={done:'done',pending:'pending',in_progress:'in_progress',blocked:'blocked',skipped:'skipped'};
+function saRenderGoals(){
+  const g=document.getElementById('saGoalList');g.innerHTML='';
+  saGoalData.forEach((d,i)=>{
+    g.insertAdjacentHTML('beforeend',`<div class="sa-gcard" onclick="saOpenGoal(${i})">
+      <div style="display:flex;align-items:center;gap:6px"><span class="gtitle">${d.title}</span><div style="flex:1"></div><span class="sa-st ${d.status}">${d.status}</span></div>
+      <div class="gctx">🔗 ${d.ctx} · source=${d.source} · version=${d.version||0}</div>
+      <div class="sa-prog"><i style="width:${d.progress}%"></i></div>
+      <div class="gfoot"><span>${d.progress}% · ${d.steps.filter(s=>s.s==='done').length}/${d.steps.length}</span><span>⏰ ${d.next}</span></div>
+      ${d.proposals.filter(p=>p.st==='pending').length?`<div class="gfoot" style="color:var(--mauve)">📋 ${d.proposals.filter(p=>p.st==='pending').length} L4 提案待审</div>`:''}
+    </div>`);
+  });
+}
+let saCurGoal=0;
+function saOpenGoal(i){saCurGoal=i;const d=saGoalData[i];
+  document.getElementById('saDrawerTitle').textContent=d.title;
+  let h=`<div style="display:flex;align-items:center;gap:8px"><span class="sa-st ${d.status}">${d.status}</span><span style="font-size:11px;color:var(--text-3)">version=${d.version||0} · ${d.source} · due ${d.due}</span></div>
+   <div class="sa-prog" style="margin:12px 0 4px"><i style="width:${d.progress}%"></i></div>
+   <div style="font-size:11px;color:var(--text-3);margin-bottom:12px">进度 ${d.progress}% · check-in ${d.cron} · next ${d.next}</div>
+   <div style="margin:10px 0;display:flex;gap:8px">
+     <button class="btn" onclick="saSetStatus('paused')">⏸ 暂停</button>
+     <button class="btn" onclick="saSetStatus('active')">▶ 恢复</button>
+     <button class="btn" onclick="saSetStatus('cancelled')">✕ 取消（L3）</button>
+     <button class="btn" style="margin-left:auto" onclick="switchPage('sa-chat');document.getElementById('saChatText').value='帮我看这个 Goal 的执行建议'">💬 Agent 对话</button></div>
+   <div class="sa-h5">步骤（勾选=L2 直执+审计 · 全 done/skipped 自动完案）</div>`;
+  d.steps.forEach((s,j)=>{
+    const settled=s.s==='done'||s.s==='skipped';
+    h+=`<div class="sa-step ${s.s}"><input type="checkbox" ${s.s==='done'?'checked':''} ${settled?'disabled':''} onchange="saToggleStep(${j},this)">
+      <div style="flex:1"><div class="s-t">${j+1}. ${s.t}</div></div><span class="s-tag">${saStepTag[s.s]}</span>
+      <button class="btn" style="padding:2px 8px;font-size:11px" ${settled?'disabled':''} onclick="saSkipStep(${j})">跳过</button></div>`;
+  });
+  const pend=d.proposals.filter(p=>p.st==='pending');
+  h+=`<div class="sa-h5">L4 计划修订提案（Agent 只 propose · 永不背用户改写）</div>`;
+  if(!pend.length)h+='<div style="font-size:12px;color:var(--text-3)">暂无待审提案</div>';
+  d.proposals.forEach((p,j)=>{
+    h+=`<div class="sa-proposal" id="pp${j}"><div class="ph">${p.st==='pending'?'🟣':p.st==='accepted'?'✅':'🚫'} ${p.txt}</div>
+    <div class="pr">${p.reason} · base_version=${d.version} · status=${p.st}</div>
+    ${p.st==='pending'?`<div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-primary" style="padding:3px 10px;font-size:12px" onclick="saAcceptProp(${j})">accept</button><button class="btn" onclick="saDismissProp(${j})">dismiss</button></div>`:''}
+    <div style="font-size:10px;color:var(--text-3);margin-top:6px" id="ppAudit${j}"></div></div>`;
+  });
+  h+='<div class="sa-h5">进展时间线</div>';
+  d.notes.forEach(n=>{h+=`<div class="sa-note ${n.k}">[${n.k}] ${n.c}</div>`});
+  h+=`<button class="btn" style="margin-top:8px" onclick="saAddNote()">＋ 记一笔进展（L1）</button>`;
+  document.getElementById('saDrawerBody').innerHTML=h;
+  document.getElementById('saDrawer').classList.add('show');document.getElementById('saDrawerMask').classList.add('show');
+}
+function saCloseDrawer(){document.getElementById('saDrawer').classList.remove('show');document.getElementById('saDrawerMask').classList.remove('show')}
+function saRefreshProgress(d){
+  const done=d.steps.filter(s=>s.s==='done'||s.s==='skipped').length;
+  d.progress=Math.round(done*100/d.steps.length);
+  if(done===d.steps.length&&d.status==='active'){d.status='done';d.notes.unshift({k:'system',c:'全部 step 终结 → 自动完案 · 关联 Ticket 推进建议已产生（L3 待确认）'});saToast('自动完案：status→done');}
+}
+function saToggleStep(j,cb){const d=saGoalData[saCurGoal];d.steps[j].s=cb.checked?'done':'pending';if(cb.checked)d.steps[j].done_at='刚刚';saRefreshProgress(d);saRenderGoals();saOpenGoal(saCurGoal);saToast('POST /goal/step/update · L2 直执+审计')}
+function saSkipStep(j){const d=saGoalData[saCurGoal];d.steps[j].s='skipped';saRefreshProgress(d);saRenderGoals();saOpenGoal(saCurGoal)}
+function saAcceptProp(j){const d=saGoalData[saCurGoal];const p=d.proposals[j];p.st='accepted';
+  d.steps.push({t:p.txt.replace(/建议新增 step.?/,'').replace(/"/g,''),s:'pending'});
+  d.version=(d.version||0)+1;d.notes.unshift({k:'agent',c:'L4 accept → version+1='+d.version});
+  document.getElementById('ppAudit'+j).textContent='审计：base_version 校验通过';
+  saRenderGoals();saOpenGoal(saCurGoal);saToast('L4 accept → 应用变更')}
+function saDismissProp(j){const d=saGoalData[saCurGoal];d.proposals[j].st='dismissed';d.notes.unshift({k:'system',c:'proposal dismissed（Agent 不改写计划）'});saRenderGoals();saOpenGoal(saCurGoal)}
+function saAddNote(){saGoalData[saCurGoal].notes.unshift({k:'progress',c:'手动记录进展 · 原型演示'});saOpenGoal(saCurGoal)}
+function saSetStatus(s){
+  if(s==='cancelled'){saToast('L3 确认弹层（原型简化）');saGoalData[saCurGoal].status='cancelled';saGoalData[saCurGoal].notes.unshift({k:'system',c:'人工取消 → cancelled'})}
+  else saGoalData[saCurGoal].status=s;
+  saRenderGoals();saOpenGoal(saCurGoal);
+}
+
+// ===== Toast =====
+function saToast(s){const t=document.getElementById('saToast');t.textContent=s;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600)}
+
+// ===== Source 管理 · 4 张运行时表 mock 数据 + 渲染 =====
+const saSrcMock={
+  threads:[
+    {id:'github:123',source:'github',title:'PR 修复登录流程双 factor 问题',status:'open'},
+    {id:'github:ci:main',source:'github',title:'main 分支 CI — 5 checks',status:'open'},
+    {id:'github:120',source:'github',title:'Issue — 购物车金额溢出',status:'closed'},
+    {id:'feishu:om_abc123',source:'feishu',title:'研发群 · 登录问题 follow-up',status:'open'},
+  ],
+  subscriptions:[
+    {ticket:'T-0012',thread:'github:123',kind:'following'},
+    {ticket:'T-0012',thread:'github:ci:main',kind:'context_only'},
+    {ticket:'T-0013',thread:'feishu:om_abc123',kind:'following'},
+  ],
+  mandates:[
+    {ticket:'T-0012',policy_version:'hash-a1b2c3',strength:'explicit',scope:'修复 PR #123 的登录双 factor 流程'},
+    {ticket:'T-0013',policy_version:'hash-a1b2c3',strength:'inferred',scope:'跟进 Feishu 群里提到的登录问题 follow-up'},
+  ],
+  assignments:[
+    {ticket:'T-0012',status:'running',executor:'worker-T-0012',report:'progress · 正在跑 Playwright e2e'},
+    {ticket:'T-0013',status:'pending',executor:'—',report:'—'},
+    {ticket:'T-0011',status:'ended',executor:'worker-T-0011',report:'ready · PR #120 已提交 + 代码审查通过'},
+  ],
+};
+function saRenderSourceTables(){
+  const T=(id,rows,cols)=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=rows.map(r=>`<tr>${cols.map((c,i)=>`<td style="padding:4px 8px;border-bottom:1px solid var(--border);${i===cols.length-1?'':''}">${c(r)}</td>`).join('')}</tr>`).join('');
+  };
+  T('srcThreadTable',saSrcMock.threads,[
+    r=>`<code>${r.id}</code>`,r=>r.source,r=>r.title,r=>{const c=r.status==='open'?'var(--green)':'var(--text-3)';return `<span style="color:${c}">● ${r.status}</span>`;}
+  ]);
+  T('srcSubTable',saSrcMock.subscriptions,[
+    r=>r.ticket,r=>`<code>${r.thread}</code>`,r=>`<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:${r.kind==='following'?'var(--accent)':'var(--surface-3)'};color:${r.kind==='following'?'#fff':'var(--text-2)'}">${r.kind}</span>`
+  ]);
+  T('srcMandateTable',saSrcMock.mandates,[
+    r=>r.ticket,r=>`<code style="font-size:10px">${r.policy_version}</code>`,r=>r.strength,r=>r.scope
+  ]);
+  T('srcAssignTable',saSrcMock.assignments,[
+    r=>r.ticket,
+    r=>`<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:${r.status==='running'?'var(--accent)':r.status==='pending'?'var(--peach)':'var(--green)'};color:#fff">${r.status}</span>`,
+    r=>r.executor,r=>`<span style="color:var(--text-2)">${r.report}</span>`
+  ]);
+}
+function saSrcHealthCheck(){
+  try {
+    const h = fetch('/api/v1/super-agent/health').then(r=>r.json());
+    h.then(d=>saToast(`✅ Engine: ${d.status} · version=${d.version}\nParts: ${d.parts.join(', ')}`));
+  } catch(e) { saToast(`❌ Engine offline: ${e.message}`); }
+}
+
+// ===== 页面初始化 =====
+document.addEventListener('DOMContentLoaded',()=>{
+  saRenderFeed('all');saRenderIdeas();saRenderGoals();saRenderSourceTables();
+
+  // SSE 事件流订阅（后端启动后生效，前端不报错）
+  try {
+    const es = new EventSource('/api/v1/super-agent/events?workspace_id=1');
+    es.addEventListener('ticket_created', e => {
+      const d = JSON.parse(e.data);
+      saToast(`🎯 Ticket created: ${d.title||d.id}`);
+    });
+    es.addEventListener('ticket_completed', e => {
+      const d = JSON.parse(e.data);
+      saToast(`✅ Ticket completed: ${d.id}`);
+    });
+    es.onerror = () => { /* 后端未启动时静默 */ };
+  } catch(_) {}
+});
+</script>
+</body></html>

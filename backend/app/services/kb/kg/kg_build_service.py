@@ -40,6 +40,7 @@ from app.models.kb.kg_triple import KgTriple
 from app.models.kb.kg_triple_mention import KgTripleMention
 from app.models.kb.kb_document import KbDocument
 from app.models.kb.kb_segment import KbSegment
+from app.services.kb.kg import kg_failure
 
 GRAPH_STEP = "graph_extract"
 
@@ -71,6 +72,57 @@ def reset_locks() -> None:
     """仅测试用：清空全部锁。"""
     with _LOCK_GUARD:
         _KB_LOCKS.clear()
+
+
+# ── 分布式互斥（PG advisory lock，会话级）────────────────────────────────
+# 进程内锁在多 uvicorn worker / 多实例部署下互斥失效 → 同库并发构建、
+# LLM 重复付费。真正的互斥交给数据库：advisory lock 绑定在**连接**上，
+# 持锁连接由后台任务持有到构建结束，会话断开自动释放（进程崩溃不残留）。
+# 键用两段 int 形式 (namespace, kb_id)：namespace 固定，避免与库内其他
+# advisory lock 用途撞车。
+_ADVISORY_NS = 1_802_217_321  # "kgui" 四字节的 ASCII 整数值
+
+
+def try_acquire_advisory(db: Session, kb_id: int) -> bool:
+    """尝试获取知识库级 advisory 锁；失败或非 PG 后端返回 False/True 语义如下：
+
+    * PG 且锁空闲 → True（调用方必须用**同一 session** 调 :func:`release_advisory`）；
+    * PG 且被占 → False（调用方返回 409）；
+    * 非 PG 后端（单测 SQLite）→ True，降级为仅进程内锁互斥。
+    """
+    from sqlalchemy import text
+
+    try:
+        if (db.get_bind().dialect.name or "") != "postgresql":
+            return True
+        return bool(
+            db.execute(
+                text("SELECT pg_try_advisory_lock(:ns, :kb)"),
+                {"ns": _ADVISORY_NS, "kb": kb_id},
+            ).scalar()
+        )
+    except Exception as exc:  # noqa: BLE001 - 锁探测失败不阻断构建（降级进程内锁）
+        logger.opt(exception=True).warning(
+            f"[kg] advisory lock 探测失败，降级为进程内锁 kb={kb_id}: {exc}"
+        )
+        return True
+
+
+def release_advisory(db: Session, kb_id: int) -> None:
+    """释放 advisory 锁（必须与获取时同一 session/连接；失败仅记日志）。"""
+    from sqlalchemy import text
+
+    try:
+        if (db.get_bind().dialect.name or "") != "postgresql":
+            return
+        db.execute(
+            text("SELECT pg_advisory_unlock(:ns, :kb)"),
+            {"ns": _ADVISORY_NS, "kb": kb_id},
+        )
+    except Exception:  # noqa: BLE001 - 连接已断时锁随之自动释放
+        logger.opt(exception=True).warning(
+            f"[kg] advisory lock 释放失败（连接可能已断开，锁将随之自动释放）kb={kb_id}"
+        )
 
 
 @dataclass
@@ -143,6 +195,8 @@ class KgBuildService:
         self._extractor = extractor
         # LLM 通道是否被降级到规则抽取（由 _build_llm 置位，供阶段 1 判定用）
         self._llm_degraded = False
+        # 降级原因原文（写进单切片详情，让失败清单直接说出「模型不可用」）
+        self._llm_degraded_reason = ""
 
     # ── 服务与配置 ──────────────────────────────────────────────────────
     def _svc(self):
@@ -209,11 +263,51 @@ class KgBuildService:
         if llm is None:
             self._llm_degraded = True
             msg = f"LLM 抽取通道不可用，本次降级为规则抽取: {note}"
+            # 降级原因同时留给单切片留痕用：只写「规则抽取零产出」会把真正可修
+            # 的「对话模型不可用」藏到报告里，切片清单上看不出该改哪里。
+            self._llm_degraded_reason = msg
             logger.warning(f"[kg] kb={self.knowledge_id} {msg}")
             report.errors.append(msg)
             return None
         logger.info(f"[kg] kb={self.knowledge_id} LLM 抽取通道: {llm.model_desc}")
         return llm
+
+    # ── 失败留痕（阶段 + 错误码 + 技术原文）───────────────────────────────
+    def _record_failure(
+        self,
+        seg: KbSegment,
+        *,
+        stage: str,
+        code: str,
+        error: str,
+        details: Optional[dict] = None,
+    ) -> None:
+        """把「哪一阶段、什么原因」写进切片抽取详情（JSONB，不新增列）。
+
+        两套键名按阶段分开：结构失败的切片也会走向量阶段，若共用 ``error``，
+        「LLM 输出被截断」会在界面上被显示成「嵌入模型调不通」——两者的修法完全不同。
+
+        * 结构：``stage`` / ``error`` / ``error_code``
+        * 向量：``vector_stage`` / ``vector_error`` / ``vector_error_code``
+
+        ``error`` 存技术原文（悬浮与排障用），``error_code`` 存稳定码
+        （前端 :mod:`kgFailureReason` 按码取 i18n 文案）。
+        """
+        merged = dict(seg.graph_extraction_details or {})
+        merged.update(details or {})
+        if stage == kg_failure.STAGE_VECTOR:
+            merged.update({
+                "vector_stage": kg_failure.STAGE_VECTOR,
+                "vector_error": error,
+                "vector_error_code": code,
+            })
+        else:
+            merged.update({
+                "stage": kg_failure.STAGE_STRUCTURE,
+                "error": error,
+                "error_code": code,
+            })
+        seg.graph_extraction_details = merged
 
     def _extract_concurrently(self, segments, extract, hint, llm, cfg: dict) -> list:
         """只并发**抽取**（纯外部调用），返回 ``[(seg, result|None, exc|None, ms)]``。
@@ -235,6 +329,13 @@ class KgBuildService:
             try:
                 return seg, extract(text, **kwargs), None, _ms(started)
             except Exception as exc:  # noqa: BLE001 - 单切片失败不中断整批
+                # 堆栈只在报错当场打（事后拿到的 exc 对象虽带 traceback，
+                # 但并发线程里再记会失去当时的上下文）。片段正文只记长度，
+                # 不写全文，避免文档正文大面积进日志。
+                logger.exception(
+                    f"[kg] kb={self.knowledge_id} segment={seg.id} 抽取异常"
+                    f"（text_len={len(text or '')}, elapsed={_ms(started)}ms）: {exc}"
+                )
                 return seg, None, exc, _ms(started)
 
         workers = max(1, int(cfg.get("concurrency_count") or 1))
@@ -261,13 +362,20 @@ class KgBuildService:
         ):
             if exc is not None:
                 seg.graph_structure_indexed = False
-                seg.graph_extraction_details = {
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "elapsed_ms": elapsed_ms,
-                }
+                self._record_failure(
+                    seg,
+                    stage=kg_failure.STAGE_STRUCTURE,
+                    code=kg_failure.classify(exc, stage=kg_failure.STAGE_STRUCTURE),
+                    error=kg_failure.format_error(exc),
+                    details={"elapsed_ms": elapsed_ms},
+                )
                 self.db.commit()
                 report.structure_failed += 1
                 report.errors.append(f"segment={seg.id} 抽取失败: {exc}")
+                logger.error(
+                    f"[kg] kb={self.knowledge_id} 结构抽取失败 segment={seg.id}"
+                    f"（耗时 {elapsed_ms}ms）: {type(exc).__name__}: {exc}"
+                )
                 continue
             if (result.errors or self._llm_degraded) and not (
                 result.entities or result.relations
@@ -277,14 +385,30 @@ class KgBuildService:
                 # 否则切片会停在「已抽取但空」的真状态里永不重试——前端看起来
                 # 像成功，这正是本轮最难发现的那类静默降级；配好模型后能续跑。
                 seg.graph_structure_indexed = False
-                seg.graph_extraction_details = result.as_details(elapsed_ms)
-                self.db.commit()
-                report.structure_failed += 1
+                base = result.as_details(elapsed_ms)
                 reason = (
                     result.errors[0] if result.errors
-                    else "规则抽取零产出（LLM 通道已降级）"
+                    else (self._llm_degraded_reason
+                          or "规则抽取零产出（LLM 通道已降级）")
                 )
+                # 码优先用抽取器当场定的（``ExtractionResult.codes``），
+                # 降级零产出这条没有异常可分类，故按消息判定。
+                self._record_failure(
+                    seg,
+                    stage=kg_failure.STAGE_STRUCTURE,
+                    code=base.get("error_code") or kg_failure.classify_message(
+                        reason, stage=kg_failure.STAGE_STRUCTURE
+                    ),
+                    error=reason,
+                    details=base,
+                )
+                self.db.commit()
+                report.structure_failed += 1
                 report.errors.append(f"segment={seg.id} 抽取失败: {reason}")
+                logger.error(
+                    f"[kg] kb={self.knowledge_id} 结构抽取失败（零产出）"
+                    f" segment={seg.id}（耗时 {elapsed_ms}ms）: {reason}"
+                )
                 continue
 
             entity_ids: dict[str, int] = {}
@@ -300,14 +424,46 @@ class KgBuildService:
                         source_document_ids=[seg.document_id] if seg.document_id else [],
                     )
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        f"[kg] kb={self.knowledge_id} 实体落库失败"
+                        f" segment={seg.id} name={ent.get('name')!r}: {exc}"
+                    )
                     report.errors.append(f"实体落库失败 {ent.get('name')}: {exc}")
                     continue
                 entity_ids[ent["normalized"]] = row.id
                 self._add_mention(KgEntityMention, "kg_entity_id", row.id, seg)
 
+            # 端点解析：本片段实体 → 库内既有实体 → 丢弃。
+            # 抽取器不再做悬空边判定（实体清单可能被输出预算裁剪，而实体本身
+            # 或已在库内——前一片段/其他文档创建过），跨片段关系在这里补回：
+            # 命中库内实体时给本片段补写提及与 Chunk→Entity 投影，PPR 才能从
+            # 当前片段检索到这条边。两处都解析不到才丢弃（悬空边仍不入库）。
+            unresolved = 0
+
+            def _resolve_endpoint(raw_name: str) -> Optional[int]:
+                nonlocal unresolved
+                key = _norm(raw_name)
+                if key in entity_ids:
+                    return entity_ids[key]
+                candidates = {(raw_name or "").strip(), key} - {""}
+                row = self.db.execute(
+                    select(KgEntity).where(
+                        KgEntity.knowledge_id == self.knowledge_id,
+                        KgEntity.name.in_(candidates),
+                        *([KgEntity.tenant_id == self.tenant_id]
+                          if self.tenant_id is not None else []),
+                    ).order_by(KgEntity.id)
+                ).scalars().first()
+                if row is None:
+                    unresolved += 1
+                    return None
+                entity_ids[key] = row.id
+                self._add_mention(KgEntityMention, "kg_entity_id", row.id, seg)
+                return row.id
+
             for rel in result.relations:
-                src = entity_ids.get(_norm(rel["source"]))
-                tgt = entity_ids.get(_norm(rel["target"]))
+                src = _resolve_endpoint(rel["source"])
+                tgt = _resolve_endpoint(rel["target"])
                 if src is None or tgt is None:
                     continue
                 try:
@@ -321,12 +477,22 @@ class KgBuildService:
                         source_document_ids=[seg.document_id] if seg.document_id else [],
                     )
                 except Exception as exc:  # noqa: BLE001
+                    logger.exception(
+                        f"[kg] kb={self.knowledge_id} 关系落库失败"
+                        f" segment={seg.id} rel={rel}: {exc}"
+                    )
                     report.errors.append(f"关系落库失败 {rel}: {exc}")
                     continue
                 self._add_mention(
                     KgTripleMention, "kg_triple_id", triple.id, seg,
                     # 提及带上原文依据：评审时可就地核对，不必回到切片重找
                     evidence=({"text": rel["text"]} if rel.get("text") else None),
+                )
+
+            if unresolved:
+                logger.warning(
+                    f"[kg] kb={self.knowledge_id} segment={seg.id} "
+                    f"{unresolved} 条关系端点在片段内与库内均解析不到，已丢弃"
                 )
 
             # Chunk → Entity 的图投影（检索 PPR 需要 Chunk 节点）
@@ -343,6 +509,20 @@ class KgBuildService:
 
             seg.graph_structure_indexed = True
             seg.graph_extraction_details = result.as_details(elapsed_ms)
+            if result.truncation:
+                # 只告警、不改标志位、不进失败清单：残缺结果已入库且可用，但
+                # 「逐段都在裁剪」就是预算不够的信号（该调大 max_output_tokens
+                # 或缩短切片）。正文本身不写进日志，只写长度与数值。
+                t = result.truncation
+                logger.warning(
+                    f"[kg] kb={self.knowledge_id} 抽取输出被裁剪后已补齐 segment={seg.id}"
+                    f"（保住 entity={t.get('kept_entities')}"
+                    f" relation={t.get('kept_relations')}"
+                    f" 丢弃字符={t.get('dropped_chars')}"
+                    f" output_tokens={t.get('output_tokens')}"
+                    f" budget={t.get('budget')}"
+                    f" thinking_chars={t.get('thinking_chars')}）"
+                )
             self.db.commit()
             report.structure_done += 1
             report.entities += len(result.entities)
@@ -372,7 +552,11 @@ class KgBuildService:
             self.db.add(row)
             self.db.flush()
         except Exception as exc:  # noqa: BLE001 - 提及失败不影响事实本身
-            logger.debug(f"[kg] 提及写入跳过 {model.__name__}={fk_value}: {exc}")
+            # 级别保持 debug（噪声大且不影响结果），但补堆栈：Neo4j 投影与 JSONB
+            # 类型不兼容在这条分支里会被静吞，只留 str(exc) 时事后看不出色因。
+            logger.opt(exception=True).debug(
+                f"[kg] 提及写入跳过 {model.__name__}={fk_value}: {exc}"
+            )
             self.db.rollback()
 
     # ── 阶段 2：向量索引 ─────────────────────────────────────────────────
@@ -435,9 +619,20 @@ class KgBuildService:
             except Exception as exc:  # noqa: BLE001 - 向量失败不回滚结构阶段
                 self.db.rollback()
                 seg.graph_indexed = False
+                # 向量阶段以前从不写 details，前端只能看到一句「向量阶段失败」，
+                # 看不出是嵌入模型调不通还是写库时维度对不上。
+                self._record_failure(
+                    seg,
+                    stage=kg_failure.STAGE_VECTOR,
+                    code=kg_failure.classify(exc, stage=kg_failure.STAGE_VECTOR),
+                    error=kg_failure.format_error(exc),
+                )
                 self.db.commit()
                 report.vector_failed += 1
                 report.errors.append(f"segment={seg.id} 向量化失败: {exc}")
+                logger.exception(
+                    f"[kg] kb={self.knowledge_id} 向量化失败 segment={seg.id}: {exc}"
+                )
 
     # ── 动作分发 ────────────────────────────────────────────────────────
     def run(
@@ -506,7 +701,9 @@ class KgBuildService:
                 },
             )
         except Exception as exc:  # noqa: BLE001 - 元信息落库失败不应对构建报错
-            logger.warning(f"[kg] 构建元信息写入失败 kb={self.knowledge_id}: {exc}")
+            logger.opt(exception=True).warning(
+                f"[kg] 构建元信息写入失败 kb={self.knowledge_id}: {exc}"
+            )
 
     def _mark_document_error(self, document_uuid: Optional[str], report: BuildReport):
         if not document_uuid:
@@ -646,21 +843,36 @@ def submit_build(
 
     任务函数**自建并关闭 Session**（``job_runner`` 硬约束）。
     同一知识库已有任务在执行则返回 ``accepted=False``（调用方给 409）。
+
+    两层互斥：进程内锁做快速路径（省一次 DB 往返，测试也依赖它注入冲突），
+    PG advisory lock 做真正的分布式互斥（多 worker / 多实例部署）。
+    advisory 锁的持锁连接由后台任务持有到构建结束——会话断开自动释放，
+    进程崩溃不残留，无需人工清锁。
     """
     if not try_acquire(knowledge_id):
         return {"accepted": False, "reason": "该知识库已有图谱任务在执行"}
 
-    def _task() -> None:
-        from app.db.database import SessionLocal
+    from app.db.database import SessionLocal
 
+    # advisory 锁必须在**提交线程**先行获取：拿不到直接 409 回给前端，
+    # 而不是让任务启动后再静默退出（用户会看到「已提交」却毫无进展）。
+    lock_db = SessionLocal()
+    if not try_acquire_advisory(lock_db, knowledge_id):
+        lock_db.close()
+        release(knowledge_id)
+        return {"accepted": False, "reason": "该知识库已有图谱任务在执行（其他实例）"}
+
+    def _task() -> None:
         db = SessionLocal()
         try:
             KgBuildService(db, tenant_id, knowledge_id).run(
                 action, document_uuid
             )
         except Exception as exc:  # noqa: BLE001 - 后台任务失败只记日志
-            logger.warning(f"[kg] 图谱构建失败 kb={knowledge_id}: {exc}")
+            logger.exception(f"[kg] 图谱构建失败 kb={knowledge_id}: {exc}")
         finally:
+            release_advisory(lock_db, knowledge_id)
+            lock_db.close()
             release(knowledge_id)
             db.close()
 

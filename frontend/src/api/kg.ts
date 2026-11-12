@@ -189,6 +189,12 @@ export interface KgFailedSegment {
   structure_indexed: boolean | null
   vector_indexed: boolean | null
   details: Record<string, unknown> | null
+  /** 失败阶段：structure | vector（旧数据可能为空，由 resolveKgFailure 回退到标志位） */
+  stage?: string | null
+  /** 稳定错误码（与后端 kg_failure.ALL_CODES 对齐），前端按码取 i18n 文案 */
+  error_code?: string | null
+  /** 后端原始技术串，只作悬浮/排障展示 */
+  error?: string | null
 }
 
 export interface KgGraphConfig {

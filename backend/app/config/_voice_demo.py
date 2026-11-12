@@ -1,6 +1,6 @@
 """语音能力 Demo 配置（VOICE_DEMO_*）— 独立于 duplex 语音线 VoiceSettings。
 
-默认值即「Mock 本地可跑」；真实服务为同主机 s2s（2026-11-10 实测 REST+WS 全功能）。
+直连真实服务：同主机 s2s（127.0.0.1:8765，2026-11-10 实测 REST+WS 全功能）。
 详见 docs/superpowers/specs/2026-11-10-voice-demo-design.md §3.5。
 """
 from pydantic import BaseModel
@@ -11,9 +11,6 @@ class VoiceDemoSettings(BaseModel):
 
     VOICE_DEMO_ENABLED: bool = True
     """模块总开关；False 时路由不注册。"""
-
-    VOICE_DEMO_MOCK: bool = True
-    """Mock 总开关（spec D5：默认开启，本地零真实服务依赖可跑）。"""
 
     VOICE_DEMO_BASE_URL: str = "http://127.0.0.1:8765"
     """REST 上游（探测 /v1/pool + ASR/TTS 转发；2026-11-10 实测可用）。"""

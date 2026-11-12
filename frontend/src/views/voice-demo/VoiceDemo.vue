@@ -1,14 +1,14 @@
 <template>
-  <div class="voice-demo">
+  <div class="voice-demo app-page">
     <a-card>
       <div class="vd-head">
         <div>
           <h2>语音能力演示</h2>
-          <div class="vd-desc">后端 FastAPI 代理 / WS 桥接 · speech-to-speech（VAD→STT→LLM→TTS）· Mock 本地可跑</div>
+          <div class="vd-desc">后端 FastAPI 代理 / WS 桥接 · speech-to-speech（VAD→STT→LLM→TTS）· 直连真实服务</div>
         </div>
         <div class="vd-pills">
-          <a-tag :color="health?.mock ? 'warning' : 'success'">
-            {{ health?.mock ? 'Mock 开启' : '真实服务' }}
+          <a-tag :color="health?.pool ? 'success' : 'error'">
+            {{ health?.pool ? '上游已连接' : '上游未连接' }}
           </a-tag>
           <a-tag>BASE: {{ health?.base_url || '—' }}</a-tag>
           <a-tooltip title="切换深色/浅色主题（useAppStore）">
@@ -42,7 +42,9 @@ onMounted(async () => { try { health.value = await getVoiceDemoHealth() } catch 
 </script>
 
 <style scoped>
-.voice-demo { max-width: 1080px; margin: 0 auto; }
+/* 铺满主布局右栏（.app-page：height 100% + overflow auto 超长滚动）；卡片纵向撑满 */
+.voice-demo { max-width: none; margin: 0; }
+.voice-demo :deep(.ant-card) { flex: 1 1 auto; min-height: 0; }
 .vd-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .vd-desc { color: var(--fg-secondary); font-size: 13px; }
 .vd-pills { display: flex; gap: 8px; align-items: center; }

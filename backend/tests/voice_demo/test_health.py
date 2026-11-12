@@ -38,9 +38,7 @@ def test_health_shape():
     resp = make_client().get("/api/v1/voice-demo/health")
     assert resp.status_code == 200
     body = resp.json()
-    # VOICE_DEMO_MOCK 默认 true（spec D5：Mock 默认开启）
-    assert body["mock"] is True
     assert body["base_url"].startswith("http://127.0.0.1:8765")
     assert body["realtime_ws_url"] == "ws://127.0.0.1:8765/v1/realtime"
-    # Mock 模式下不做真实 pool 探测 → None；真实模式下为 dict 或探测失败 None
+    # 真实模式探测 /v1/pool：上游在线为 dict，不可达降级 None
     assert body["pool"] is None or isinstance(body["pool"], dict)

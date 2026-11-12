@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title> 会议与语音能力 Demo 原型</title>
+<style>
+  :root{
+    --primary:#1677ff; --primary-0:#e6f0ff; --primary-2:#f4f9ff;
+    --success:#52c41a; --warn:#faad14; --danger:#ff4d4f;
+    --text:#1f2329; --text-2:#5c6470; --text-3:#8a919c;
+    --border:#e5e8ef; --bg:#f5f7fa; --card:#ffffff;
+    --radius:10px; --shadow:0 2px 12px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+  header.app{display:flex;align-items:center;gap:12px;padding:14px 22px;background:#fff;border-bottom:1px solid var(--border)}
+  header.app .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#1677ff,#7aa8ff);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+  header.app h1{font-size:16px;margin:0;font-weight:600}
+  header.app .tag{margin-left:auto;font-size:12px;color:#fff;background:var(--warn);padding:3px 10px;border-radius:20px}
+  .layout{display:flex;min-height:calc(100vh - 60px)}
+  nav.side{width:220px;background:#fff;border-right:1px solid var(--border);padding:14px 10px;flex-shrink:0}
+  nav.side .grp{font-size:12px;color:var(--text-3);padding:8px 12px 4px}
+  nav.side a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:var(--text-2);cursor:pointer;text-decoration:none;margin-bottom:2px}
+  nav.side a:hover{background:var(--primary-2)}
+  nav.side a.active{background:var(--primary-0);color:var(--primary);font-weight:600}
+  nav.side a .ico{width:18px;text-align:center}
+  main{flex:1;padding:22px;overflow:auto}
+  .view{display:none}.view.active{display:block}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:18px}
+  .card h2{margin:0 0 4px;font-size:16px}
+  .card .sub{color:var(--text-3);font-size:13px;margin-bottom:14px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:#fff;color:var(--text);
+    padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px;transition:.15s}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn.primary:hover{opacity:.9;color:#fff}
+  .btn.danger{background:#fff;border-color:var(--danger);color:var(--danger)}
+  .btn.sm{padding:4px 10px;font-size:12px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  select,input[type=text],textarea{border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fff;color:var(--text)}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--primary)}
+  textarea{width:100%;resize:vertical;min-height:88px}
+  label.f{display:block;font-size:12px;color:var(--text-2);margin-bottom:6px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 9px;border-radius:20px;background:var(--primary-0);color:var(--primary)}
+  .pill.ok{background:#ecf9ec;color:var(--success)}
+  .pill.warn{background:#fff7e6;color:#c88a00}
+  .pill.danger{background:#fff1f0;color:var(--danger)}
+  .pill.gray{background:#f0f2f5;color:var(--text-2)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border)}
+  th{color:var(--text-3);font-weight:500;background:#fafbfc}
+  .muted{color:var(--text-3)}
+  .note{background:var(--primary-2);border:1px solid #d6e6ff;border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--text-2);margin-top:12px}
+  .note b{color:var(--primary)}
+  /* meeting */
+  .grid-tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tile{position:relative;aspect-ratio:16/10;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;background:#2a3340}
+  .tile .avatar{width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:22px}
+  .tile .name{position:absolute;left:8px;bottom:8px;font-size:12px;background:rgba(0,0,0,.45);padding:2px 8px;border-radius:6px}
+  .tile .micoff{position:absolute;right:8px;top:8px;font-size:14px;background:rgba(0,0,0,.45);padding:2px 6px;border-radius:6px}
+  .tile.speaking{box-shadow:0 0 0 3px var(--success) inset}
+  .tile.local{background:linear-gradient(135deg,#3a4a5f,#232d3a)}
+  .ctrlbar{display:flex;gap:10px;justify-content:center;padding:14px;background:#fafbfc;border:1px solid var(--border);border-radius:10px;margin-top:14px}
+  .ctrl{width:46px;height:46px;border-radius:50%;border:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px}
+  .ctrl.on{background:var(--primary-0);border-color:var(--primary);color:var(--primary)}
+  .ctrl.off{background:#fff1f0;border-color:#ffccc7;color:var(--danger)}
+  .ctrl.leave{background:var(--danger);border-color:var(--danger);color:#fff}
+  .meet-body{display:flex;gap:16px}
+  .meet-body .left{flex:1.6;min-width:0}
+  .meet-body .right{flex:1;min-width:280px;display:flex;flex-direction:column}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:10px}
+  .tabs .t{padding:8px 14px;cursor:pointer;font-size:13px;color:var(--text-2);border-bottom:2px solid transparent}
+  .tabs .t.active{color:var(--primary);border-color:var(--primary);font-weight:600}
+  .caption{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .cap{display:flex;gap:8px;animation:fade .4s}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  .cap .who{flex-shrink:0;width:52px;font-size:12px;color:var(--primary);font-weight:600}
+  .cap .txt{font-size:13px}
+  .cap .ts{font-size:11px;color:var(--text-3)}
+  .plist{display:flex;flex-direction:column;gap:8px}
+  .pitem{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px}
+  .pitem .pa{width:34px;height:34px;border-radius:50%;background:var(--primary-0);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:600}
+  /* drawer */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:40}
+  .mask.show{display:block}
+  .drawer{position:fixed;top:0;right:-560px;width:540px;max-width:94vw;height:100%;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.12);transition:right .28s;z-index:50;display:flex;flex-direction:column}
+  .drawer.show{right:0}
+  .drawer .dh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .drawer .db{padding:18px 20px;overflow:auto;flex:1}
+  .drawer .df{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+  .field{margin-bottom:14px}
+  .field .k{font-size:12px;color:var(--text-2);margin-bottom:4px}
+  .field .v{border:1px solid transparent;border-radius:6px;padding:6px}
+  .field .v[contenteditable]:hover{background:#fafbfc}
+  .field .v[contenteditable]:focus{outline:none;border-color:var(--primary);background:#fff}
+  /* asr waveform */
+  .wave{display:flex;align-items:flex-end;gap:2px;height:44px;padding:6px 8px;background:#f7f9fc;border:1px solid var(--border);border-radius:8px}
+  .wave .b{flex:1;background:linear-gradient(var(--primary),#9dc0ff);border-radius:2px;opacity:.35}
+  .wave .b.speaking{opacity:1}
+  .loader{display:inline-block;width:14px;height:14px;border:2px solid #cfe0ff;border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .seg-table{max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+  .empty{color:var(--text-3);text-align:center;padding:26px;font-size:13px}
+  .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:99;opacity:0;transition:.3s;pointer-events:none}
+  .toast.show{opacity:.92}
+  audio{width:100%;margin-top:10px}
+  .footmap{font-size:12px;color:var(--text-3);margin-top:8px}
+  .footmap code{background:#f0f2f5;padding:1px 5px;border-radius:4px;color:var(--text-2)}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="logo">M</div>
+  <h1>Demo平台 · 会议与语音能力 Demo 原型</h1>
+  <span class="tag">纯前端模拟 · 真实将接 LiveKit + 137 语音服务</span>
+</header>
+<div class="layout">
+  <nav class="side">
+    <div class="grp">演示线</div>
+    <a data-view="meeting" class="active"><span class="ico">🎥</span> 视频会议</a>
+    <a data-view="voice"><span class="ico">🎙️</span> 语音能力演示</a>
+    <div class="grp">说明</div>
+    <div style="font-size:12px;color:var(--text-3);padding:6px 12px;line-height:1.7">
+      本页面把设计文档的结构可视化：§3.5 会议页、§12.1 ASR、§12.2 TTS、§12.4 客户端 VAD 分段、§13 单菜单双 Tab。所有数据为演示假数据。
+    </div>
+  </nav>
+  <main>
+    <!-- ============ 视频会议 ============ -->
+    <section class="view active" id="view-meeting">
+      <!-- list -->
+      <div id="meet-list">
+        <div class="card">
+          <h2>会议列表</h2>
+          <div class="sub">对应 §3.5 MeetingList.vue：快速建房（绑定Case）→ 入会</div>
+          <div class="row" style="margin-bottom:14px">
+            <button class="btn primary" onclick="createRoom()">＋ 新建Demo会议</button>
+            <span class="muted">演示：一个会议固定绑定一个 caseId</span>
+          </div>
+          <table>
+            <thead><tr><th>会议标题</th><th>关联Case</th><th>主持人</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="roomRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- room -->
+      <div id="meet-room" style="display:none">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;margin-bottom:14px">
+            <div><h2 id="roomTitle" style="margin:0">Demo会议</h2>
+              <div class="muted" id="roomMeta">roomId · Case #—</div></div>
+            <div class="row"><span class="pill ok">● 已连接 LiveKit（模拟）</span><span class="pill gray" id="connState">信令 7880 / 媒体 7881</span></div>
+          </div>
+          <div class="meet-body">
+            <div class="left">
+              <div class="grid-tiles" id="videoGrid"></div>
+              <div class="ctrlbar">
+                <div class="ctrl on" id="btnMic" title="静音/取消" onclick="toggleMic()">🎤</div>
+                <div class="ctrl on" id="btnCam" title="开/关摄像头" onclick="toggleCam()">📷</div>
+                <div class="ctrl" title="共享屏幕（迭代1）" onclick="toast('共享屏幕为迭代 1（§6），本期不做')">🖥️</div>
+                <div class="ctrl leave" title="结束会议" onclick="endMeeting()">📞</div>
+              </div>
+            </div>
+            <div class="right">
+              <div class="tabs">
+                <div class="t active" data-rt="cap" onclick="switchRT(this)">实时字幕</div>
+                <div class="t" data-rt="plist" onclick="switchRT(this)">成员</div>
+              </div>
+              <div class="caption" id="captionPanel"></div>
+              <div class="plist" id="plistPanel" style="display:none"></div>
+            </div>
+          </div>
+          <div class="note">媒体面（WebRTC）浏览器直连 livekit-server，不经 Java；字幕来自 worker 服务端逐轨转写，经 <b>SSE</b> 下推（§3.1 / §3.4）。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 语音能力演示（单菜单双 Tab）============ -->
+    <section class="view" id="view-voice">
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div><h2 style="margin:0">语音能力演示</h2>
+            <div class="sub" style="margin:2px 0 0">§13.1 单菜单 + 页内 ASR / TTS 双 Tab（拆两子菜单本期不推荐）· 直连 192.168.1.137:8765，零会议依赖</div></div>
+          <span class="pill warn">依赖仅 137，关掉 LiveKit/worker 仍可用</span>
+        </div>
+        <div class="tabs" style="margin-top:16px">
+          <div class="t active" data-vt="asr" onclick="switchVT(this)">语音转写 ASR</div>
+          <div class="t" data-vt="tts" onclick="switchVT(this)">语音合成 TTS</div>
+        </div>
+
+        <!-- ASR -->
+        <div id="panel-asr">
+          <div class="row" style="align-items:flex-end;margin-bottom:12px">
+            <div style="flex:1;min-width:240px">
+              <label class="f">音频来源</label>
+              <div class="row">
+                <button class="btn sm" id="asrModeUp" onclick="setAsrMode('upload')" style="border-color:var(--primary);color:var(--primary)">上传文件</button>
+                <button class="btn sm" id="asrModeRec" onclick="setAsrMode('record')">浏览器录音</button>
+              </div>
+            </div>
+            <div id="asrUploadBox">
+              <label class="f">选择音频（wav/pcm/ogg，格式约束见 §9 Q11）</label>
+              <input type="file" id="asrFile" accept="audio/*" />
+            </div>
+            <div id="asrRecBox" style="display:none">
+              <label class="f">麦克风录音（配合 §12.4 客户端 Silero VAD 分段）</label>
+              <div class="row">
+                <button class="btn sm" id="recBtn" onclick="toggleRec()">● 开始录音</button>
+                <span class="muted" id="recHint">未录音</span>
+              </div>
+            </div>
+            <div>
+              <label class="f">语言</label>
+              <select id="asrLang"><option value="auto">auto</option><option value="zh">中文 zh</option><option value="en">English</option></select>
+            </div>
+            <button class="btn primary" id="asrBtn" onclick="runAsr()">转写</button>
+          </div>
+          <div class="wave" id="asrWave"></div>
+          <div id="asrResult" style="margin-top:14px"><div class="empty">尚未转写。点「转写」用演示样例音频模拟。</div></div>
+          <div class="note">实测（§9 Q8/Q9）：137 REST <b>仅返回 {"text","language"}</b>，无服务端分段/时间戳/说话人。<br/>
+            下表的<b>时间戳分段来自客户端 Silero VAD 切段</b>后逐段送转写拼接（§12.4），非 137 返回；说话人演示场景不涉及。</div>
+        </div>
+
+        <!-- TTS -->
+        <div id="panel-tts" style="display:none">
+          <div class="field">
+            <label class="f">待合成文本（限长提示：过长前端截断，§12.2）</label>
+            <textarea id="ttsText">今天天气不错，我们开始会议记录测试。</textarea>
+          </div>
+          <div class="row" style="align-items:flex-end;margin-bottom:12px">
+            <div style="min-width:220px">
+              <label class="f">音色 voice（§9 Q10 定案：9 个内置 + 自定义）</label>
+              <select id="ttsVoice" onchange="onVoice(this.value)"></select>
+            </div>
+            <div id="ttsCustomBox" style="display:none;min-width:180px">
+              <label class="f">自定义音色名</label>
+              <input type="text" id="ttsCustom" placeholder="填写服务支持的自定义 speaker" />
+            </div>
+            <div>
+              <label class="f">语速 speed <span class="pill danger" style="font-size:10px">实测未生效</span></label>
+              <input type="range" id="ttsSpeed" min="0.5" max="2" step="0.1" value="1" />
+              <span class="muted" id="ttsSpeedVal">1.0×</span>
+            </div>
+            <div>
+              <label class="f">格式 <span class="pill warn" style="font-size:10px">实测恒输出 WAV</span></label>
+              <select id="ttsFmt"><option>wav</option><option>pcm</option><option>mp3</option></select>
+            </div>
+            <button class="btn primary" id="ttsBtn" onclick="runTts()">合成并播放</button>
+          </div>
+          <div id="ttsResult"><div class="empty">尚未合成。</div></div>
+          <div class="note">真实链路：Java 代理 <code>POST /v1/audio/speech</code> → 137 返回 <b>24kHz mono PCM WAV</b> 字节 → 前端 blob 播放/下载（§12.2 / §2.1 回环实测）。<br/>
+            本原型用浏览器语音合成近似演示“能出声”，音色/格式差异以真实 137 为准。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- minutes drawer -->
+<div class="mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dh"><h2 style="margin:0;font-size:15px">会议纪要</h2>
+    <span class="pill warn" id="minStatus">DRAFT 草稿</span>
+    <span class="muted" style="margin-left:auto">§3.4 关键数据流 · M7 硬边界</span></div>
+  <div class="db" id="minBody"></div>
+  <div class="df">
+    <span class="muted" style="margin-right:auto">AI 只产草稿，DRAFT 不写业务字段</span>
+    <button class="btn" onclick="regenMinutes()">重新生成草稿</button>
+    <button class="btn primary" id="confirmBtn" onclick="confirmMinutes()">确认并回写Case</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 通用 ---------- */
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+function switchView(v){document.querySelectorAll('nav.side a[data-view]').forEach(a=>a.classList.toggle('active',a.dataset.view===v));
+  document.getElementById('view-meeting').classList.toggle('active',v==='meeting');
+  document.getElementById('view-voice').classList.toggle('active',v==='voice');}
+document.querySelectorAll('nav.side a[data-view]').forEach(a=>a.onclick=()=>switchView(a.dataset.view));
+
+/* ---------- 会议：列表 ---------- */
+const rooms=[
+  {id:'MR-20261104-01',title:'房屋租赁纠纷Demo',caseNo:'CASE-88021',host:'张Demo员',status:'进行中'},
+  {id:'MR-20261104-02',title:'邻里噪音矛盾Demo',caseNo:'CASE-88035',host:'李Demo员',status:'待开始'},
+];
+function renderRooms(){document.getElementById('roomRows').innerHTML=rooms.map((r,i)=>`<tr>
+  <td>${r.title}</td><td class="muted">${r.caseNo}</td><td>${r.host}</td>
+  <td><span class="pill ${r.status==='进行中'?'ok':'gray'}">${r.status}</span></td>
+  <td><button class="btn sm primary" onclick="joinRoom(${i})">入会</button></td></tr>`).join('');}
+renderRooms();
+function createRoom(){rooms.unshift({id:'MR-NEW',title:'新建Demo会议',caseNo:'CASE-'+(88000+Math.floor(Math.random()*99)),host:'当前用户',status:'待开始'});renderRooms();toast('已建房（模拟 POST /ai/meeting/room/create，落 ai_meeting_room）');}
+
+/* ---------- 会议：房间 ---------- */
+const participants=[
+  {name:'我（本地）',role:'主持人',local:true,mic:true,cam:true},
+  {name:'当事人·王',role:'参会者',mic:true,cam:true},
+  {name:'当事人·赵',role:'参会者',mic:false,cam:true},
+  {name:'记录员',role:'参会者',mic:true,cam:false},
+];
+let curRoom=null;
+function joinRoom(i){curRoom=rooms[i];
+  document.getElementById('meet-list').style.display='none';
+  document.getElementById('meet-room').style.display='block';
+  document.getElementById('roomTitle').textContent=curRoom.title;
+  document.getElementById('roomMeta').textContent=`roomId ${curRoom.id} · Case ${curRoom.caseNo}`;
+  renderGrid();renderPlist();startCaptions();toast('已签发入会 token 并连接房间（模拟 /ai/meeting/token）');}
+function renderGrid(){document.getElementById('videoGrid').innerHTML=participants.map((p,idx)=>`
+  <div class="tile ${p.local?'local':''}" id="tile${idx}">
+    <div class="avatar">${p.name.slice(0,1)}</div>
+    <div class="name">${p.name}${p.role==='主持人'?' · 主持':''}</div>
+    ${p.mic?'':'<div class="micoff">🔇</div>'}
+  </div>`).join('');}
+function renderPlist(){document.getElementById('plistPanel').innerHTML=participants.map(p=>`
+  <div class="pitem"><div class="pa">${p.name.slice(0,1)}</div>
+    <div style="flex:1"><div>${p.name}</div><div class="muted" style="font-size:12px">${p.role}</div></div>
+    <span>${p.mic?'🎤':'🔇'}</span><span>${p.cam?'📷':'🚫'}</span></div>`).join('');}
+function toggleMic(){const p=participants[0];p.mic=!p.mic;
+  document.getElementById('btnMic').className='ctrl '+(p.mic?'on':'off');renderGrid();}
+function toggleCam(){const p=participants[0];p.cam=!p.cam;
+  document.getElementById('btnCam').className='ctrl '+(p.cam?'on':'off');renderGrid();}
+function switchRT(el){document.querySelectorAll('.tabs .t').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+  const cap=el.dataset.rt==='cap';document.getElementById('captionPanel').style.display=cap?'flex':'none';document.getElementById('plistPanel').style.display=cap?'none':'flex';}
+
+/* 实时字幕滚动（模拟 worker 逐轨转写 SSE 下推） */
+const mockCaps=[
+  {w:'主持',t:'我们开始今天的Demo，先请王先生说明诉求。',sp:1},
+  {w:'王',t:'对方拖欠三个月房租，我希望尽快拿回欠款。',sp:2},
+  {w:'赵',t:'我这边确实有困难，最近资金周转不开。',sp:3},
+  {w:'主持',t:'那是否可以分期，一个月内先补一个月租金？',sp:4},
+  {w:'赵',t:'可以接受，先付一个月，剩余分两期。',sp:5},
+  {w:'王',t:'如果他按期，我同意这个方案。',sp:6},
+];
+let capTimer=null;
+function startCaptions(){document.getElementById('captionPanel').innerHTML='';let i=0;
+  clearInterval(capTimer);capTimer=setInterval(()=>{if(i>=mockCaps.length){clearInterval(capTimer);return;}
+    const c=mockCaps[i++];const ts=fmt(3000*i+Math.floor(Math.random()*400));
+    const div=document.createElement('div');div.className='cap';
+    div.innerHTML=`<div class="who">${c.w}</div><div><div class="txt">${c.t}</div><div class="ts">${ts}</div></div>`;
+    const panel=document.getElementById('captionPanel');panel.appendChild(div);panel.scrollTop=panel.scrollHeight;
+    const tile=document.getElementById('tile'+c.sp);if(tile){tile.classList.add('speaking');setTimeout(()=>tile.classList.remove('speaking'),1500);}
+  },1800);}
+function fmt(ms){const s=Math.floor(ms/1000);return `00:${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}.${String(ms%1000).padStart(3,'0')}`;}
+
+/* ---------- 纪要抽屉（草稿→确认）---------- */
+function endMeeting(){clearInterval(capTimer);openDrawer();document.getElementById('connState').textContent='已结束';}
+function openDrawer(){document.getElementById('mask').classList.add('show');document.getElementById('drawer').classList.add('show');renderMinutes('DRAFT');}
+function closeDrawer(){document.getElementById('mask').classList.remove('show');document.getElementById('drawer').classList.remove('show');}
+let minutesState='DRAFT';
+function renderMinutes(state){minutesState=state;
+  const st=document.getElementById('minStatus');
+  if(state==='CONFIRMED'){st.className='pill ok';st.textContent='CONFIRMED 已确认';}
+  else{st.className='pill warn';st.textContent='DRAFT 草稿';}
+  const edit=state==='DRAFT';
+  const fields=[
+    ['纠纷类型','房屋租赁合同纠纷（租金拖欠）','classify 引擎产出'],
+    ['当事人','申请人 王先生；被申请人 赵先生','要素提取'],
+    ['争议焦点','拖欠三个月房租，是否分期补付','callModelForStructuredJson'],
+    ['Demo结果','赵先付 1 个月，剩余分 2 期；王同意','promptCode=Demo_MEETING_MINUTES'],
+    ['待办','签约后 3 日内首期到账，Demo员跟进','派单建议（非自动派发）'],
+  ];
+  document.getElementById('minBody').innerHTML=
+    `<div class="note" style="margin:0 0 14px">LLM 读全文转录生成，<b>status=DRAFT 不触碰业务字段</b>。确认后经 SuperagentCheckpointManager 状态机回写 addDemoRecord 并留痕（§3.4 / M7）。</div>`+
+    fields.map(f=>`<div class="field"><div class="k">${f[0]} <span class="muted" style="font-size:11px">· ${f[2]}</span></div>
+      <div class="v" ${edit?'contenteditable="true"':''}>${f[1]}</div></div>`).join('')+
+    `<div class="footmap">段落可锚回转录时间戳：点击任一结果项查看原文（此处省略）。来源 <code>MEETING</code>，关联 <code>${curRoom?curRoom.id:'—'}</code></div>`;
+  document.getElementById('confirmBtn').disabled=(state==='CONFIRMED');
+  document.getElementById('confirmBtn').textContent=state==='CONFIRMED'?'已回写':'确认并回写Case';}
+function regenMinutes(){if(minutesState==='CONFIRMED'){toast('已确认，不可再生成');return;}renderMinutes('DRAFT');toast('已重新生成草稿（模拟）');}
+function confirmMinutes(){if(minutesState!=='DRAFT')return;
+  renderMinutes('CONFIRMED');toast('已回写Demo记录 + ai_agent_operation_log 留痕（模拟 addDemoRecord）');}
+
+/* ---------- 语音：Tab ---------- */
+function switchVT(el){document.querySelectorAll('#view-voice .tabs .t').forEach(t=>t.classList.remove('active'));el.classList.add('active');
+  const asr=el.dataset.vt==='asr';document.getElementById('panel-asr').style.display=asr?'block':'none';document.getElementById('panel-tts').style.display=asr?'none':'block';}
+
+/* ---------- 语音：ASR ---------- */
+let asrMode='upload';
+function setAsrMode(m){asrMode=m;
+  document.getElementById('asrModeUp').style.cssText=m==='upload'?'border-color:var(--primary);color:var(--primary)':'';
+  document.getElementById('asrModeRec').style.cssText=m==='record'?'border-color:var(--primary);color:var(--primary)':'';
+  document.getElementById('asrUploadBox').style.display=m==='upload'?'block':'none';
+  document.getElementById('asrRecBox').style.display=m==='record'?'block':'none';}
+// 波形条
+(function(){const w=document.getElementById('asrWave');w.innerHTML='';for(let i=0;i<56;i++){const b=document.createElement('div');b.className='b';b.style.height=(8+Math.random()*30)+'px';w.appendChild(b);}})();
+function toggleRec(){const btn=document.getElementById('recBtn');const on=btn.textContent.startsWith('●');
+  btn.textContent=on?'■ 停止录音':'● 开始录音';document.getElementById('recHint').textContent=on?'已录音，可点转写':'录音中…（模拟）';
+  document.querySelectorAll('#asrWave .b').forEach(b=>b.classList.toggle('speaking',!on));}
+const asrDemoSegs=[
+  {s:120,e:2680,t:'今天天气不错，'},
+  {s:2900,e:5600,t:'我们开始会议记录测试。'},
+  {s:6000,e:9200,t:'这段用于验证客户端 VAD 的分段效果。'},
+];
+function runAsr(){const btn=document.getElementById('asrBtn');
+  if(asrMode==='upload'&&!document.getElementById('asrFile').files.length){toast('请选择音频文件，或用录音模式（§12.1 空音频→1_040_062_002）');return;}
+  btn.disabled=true;btn.innerHTML='<span class="loader"></span> 转写中';
+  setTimeout(()=>{btn.disabled=false;btn.textContent='转写';renderAsrResult();},1200);}
+function renderAsrResult(){const cost=(300+Math.floor(Math.random()*400));const full=asrDemoSegs.map(s=>s.t).join('');
+  document.getElementById('asrResult').innerHTML=`
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <span class="pill ok">转写完成 · 耗时 ${cost}ms（实测短音频 ~370ms）</span>
+      <span class="muted">language=auto → 识别语言：中文</span></div>
+    <div class="field"><div class="k">整段文本（137 REST 唯一直接返回项 {"text"}）</div><div class="v">${full}</div></div>
+    <div class="k" style="font-size:12px;color:var(--text-2);margin:6px 0">分段表（客户端 Silero VAD 切段逐段送转写拼接，非 137 返回 · §12.4）</div>
+    <div class="seg-table"><table><thead><tr><th>#</th><th>start</th><th>end</th><th>文本</th></tr></thead><tbody>
+      ${asrDemoSegs.map((s,i)=>`<tr><td>${i+1}</td><td>${s.s}ms</td><td>${s.e}ms</td><td>${s.t}</td></tr>`).join('')}
+    </tbody></table></div>`;}
+
+/* ---------- 语音：TTS ---------- */
+const voices=[
+  {g:'中文',list:[['Vivian','明亮·略带锋芒女声'],['Serena','温暖温柔女声'],['Uncle_Fu','低沉稳重男声'],['Dylan','北京男声'],['Eric','成都男声·四川话']]},
+  {g:'英语',list:[['Aiden','阳光美国男声（默认）'],['Ryan','活力男声']]},
+  {g:'日语',list:[['Ono_Anna','活泼女声']]},
+  {g:'韩语',list:[['Sohee','温暖女声']]},
+];
+(function(){const sel=document.getElementById('ttsVoice');let h='';
+  voices.forEach(gr=>{h+=`<optgroup label="${gr.g}">`;gr.list.forEach(v=>{h+=`<option value="${v[0]}"${v[0]==='Aiden'?' selected':''}>${v[0]} · ${v[1]}</option>`;});h+='</optgroup>';});
+  h+='<optgroup label="自定义"><option value="__custom__">＋ 自定义音色…</option></optgroup>';sel.innerHTML=h;})();
+function onVoice(v){document.getElementById('ttsCustomBox').style.display=v==='__custom__'?'block':'none';}
+document.getElementById('ttsSpeed').oninput=function(){document.getElementById('ttsSpeedVal').textContent=Number(this.value).toFixed(1)+'×';};
+function runTts(){const txt=document.getElementById('ttsText').value.trim();
+  if(!txt){toast('文本为空 → 1_040_062_004');return;}
+  const v=document.getElementById('ttsVoice').value==='__custom__'?(document.getElementById('ttsCustom').value||'custom'):document.getElementById('ttsVoice').value;
+  const btn=document.getElementById('ttsBtn');btn.disabled=true;btn.innerHTML='<span class="loader"></span> 合成中';
+  setTimeout(()=>{btn.disabled=false;btn.textContent='合成并播放';
+    document.getElementById('ttsResult').innerHTML=`<div class="pill ok">合成完成 · voice=${v}（真实为 137 输出 24kHz mono WAV）</div>
+      <audio controls autoplay src=""></audio>
+      <div class="row" style="margin-top:10px"><button class="btn sm" onclick="speakBrowser('${txt.replace(/'/g,"\\'")}')">▶ 用浏览器语音试听</button>
+      <a class="btn sm" onclick="toast('真实将下载 Java 透传的 wav blob（本期不落盘 §12.2）');return false" href="#">⬇ 下载 wav</a></div>`;
+    toast('已合成（模拟 POST /ai/voice-demo/tts/synthesize → blob）');
+  },1000);}
+function speakBrowser(t){try{if(!('speechSynthesis'in window)){toast('当前浏览器不支持语音合成，仅演示流程');return;}
+  const u=new SpeechSynthesisUtterance(t);u.lang=/[\u4e00-\u9fa5]/.test(t)?'zh-CN':'en-US';window.speechSynthesis.cancel();window.speechSynthesis.speak(u);}catch(e){toast('播放失败：'+e.message);}}
+
+/* 初始化进入会议列表 */
+switchView('meeting');
+</script>
+</body>
+</html>

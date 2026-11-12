@@ -1,7 +1,6 @@
 """WS 桥接 — 浏览器 ↔ 网关 ↔ s2s /v1/realtime（spec docs/superpowers/specs/2026-11-10-voice-demo-design.md §3.3）。
 
-Mock 模式：MockRealtimeScript 本地扮演上游；真实模式：websockets 双向泵，
-connect 注入一次 session.update，其余纯透传；并发闸对齐 s2s pool size 1。
+websockets 双向泵，connect 注入一次 session.update，其余纯透传；并发闸对齐 s2s pool size 1。
 """
 import asyncio
 import json
@@ -13,7 +12,6 @@ from jose import JWTError, jwt
 from loguru import logger
 
 from app.config import settings
-from app.services.voice_demo.mock import MockRealtimeScript
 
 BRIDGE_SEMAPHORE = asyncio.Semaphore(settings.VOICE_DEMO_MAX_CONCURRENCY)
 
@@ -38,34 +36,6 @@ def build_session_update() -> dict:
             "turn_detection": {"type": "server_vad", "interrupt_response": True},
         },
     }
-
-
-async def run_mock_session(websocket: WebSocket) -> None:
-    """Mock 会话：把 WebSocket 收包适配成 AsyncIterator 交给脚本。"""
-    queue: asyncio.Queue = asyncio.Queue()
-
-    async def reader() -> None:
-        try:
-            while True:
-                queue.put_nowait(json.loads(await websocket.receive_text()))
-        except Exception:
-            queue.put_nowait(None)  # 终止哨兵
-
-    async def client_events():
-        while True:
-            evt = await queue.get()
-            if evt is None:
-                return
-            yield evt
-
-    async def send(evt: dict) -> None:
-        await websocket.send_text(json.dumps(evt, ensure_ascii=False))
-
-    reader_task = asyncio.create_task(reader())
-    try:
-        await MockRealtimeScript().run(send, client_events())
-    finally:
-        reader_task.cancel()
 
 
 async def run_bridge(websocket: WebSocket) -> None:

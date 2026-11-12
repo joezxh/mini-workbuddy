@@ -155,6 +155,9 @@ class AgentFactory:
         Returns:
             AgentScope Agent 实例
         """
+        # 大小写规整：DB agent_config.agent_type 登记为大写（如 SUPERAGENT），
+        # 而 case 标签均为小写 —— 不规整会直接落入 case _ 抛 ValueError
+        session_type = str(session_type or "").strip().lower()
         match session_type:
             case "general":
                 return self._create_general_agent(config)
@@ -166,12 +169,16 @@ class AgentFactory:
                 return self._create_skill_agent(config)
             case "agent":
                 return self._create_expert_agent(config)
+            case "plan":
+                return self._create_plan_agent(config)
             case "react":
                 return self._create_react_agent(config)
             case "team":
                 return self._create_team_agent(config)
             case "sop":
                 return self._create_sop_agent(config)
+            case "superagent":
+                return self._create_superagent_agent(config)
             case "data":
                 # 数据分析模式：复用通用 Agent，SQLBot 能力经 AgentConfig.tools
                 # （tool_key=sqlbot_*）注入；会话收尾由 STRATEGY_TABLE["data"] 记录
@@ -273,7 +280,8 @@ class AgentFactory:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"[RAG] 检索工具收集失败: {exc}")
             rag_tools = []
-        merged_toolkit = Toolkit(tools=[*toolkit.tools, *rag_tools]) if rag_tools else toolkit
+        merged_toolkit = (Toolkit(tools=[*self._iter_toolkit_tools(toolkit), *rag_tools])
+                          if rag_tools else toolkit)
         return {"toolkit": merged_toolkit, "middlewares": [mw]}
 
     def _kb_dimensions(self, collection_name: str) -> int:
@@ -387,17 +395,194 @@ class AgentFactory:
             name=config.get("name", "技能执行"),
         )
 
+    # ── 配置白名单（agentscope 2.x 构造参数，spec B5）──────────────────
+    _REACT_CONFIG_KEYS = (
+        "max_iters", "structured_output_grace_iters", "stop_on_reject",
+        "interruption_message", "interruption_raise_cancelled_error",
+    )
+    _CONTEXT_CONFIG_KEYS = (
+        "trigger_ratio", "reserve_ratio", "context_buffer_ratio",
+        "compression_prompt", "summary_template", "tool_result_limit",
+        "compression_fallback_to_truncation", "compression_tool_enabled",
+        "max_image_num",
+    )
+
+    def _agentscope_react_config(self, config: dict):
+        """react_config → agentscope ReActConfig（白名单过滤，None 跳过）。"""
+        raw = config.get("react_config") or {}
+        kwargs = {k: raw[k] for k in self._REACT_CONFIG_KEYS
+                  if raw.get(k) is not None}
+        if not kwargs:
+            return None
+        from agentscope.agent import ReActConfig
+        try:
+            return ReActConfig(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ReActConfig 构造失败，忽略: {} ({})", kwargs, exc)
+            return None
+
+    def _agentscope_context_config(self, config: dict):
+        """context_config → agentscope ContextConfig（白名单过滤）。"""
+        raw = config.get("context_config") or {}
+        kwargs = {k: raw[k] for k in self._CONTEXT_CONFIG_KEYS
+                  if raw.get(k) is not None}
+        if not kwargs:
+            return None
+        from agentscope.agent import ContextConfig
+        try:
+            return ContextConfig(**kwargs)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ContextConfig 构造失败，忽略: {} ({})", kwargs, exc)
+            return None
+
+    def _agentscope_model_config(self, config: dict):
+        """model_config.max_retries → agentscope ModelConfig（其余键忽略）。"""
+        raw = config.get("model_config") or {}
+        max_retries = raw.get("max_retries")
+        if max_retries is None:
+            return None
+        from agentscope.agent import ModelConfig
+        try:
+            return ModelConfig(max_retries=int(max_retries))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ModelConfig 构造失败，忽略: {}", exc)
+            return None
+
+    @staticmethod
+    def _iter_toolkit_tools(toolkit) -> list:
+        """枚举 Toolkit 全部工具实例（tool_groups[].tools）。"""
+        tools = []
+        for group in getattr(toolkit, "tool_groups", None) or []:
+            tools.extend(getattr(group, "tools", None) or [])
+        return tools
+
+    def _apply_ask_permissions(toolkit, tool_names) -> None:
+        """对命中名单的工具强制 ASK 权限（→ RequireUserConfirmEvent）。
+
+        引擎（permission/_engine.py Step 4）调用 tool.check_permissions；
+        实例属性覆盖为恒 ASK 决策即可拦截。命中失败仅告警不阻断。
+        """
+        wanted = {str(n) for n in (tool_names or [])}
+        if not wanted:
+            return
+        from agentscope.permission import PermissionBehavior, PermissionDecision
+
+        hit = 0
+        for tool in AgentFactory._iter_toolkit_tools(toolkit):
+            name = getattr(tool, "name", None)
+            if name not in wanted:
+                continue
+
+            async def _ask(tool_input, context, _name=name):  # noqa: ANN001
+                return PermissionDecision(
+                    behavior=PermissionBehavior.ASK,
+                    message=f"工具 {_name} 已配置人工确认（HITL）",
+                )
+            tool.check_permissions = _ask
+            hit += 1
+        if hit < len(wanted):
+            logger.warning("HITL 工具名单未全部命中 Toolkit：{}/{}", hit, len(wanted))
+
+    @staticmethod
+    def _restore_tool_permission(tool) -> None:
+        """清除实例级 check_permissions 覆盖（计划审批通过后恢复 TaskUpdate）。"""
+        try:
+            del tool.check_permissions
+        except AttributeError:
+            pass
+
     def _create_expert_agent(self, config: dict):
-        """专家 Agent — 从 agent_config 表读取专家人设"""
+        """专家 Agent — 从 agent_config 表读取专家人设与完整配置。
+
+        装配：模型（model_id/model_config.model_code）+ Toolkit（tools/MCP）
+        + RAG 知识库 + ReActConfig/ContextConfig/ModelConfig（白名单）
+        + HITL（confirm_tools ASK 权限、AskUser 对话式追问）。
+        """
         from agentscope.agent import Agent
+        from agentscope.tool import Toolkit
+
         model, toolkit = self._build_model_and_toolkit(config)
-        return Agent(
+        # model_config.model_code 优先（与 superagent 分支一致），失败回退上面的模型
+        if config.get("model_config") and config["model_config"].get("model_code"):
+            from app.ai.strategy.registry_bridge import build_model_from_db
+            coded = build_model_from_db(self._db, str(config["model_config"]["model_code"]))
+            if coded is not None:
+                model = coded
+
+        hitl_cfg = config.get("hitl_config") or {}
+        if hitl_cfg.get("enabled") and hitl_cfg.get("confirm_tools"):
+            self._apply_ask_permissions(toolkit, hitl_cfg["confirm_tools"])
+        if hitl_cfg.get("enabled") and hitl_cfg.get("allow_ask_user"):
+            from agentscope.tool import AskUser
+            existing = self._iter_toolkit_tools(toolkit)
+            toolkit = Toolkit(tools=[*existing, AskUser()])
+
+        agent = Agent(
             name=config.get("name", "专家"),
             system_prompt=config.get("sys_prompt", "你是一位专业领域助手，在特定领域具有深入的专业知识和经验。"),
             model=model,
             toolkit=toolkit,
+            **({"model_config": mc} if (mc := self._agentscope_model_config(config)) else {}),
+            **({"context_config": cc} if (cc := self._agentscope_context_config(config)) else {}),
+            **({"react_config": rc} if (rc := self._agentscope_react_config(config)) else {}),
             **self._rag_kwargs(config, toolkit),
         )
+        agent._hitl_config = hitl_cfg  # 事件层消费（chat 主循环识别 pause_type）
+        return agent
+
+    def _create_plan_agent(self, config: dict):
+        """计划模式 Agent — AgentScope 原生计划工具链（TaskCreate/Get/List/Update）。
+
+        Plan & Execute：先 TaskCreate 建清单（TaskUpdate 建依赖）→
+        plan_approval 开启时首个 TaskUpdate 触发计划审批暂停 →
+        批准后恢复工具权限并按清单执行（in_progress→completed）→ 汇报。
+        """
+        from agentscope.agent import Agent
+        from agentscope.permission import PermissionBehavior, PermissionDecision
+        from agentscope.tool import TaskCreate, TaskGet, TaskList, TaskUpdate, Toolkit
+
+        _, business_toolkit = self._build_model_and_toolkit(config)
+        plan_tools = [TaskCreate(), TaskGet(), TaskList(), TaskUpdate()]
+        biz_tools = self._iter_toolkit_tools(business_toolkit)
+        toolkit = Toolkit(tools=[*plan_tools, *biz_tools])
+
+        agent = Agent(
+            name=config.get("name", "计划助手"),
+            system_prompt=config.get("sys_prompt") or (
+                "你是计划执行专家（Plan & Execute）。工作流程：\n"
+                "1. 收到任务后，先用 TaskCreate 把工作拆解为有序任务（明确的 subject 与 description），"
+                "再用 TaskUpdate 设置任务间依赖（blocked_by/blocks）；\n"
+                "2. 清单建好后，按依赖顺序逐个执行：开始前将任务置为 in_progress，完成后置为 completed；\n"
+                "3. 若你的 TaskUpdate 调用被用户拒绝，表示计划需要调整——根据反馈修改任务清单后重新开始；\n"
+                "4. 执行中发现遗漏工作时随时 TaskCreate 补充；\n"
+                "5. 全部任务完成后，向用户汇总执行结果。"
+            ),
+            model=self._create_superagent_model(config)
+            if config.get("model_config") else self._build_model_and_toolkit(config)[0],
+            toolkit=toolkit,
+            **({"model_config": mc} if (mc := self._agentscope_model_config(config)) else {}),
+            **({"context_config": cc} if (cc := self._agentscope_context_config(config)) else {}),
+            **({"react_config": rc} if (rc := self._agentscope_react_config(config)) else {}),
+            **self._rag_kwargs(config, toolkit),
+        )
+
+        # 计划审批：TaskUpdate 强制 ASK，首次调用即暂停审批；批准后由主循环恢复
+        hitl_cfg = config.get("hitl_config") or {}
+        agent._hitl_config = hitl_cfg
+        if hitl_cfg.get("plan_approval"):
+            for tool in self._iter_toolkit_tools(toolkit):
+                if getattr(tool, "name", "") == "TaskUpdate":
+                    original = tool.check_permissions
+
+                    async def _plan_ask(tool_input, context):  # noqa: ANN001
+                        return PermissionDecision(
+                            behavior=PermissionBehavior.ASK,
+                            message="计划审批：请确认任务清单后再开始执行",
+                        )
+                    tool.check_permissions = _plan_ask
+                    agent._plan_approval_restore = (tool, original)
+                    break
+        return agent
 
     def _create_react_agent(self, config: dict):
         """ReAct 计划执行 Agent — 使用 ReActOrchestrator 编排 Plan-Execute-Reflect 循环"""
@@ -418,4 +603,102 @@ class AgentFactory:
             team_id=config.get("team_id"),
             model_id=config.get("model_id_db"),
             name=config.get("name", "团队协调者"),
+        )
+
+    def _create_superagent_model(self, config: dict):
+        """SUPERAGENT 模型构建 — model_config（to_agent_kwargs 形状）。
+
+        llm_config 支持 {model_code}（ai_chat_model.code 引用）或
+        {provider, model, base_url, api_key} 内联形状；前者经
+        registry_bridge 按 DB 行构建，失败回退 ENV 兜底模型。
+        """
+        from app.ai.strategy.factory_ext import build_default_model_config, build_model
+
+        model_cfg = dict(config.get("model_config") or {})
+        model_code = model_cfg.pop("model_code", None)
+        if model_code and not model_cfg.get("provider"):
+            from app.ai.strategy.registry_bridge import build_model_from_db
+
+            model = build_model_from_db(self._db, str(model_code))
+            if model is not None:
+                return model
+            logger.warning(f"SUPERAGENT 模型编码 {model_code} 不可用，回退 ENV 兜底")
+        return build_model(model_cfg or build_default_model_config())
+
+    def _superagent_toolkit_to_agentscope(self, sa_toolkit) -> list:
+        """superagent Toolkit 工具桥接为 agentscope FunctionTool 列表。
+
+        MCP 工具经 toolkit.call('server:tool', args) 转发；本地工具（Knowledge/
+        Sandbox/登记 custom/skill）经 LocalTool.call 转发。登记工具统一 ALLOW
+        （登记即授权；superagent 自身 HITL 在 ticket/policy 层控制）。
+        """
+        from agentscope.permission import PermissionBehavior, PermissionDecision
+        from agentscope.tool import FunctionTool
+
+        allow = PermissionDecision(
+            behavior=PermissionBehavior.ALLOW,
+            message="登记工具自动授权（SUPERAGENT）",
+        )
+
+        def _bridge(func, name, description, input_schema):
+            schema = input_schema or {}
+            if not isinstance(schema, dict):
+                schema = {}
+            # agentscope Toolkit 校验要求 object schema 含 properties
+            if schema.get("type") == "object" and "properties" not in schema:
+                schema = {**schema, "properties": {}}
+            return FunctionTool(
+                func=func, name=name, description=description,
+                input_schema=schema or {"type": "object", "properties": {}},
+                permission=allow,
+            )
+
+        tools = []
+        for ref, t in sa_toolkit.tools.items():
+            def _make_mcp_func(_ref=ref, _tk=sa_toolkit):
+                def _mcp_func(**kwargs):
+                    return _tk.call(_ref, kwargs)
+                return _mcp_func
+            tools.append(_bridge(_make_mcp_func(), ref, t.description, t.input_schema))
+        for lt in sa_toolkit.extra_tools.values():
+            def _make_local_func(_lt=lt):
+                def _local_func(**kwargs):
+                    return _lt.call(kwargs)
+                return _local_func
+            tools.append(_bridge(_make_local_func(), lt.name, lt.description, lt.input_schema))
+        return tools
+
+    def _create_superagent_agent(self, config: dict):
+        """SUPERAGENT — 按 agent_config.to_agent_kwargs() 委托 superagent 装配。
+
+        能力唯一来源为登记列（mcp_servers/tools/skills/knowledge_bases）：
+        build_agent_toolkit_sync 装配 superagent Toolkit 后桥接为 agentscope
+        Toolkit，返回物与其它分支一致（agentscope Agent，reply 可真实调用
+        登记的 MCP 工具）。
+        """
+        from agentscope.agent import Agent, ReActConfig
+        from agentscope.tool import Toolkit as AgentScopeToolkit
+
+        from app.ai.superagent.tools.toolkit import build_agent_toolkit_sync
+
+        model = self._create_superagent_model(config)
+        sa_toolkit = build_agent_toolkit_sync(
+            config, db=self._db,
+            workspace_id=config.get("workspace_id") or 0,
+        )
+        as_tools = self._superagent_toolkit_to_agentscope(sa_toolkit)
+
+        construct_kwargs = {}
+        react_cfg = config.get("react_config") or {}
+        if react_cfg.get("max_iters"):
+            construct_kwargs["react_config"] = ReActConfig(
+                max_iters=int(react_cfg["max_iters"]))
+
+        return Agent(
+            name=config.get("name") or config.get("agent_code") or "SUPERAGENT",
+            system_prompt=config.get("system_prompt")
+            or "你是 SuperAgent，按登记的工具与知识能力完成领域任务。",
+            model=model,
+            toolkit=AgentScopeToolkit(tools=as_tools),
+            **construct_kwargs,
         )

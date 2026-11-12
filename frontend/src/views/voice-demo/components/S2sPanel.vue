@@ -17,7 +17,7 @@
             {{ connected ? '■ 结束对话' : '● 开始对话' }}
           </a-button>
           <a-button :disabled="!connected || s2s.state.value !== 'responding'" @click="s2s.interrupt()">打断</a-button>
-          <a-button :disabled="!connected" @click="s2s.micActive.value ? s2s.stopMic() : s2s.startMic().catch(() => message.error('无法访问麦克风'))">
+          <a-button :disabled="!connected" @click="toggleMic">
             {{ s2s.micActive.value ? '🎙 关闭麦克风' : '🎙 开启麦克风' }}
           </a-button>
           <a-tag :color="stateColor">{{ stateLabel }}</a-tag>
@@ -26,7 +26,7 @@
 
         <div ref="chatBox" class="chat">
           <div v-if="!s2s.messages.value.length" class="empty muted">
-            尚无对话。开启「开始对话」后可通过麦克风说话，或在下方输入模拟发言（Mock/真实模式均可）。
+            尚无对话。开启「开始对话」后可通过麦克风说话，或在下方输入模拟发言。
           </div>
           <div v-for="(m, i) in s2s.messages.value" :key="i" class="bubble" :class="m.role">
             <span v-if="m.partial" class="partial-mark">…</span>
@@ -43,6 +43,8 @@
           />
           <a-button type="primary" :disabled="!connected" @click="sendSim">发送</a-button>
         </div>
+        <!-- TTS 回放电平波形（逐块 RMS；播完/打断归零静止） -->
+        <VoiceWaveform v-if="connected" :level="s2s.playbackLevel.value" class="play-wave" />
         <div class="muted status-line">
           状态机：idle → connecting → listening ⇄ responding → closed；服务端 VAD speech_started 于 responding 时自动打断。
         </div>
@@ -67,6 +69,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import VoiceWaveform from '@/components/voice/VoiceWaveform.vue'
 import { useRealtimeS2s } from '../composables/useRealtimeS2s'
 
 const s2s = useRealtimeS2s()
@@ -96,6 +99,19 @@ function sendSim() {
   simText.value = ''
 }
 
+// 开/关麦克风：startMic 为异步且会抛具体错误（未连接 / 非安全上下文 / worklet 加载失败 /
+// 权限拒），统一在此捕获并向用户展示真实原因，避免「点了没反应也无报错」。
+async function toggleMic() {
+  if (s2s.micActive.value) { s2s.stopMic(); return }
+  try {
+    await s2s.startMic()
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e)
+    console.error('[voice-demo] 开启麦克风失败:', e)
+    message.error(msg)
+  }
+}
+
 function fmtAt(at: number): string {
   const d = new Date(at)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
@@ -117,6 +133,7 @@ function fmtAt(at: number): string {
 .partial-mark { color: var(--accent, var(--primary, #4aa3ff)); margin-right: 4px; }
 .interrupted-mark { color: var(--danger, #e6554d); font-size: 12px; margin-left: 6px; }
 .simbox { display: flex; gap: 8px; margin-top: 10px; }
+.play-wave { margin-top: 8px; }
 .status-line { margin-top: 6px; }
 .log-col { display: flex; flex-direction: column; border: 1px solid var(--border, var(--line, #d9d9d9)); border-radius: 8px; overflow: hidden; }
 .log-title { padding: 8px 12px; font-size: 12px; color: var(--fg-secondary, var(--text-2, #5a6b80)); background: var(--bg-subtle, #fafafa); border-bottom: 1px solid var(--border, var(--line, #eee)); }

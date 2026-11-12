@@ -152,14 +152,16 @@ def test_extractor_drops_overlong_label():
     assert out.entities == [] and out.dropped_entities == 1
 
 
-def test_extractor_drops_dangling_relations():
-    """端点实体被丢弃 → 关系一并丢弃（悬空边不入库）。"""
+def test_extractor_keeps_unresolved_endpoint_relations():
+    """端点不在本片段实体清单里的关系**不再在抽取器丢弃**：
+    实体清单可能被输出预算裁剪，而实体或已在库内（跨片段）——
+    解析权在构建层（先本片段 → 再按名查库 → 都不中才丢弃）。"""
     client = FakeClient(
         entities=[{"name": "实体A", "label": "T"}],
         triplets=[{"subject": "实体A", "predicate": "属于", "object": "不存在的实体"}],
     )
     out = kg_extractor.extract("文本", client=client)
-    assert out.relations == [] and out.dropped_relations == 1
+    assert len(out.relations) == 1 and out.dropped_relations == 0
 
 
 def test_extractor_dedups_entities_and_relations():
@@ -250,6 +252,51 @@ def test_build_writes_provenance_mentions(db, kb, doc):
     assert m.segment_id == seg.id and m.document_id == doc.uuid_code
 
 
+def test_cross_segment_relation_resolved_via_existing_entity(db, kb, doc):
+    """跨片段关系补回：片段2因输出截断没列出片段1的实体，
+    构建层按名查库解析端点并建边（旧实现在抽取器就整条丢弃）。"""
+    seg1 = make_segment(db, kb, doc, "片段一：星海科技", index=0)
+    seg2 = make_segment(db, kb, doc, "片段二：订单", index=1)
+
+    def extract(text, *, schema_hint="", tenant_id=None):
+        if "片段一" in text:
+            client = FakeClient(entities=[{"name": "星海科技", "label": "客户"}])
+        else:
+            client = FakeClient(
+                entities=[{"name": "订单中心", "label": "订单"}],
+                triplets=[{"subject": "星海科技", "predicate": "使用",
+                           "object": "订单中心"}],
+            )
+        return kg_extractor.extract(text, client=client, schema_hint=schema_hint,
+                                    tenant_id=tenant_id)
+
+    report = builder(db, kb, extractor=extract, embed_fn=vec_fn()).run("build")
+
+    tris = db.query(KgTriple).filter(KgTriple.knowledge_id == kb.id).all()
+    assert len(tris) == 1, "跨片段端点必须经库内解析补回，不得静默丢弃"
+    assert report.relations == 1
+    # 片段2里给「星海科技」补了提及：PPR 才能从片段2的 Chunk 检索到这条边
+    seg2_mentions = db.query(KgEntityMention).filter(
+        KgEntityMention.segment_id == seg2.id
+    ).all()
+    assert len(seg2_mentions) == 2
+    assert seg1 is not None and seg2 is not None
+
+
+def test_relation_with_unresolvable_endpoints_still_dropped(db, kb, doc):
+    """两端都解析不到（本片段没有、库内也没有）→ 悬空边仍不入库。"""
+    make_segment(db, kb, doc, "悬空片段")
+    client = FakeClient(
+        entities=[{"name": "实体A", "label": "T"}],
+        triplets=[{"subject": "实体A", "predicate": "属于", "object": "查无此物"}],
+    )
+    builder(db, kb, extractor=fake_extractor(client), embed_fn=vec_fn()).run("build")
+
+    assert db.query(KgTriple).filter(KgTriple.knowledge_id == kb.id).count() == 0
+    # 实体本身正常入库，不受悬空边影响
+    assert db.query(KgEntity).filter(KgEntity.knowledge_id == kb.id).count() == 1
+
+
 def test_build_vectors_written(db, kb, doc):
     make_segment(db, kb, doc, "星海科技")
     client = FakeClient(entities=[{"name": "星海科技", "label": "客户"}])
@@ -308,6 +355,45 @@ def test_vector_failure_keeps_structure_phase(db, kb, doc):
     assert seg.graph_indexed is False
     assert report.vector_failed == 1
     assert db.query(KgEntity).filter(KgEntity.knowledge_id == kb.id).count() == 1
+
+
+def test_extraction_failure_records_stage_and_error_code(db, kb, doc):
+    """切片详情里必须落「哪一阶段 + 哪个码 + 原文」，前端才能按码取文案。"""
+    from app.services.kb.kg import kg_failure
+
+    seg = make_segment(db, kb, doc, "会炸的文本")
+
+    def boom(text, *, schema_hint="", tenant_id=None):
+        raise ValueError("模型只返回了思考/工具块，没有正文文本（blocks=['thinking']）")
+
+    report = builder(db, kb, extractor=boom, embed_fn=vec_fn()).run(
+        "build", doc.uuid_code)
+    db.refresh(seg)
+    details = seg.graph_extraction_details
+
+    assert report.structure_failed == 1
+    assert details["stage"] == kg_failure.STAGE_STRUCTURE
+    assert details["error_code"] == kg_failure.MODEL_NO_TEXT
+    assert "没有正文文本" in details["error"], "技术原文继续保留（悬浮/排障用）"
+
+
+def test_vector_failure_records_embedding_code(db, kb, doc):
+    """向量阶段失败另起一组键：不得把结构成功说成「嵌入模型调不通」。"""
+    from app.services.kb.kg import kg_failure
+
+    seg = make_segment(db, kb, doc, "星海科技")
+    client = FakeClient(entities=[{"name": "星海科技", "label": "客户"}])
+    svc = builder(db, kb, extractor=fake_extractor(client),
+                  embed_fn=lambda texts: (_ for _ in ()).throw(
+                      RuntimeError("Failed to establish a new connection")))
+    report = svc.run("build")
+    db.refresh(seg)
+    details = seg.graph_extraction_details
+
+    assert seg.graph_structure_indexed is True and report.vector_failed == 1
+    assert details["vector_stage"] == kg_failure.STAGE_VECTOR
+    assert details["vector_error_code"] == kg_failure.EMBEDDING_UNAVAILABLE
+    assert "stage" not in details, "结构未失败时不得凭空写 structure 失败键"
 
 
 # ── 撤销与重建 ───────────────────────────────────────────────────────────

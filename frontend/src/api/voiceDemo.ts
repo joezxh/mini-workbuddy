@@ -7,7 +7,6 @@ import request from '@/utils/request'
 const BASE = '/api/v1/voice-demo'
 
 export interface VoiceDemoHealth {
-  mock: boolean
   base_url: string
   realtime_ws_url: string
   pool: { size: number; in_use: number; units: string[] } | null
@@ -20,6 +19,11 @@ export function getVoiceDemoHealth() {
 export function transcribeAsr(form: FormData) {
   return request.post<{ text: string; language: string; cost_ms: number }>(
     `${BASE}/asr/transcribe`, form)
+}
+
+/** LLM 文本纠正（后端取 AiChatModel is_default 默认对话模型；仅修同音字/断句/标点） */
+export function correctAsrText(text: string) {
+  return request.post<{ text: string; cost_ms: number }>(`${BASE}/asr/correct`, { text })
 }
 
 export function synthesizeTts(p: { text: string; voice: string }) {

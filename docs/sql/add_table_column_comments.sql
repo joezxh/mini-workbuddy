@@ -296,20 +296,6 @@ COMMENT ON COLUMN public.agent_trace.workspace_config_id IS '关联 Workspace �
 COMMENT ON COLUMN public.agent_trace.component_ids IS '关联组件 ID 集合 {"skill": [...], "tool": [...]}';
 COMMENT ON COLUMN public.agent_trace.tenant_id IS '租户ID（多租户隔离）';
 
-COMMENT ON TABLE public.ai_agent_config IS '表: ai_agent_config';
-COMMENT ON COLUMN public.ai_agent_config.id IS '主键ID';
-COMMENT ON COLUMN public.ai_agent_config.agent_id IS '关联 Agent 配置ID';
-COMMENT ON COLUMN public.ai_agent_config.name IS '名称';
-COMMENT ON COLUMN public.ai_agent_config.type IS 'agentscope（dify/direct 已废弃，见 2026-09-20 spec）';
-COMMENT ON COLUMN public.ai_agent_config.model IS '模型标识';
-COMMENT ON COLUMN public.ai_agent_config.system_prompt IS '系统提示词';
-COMMENT ON COLUMN public.ai_agent_config.tool_bindings IS '绑定的工具名列表';
-COMMENT ON COLUMN public.ai_agent_config.mcp_bindings IS '绑定的 MCP 服务列表';
-COMMENT ON COLUMN public.ai_agent_config.max_react_iters IS 'ReAct 最大迭代次数';
-COMMENT ON COLUMN public.ai_agent_config.enable_plan IS '是否启用计划模式';
-COMMENT ON COLUMN public.ai_agent_config.created_at IS '创建时间';
-COMMENT ON COLUMN public.ai_agent_config.updated_at IS '更新时间';
-
 COMMENT ON TABLE public.ai_api_key IS 'AI API 密钥表';
 COMMENT ON COLUMN public.ai_api_key.id IS '主键ID';
 COMMENT ON COLUMN public.ai_api_key.name IS '密钥名称';
@@ -676,18 +662,6 @@ COMMENT ON COLUMN public.ai_workspace.created_at IS '创建时间';
 COMMENT ON COLUMN public.ai_workspace.updated_at IS '更新时间';
 COMMENT ON COLUMN public.ai_workspace.is_deleted IS '是否删除';
 COMMENT ON COLUMN public.ai_workspace.tenant_id IS '租户ID（多租户隔离）';
-
-COMMENT ON TABLE public.duplex_voice_config IS '表: duplex_voice_config';
-COMMENT ON COLUMN public.duplex_voice_config.id IS '主键ID';
-COMMENT ON COLUMN public.duplex_voice_config.role_id IS '角色标识（如 mediator / party_a）';
-COMMENT ON COLUMN public.duplex_voice_config.role_name IS '角色展示名';
-COMMENT ON COLUMN public.duplex_voice_config.greeting IS '开场白';
-COMMENT ON COLUMN public.duplex_voice_config.voice_identity IS '音色标识';
-COMMENT ON COLUMN public.duplex_voice_config.language IS '语音语言';
-COMMENT ON COLUMN public.duplex_voice_config.agent_id IS '绑定的 Agent';
-COMMENT ON COLUMN public.duplex_voice_config.case_type IS '适用案件类型（空表示通用）';
-COMMENT ON COLUMN public.duplex_voice_config.created_at IS '创建时间';
-COMMENT ON COLUMN public.duplex_voice_config.updated_at IS '更新时间';
 
 COMMENT ON TABLE public.duplex_voice_session IS '表: duplex_voice_session';
 COMMENT ON COLUMN public.duplex_voice_session.id IS '主键ID';
@@ -1474,16 +1448,6 @@ COMMENT ON COLUMN public.sys_user_role.user_id IS '用户ID';
 COMMENT ON COLUMN public.sys_user_role.role_id IS '角色ID';
 COMMENT ON COLUMN public.sys_user_role.created_at IS '创建时间';
 COMMENT ON COLUMN public.sys_user_role.tenant_id IS '租户ID（多租户隔离）';
-
-COMMENT ON TABLE public.tool_policy IS '表: tool_policy';
-COMMENT ON COLUMN public.tool_policy.id IS '主键ID';
-COMMENT ON COLUMN public.tool_policy.tool_name IS '工具名称';
-COMMENT ON COLUMN public.tool_policy.enabled IS '是否启用';
-COMMENT ON COLUMN public.tool_policy.timeout_ms IS '超时（毫秒）';
-COMMENT ON COLUMN public.tool_policy.max_calls_per_turn IS '每轮最大调用次数';
-COMMENT ON COLUMN public.tool_policy.max_result_bytes IS '结果最大字节数';
-COMMENT ON COLUMN public.tool_policy.created_at IS '创建时间';
-COMMENT ON COLUMN public.tool_policy.updated_at IS '更新时间';
 
 COMMENT ON TABLE public.workflow_chain IS '工作流链式编排定义';
 COMMENT ON COLUMN public.workflow_chain.id IS '主键ID';

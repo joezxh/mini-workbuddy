@@ -1,4 +1,4 @@
-/** 实时 S2S 对话状态机（spec §2.2 WS 链）— 事件形状与 Mock/真实逐一同构。 */
+/** 实时 S2S 对话状态机（spec §2.2 WS 链）— 事件形状与真实 s2s /v1/realtime 同构。 */
 import { ref } from 'vue'
 import { buildVoiceDemoWsUrl } from '@/api/voiceDemo'
 import { getToken } from '@/utils/auth'
@@ -7,6 +7,7 @@ import {
   encodeFloatToPcm16,
   decodePcm16ToFloat,
   createPlaybackChain,
+  rmsLevel,
 } from '@/utils/audioDsp'
 
 export type S2sState = 'idle' | 'connecting' | 'listening' | 'responding' | 'closed'
@@ -21,6 +22,7 @@ export function useRealtimeS2s() {
   const messages = ref<Msg[]>([])
   const events = ref<Ev[]>([])
   const micActive = ref(false)
+  const playbackLevel = ref(0) // TTS 回放电平 0..1（逐块 RMS，供 VoiceWaveform）
   let ws: WebSocket | null = null
   let assistantDraft: Msg | null = null
 
@@ -77,7 +79,7 @@ export function useRealtimeS2s() {
   }
 
   // 播放链：PCM16/24k base64 → Float32 → PlaybackChain → AudioContext（懒建）
-  const playback = createPlayback()
+  const playback = createPlayback(v => { playbackLevel.value = v })
 
   function connect() {
     state.value = 'connecting'
@@ -102,7 +104,7 @@ export function useRealtimeS2s() {
     const last = messages.value.at(-1)
     if (last && last.role === 'assistant') last.interrupted = true
   }
-  /** 文字模拟一句语音（Mock/真实模式 s2s 均可接 input text，桥接透传） */
+  /** 文字模拟一句语音（s2s 接 input text，桥接透传） */
   function sendSimText(text: string) {
     send({ type: 'conversation.item.create', item: { role: 'user', content: [{ type: 'input_text', text }] } })
     send({ type: 'response.create' })
@@ -110,24 +112,54 @@ export function useRealtimeS2s() {
 
   // ── 麦克风采集（spec §4.3）：getUserMedia → AudioWorklet → 重采样 → append ──
   async function startMic() {
-    if (!ws || state.value === 'closed' || micActive.value) return
+    if (micActive.value) return
+    // 根因修复①：未连接即开麦不再静默 no-op，抛出可诊断提示（S2sPanel 捕获后展示）
+    if (!ws || state.value === 'closed') {
+      throw new Error('未连接：请先点击「开始对话」并等待上游就绪后再开启麦克风')
+    }
+    // 根因修复②：非安全上下文（http:// 非 localhost）下 navigator.mediaDevices 为
+    // undefined，直接访问 .getUserMedia 会抛 cryptic TypeError；给出明确指引（对齐 useVadRecorder）
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('麦克风 API 不可用：当前页面非安全上下文。请改用 localhost 或 https 访问（Chrome 也可将该地址加入「不安全来源视为安全」标记后重启浏览器）')
+    }
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
     })
     micStream = stream
     micCtx = new AudioContext()
     micResampler = createStreamingResampler()
-    await micCtx.audioWorklet.addModule('/worklets/mic-pcm-collector.js')
+    // 根因修复③：worklet 加载失败（404 等）转为明确错误并回滚，不再让链路「哑」而无提示
+    try {
+      await micCtx.audioWorklet.addModule('/worklets/mic-pcm-collector.js')
+    } catch (e) {
+      stopMic()
+      throw new Error(`音频采集模块加载失败（/worklets/mic-pcm-collector.js）：${(e as Error)?.message ?? String(e)}`)
+    }
     const node = new AudioWorkletNode(micCtx, 'mic-pcm-collector')
     micNode = node
+    let sawChunk = false
     node.port.onmessage = (e: MessageEvent) => {
       const chunk = e.data as Float32Array
       if (!chunk?.length || !micCtx) return
+      sawChunk = true
       sendPcmChunk(micResampler!.process(chunk, micCtx.sampleRate, MIC_RATE))
     }
     // 采集节点不连 destination：避免回声啸叫
     micCtx.createMediaStreamSource(stream).connect(node)
+    // 根因（主）：await getUserMedia 已消耗「瞬态用户激活」，AudioContext 常以 'suspended'
+    // 创建；suspended 下 AudioWorklet 的 process 不会运行 → port.onmessage 从不触发 →
+    // 无 PCM 上行 append → 服务端 VAD 无感知（链路「哑」）。必须显式 resume（对齐下行 createPlayback 的 resume）。
+    if (micCtx.state === 'suspended') {
+      try { await micCtx.resume() } catch (err) { console.warn('[voice-demo] AudioContext resume 失败:', err) }
+    }
     micActive.value = true
+    console.info('[voice-demo] 麦克风采集已启动:', { ctxState: micCtx.state, sampleRate: micCtx.sampleRate })
+    // 采集为空自检：1s 内未收到任何 PCM 块（worklet 未运行 / 系统权限异常）→ 明确告警
+    setTimeout(() => {
+      if (micActive.value && !sawChunk) {
+        console.warn('[voice-demo] 开启麦克风 1s 内未采集到任何音频块：请检查系统麦克风权限与输入设备')
+      }
+    }, 1000)
   }
   function stopMic() {
     if (micNode) { try { micNode.port.close(); micNode.disconnect() } catch { /* noop */ } micNode = null }
@@ -143,11 +175,11 @@ export function useRealtimeS2s() {
     send({ type: 'input_audio_buffer.append', audio: pcm16ToBase64(pcm) })
   }
 
-  return { state, messages, events, micActive, connect, disconnect, interrupt, sendSimText, startMic, stopMic }
+  return { state, messages, events, micActive, playbackLevel, connect, disconnect, interrupt, sendSimText, startMic, stopMic }
 }
 
-/** 下行播放器：base64 PCM16 块顺序播放；clear() 即刻停播（打断） */
-function createPlayback() {
+/** 下行播放器：base64 PCM16 块顺序播放；clear() 即刻停播（打断）；onLevel 逐块上报电平 */
+function createPlayback(onLevel: (v: number) => void) {
   let ctx: AudioContext | null = null
   let chain: ReturnType<typeof createPlaybackChain> | null = null
   let queue: string[] = []
@@ -179,6 +211,7 @@ function createPlayback() {
         const b64 = queue.shift()!
         const samples = decodePcm16ToFloat(base64ToBytes(b64))
         if (!samples.length) continue
+        onLevel(rmsLevel(samples)) // 本块电平：波形随语音块跳动
         const c = ensureCtx()
         if (c.state === 'suspended') { try { await c.resume() } catch { /* 忽略 */ } }
         const buf = c.createBuffer(1, samples.length, PLAY_RATE)
@@ -190,8 +223,10 @@ function createPlayback() {
         src.start()
         await new Promise<void>(r => { src.onended = () => r() })
       }
+      onLevel(0) // 队列播完归零（静止）
     } catch (e) {
       console.warn('[voice-demo] s2s 播放中断:', e)
+      onLevel(0)
     } finally {
       playing = false
     }
@@ -202,6 +237,7 @@ function createPlayback() {
     clear() {
       cancelled = true
       queue = []
+      onLevel(0)
       if (chain) { try { chain.dispose() } catch { /* noop */ } chain = null }
       if (ctx) { try { ctx.close().catch(() => { /* noop */ }) } catch { /* noop */ } ctx = null }
     },

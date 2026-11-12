@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>语音能力 Demo · 交互原型（方案 B）</title>
+<script>
+  /* 首屏绘制前应用已保存皮肤，避免闪色（对齐 useAppStore.hydrate：data-theme + localStorage['app-theme']，默认浅色） */
+  try{var t=localStorage.getItem('app-theme');if(t!=='dark'&&t!=='light')t='light';
+    document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='light'}
+</script>
+<style>
+  /* ── 设计 token：对齐 frontend/src/styles/tokens.css 双皮肤（dark 为 CSS 默认，light 经 data-theme 覆盖）；
+     下方别名行沿用原型正文变量名，值全部取自工程 token ── */
+  :root,:root[data-theme='dark']{
+    color-scheme:dark;
+    --font-sans:'IBM Plex Sans','Space Grotesk','HarmonyOS Sans SC','PingFang SC','Microsoft YaHei',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --font-mono:'JetBrains Mono','Fira Code','Cascadia Code',monospace;
+    --radius:14px; --transition:200ms cubic-bezier(.4,0,.2,1);
+    --fg:#ebf3ff; --fg-secondary:#8fa8c6; --fg-muted:#5a7a9a; --fg-inverse:#050b15;
+    --bg-page:#0b1322; --bg-surface:rgba(9,18,32,.84); --bg-elevated:rgba(11,22,38,.92);
+    --bg-input:rgba(3,8,14,.55); --bg-subtle:rgba(255,255,255,.05);
+    --border:rgba(140,192,255,.14); --divider:rgba(140,192,255,.1);
+    --accent:#4aa3ff; --accent-hover:#7fd0ff; --accent-soft:rgba(74,163,255,.12);
+    --ok:#4cc38a; --ok-soft:rgba(76,195,138,.12);
+    --warn:#f2b66d; --warn-soft:rgba(242,182,109,.12);
+    --err:#ff7b72; --err-soft:rgba(255,123,114,.12);
+    --topbar-bg:rgba(13,22,38,.9); --glass:saturate(140%) blur(18px);
+    --shadow-sm:0 1px 3px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04);
+    --shadow-lg:0 28px 64px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+    --glow-a:radial-gradient(circle at top,rgba(103,182,255,.08),transparent 24%);
+    --glow-b:radial-gradient(circle at top right,rgba(242,182,109,.07),transparent 30%);
+    --pill-ok-border:rgba(76,195,138,.4); --pill-warn-border:rgba(242,182,109,.4);
+    --pill-danger-border:rgba(255,123,114,.4); --pill-blue-border:rgba(74,163,255,.4);
+    --wave-bar:rgba(74,163,255,.45); --switch-bg:rgba(255,255,255,.16); --code-fg:#f2b66d;
+    /* 原型语义别名（正文 CSS 引用） */
+    --primary:var(--accent); --primary-2:var(--accent-hover); --primary-bg:var(--accent-soft);
+    --bg:var(--bg-page); --card:var(--bg-surface);
+    --text:var(--fg); --text-2:var(--fg-secondary); --text-3:var(--fg-muted);
+    --line:var(--border); --danger:var(--err); --mono:var(--font-mono);
+  }
+  :root[data-theme='light']{
+    color-scheme:light;
+    --fg:#1f2937; --fg-secondary:#5a6b80; --fg-muted:#9ca3af; --fg-inverse:#ffffff;
+    --bg-page:#f5f7fa; --bg-surface:rgba(255,255,255,.92); --bg-elevated:rgba(255,255,255,.96);
+    --bg-input:#fff; --bg-subtle:#f5f7fa;
+    --border:rgba(0,0,0,.08); --divider:rgba(0,0,0,.07);
+    --accent:#3b82f6; --accent-hover:#2563eb; --accent-soft:rgba(59,130,246,.08);
+    --ok:#10b981; --ok-soft:rgba(16,185,129,.08);
+    --warn:#d97706; --warn-soft:rgba(245,158,11,.08);
+    --err:#ef4444; --err-soft:rgba(239,68,68,.08);
+    --topbar-bg:rgba(241,243,247,.92);
+    --shadow-sm:0 1px 3px rgba(15,28,48,.06),inset 0 1px 0 rgba(255,255,255,.8);
+    --shadow-lg:0 22px 48px rgba(15,28,48,.14),inset 0 1px 0 rgba(255,255,255,.85);
+    --glow-a:radial-gradient(circle at top,rgba(59,130,246,.06),transparent 24%);
+    --glow-b:radial-gradient(circle at top right,rgba(245,158,11,.05),transparent 30%);
+    --pill-ok-border:#b7ebc6; --pill-warn-border:#ffe0b2;
+    --pill-danger-border:#ffd6d6; --pill-blue-border:#bedaff;
+    --wave-bar:#c9dcf5; --switch-bg:#d6d9e0; --code-fg:#c7440a;
+    --primary:var(--accent); --primary-2:var(--accent-hover); --primary-bg:var(--accent-soft);
+    --bg:var(--bg-page); --card:var(--bg-surface);
+    --text:var(--fg); --text-2:var(--fg-secondary); --text-3:var(--fg-muted);
+    --line:var(--border); --danger:var(--err); --mono:var(--font-mono);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--glow-a),var(--glow-b),var(--bg-page);background-attachment:fixed;
+    color:var(--text);font:14px/1.6 var(--font-sans)}
+  .wrap{max-width:1080px;margin:0 auto;padding:16px 20px 60px}
+
+  /* ── 顶栏 ── */
+  .topbar{position:sticky;top:0;z-index:50;background:var(--topbar-bg);backdrop-filter:var(--glass);border-bottom:1px solid var(--line);
+    padding:10px 20px;display:flex;align-items:center;gap:14px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-hover));
+    color:var(--fg-inverse);display:flex;align-items:center;justify-content:center;font-size:18px}
+  .topbar h1{font-size:15px;margin:0}
+  .topbar .sub{font-size:12px;color:var(--text-3)}
+  .topbar .spacer{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:999px;
+    font-size:12px;border:1px solid var(--line);background:var(--bg-elevated);color:var(--text-2);white-space:nowrap}
+  .pill.ok{border-color:var(--pill-ok-border);background:var(--ok-soft);color:var(--ok)}
+  .pill.warn{border-color:var(--pill-warn-border);background:var(--warn-soft);color:var(--warn)}
+  .pill.danger{border-color:var(--pill-danger-border);background:var(--err-soft);color:var(--danger)}
+  .pill.blue{border-color:var(--pill-blue-border);background:var(--primary-bg);color:var(--primary)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+
+  /* ── 卡片 / 页头 ── */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 24px;box-shadow:var(--shadow-sm)}
+  .pagehead{display:flex;align-items:flex-start;gap:12px;margin-bottom:6px}
+  .pagehead h2{margin:0;font-size:18px}
+  .pagehead .desc{color:var(--text-2);font-size:13px;margin-top:2px}
+  .pagehead .right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+
+  /* ── Tabs ── */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:14px 0 0}
+  .tabs .t{padding:9px 18px;cursor:pointer;border:1px solid transparent;border-bottom:none;
+    border-radius:8px 8px 0 0;color:var(--text-2);font-size:14px;user-select:none}
+  .tabs .t:hover{color:var(--primary)}
+  .tabs .t.active{background:var(--primary-bg);border-color:var(--line);color:var(--primary);font-weight:600}
+  .panel{display:none;padding-top:18px}
+  .panel.active{display:block}
+
+  /* ── 控件 ── */
+  .btn{border:1px solid var(--line);background:var(--bg-elevated);color:var(--text);border-radius:7px;
+    padding:7px 16px;font-size:14px;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--primary);color:var(--primary)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--fg-inverse)}
+  .btn.primary:hover{background:var(--primary-2)}
+  .btn.danger{background:var(--bg-elevated);border-color:var(--pill-danger-border);color:var(--danger)}
+  .btn.danger:hover{border-color:var(--danger)}
+  .btn.sm{padding:4px 12px;font-size:13px;border-radius:6px}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn.recording{background:var(--danger);border-color:var(--danger);color:var(--fg-inverse);animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.65}}
+  select,input[type=text],textarea{border:1px solid var(--line);border-radius:7px;padding:7px 10px;
+    font-size:14px;color:var(--text);background:var(--bg-input);font-family:inherit}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--primary)}
+  textarea{width:100%;resize:vertical}
+  label.f{display:block;font-size:12px;color:var(--text-2);margin-bottom:5px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .field{margin:10px 0}
+  .field .k{font-size:12px;color:var(--text-2);margin-bottom:4px}
+  .field .v{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg-subtle);min-height:20px}
+  .switch{position:relative;width:40px;height:22px;border-radius:999px;background:var(--switch-bg);cursor:pointer;transition:.2s;flex:none}
+  .switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .switch.on{background:var(--primary)}
+  .switch.on::after{left:20px}
+  .muted{color:var(--text-3);font-size:12px}
+  .note{border-left:3px solid var(--accent);background:var(--bg-subtle);padding:10px 14px;border-radius:0 8px 8px 0;
+    color:var(--text-2);font-size:12.5px;margin-top:14px;line-height:1.7}
+  .note b{color:var(--text)}
+  code{background:var(--bg-subtle);border-radius:4px;padding:1px 6px;font-family:var(--mono);font-size:12px;color:var(--code-fg)}
+  .empty{border:1px dashed var(--line);border-radius:8px;padding:26px;text-align:center;color:var(--text-3);font-size:13px}
+
+  /* ── 波形 ── */
+  .wave{display:flex;align-items:flex-end;gap:3px;height:44px;margin:12px 0}
+  .wave .b{width:5px;border-radius:3px;background:var(--wave-bar);height:8px;transition:height .12s}
+  .wave .b.speaking{background:var(--primary);animation:jump .7s infinite ease-in-out}
+  @keyframes jump{0%,100%{height:8px}50%{height:34px}}
+
+  /* ── S2S 对话区 ── */
+  .s2s-grid{display:grid;grid-template-columns:1fr 300px;gap:16px}
+  @media(max-width:900px){.s2s-grid{grid-template-columns:1fr}}
+  .chat{border:1px solid var(--line);border-radius:10px;background:var(--bg-subtle);height:430px;
+    overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+  .msg{display:flex;gap:8px;max-width:86%}
+  .msg .av{width:30px;height:30px;border-radius:50%;flex:none;display:flex;align-items:center;
+    justify-content:center;font-size:14px;color:var(--fg-inverse)}
+  .msg.user{align-self:flex-end;flex-direction:row-reverse}
+  .msg.user .av{background:var(--primary)}
+  .msg.ai .av{background:var(--ok)}
+  .bubble{border-radius:10px;padding:8px 12px;font-size:13.5px;line-height:1.65;position:relative}
+  .msg.user .bubble{background:var(--primary-bg);border:1px solid var(--pill-blue-border)}
+  .msg.ai .bubble{background:var(--bg-elevated);border:1px solid var(--line)}
+  .bubble .role{font-size:11px;color:var(--text-3);margin-bottom:2px}
+  .bubble.partial{color:var(--text-3);font-style:italic}
+  .bubble .bars{display:inline-flex;gap:2px;align-items:flex-end;height:14px;margin-left:8px;vertical-align:middle}
+  .bubble .bars i{width:3px;background:var(--ok);border-radius:2px;animation:jump .6s infinite}
+  .bubble .bars i:nth-child(2){animation-delay:.15s}.bubble .bars i:nth-child(3){animation-delay:.3s}
+  .bubble .interrupted{color:var(--danger);font-size:11px;margin-left:6px}
+  .statusline{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .thinking{color:var(--text-2);font-size:12.5px}
+  .thinking::after{content:'…';animation:dots 1.2s infinite steps(4)}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+  .simbox{margin-top:12px;display:flex;gap:8px}
+  .simbox input{flex:1}
+  .eventlog{border:1px solid var(--line);border-radius:10px;background:#10141b;color:#9fb3d1;
+    font-family:var(--mono);font-size:11.5px;height:430px;overflow-y:auto;padding:10px 12px;line-height:1.55}
+  .eventlog .dir{color:#5b6b84}
+  .eventlog .in{color:#4ade80}
+  .eventlog .out{color:#60a5fa}
+  .eventlog .ev{color:#facc15}
+  .eventlog .pl{color:#64748b}
+  .eventlog .t{color:#3d4a5f}
+  .archstrip{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px;
+    background:var(--bg-subtle);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:12.5px}
+  .archstrip .node{background:var(--bg-elevated);border:1px solid var(--line);border-radius:6px;padding:3px 10px}
+  .archstrip .node.hot{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+  .archstrip .arr{color:var(--text-3)}
+
+  /* ── 表格 ── */
+  table.seg{width:100%;border-collapse:collapse;font-size:13px}
+  table.seg th{background:var(--bg-subtle);color:var(--text-2);font-weight:500;text-align:left;
+    padding:7px 10px;border-bottom:1px solid var(--line)}
+  table.seg td{padding:7px 10px;border-bottom:1px solid var(--divider)}
+  .loader{display:inline-block;width:12px;height:12px;border:2px solid var(--fg-inverse);border-top-color:transparent;
+    border-radius:50%;animation:spin .7s linear infinite;vertical-align:-1px;margin-right:6px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ── 抽屉 ── */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:.2s;z-index:90}
+  .mask.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:-420px;width:400px;height:100%;background:var(--bg-elevated);backdrop-filter:var(--glass);z-index:95;
+    transition:right .25s;display:flex;flex-direction:column;box-shadow:-4px 0 16px rgba(0,0,0,.08)}
+  .drawer.show{right:0}
+  .drawer .dh{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .drawer .db{flex:1;overflow-y:auto;padding:16px 18px}
+  .drawer .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end}
+  .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%) translateY(-12px);background:var(--fg-inverse);color:var(--fg);
+    padding:9px 18px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:99;max-width:80vw;box-shadow:var(--shadow-lg)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .guide h3{font-size:15px;margin:20px 0 8px;padding-left:9px;border-left:3px solid var(--primary)}
+  .guide p,.guide li{color:var(--text-2);font-size:13.5px}
+  .flow{display:flex;flex-direction:column;gap:0;align-items:center;margin:8px 0}
+  .flow .fnode{border:1px solid var(--line);border-radius:8px;padding:7px 16px;background:var(--bg-elevated);font-size:13px;text-align:center;min-width:340px}
+  .flow .fnode small{display:block;color:var(--text-3);font-size:11.5px}
+  .flow .farr{color:var(--text-3);font-size:14px;line-height:1.5;padding:2px 0}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">🎙</div>
+  <div>
+    <h1>语音能力 Demo <span class="pill blue" style="margin-left:6px">交互原型 · 方案 B</span></h1>
+    <div class="sub">MinWorkBuddy · ASR / TTS / 实时 S2S 对话（OpenAI Realtime WS）/ 使用手册</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="pillBackend"><span class="dot"></span>后端：未探测</span>
+  <span class="pill warn" id="pillMock"><span class="dot"></span>Mock 开启</span>
+  <div class="switch on" id="mockSwitch" onclick="toggleMock()" title="Mock 模式开关"></div>
+  <button class="btn sm" id="themeBtn" onclick="toggleTheme()" title="切换主题">🌙 深色</button>
+  <button class="btn sm" onclick="openDrawer()">⚙ 配置</button>
+  <button class="btn sm" onclick="runHealth()">探测服务</button>
+</header>
+
+<main class="wrap">
+  <div class="card">
+    <div class="pagehead">
+      <div>
+        <h2>语音能力演示</h2>
+        <div class="desc">后端 FastAPI 代理 / WS 桥接 · 直连 speech-to-speech 服务（VAD→STT→LLM→TTS）· Mock 模式本地可跑</div>
+      </div>
+      <div class="right">
+        <span class="pill" id="pillBase"><span class="dot"></span>BASE_URL: —</span>
+        <span class="pill" id="pillWs"><span class="dot"></span>WS: —</span>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="t active" data-tab="asr" onclick="switchTab(this)">📝 语音转写（ASR）</div>
+      <div class="t" data-tab="tts" onclick="switchTab(this)">🔊 语音合成（TTS）</div>
+      <div class="t" data-tab="s2s" onclick="switchTab(this)">🗣 语音对话（实时 S2S）</div>
+      <div class="t" data-tab="guide" onclick="switchTab(this)">📖 使用手册</div>
+    </div>
+
+    <!-- ═══════════ Tab 1：ASR（默认选中） ═══════════ -->
+    <div class="panel active" id="panel-asr">
+      <div class="row" style="align-items:flex-end;margin-bottom:12px">
+        <div>
+          <label class="f">音频来源</label>
+          <div class="row">
+            <button class="btn sm" id="asrModeUp" onclick="setAsrMode('upload')">上传文件</button>
+            <button class="btn sm" id="asrModeRec" onclick="setAsrMode('record')">录音（VAD 分段）</button>
+          </div>
+        </div>
+        <div id="asrUploadBox">
+          <label class="f">选择音频文件</label>
+          <input type="file" id="asrFile" accept="audio/*" onchange="onAsrFile(this)" />
+        </div>
+        <div id="asrRecBox" style="display:none">
+          <label class="f">麦克风录音</label>
+          <div class="row">
+            <button class="btn sm" id="recBtn" onclick="toggleRec()">● 开始录音</button>
+            <span class="muted" id="recHint">未录音</span>
+          </div>
+        </div>
+        <div>
+          <label class="f">语言</label>
+          <select id="asrLang"><option value="auto">auto</option><option value="zh">中文</option><option value="en">English</option></select>
+        </div>
+        <button class="btn primary" id="asrBtn" onclick="runAsr()">转写</button>
+      </div>
+      <div class="wave" id="asrWave"></div>
+      <div id="asrResult"><div class="empty">尚未转写。上传音频或录音后点「转写」（Mock 下使用样例数据）。<br/>
+        <span class="muted">Mock：POST /api/v1/voice-demo/asr/transcribe（multipart）→ {text, costMs}</span></div></div>
+      <div class="note">
+        <b>分段时间戳来自客户端 VAD 切段</b>（Silero VAD，redemption≈700ms），逐段送转写后拼接；REST 服务仅返回 <code>{"text","language"}</code>，
+        无服务端分段/说话人。录音模式产出 16kHz mono WAV（Float32→PCM16）。
+      </div>
+    </div>
+
+    <!-- ═══════════ Tab 2：TTS ═══════════ -->
+    <div class="panel" id="panel-tts">
+      <div class="field">
+        <label class="f">待合成文本</label>
+        <textarea id="ttsText" rows="3">你好，我是 MinWorkBuddy 语音助手。今天有三项待办，需要我按时间顺序为你读一遍吗？</textarea>
+      </div>
+      <div class="row" style="align-items:flex-end;margin-bottom:12px">
+        <div style="min-width:230px">
+          <label class="f">音色 voice</label>
+          <select id="ttsVoice" onchange="onVoice(this.value)"></select>
+        </div>
+        <div id="ttsCustomBox" style="display:none;min-width:170px">
+          <label class="f">自定义音色名</label>
+          <input type="text" id="ttsCustom" placeholder="custom-speaker" />
+        </div>
+        <div>
+          <label class="f">语速 speed <span class="pill warn" style="font-size:10px">服务端暂未生效</span></label>
+          <input type="range" id="ttsSpeed" min="0.5" max="2" step="0.1" value="1" oninput="document.getElementById('ttsSpeedVal').textContent=Number(this.value).toFixed(1)+'×'" />
+          <span class="muted" id="ttsSpeedVal">1.0×</span>
+        </div>
+        <div>
+          <label class="f">格式 <span class="pill warn" style="font-size:10px">恒输出 WAV</span></label>
+          <select id="ttsFmt"><option>wav</option><option>mp3</option><option>pcm</option></select>
+        </div>
+        <button class="btn primary" id="ttsBtn" onclick="runTts()">合成并播放</button>
+      </div>
+      <div id="ttsResult"><div class="empty">尚未合成。<span class="muted">Mock：POST /api/v1/voice-demo/tts/synthesize → audio/wav blob</span></div></div>
+      <div class="note">真实链路：后端代理转发至 s2s 兼容端点，返回 <b>24kHz mono WAV</b> 字节，前端 blob 播放 / 下载，不落盘。
+        原型用浏览器 speechSynthesis 近似「能出声」，音色以真实服务为准。</div>
+    </div>
+
+    <!-- ═══════════ Tab 3：实时 S2S 对话 ═══════════ -->
+    <div class="panel" id="panel-s2s">
+      <div class="archstrip">
+        <span class="node">浏览器</span><span class="arr">⇄</span>
+        <span class="node hot">FastAPI WS 桥接 <code>/api/v1/voice-demo/ws</code></span><span class="arr">⇄</span>
+        <span class="node">s2s <code>/v1/realtime</code></span><span class="arr">→</span>
+        <span class="node">Silero VAD</span><span class="arr">→</span>
+        <span class="node">Parakeet STT</span><span class="arr">→</span>
+        <span class="node">LLM</span><span class="arr">→</span>
+        <span class="node">Qwen3 TTS</span>
+      </div>
+
+      <div class="s2s-grid">
+        <div>
+          <div class="row" style="margin-bottom:12px">
+            <button class="btn primary" id="s2sBtn" onclick="toggleS2s()">🎤 开始对话</button>
+            <button class="btn danger" id="s2sInterrupt" onclick="bargeIn()" disabled>✋ 打断播报</button>
+            <span class="pill" id="s2sConn"><span class="dot"></span>未连接</span>
+            <span class="pill" id="s2sTurn">轮次：—</span>
+            <label class="row muted" style="gap:6px;cursor:pointer">
+              <input type="checkbox" id="autoDemo" checked /> 自动演示脚本
+            </label>
+          </div>
+          <div class="chat" id="chatBox">
+            <div class="empty" id="chatEmpty">点击「开始对话」建立 WebSocket 连接。<br/>
+              <span class="muted">真实链路：麦克风 PCM16/16kHz → input_audio_buffer.append → 服务端 VAD 自动切轮次。</span></div>
+          </div>
+          <div class="simbox">
+            <input type="text" id="simInput" placeholder="输入文字模拟一句语音（回车发送）"
+                   onkeydown="if(event.key==='Enter')sendSim()" />
+            <button class="btn" onclick="sendSim()">模拟发言</button>
+          </div>
+          <div class="statusline" id="s2sStatus"></div>
+        </div>
+        <div>
+          <div class="row" style="justify-content:space-between;margin-bottom:8px">
+            <b style="font-size:13px">OpenAI Realtime 事件流</b>
+            <button class="btn sm" onclick="clearLog()">清空</button>
+          </div>
+          <div class="eventlog" id="evLog"></div>
+        </div>
+      </div>
+      <div class="note">
+        桥接网关在 <b>connect 时下发 session.update</b>（注入人设 instructions、server_vad + interrupt_response），
+        浏览器侧仅做 <b>采集重采样(48k→16k PCM16) 与 24k 音频回放</b>；会话上下文由 s2s 服务端维护，刷新页面即新会话。
+        「打断」走 <code>response.cancel</code> + <code>output_audio_buffer.clear</code>。
+        WS 鉴权：<code>?token=&lt;JWT&gt;</code> query 参数（对齐 duplex/voice 网关先例）。
+      </div>
+    </div>
+
+    <!-- ═══════════ Tab 4：手册 ═══════════ -->
+    <div class="panel guide" id="panel-guide">
+      <h3>功能总览</h3>
+      <table class="seg">
+        <thead><tr><th>Tab</th><th>能力</th><th>通信方式</th><th>依赖</th></tr></thead>
+        <tbody>
+          <tr><td>语音转写（ASR）</td><td>上传转写 / 录音 VAD 分段转写（起止 ms + 文本）</td><td>HTTP REST（multipart）</td><td>ASR 端点或 Mock</td></tr>
+          <tr><td>语音合成（TTS）</td><td>文本→音频，9 音色按语种分组，播放 / 下载</td><td>HTTP REST（JSON→blob）</td><td>TTS 端点或 Mock</td></tr>
+          <tr><td>语音对话（S2S）</td><td>连续语音对话：服务端 VAD 切轮次、逐句转录上屏、流式音频回放、可打断</td><td>WebSocket（OpenAI Realtime 事件集）</td><td>s2s /v1/realtime</td></tr>
+          <tr><td>使用手册</td><td>静态说明（本页内容）</td><td>—</td><td>无</td></tr>
+        </tbody>
+      </table>
+
+      <h3>实时对话链路</h3>
+      <div class="flow">
+        <div class="fnode">浏览器 AudioWorklet<small>48kHz 采集 → 16kHz PCM16 分片（base64）</small></div>
+        <div class="farr">↓ WebSocket（JWT 鉴权 query 参数，对齐 duplex/voice 先例）</div>
+        <div class="fnode hot">后端 WS 桥接网关<small>/api/v1/voice-demo/ws · 会话登记 / 事件透传 / 心跳与超时</small></div>
+        <div class="farr">↓ WebSocket（OpenAI Realtime 协议）</div>
+        <div class="fnode">speech-to-speech 服务<small>VAD(Silero) → STT(Parakeet) → LLM(OpenAI 兼容) → TTS(Qwen3)</small></div>
+        <div class="farr">↓ 事件回流（转录 / response.audio.delta / response.done）</div>
+        <div class="fnode">浏览器播放链<small>PCM16 24kHz → 重采样 → 噪声门 → 播放（复用 audioDsp）</small></div>
+      </div>
+
+      <h3>后端接口一览（新增模块 /api/v1/voice-demo）</h3>
+      <table class="seg">
+        <thead><tr><th>方法</th><th>路径</th><th>说明</th><th>鉴权</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td><code>/api/v1/voice-demo/health</code></td><td>探测上游服务（GET /v1/pool）+ 返回生效配置摘要</td><td>JWT</td></tr>
+          <tr><td>POST</td><td><code>/api/v1/voice-demo/asr/transcribe</code></td><td>multipart 转发 ASR → {text, language, costMs}</td><td>JWT</td></tr>
+          <tr><td>POST</td><td><code>/api/v1/voice-demo/tts/synthesize</code></td><td>JSON 转发 TTS → audio/wav 二进制</td><td>JWT</td></tr>
+          <tr><td>WS</td><td><code>/api/v1/voice-demo/ws?token=&lt;JWT&gt;</code></td><td>OpenAI Realtime 双向桥接；connect 自动 session.update 注入人设</td><td>query JWT（对齐 duplex 网关先例）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>配置项（backend/.env，config/_voice.py 新增 VOICE_DEMO_* 段）</h3>
+      <table class="seg">
+        <thead><tr><th>变量</th><th>默认值</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>VOICE_DEMO_ENABLED</code></td><td>true</td><td>模块总开关</td></tr>
+          <tr><td><code>VOICE_DEMO_BASE_URL</code></td><td>http://localhost:8765</td><td>REST 基址（探测 /v1/pool）</td></tr>
+          <tr><td><code>VOICE_DEMO_REALTIME_WS_URL</code></td><td>ws://localhost:8765/v1/realtime</td><td>实时对话上游</td></tr>
+          <tr><td><code>VOICE_DEMO_API_KEY</code></td><td>not-needed</td><td>上游鉴权占位</td></tr>
+          <tr><td><code>VOICE_DEMO_MOCK</code></td><td>true</td><td>Mock 模式（无真实服务也可跑）</td></tr>
+          <tr><td><code>VOICE_DEMO_TTS_VOICE</code> / <code>_LANGUAGE</code> / <code>_INSTRUCTIONS</code></td><td>Aiden / auto / 工作台助手人设</td><td>TTS 与会话默认值</td></tr>
+          <tr><td><code>VOICE_DEMO_CONNECT_TIMEOUT_MS</code> / <code>_READ_TIMEOUT_MS</code></td><td>5000 / 30000</td><td>HTTP 超时；WS 空闲超时独立常量</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Mock 模式</h3>
+      <p>默认开启：REST 返回样例转写 / 合成 WAV（正弦提示音），WS 由后端模拟 Realtime 事件序列（session.created → speech_started → 转录 → audio.delta → response.done），
+        前后端联调不依赖任何真实模型服务。右上角开关即对应 <code>VOICE_DEMO_MOCK</code>（前端下拉可临时切换，真实开关以后端配置为准）。</p>
+
+      <h3>切换真实服务（2026-11-10 已实测）</h3>
+      <p>本地 <code>127.0.0.1:8765</code> 同主机提供 OpenAI 兼容 REST 与 <code>/v1/realtime</code>，默认配置即真实全功能：<br/>
+        ASR：<code>POST /v1/audio/transcriptions</code>（multipart file+language）→ <code>{"text","language"}</code>（language 为语言名，如 "Chinese"）；<br/>
+        TTS：<code>POST /v1/audio/speech</code>（JSON input/voice/response_format，仅 wav，无 speed 字段）→ WAV 字节；voice=Aiden 实测有效；<br/>
+        WS 容器内 E2E：<code>docker exec speech-to-speech-thirdparty-pipeline-1 python3 /tmp/e2e_realtime_test.py --url ws://127.0.0.1:8765/v1/realtime --audio /tmp/prompt.wav --out-dir /tmp/e2e --timeout 90</code>；<br/>
+        切换：置 <code>VOICE_DEMO_MOCK=false</code> 即可（默认 BASE_URL / WS 已指向本机，无需改）。</p>
+
+      <h3>主题</h3>
+      <p>浅色 / 深色双主题可切换（顶栏按钮），与控制台一致：<code>&lt;html data-theme="light|dark"&gt;</code> + <code>localStorage['app-theme']</code>，默认浅色。
+        实现时复用 <code>useAppStore().toggleTheme()</code> 与 <code>styles/tokens.css</code> 双皮肤变量，不另建主题机制；原型 CSS 变量即工程 token 的别名映射。</p>
+
+      <h3>已知限制与风险</h3>
+      <ul>
+        <li>s2s 为<b>单实例串行</b>（pool size 1）：多用户并发需排队或扩容（后端桥接层加并发闸门并给出友好 503）。</li>
+        <li>会话上下文由 s2s 服务端持有，<b>无持久化</b>：刷新即新会话；如需落库沿用 duplex 既有会话存储方案（P1）。</li>
+        <li>浏览器兼容：Chrome / Edge ≥ 110（AudioWorklet）；Electron 下需核对麦克风权限；无 WebRTC fallback（预留）。</li>
+        <li>音色固定为服务端 speaker 集；speed / response_format 服务端暂未生效（占位透传）。</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<!-- 配置抽屉 -->
+<div class="mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="dh"><b>⚙ Demo 配置</b><span class="muted">对应 VOICE_DEMO_* 环境变量（原型存 localStorage）</span></div>
+  <div class="db">
+    <div class="field"><label class="f">VOICE_DEMO_BASE_URL（REST 基址）</label>
+      <input type="text" id="cfgBase" style="width:100%" /></div>
+    <div class="field"><label class="f">VOICE_DEMO_REALTIME_WS_URL</label>
+      <input type="text" id="cfgWs" style="width:100%" /></div>
+    <div class="field"><label class="f">VOICE_DEMO_API_KEY</label>
+      <input type="text" id="cfgKey" style="width:100%" /></div>
+    <div class="field"><label class="f">Mock 模式（VOICE_DEMO_MOCK）</label>
+      <div class="switch" id="cfgMock" onclick="this.classList.toggle('on')"></div></div>
+    <div class="row">
+      <div class="field" style="flex:1"><label class="f">TTS 音色</label>
+        <select id="cfgVoice" style="width:100%"></select></div>
+      <div class="field" style="flex:1"><label class="f">识别语言</label>
+        <select id="cfgLang" style="width:100%"><option value="auto">auto</option><option value="zh">中文</option><option value="en">English</option></select></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1"><label class="f">连接超时 ms</label><input type="text" id="cfgConn" style="width:100%" /></div>
+      <div class="field" style="flex:1"><label class="f">读取超时 ms</label><input type="text" id="cfgRead" style="width:100%" /></div>
+    </div>
+    <div class="field"><label class="f">对话人设 instructions（session.update 注入）</label>
+      <textarea id="cfgInstr" rows="3"></textarea></div>
+    <div class="field"><label class="f">当前配置 JSON</label>
+      <div class="v" id="cfgJson" style="font-family:var(--mono);font-size:11.5px;white-space:pre-wrap"></div></div>
+  </div>
+  <div class="df">
+    <button class="btn" onclick="closeDrawer()">取消</button>
+    <button class="btn primary" onclick="saveCfg()">保存</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════ 通用 ═══════════ */
+const $ = id => document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
+
+/* ── 配置状态（持久化）── */
+const DEFAULT_CFG = {
+  BASE_URL:'http://localhost:8765', REALTIME_WS:'ws://localhost:8765/v1/realtime',
+  API_KEY:'not-needed', MOCK:true, VOICE:'Aiden', LANGUAGE:'auto',
+  CONNECT_TIMEOUT:5000, READ_TIMEOUT:30000,
+  INSTRUCTIONS:'你是 MinWorkBuddy 语音工作台助手，回答简洁、口语化，使用用户的语言。'
+};
+let cfg = {...DEFAULT_CFG};
+try{ cfg = {...DEFAULT_CFG, ...(JSON.parse(localStorage.getItem('voiceDemoCfg')||'{}'))}; }catch(e){}
+
+function refreshPills(){
+  $('pillBase').innerHTML = '<span class="dot"></span>BASE: '+cfg.BASE_URL;
+  $('pillWs').innerHTML = '<span class="dot"></span>WS: '+cfg.REALTIME_WS.replace(/^wss?:\/\//,'');
+  const pm=$('pillMock');
+  pm.className='pill '+(cfg.MOCK?'warn':'ok');
+  pm.innerHTML = '<span class="dot"></span>'+(cfg.MOCK?'Mock 开启':'真实服务');
+  $('mockSwitch').classList.toggle('on', cfg.MOCK);
+}
+function toggleMock(){ cfg.MOCK=!cfg.MOCK; persist(); refreshPills();
+  toast(cfg.MOCK?'Mock 已开启（样例数据）':'Mock 已关闭（指向真实服务）'); runHealth(); }
+function persist(){ localStorage.setItem('voiceDemoCfg', JSON.stringify(cfg)); }
+
+/* ── 服务探测（Mock 必绿；真实模式尝试 fetch /v1/pool）── */
+async function runHealth(){
+  const p=$('pillBackend');
+  p.className='pill'; p.innerHTML='<span class="dot"></span>后端：探测中…';
+  if(cfg.MOCK){
+    setTimeout(()=>{p.className='pill ok';
+      p.innerHTML='<span class="dot"></span>后端健康（Mock）· s2s /v1/pool size=1（模拟）';
+      toast('GET /api/v1/voice-demo/health → {upstream:"mock", pool:{size:1}}');},600);
+    return;
+  }
+  try{
+    const ctl=new AbortController(); setTimeout(()=>ctl.abort(),1800);
+    const r=await fetch(cfg.BASE_URL+'/v1/pool',{signal:ctl.signal});
+    const j=await r.json();
+    p.className='pill ok';
+    p.innerHTML='<span class="dot"></span>后端健康 · pool size='+j.size+' in_use='+j.in_use;
+  }catch(e){
+    p.className='pill danger';
+    p.innerHTML='<span class="dot"></span>上游不可达（原型 file:// 或 CORS）';
+  }
+}
+
+/* ── Tabs ── */
+function switchTab(el){
+  document.querySelectorAll('.tabs .t').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  $('panel-'+el.dataset.tab).classList.add('active');
+}
+
+/* ── 配置抽屉 ── */
+function openDrawer(){
+  $('cfgBase').value=cfg.BASE_URL; $('cfgWs').value=cfg.REALTIME_WS; $('cfgKey').value=cfg.API_KEY;
+  $('cfgMock').classList.toggle('on',cfg.MOCK);
+  $('cfgVoice').value=cfg.VOICE; $('cfgLang').value=cfg.LANGUAGE;
+  $('cfgConn').value=cfg.CONNECT_TIMEOUT; $('cfgRead').value=cfg.READ_TIMEOUT;
+  $('cfgInstr').value=cfg.INSTRUCTIONS; renderCfgJson();
+  $('mask').classList.add('show'); $('drawer').classList.add('show');
+}
+function renderCfgJson(){
+  $('cfgJson').textContent=JSON.stringify({VOICE_DEMO_BASE_URL:cfg.BASE_URL,
+    VOICE_DEMO_REALTIME_WS_URL:cfg.REALTIME_WS, VOICE_DEMO_API_KEY:cfg.API_KEY,
+    VOICE_DEMO_MOCK:cfg.MOCK, VOICE_DEMO_TTS_VOICE:cfg.VOICE, VOICE_DEMO_LANGUAGE:cfg.LANGUAGE,
+    VOICE_DEMO_CONNECT_TIMEOUT_MS:+cfg.CONNECT_TIMEOUT, VOICE_DEMO_READ_TIMEOUT_MS:+cfg.READ_TIMEOUT,
+    VOICE_DEMO_INSTRUCTIONS:cfg.INSTRUCTIONS},null,2);
+}
+['cfgBase','cfgWs','cfgKey','cfgConn','cfgRead','cfgInstr'].forEach(id=>$(id).addEventListener('input',()=>{collectCfg();renderCfgJson();}));
+['cfgVoice','cfgLang'].forEach(id=>$(id).addEventListener('change',()=>{collectCfg();renderCfgJson();}));
+$('cfgMock').addEventListener('click',()=>{collectCfg();renderCfgJson();});
+function collectCfg(){
+  cfg.BASE_URL=$('cfgBase').value||cfg.BASE_URL; cfg.REALTIME_WS=$('cfgWs').value||cfg.REALTIME_WS;
+  cfg.API_KEY=$('cfgKey').value; cfg.MOCK=$('cfgMock').classList.contains('on');
+  cfg.VOICE=$('cfgVoice').value; cfg.LANGUAGE=$('cfgLang').value;
+  cfg.CONNECT_TIMEOUT=+$('cfgConn').value||5000; cfg.READ_TIMEOUT=+$('cfgRead').value||30000;
+  cfg.INSTRUCTIONS=$('cfgInstr').value;
+}
+function saveCfg(){ collectCfg(); persist(); refreshPills(); closeDrawer(); toast('配置已保存（localStorage）'); }
+function closeDrawer(){ $('mask').classList.remove('show'); $('drawer').classList.remove('show'); }
+
+/* ═══════════ Tab 3：S2S 实时对话 ═══════════ */
+const chatBox=$('chatBox'), evLog=$('evLog');
+let s2sState='idle';          // idle|connecting|listening|recognizing|thinking|speaking
+let turnBusy=false;           // 一轮演示动画进行中（防自动脚本重入）
+let autoTimer=null, typingTimer=null;
+const TURN_LABEL={idle:'—',connecting:'连接中',listening:'聆听中',recognizing:'识别中',thinking:'思考中',speaking:'播报中'};
+
+function log(dir,name,payload){
+  const t=new Date().toTimeString().slice(0,8);
+  const d=document.createElement('div');
+  d.innerHTML=`<span class="t">${t}</span> <span class="dir">${dir}</span> <span class="ev">${name}</span>`
+    +(payload?` <span class="pl">${payload}</span>`:'');
+  evLog.appendChild(d); evLog.scrollTop=evLog.scrollHeight;
+}
+function clearLog(){ evLog.innerHTML=''; }
+
+function setConn(text,cls){ $('s2sConn').className='pill '+(cls||'');
+  $('s2sConn').innerHTML='<span class="dot"></span>'+text; }
+function setTurn(state){ $('s2sTurn').textContent='轮次：'+TURN_LABEL[state]; }
+
+function addMsg(role){
+  const empty=$('chatEmpty'); if(empty)empty.remove();
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  div.innerHTML=role==='user'
+    ?'<div class="av">🙋</div><div class="bubble"><div class="role">你</div><div class="txt"></div></div>'
+    :'<div class="av">🤖</div><div class="bubble"><div class="role">助手</div><div class="txt"></div></div>';
+  chatBox.appendChild(div); chatBox.scrollTop=chatBox.scrollHeight;
+  return div.querySelector('.txt');
+}
+function setStatus(html){ $('s2sStatus').innerHTML=html; }
+
+/* 打字机：把 text 逐字流入 el，返回 Promise */
+function type(el,text,speed){
+  return new Promise(res=>{
+    el.textContent=''; let i=0;
+    typingTimer=setInterval(()=>{
+      el.textContent+=text[i++]||'';
+      chatBox.scrollTop=chatBox.scrollHeight;
+      if(i>=text.length){clearInterval(typingTimer);typingTimer=null;res();}
+    }, speed||38);
+  });
+}
+
+const SCRIPT=[
+  {u:'你好，帮我总结一下今天的待办。',a:'好的。你今天有 3 项待办：上午 10 点的项目评审会；审批两份采购申请；下午 3 点前提交周报。需要我设一个会前提醒吗？'},
+  {u:'帮我设置一个 9 点 50 的会前提醒。',a:'已创建提醒：今天 09:50 提醒你参加项目评审会，会前 10 分钟。'},
+  {u:'昨天的语音接入文档在知识库哪里？',a:'在「知识库 Wiki」的《语音能力接入指南》。需要我把链接发到你的会话里吗？'},
+];
+let scriptIdx=0;
+
+async function toggleS2s(){
+  if(s2sState!=='idle'){ disconnectS2s(); return; }
+  s2sState='connecting'; setTurn('connecting');
+  $('s2sBtn').textContent='🔌 断开对话'; $('s2sBtn').classList.remove('primary'); $('s2sBtn').classList.add('danger');
+  setConn('连接中…','');
+  log('→','ws.connect',cfg.REALTIME_WS+'?token=<JWT>');
+  log('→','session.update',`instructions="${cfg.INSTRUCTIONS.slice(0,18)}…" turn_detection=server_vad(interrupt)`);
+  await wait(700);
+  log('←','session.created','{session_id:"sess_'+Math.random().toString(36).slice(2,8)+'"}');
+  setConn('已连接'+(cfg.MOCK?'（Mock）':'（真实）'),'ok');
+  s2sState='listening'; setTurn('listening');
+  setStatus('<span class="pill blue"><span class="dot"></span>服务端 VAD 已开启 · 等待语音…</span>');
+  if($('autoDemo').checked) runScript();
+}
+
+function disconnectS2s(){
+  clearInterval(autoTimer); clearInterval(typingTimer); autoTimer=typingTimer=null;
+  try{speechSynthesis.cancel();}catch(e){}
+  log('←','ws.close','1000');
+  s2sState='idle'; turnBusy=false; setTurn('idle');
+  $('s2sBtn').textContent='🎤 开始对话'; $('s2sBtn').classList.add('primary'); $('s2sBtn').classList.remove('danger');
+  $('s2sInterrupt').disabled=true;
+  setConn('未连接','');
+  setStatus(''); toast('会话已断开（上下文随 s2s 会话销毁）');
+}
+
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* 一轮完整对话动画：user→ASR→LLM→TTS */
+async function runTurn(userText, aiText){
+  if(s2sState==='idle'||turnBusy)return;
+  turnBusy=true;
+  try{
+    // ── 聆听→语音段
+    s2sState='listening'; setTurn('listening');
+    log('←','input_audio_buffer.speech_started','');
+    setStatus('<span class="pill"><span class="dot"></span>🎙 检测到语音…</span>');
+    await wait(600);
+    // ── partial 转录
+    s2sState='recognizing'; setTurn('recognizing');
+    log('←','conversation.item.input_audio_transcription.partial','');
+    const ut=addMsg('user'); ut.parentElement.classList.add('partial');
+    await type(ut,userText,42);
+    ut.parentElement.classList.remove('partial');
+    log('←','input_audio_buffer.speech_stopped','');
+    log('←','conversation.item.input_audio_transcription.completed','text="'+userText+'"');
+    await wait(350);
+    // ── LLM
+    s2sState='thinking'; setTurn('thinking');
+    log('→','response.create','(server_vad 自动)');
+    setStatus('<span class="thinking">助手思考中</span>');
+    await wait(700+Math.random()*500);
+    // ── TTS 流式
+    s2sState='speaking'; setTurn('speaking');
+    const at=addMsg('ai');
+    const bars=document.createElement('span'); bars.className='bars';
+    bars.innerHTML='<i style="height:6px"></i><i style="height:12px"></i><i style="height:8px"></i>';
+    at.appendChild(bars);
+    log('←','response.audio_transcript.delta','（流式文本）');
+    log('←','response.audio.delta','PCM16/24kHz base64…');
+    $('s2sInterrupt').disabled=false;
+    speak(aiText);                                  // 原型：浏览器 TTS 出声
+    await type(at, aiText, 30);
+    log('←','response.done','usage≈'+(120+Math.floor(Math.random()*200))+' tokens');
+    $('s2sInterrupt').disabled=true;
+    s2sState='listening'; setTurn('listening');
+    setStatus('<span class="pill blue"><span class="dot"></span>继续聆听…（可打断 / 可用下方文本框模拟）</span>');
+  }finally{
+    turnBusy=false;
+  }
+}
+
+function speak(text){
+  try{
+    if(!('speechSynthesis'in window))return;
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=/[\u4e00-\u9fa5]/.test(text)?'zh-CN':'en-US'; u.rate=1.05;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* 自动演示脚本循环 */
+function runScript(){
+  clearInterval(autoTimer);
+  autoTimer=setInterval(()=>{
+    if(s2sState==='listening'&&!typingTimer&&!turnBusy){
+      if(scriptIdx>=SCRIPT.length){scriptIdx=0;clearInterval(autoTimer);autoTimer=null;
+        setStatus('<span class="muted">脚本播完，进入自由模式：在下方输入文字模拟发言</span>');return;}
+      const t=SCRIPT[scriptIdx++]; runTurn(t.u,t.a);
+    }
+  },500);
+}
+
+/* 文本模拟发言 */
+function sendSim(){
+  const inp=$('simInput'); const text=inp.value.trim();
+  if(!text){toast('先输入一句话');return;}
+  if(s2sState==='idle'){toast('请先「开始对话」');return;}
+  if(s2sState!=='listening'||turnBusy){toast('当前轮次未结束，稍后再试');return;}
+  clearInterval(autoTimer); autoTimer=null;
+  inp.value='';
+  const reply='收到：「'+text+'」。这是模拟回复——真实链路中由 s2s 的 LLM 生成，文本与 24kHz 音频将流式返回。';
+  runTurn(text,reply);
+}
+
+/* 打断 */
+function bargeIn(){
+  if(s2sState!=='speaking')return;
+  log('→','response.cancel','');
+  log('→','output_audio_buffer.clear','');
+  log('←','output_audio_buffer.cleared','');
+  clearInterval(typingTimer); typingTimer=null;
+  try{speechSynthesis.cancel();}catch(e){}
+  const last=[...chatBox.querySelectorAll('.msg.ai .txt')].pop();
+  if(last){last.insertAdjacentHTML('beforeend','<span class="interrupted">（已被打断）</span>');
+    const b=last.querySelector('.bars'); if(b)b.remove();}
+  $('s2sInterrupt').disabled=true;
+  s2sState='listening'; setTurn('listening');
+  setStatus('<span class="pill warn"><span class="dot"></span>播报已打断，继续聆听…</span>');
+  toast('response.cancel → 音频队列已清空（barge-in）');
+}
+
+/* ═══════════ Tab 1：ASR ═══════════ */
+let asrMode='upload', recording=false;
+(function(){const w=$('asrWave');for(let i=0;i<56;i++){const b=document.createElement('div');
+  b.className='b';b.style.height=(6+Math.random()*22)+'px';w.appendChild(b);}})();
+function setAsrMode(m){asrMode=m;
+  $('asrUploadBox').style.display=m==='upload'?'block':'none';
+  $('asrRecBox').style.display=m==='record'?'block':'none';}
+function onAsrFile(i){toast(i.files.length?'已选择：'+i.files[0].name:'已清空');}
+function toggleRec(){
+  recording=!recording;
+  const b=$('recBtn');
+  b.classList.toggle('recording',recording);
+  b.textContent=recording?'■ 停止录音':'● 开始录音';
+  $('recHint').textContent=recording?'录音中… VAD 检测语音段（模拟 Silero）':'已录音，可点「转写」';
+  document.querySelectorAll('#asrWave .b').forEach(el=>el.classList.toggle('speaking',recording));
+}
+const ASR_SEGS=[
+  {s:180,e:2450,t:'帮我把今天的会议纪要整理成待办清单。'},
+  {s:2900,e:6100,t:'另外把上周的语音接入评审结论同步到项目群。'},
+  {s:6600,e:9800,t:'最后提醒我下午三点提交周报。'},
+];
+function runAsr(){
+  if(asrMode==='upload'&&!$('asrFile').files.length&&!recording){toast('请先选择音频文件，或切换录音模式');return;}
+  const b=$('asrBtn'); b.disabled=true; b.innerHTML='<span class="loader"></span> 转写中';
+  setTimeout(()=>{
+    b.disabled=false; b.textContent='转写';
+    const cost=cfg.MOCK?300+Math.floor(Math.random()*400):380+Math.floor(Math.random()*300);
+    const full=ASR_SEGS.map(s=>s.t).join('');
+    $('asrResult').innerHTML=`
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <span class="pill ok">转写完成 · ${cost}ms · ${cfg.MOCK?'Mock':'真实 s2s'}</span>
+        <span class="muted">language=${$('asrLang').value} → 识别语言：中文</span></div>
+      <div class="field"><div class="k">整段文本（REST 唯一返回 {"text","language"}）</div><div class="v">${full}</div></div>
+      <div class="k" style="margin:8px 0 6px">分段表（客户端 VAD 切段逐段送转写拼接）</div>
+      <table class="seg"><thead><tr><th>#</th><th>start</th><th>end</th><th>文本</th></tr></thead><tbody>
+      ${ASR_SEGS.map((s,i)=>`<tr><td>${i+1}</td><td>${s.s}ms</td><td>${s.e}ms</td><td>${s.t}</td></tr>`).join('')}
+      </tbody></table>`;
+    toast(cfg.MOCK?'Mock：POST /api/v1/voice-demo/asr/transcribe → 200':'真实：POST /api/v1/voice-demo/asr/transcribe → 200');
+  },1100);
+}
+
+/* ═══════════ Tab 2：TTS ═══════════ */
+const VOICES=[
+  {g:'中文',list:[['Vivian','明亮女声'],['Serena','温柔女声'],['Uncle_Fu','低沉稳重男声'],['Dylan','北京男声'],['Eric','成都男声·四川话']]},
+  {g:'英语',list:[['Aiden','阳光男声（默认）'],['Ryan','活力男声']]},
+  {g:'日语',list:[['Ono_Anna','活泼女声']]},
+  {g:'韩语',list:[['Sohee','温暖女声']]},
+];
+(function(){let h='';
+  VOICES.forEach(gr=>{h+=`<optgroup label="${gr.g}">`;
+    gr.list.forEach(v=>{h+=`<option value="${v[0]}">${v[0]} · ${v[1]}</option>`;});h+='</optgroup>';});
+  h+='<optgroup label="自定义"><option value="__custom__">＋ 自定义音色…</option></optgroup>';
+  $('ttsVoice').innerHTML=h;$('ttsVoice').value='Aiden';
+  $('cfgVoice').innerHTML=h;$('cfgVoice').value='Aiden';})();
+function onVoice(v){$('ttsCustomBox').style.display=v==='__custom__'?'block':'none';}
+function runTts(){
+  const txt=$('ttsText').value.trim();
+  if(!txt){toast('文本为空 → 400 VOICE_TTS_TEXT_EMPTY');return;}
+  const voice=$('ttsVoice').value==='__custom__'?($('ttsCustom').value||'custom'):$('ttsVoice').value;
+  const b=$('ttsBtn'); b.disabled=true; b.innerHTML='<span class="loader"></span> 合成中';
+  setTimeout(()=>{
+    b.disabled=false; b.textContent='合成并播放';
+    const cost=cfg.MOCK?500+Math.floor(Math.random()*500):900+Math.floor(Math.random()*800);
+    $('ttsResult').innerHTML=`
+      <div class="row" style="margin-bottom:10px">
+        <span class="pill ok">合成完成 · ${cost}ms · voice=${voice} · 24kHz mono WAV（${cfg.MOCK?'Mock':'真实'}）</span></div>
+      <div class="row"><button class="btn sm primary" onclick="speakTtsDemo(this)" data-txt="TTS 试听占位：原型环境使用浏览器语音近似。真实链路将播放后端返回的 24kHz WAV。">▶ 试听（原型用浏览器 TTS）</button>
+        <button class="btn sm" onclick="toast('真实链路：下载后端透传的 audio/wav blob（不落盘）')">⬇ 下载 wav</button></div>`;
+    speak('你好，这是语音合成试听。真实链路将播放后端返回的 24kHz 单声道 WAV 音频。');
+    toast('POST /api/v1/voice-demo/tts/synthesize → audio/wav blob');
+  },1000);
+}
+function speakTtsDemo(){speak('你好，这是语音合成试听。真实链路将播放后端返回的 24kHz 单声道 WAV 音频。');}
+
+/* ═══════════ 主题（对齐 useAppStore：data-theme + localStorage['app-theme']，默认浅色）═══════════ */
+function toggleTheme(){
+  const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('app-theme',next)}catch(e){}
+  updateThemeBtn();
+}
+function updateThemeBtn(){
+  const dark=document.documentElement.dataset.theme==='dark';
+  const b=document.getElementById('themeBtn');
+  b.textContent=dark?'☀️ 浅色':'🌙 深色';
+  b.title='切换到'+(dark?'浅色':'深色')+'主题';
+}
+
+/* ═══════════ 初始化 ═══════════ */
+refreshPills(); runHealth();
+setStatus('');
+updateThemeBtn();
+</script>
+</body>
+</html>

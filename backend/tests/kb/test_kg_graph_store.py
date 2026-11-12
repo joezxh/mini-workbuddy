@@ -187,6 +187,18 @@ def test_create_triple_triggers_projection(svc, fake):
     assert fake["store"].relations, "手工建关系必须投影到 Neo4j"
 
 
+def test_create_triple_merge_path_reprojects(svc, fake):
+    """幂等合并路径也要投影：首次创建时 Neo4j 可能恰好不可用漏掉这条边，
+    之后每次重复提交都该是补投影的机会，否则该边在 Neo4j 里永久缺席。"""
+    a = svc.create_entity(name="星海科技", type_code="CUS")
+    b = svc.create_entity(name="订单B1", type_code="ORD")
+    svc.create_triple(from_entity_id=a.id, to_entity_id=b.id, relation_code="PLACES")
+    assert len(fake["store"].relations) == 1
+    fake["store"].relations.clear()   # 模拟首次投影失败/丢失
+    svc.create_triple(from_entity_id=a.id, to_entity_id=b.id, relation_code="PLACES")
+    assert len(fake["store"].relations) == 1, "重复提交同一关系应走合并路径并补投影"
+
+
 def test_update_entity_triggers_reprojection(svc, fake):
     e = svc.create_entity(name="星海科技", type_code="CUS")
     fake["store"].entities.clear()

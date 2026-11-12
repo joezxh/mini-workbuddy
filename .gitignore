@@ -3237,3 +3237,14 @@ release
 /frontend/dist-verify-new/file-viewer/flyfish-viewer-assets.json
 /frontend/dist-verify-new/file-viewer/flyfish-viewer-manifest.json
 /frontend/dist-verify-new/index.html
+fanruan
+/.trae/
+/.tmp/
+/.venv-kira/
+/.venv-winmcp/
+/.venv-mingw314-bak/
+/backend/.playwright-mcp/
+/backend/.pytest_tmp/
+/backend/.pytest_tmp_t51/
+/backend/.pytest_tmp_t51b/
+/frontend/dist-verify-new/

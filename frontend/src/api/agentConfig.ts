@@ -65,15 +65,54 @@ export interface AgentModelConfig {
   base_url?: string
   temperature?: number
   max_tokens?: number
+  /** 模型请求最大重试次数（后端透传 agentscope ModelConfig，默认 0） */
+  max_retries?: number
   api_key_ref?: string
   /** 关联的已注册 ChatModel 代码（如已选择系统模型），用于回显 */
   model_code?: string
 }
 
+/** ReAct 执行配置：常规编排项 + agentscope ReActConfig 白名单项 */
+export interface AgentReactConfig {
+  /** 常规（自研编排遗留字段，后端白名单外仅存档） */
+  interaction_mode?: string
+  reflection_mode?: string
+  timeout_seconds?: number
+  /** agentscope ReActConfig 白名单（spec F2） */
+  max_iters?: number
+  structured_output_grace_iters?: number
+  stop_on_reject?: boolean
+  interruption_message?: string
+  interruption_raise_cancelled_error?: boolean
+}
+
+/** HITL 多轮人机协同配置（spec B5） */
+export interface AgentHitlConfig {
+  enabled?: boolean
+  timeout_seconds?: number
+  /** 需人工确认的工具名单（options = 已绑定 tools） */
+  confirm_tools?: string[]
+  /** 计划模式：首个 TaskUpdate 触发计划审批 */
+  plan_approval?: boolean
+  /** 注册 AskUser 对话式追问工具 */
+  allow_ask_user?: boolean
+}
+
+/** 上下文压缩配置（agentscope ContextConfig 白名单，spec F3，无顶层 max_tokens） */
+export interface AgentContextConfig {
+  trigger_ratio?: number
+  reserve_ratio?: number
+  tool_result_limit?: number
+  max_image_num?: number
+  compression_tool_enabled?: boolean
+  compression_prompt?: string
+  summary_template?: string
+}
+
 export interface AgentExecutionConfig {
-  hitl_config?: Record<string, any>
-  react_config?: Record<string, any>
-  context_config?: Record<string, any>
+  hitl_config?: AgentHitlConfig | Record<string, any>
+  react_config?: AgentReactConfig | Record<string, any>
+  context_config?: AgentContextConfig | Record<string, any>
 }
 
 /** 可视化配置提交体（与后端 AgentConfigCreate 嵌套结构对齐） */

@@ -30,6 +30,46 @@ function ssr(props: Record<string, unknown> = {}) {
   return renderToString(app)
 }
 
+/** 造一张真实规模的图（kb=12 全库图量级：65 实体 / 46 关系） */
+function bigGraph(nodeCount: number, edgeCount: number) {
+  const nodes = Array.from({ length: nodeCount }, (_, i) => ({
+    id: i + 1,
+    name: `实体${i + 1}`,
+    code: i === 0 ? 'OBJ_CUSTOMER' : 'OBJ_ORDER',
+    color: '#3371fc',
+    typeLabel: i === 0 ? '客户' : '订单',
+  }))
+  const edges = Array.from({ length: edgeCount }, (_, i) => ({
+    id: 1000 + i,
+    from: (i % nodeCount) + 1,
+    to: ((i * 7) % nodeCount) + 1,
+    label: `关系${i}`,
+    code: 'REL_ORDER_CUSTOMER',
+  })).filter((e) => e.from !== e.to)
+  return { nodes, edges }
+}
+
+/** 从 SSR 结果里取节点圆盘（渲染顺序与 props.nodes 一致） */
+function circles(html: string) {
+  return [...html.matchAll(/<circle cx="([\d.-]+)" cy="([\d.-]+)" r="([\d.-]+)"/g)].map((m) => ({
+    x: Number(m[1]),
+    y: Number(m[2]),
+    r: Number(m[3]),
+  }))
+}
+
+/** 从 SSR 结果里取每条边的可见路径（起点 / 终点） */
+function edgeLines(html: string) {
+  return [...html.matchAll(/class="kg-edge__line"[^>]*d="M([\d.-]+),([\d.-]+) [^"]* ([\d.-]+),([\d.-]+)"/g)].map(
+    (m) => ({
+      sx: Number(m[1]),
+      sy: Number(m[2]),
+      tx: Number(m[3]),
+      ty: Number(m[4]),
+    }),
+  )
+}
+
 describe('GraphCanvas', () => {
   it('渲染画布骨架与皮肤作用域类名', async () => {
     const html = await ssr({ nodes: NODES, edges: EDGES })
@@ -101,5 +141,46 @@ describe('GraphCanvas', () => {
   it('loading：遮罩层出现', async () => {
     const html = await ssr({ nodes: NODES, edges: EDGES, loading: true })
     expect(html).toContain('kg-canvas__mask')
+  })
+
+  it('有向关系：箭头模板存在，且可见边线绑定 marker-end', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    expect(html).toMatch(/<marker[^>]*id="kg-arrow"/)
+    expect(html).toContain('marker-end="url(#kg-arrow)"')
+  })
+
+  it('选中/邻接的边换用高亮箭头，方向语义跟手', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES, selection: { kind: 'node', id: 2 } })
+    expect(html).toContain('marker-end="url(#kg-arrow-hl)"')
+  })
+
+  it('边端点按节点半径裁剪：路径不落在圆心，箭头不被圆盘盖住', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    const discs = circles(html)
+    const lines = edgeLines(html)
+    expect(lines.length).toBe(EDGES.length)
+    // EDGES：2→1、3→1（下标 = id-1）
+    const pairs: [number, number][] = EDGES.map((e) => [e.from - 1, e.to - 1])
+    lines.forEach((line, i) => {
+      const [a, b] = pairs[i]
+      const fromGap = Math.hypot(line.sx - discs[a].x, line.sy - discs[a].y)
+      const toGap = Math.hypot(line.tx - discs[b].x, line.ty - discs[b].y)
+      expect(fromGap).toBeGreaterThan(discs[a].r)
+      expect(toGap).toBeGreaterThan(discs[b].r)
+    })
+  })
+
+  it('真实规模（>40 边）：关系标签不被静默抑制', async () => {
+    const g = bigGraph(65, 46)
+    expect(g.edges.length).toBeGreaterThan(40)
+    const html = await ssr(g)
+    expect(html).toContain('kg-edge__label')
+    expect(html).toContain('关系1')
+  })
+
+  it('真实规模（>60 节点）：节点名不被静默抑制（否则满屏孤点）', async () => {
+    const html = await ssr(bigGraph(65, 46))
+    expect(html).toContain('实体2')
+    expect(html).toContain('实体40')
   })
 })

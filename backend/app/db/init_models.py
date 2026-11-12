@@ -111,7 +111,11 @@ from app.models.sop import SOPTemplate                                      # no
 # --- 调解语音 RTC（迁移自 risk_control）---
 from app.models.duplex.duplex_voice_session import DuplexVoiceSession  # noqa: F401
 from app.models.duplex.duplex_voice_turn import DuplexVoiceTurn        # noqa: F401
-from app.models.duplex.duplex_voice_config import (                       # noqa: F401
-    DuplexVoiceConfig, AiAgentConfig, ToolPolicy,
+# --- SuperAgent 引擎核心运行时（sa_ 前缀，Task 1.1 2026-11-08）---
+from app.models.superagent import (                                          # noqa: F401
+    SuperAgentTrigger, SuperAgentTicket, SuperAgentEffect,
+    SuperAgentThread, SuperAgentSubscription, SuperAgentMandate,
+    SuperAgentAssignment, SuperAgentAuditLog,
 )
+from app.models.superagent_workspace_config import SuperAgentWorkspaceConfig   # noqa: F401
 # fmt: on

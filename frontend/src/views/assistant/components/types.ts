@@ -113,9 +113,10 @@ export type ChatMessage = AiChatMessage & {
 
   /** 通用：标记该消息使用何种专属渲染器
    *  research-async：深度研究后台异步任务卡片
-   *  research-legacy：旧版深度研究消息（过程面板 + 报告） */
+   *  research-legacy：旧版深度研究消息（过程面板 + 报告）
+   *  plan：计划模式任务清单（PlanExecutionPanel，spec F4/T9） */
   renderKind?: 'thinking' | 'research' | 'scheduled' | 'general' | 'skill' | 'agent' | 'team' | 'data'
-    | 'research-async' | 'research-legacy' | 'react' | 'sop'
+    | 'research-async' | 'research-legacy' | 'react' | 'sop' | 'plan'
   attachments?: Array<{
     file_id?: string
     db_id?: number
@@ -154,6 +155,18 @@ export type ChatMessage = AiChatMessage & {
   reactEvents?: Array<{ type: string; [key: string]: any }>
   /** ReAct 模式：运行 ID（供 HITL API 调用） */
   reactRunId?: string
+
+  /** 计划模式（plan）：任务清单快照（plan_snapshot 事件，回放直读，spec F4/T9） */
+  planSnapshot?: PlanTaskSnapshot[]
+}
+
+/** 计划模式任务快照（后端 plan_snapshot 事件 tasks 元素，spec F4/T9） */
+export interface PlanTaskSnapshot {
+  id: string
+  subject: string
+  description?: string
+  state: 'pending' | 'in_progress' | 'completed' | string
+  blocked_by?: Array<string | number>
 }
 
 /** 技能信息 */

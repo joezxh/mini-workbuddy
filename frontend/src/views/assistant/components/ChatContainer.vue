@@ -202,6 +202,20 @@
                 :session-type="currentSessionType"
               />
             </template>
+            <!-- 计划模式流式：PlanExecutionPanel（任务清单卡片 + 当前活动，spec F4/T9）+ 正文在下方 -->
+            <template v-else-if="isPlanStreaming">
+              <PlanExecutionPanel
+                :tasks="streamingPlanTasks || []"
+                :activity="streamingPlanActivity"
+                :streaming="true"
+              />
+              <GeneralRenderer
+                v-if="streamingText"
+                :parsed="streamingParsed"
+                streaming
+                :session-type="currentSessionType"
+              />
+            </template>
             <!-- 技能模式流式：SkillExecutionPanel（Tab 标签页）+ 结果正文在 Tab 底下（与回放消息结构一致） -->
             <template v-else-if="isSkillStreaming">
               <div v-if="!streamingText" class="ai-stream-waiting">
@@ -339,6 +353,8 @@ import ThinkingExecutionPanel from './renderers/execution/ThinkingExecutionPanel
 import AgentExecutionPanel from './renderers/execution/AgentExecutionPanel.vue'
 import DeepResearchExecutionPanel from './renderers/execution/DeepResearchExecutionPanel.vue'
 import TeamExecutionPanel from './renderers/execution/TeamExecutionPanel.vue'
+import PlanExecutionPanel from './renderers/execution/PlanExecutionPanel.vue'
+import type { PlanTaskSnapshot } from './types'
 import ThinkingCard from './renderers/ThinkingCard.vue'
 import ResearchPanel from './renderers/ResearchPanel.vue'
 import ScheduledTaskCard from './renderers/ScheduledTaskCard.vue'
@@ -389,6 +405,12 @@ defineProps<{
   isResearchStreaming?: boolean
   /** 流式深度研究来源列表 */
   streamingResearchSources?: Array<{ title: string; url?: string; snippet?: string }> | null
+  /** 是否为计划模式流式执行（使用独立的 PlanExecutionPanel 渲染，spec F4/T9） */
+  isPlanStreaming?: boolean
+  /** 流式计划任务清单快照（plan_snapshot 事件聚合） */
+  streamingPlanTasks?: PlanTaskSnapshot[] | null
+  /** 流式计划当前任务活动（plan_task_activity 事件聚合） */
+  streamingPlanActivity?: { tool_name: string; tool_call_id?: string | null; time?: number } | null
   /** 思考内容 */
   streamingThinkingContent?: string | null
   /** 工具调用历史 */

@@ -230,7 +230,7 @@ function typeLabel(type: string) {
   return ({
     CHAT: t('agentMgmt.typeChat'),
     WORKFLOW: t('agentMgmt.typeWorkflow'),
-    SKILL: t('agentMgmt.typeSkill'),
+    SUPERAGENT: t('agentMgmt.typeSuperagent'),
   } as Record<string, string>)[type] ?? type
 }
 
@@ -238,7 +238,7 @@ function typeColor(type: string) {
   return ({
     CHAT: 'blue',
     WORKFLOW: 'purple',
-    SKILL: 'green',
+    SUPERAGENT: 'geekblue',
   } as Record<string, string>)[type] ?? 'default'
 }
 

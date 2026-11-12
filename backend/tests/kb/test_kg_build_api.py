@@ -166,6 +166,60 @@ def test_failed_segments_lists_only_failures(db, kb):
     assert body["items"][0]["details"]["error"] == "boom"
 
 
+def test_failed_segments_returns_flat_failure_reason(db, kb):
+    """前端只读平级字段就能展示原因：阶段、码、原文，不必钻两套 details 键。"""
+    from app.services.kb.kg import kg_failure
+
+    _segment(db, kb, index=0, structure=False, vector=True,
+             details={"stage": "structure",
+                      "error": "NoTextResponseError: 模型只返回了思考/工具块",
+                      "error_code": kg_failure.MODEL_NO_TEXT})
+    _segment(db, kb, index=1, structure=True, vector=False,
+             details={"vector_stage": "vector",
+                      "vector_error": "RuntimeError: failed to establish a new connection",
+                      "vector_error_code": kg_failure.EMBEDDING_UNAVAILABLE})
+    with _client(db) as c:
+        items = c.get(
+            f"/api/v1/kb/knowledges/{kb.id}/graph/failed-segments"
+        ).json()["items"]
+
+    by_chunk = {i["chunk_index"]: i for i in items}
+    assert by_chunk[0]["stage"] == kg_failure.STAGE_STRUCTURE
+    assert by_chunk[0]["error_code"] == kg_failure.MODEL_NO_TEXT
+    # 结构已成功、仅向量失败的切片才报向量（否则「LLM 截断」会被看成「嵌入不可用」）
+    assert by_chunk[1]["stage"] == kg_failure.STAGE_VECTOR
+    assert by_chunk[1]["error_code"] == kg_failure.EMBEDDING_UNAVAILABLE
+    assert by_chunk[1]["error"].startswith("RuntimeError:")
+
+
+def test_failed_segments_derives_code_for_legacy_rows(db, kb):
+    """旧数据只存了一句原文时也要现场求出码，不能退化成「未知原因」。"""
+    from app.services.kb.kg import kg_failure
+
+    _segment(db, kb, structure=False, vector=False,
+             details={"error": "ValueError: 响应截断修复后无任何实体/关系"})
+    with _client(db) as c:
+        item = c.get(
+            f"/api/v1/kb/knowledges/{kb.id}/graph/failed-segments"
+        ).json()["items"][0]
+    assert item["error_code"] == kg_failure.JSON_TRUNCATED
+    assert item["stage"] == kg_failure.STAGE_STRUCTURE
+
+
+def test_failed_segments_unknown_when_nothing_recorded(db, kb):
+    """甚至没留痕的切片（以前向量阶段从不写 details）给 unknown，而不是猜。"""
+    from app.services.kb.kg import kg_failure
+
+    _segment(db, kb, structure=True, vector=False, details=None)
+    with _client(db) as c:
+        item = c.get(
+            f"/api/v1/kb/knowledges/{kb.id}/graph/failed-segments"
+        ).json()["items"][0]
+    assert item["error_code"] == kg_failure.UNKNOWN
+    assert item["stage"] == kg_failure.STAGE_VECTOR
+    assert item["error"] == ""
+
+
 # ── 配置 ─────────────────────────────────────────────────────────────────
 def test_config_get_returns_defaults(db, kb):
     with _client(db) as c:

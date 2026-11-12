@@ -128,6 +128,28 @@ def test_cross_kb_labels_are_isolated():
     assert "mwb_kb_8" not in calls[0][0]
 
 
+def test_entity_upsert_attributes_must_be_neo4j_primitive():
+    """Neo4j 属性只接受基本类型/数组：attributes 必须以 JSON 字符串下发，
+    直接传 dict 会被驱动序列化成 Map{}，报 ClientError.Statement.TypeError
+    （线上事故：project_mention 空 attributes={} → 「Encountered: Map{}」）。"""
+    import json
+
+    calls, factory = _recorder()
+    s = store.KgNeo4jStore(7, session_factory=factory)
+    # 缺省（project_mention/project_relation 形态）：不得是 dict
+    s.upsert_entity(entity_id="e", name="n", label="l", normalized_name="n")
+    attrs = calls[0][1]["attributes"]
+    assert isinstance(attrs, str) and json.loads(attrs) == {}
+    # 显式嵌套 dict（project_entity 形态）：整体 JSON 化，可无损还原
+    payload = {"aliases": ["A"], "properties": {"k": "v"}, "status": 1}
+    s.upsert_entity(
+        entity_id="e", name="n", label="l", normalized_name="n", attributes=payload
+    )
+    attrs2 = calls[1][1]["attributes"]
+    assert isinstance(attrs2, str)
+    assert json.loads(attrs2) == payload
+
+
 def test_relation_upsert_carries_semantic_type_as_property():
     calls, factory = _recorder()
     s = store.KgNeo4jStore(7, session_factory=factory)

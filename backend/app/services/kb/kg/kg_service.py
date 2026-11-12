@@ -369,6 +369,10 @@ class KgService:
             if evidence:
                 existing.evidence = evidence
             self.db.commit()
+            # 合并路径同样要投影：投影是 best-effort，首次创建时 Neo4j 可能
+            # 恰好不可用而漏掉这条边；此后每次幂等命中都是补投影的机会，
+            # 不补则该边在 Neo4j 里永久缺席（只能等 reconcile 兜底）。
+            self._project_triple(existing)
             return existing
 
         triple = KgTriple(

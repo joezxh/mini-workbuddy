@@ -20,6 +20,8 @@ from typing import Any, Optional
 
 from loguru import logger
 
+from app.services.kb.kg import kg_failure
+
 # ── 长度守卫（越界丢弃，不抛错）──────────────────────────────────────────
 MAX_ENTITY_NAME_LENGTH = 512
 MAX_ENTITY_LABEL_LENGTH = 128
@@ -52,9 +54,16 @@ class ExtractionResult:
     dropped_entities: int = 0
     dropped_relations: int = 0
     errors: list[str] = field(default_factory=list)
+    #: 与 ``errors`` 同序的**失败码**（:mod:`kg_failure`）——异常在本层被吞成字符串，
+    #: 不在这里定码，上游就只能拿 ``errors[0]`` 的文本去猜原因。
+    codes: list[str] = field(default_factory=list)
+    #: **补齐成功**的截断响应留下的裁剪留痕（:class:`kg_llm_extractor.ParsedOutput.notice`）。
+    #: 不算失败也不写进 ``errors``：部分结果对图谱仍有价值且已入库，但「被裁过」与
+    #: 「抽全了」必须可区分，否则残缺结果会一直顶着「成功 N 实体」无人重抽。
+    truncation: Optional[dict] = None
 
     def as_details(self, elapsed_ms: int = 0) -> dict:
-        return {
+        details = {
             "entities": len(self.entities),
             "relations": len(self.relations),
             "dropped_entities": self.dropped_entities,
@@ -62,6 +71,11 @@ class ExtractionResult:
             "errors": self.errors[:5],
             "elapsed_ms": elapsed_ms,
         }
+        if self.codes:
+            details["error_code"] = self.codes[0]
+        if self.truncation:
+            details["truncated"] = self.truncation
+        return details
 
 
 def _pick(d: dict, keys: tuple[str, ...]) -> Any:
@@ -177,8 +191,14 @@ def _normalize_entity(raw: Any) -> Optional[dict]:
     }
 
 
-def _normalize_relation(raw: Any, kept: set[str]) -> Optional[dict]:
-    """规整单个关系；**端点实体被丢弃则关系一并丢弃**（悬空边不入库）。"""
+def _normalize_relation(raw: Any) -> Optional[dict]:
+    """规整单个关系。
+
+    端点是否可用**不在抽取器判定**：本片段实体清单可能因截断/遗漏缺项，
+    而该实体或许已在库内（前一片段/其他文档创建）。这里只做格式守卫，
+    把关系原样交给构建层——``_run_structure`` 先查本片段结果、再按名查库，
+    两处都解析不到才丢弃（跨片段关系由此补回，悬空边仍不入库）。
+    """
     if not isinstance(raw, dict):
         return None
     src = _as_text(_pick(raw, _SUBJECT_KEYS)).strip()
@@ -187,8 +207,6 @@ def _normalize_relation(raw: Any, kept: set[str]) -> Optional[dict]:
     if not src or not tgt or not rtype:
         return None
     if len(rtype) > MAX_RELATION_TYPE_LENGTH:
-        return None
-    if normalize_entity_name(src) not in kept or normalize_entity_name(tgt) not in kept:
         return None
     return {
         "source": src,
@@ -208,7 +226,7 @@ def extract(
 ) -> ExtractionResult:
     """从一段文本抽取实体与关系。
 
-    两条通道共用下方同一套**规整层**（长度守卫 / 去重 / 悬空边丢弃），
+    两条通道共用下方同一套**规整层**（长度守卫 / 去重 / 关系端点移交构建层解析），
     避免「LLM 通道少校验一项」的隐性分叉：
 
     * ``llm`` 不为空 → LLM 通道（:mod:`kg_llm_extractor`，中文长文本唯一可行解）；
@@ -227,12 +245,25 @@ def extract(
 
     if llm is not None:
         try:
-            raw_entities, raw_triplets = llm(text, schema_hint=schema_hint)
+            # 抽取器返 ``(entities, triplets)``（实际是 :class:`ParsedOutput`，多一个
+            # ``notice``）：按 2 元组解包的写法保持不变，老注入点（测试/规则回退）
+            # 返回普通元组也能走。
+            out = llm(text, schema_hint=schema_hint)
+            raw_entities, raw_triplets = out
+            result.truncation = getattr(out, "notice", None)
         except Exception as exc:  # noqa: BLE001 - 单切片失败不中断整批
             # **不回落规则通道**：回落会产出一堆 related_to 全连接弱关系，
             # 比空结果更难发现（前端看起来“抽取成功”）。直接失败 → 阶段标记置
             # False → 模型恢复后可断点续跑。
+            # 堆栈必须在此落日志：这里是异常链的终点——只往 errors 里塞 str(exc) 的话，
+            # 上游拿到的是“一句话”，看不到报错在哪一层、入参长什么样。
+            logger.exception(
+                f"[kg] LLM 抽取异常（schema_hint_len={len(schema_hint or '')}"
+                f", text_len={len(text or '')}"
+                f", model={getattr(llm, 'model_desc', 'n/a')}）: {exc}"
+            )
             result.errors.append(f"LLM 抽取失败: {type(exc).__name__}: {exc}")
+            result.codes.append(kg_failure.classify(exc, stage=kg_failure.STAGE_STRUCTURE))
         return _assemble(result, raw_entities, raw_triplets)
 
     if client is None:
@@ -243,7 +274,11 @@ def extract(
             scope = TenantScope(tenant_id) if tenant_id is not None else None
             client = SemanticaClient(scope)
         except Exception as exc:  # noqa: BLE001
+            logger.exception(f"[kg] 规则抽取通道初始化失败: {exc}")
             result.errors.append(f"抽取器初始化失败: {exc}")
+            result.codes.append(
+                kg_failure.classify(exc, stage=kg_failure.STAGE_STRUCTURE)
+            )
             return result
 
     try:
@@ -259,11 +294,15 @@ def extract(
         else:
             raw_entities = list(client.extract_entities(text) or [])
     except Exception as exc:  # noqa: BLE001 - 抽取失败登记后继续（关系可能仍可用）
+        logger.exception(f"[kg] 规则通道实体抽取失败: {exc}")
         result.errors.append(f"实体抽取失败: {type(exc).__name__}: {exc}")
+        result.codes.append(kg_failure.classify(exc, stage=kg_failure.STAGE_STRUCTURE))
     try:
         raw_triplets = list(client.extract_triplets(text, entities=raw_entities) or [])
     except Exception as exc:  # noqa: BLE001
+        logger.exception(f"[kg] 规则通道关系抽取失败: {exc}")
         result.errors.append(f"关系抽取失败: {type(exc).__name__}: {exc}")
+        result.codes.append(kg_failure.classify(exc, stage=kg_failure.STAGE_STRUCTURE))
 
     return _assemble(result, raw_entities, raw_triplets)
 
@@ -271,7 +310,12 @@ def extract(
 def _assemble(
     result: ExtractionResult, raw_entities: list, raw_triplets: list
 ) -> ExtractionResult:
-    """两条通道共用的规整层：去重 + 长度守卫 + 悬空边丢弃。"""
+    """两条通道共用的规整层：去重 + 长度守卫 + 关系去重。
+
+    端点不在实体清单里的关系**不再在此丢弃**：实体清单可能被输出预算裁剪，
+    而实体本身或已在库内（跨片段）。解析权交给 ``_run_structure``
+    （先本片段 → 再按名查库 → 都不中才丢弃），抽取器只保证格式可用。
+    """
     # ── 实体：去重 + 长度守卫 ──
     seen: dict[str, dict] = {}
     for raw in raw_entities:
@@ -281,12 +325,11 @@ def _assemble(
             continue
         seen.setdefault(ent["normalized"], ent)
     result.entities = list(seen.values())
-    kept = set(seen.keys())
 
-    # ── 关系：悬空丢弃 + 去重 ──
+    # ── 关系：格式守卫 + 去重（端点解析交构建层）──
     rel_seen: set[tuple] = set()
     for raw in raw_triplets:
-        rel = _normalize_relation(raw, kept)
+        rel = _normalize_relation(raw)
         if rel is None:
             result.dropped_relations += 1
             continue

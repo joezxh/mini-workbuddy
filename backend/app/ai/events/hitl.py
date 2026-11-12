@@ -15,17 +15,43 @@ from loguru import logger
 PAUSE_TIMEOUT_MINUTES = 30
 
 
-def record_pause(db: Any, *, execution_id: str, reply_id: Optional[str] = None,
-                 tool_calls: Optional[list] = None,
-                 suggested_rules: Optional[list] = None,
-                 timeout_minutes: int = PAUSE_TIMEOUT_MINUTES) -> Optional[int]:
-    """写入 HITL 暂停记录（status=waiting）。吞异常：不阻断执行流。"""
+def _next_round_no(db: Any, execution_id: str) -> int:
+    """同 execution_id 已有暂停记录数 + 1（多轮 HITL 轮次，查询失败回退 1）。"""
     from app.models.agent.agent_hitl_pause import AgentHitlPause
 
     try:
+        count = (
+            db.query(AgentHitlPause)
+            .filter(AgentHitlPause.execution_id == execution_id)
+            .count()
+        )
+        return int(count) + 1
+    except Exception:  # noqa: BLE001
+        return 1
+
+
+def record_pause(db: Any, *, execution_id: str, reply_id: Optional[str] = None,
+                 tool_calls: Optional[list] = None,
+                 suggested_rules: Optional[list] = None,
+                 timeout_minutes: int = PAUSE_TIMEOUT_MINUTES,
+                 pause_type: Optional[str] = None,
+                 pause_payload: Optional[dict] = None,
+                 round_no: Optional[int] = None) -> Optional[int]:
+    """写入 HITL 暂停记录（status=waiting）。吞异常：不阻断执行流。
+
+    多轮语义：``round_no`` 缺省按同 execution_id 现有记录数 +1 自动递增；
+    ``pause_type`` ∈ tool_confirm / plan_approval / ask_user。
+    """
+    from app.models.agent.agent_hitl_pause import AgentHitlPause
+
+    try:
+        if round_no is None:
+            round_no = _next_round_no(db, execution_id)
         row = AgentHitlPause(
             execution_id=execution_id, reply_id=reply_id,
             tool_calls=tool_calls, suggested_rules=suggested_rules,
+            round_no=round_no, pause_type=pause_type,
+            pause_payload=pause_payload,
             status="waiting",
             timeout_at=datetime.now() + timedelta(minutes=timeout_minutes),
         )
@@ -88,9 +114,63 @@ def build_resume_event(action: str, reply_id: Optional[str],
     )
 
 
+def build_ask_user_resume_event(tool_calls: list[dict],
+                                message: str = "",
+                                reply_id: Optional[str] = None) -> Any:
+    """构造 AskUser（external tool）恢复事件：ExternalExecutionResultEvent。
+
+    - ``tool_calls`` 为暂停记录里的待执行工具调用（含 id/name/input），
+      input.questions 为 AskUser 提出的问题列表；
+    - ``message`` 非空 → 每个问题以自由文本回答（selected=[], other=message）；
+    - tool_calls 内直接携带 ``answers`` 时优先使用（前端可提交结构化选项）。
+
+    结果以 ToolResultBlock(metadata={"answers": [...]}) 回填，形状对齐
+    agentscope AskUserMetadata（_agent.check_external_result 校验依据）。
+    """
+    import json as _json
+
+    from agentscope.event import ExternalExecutionResultEvent
+    from agentscope.message import TextBlock, ToolResultBlock, ToolResultState
+
+    tc = tool_calls[0] if tool_calls else {}
+    raw_input = tc.get("input") or {}
+    if isinstance(raw_input, str):
+        try:
+            raw_input = _json.loads(raw_input)
+        except (TypeError, ValueError):
+            raw_input = {}
+    questions = [
+        q.get("question", "") for q in (raw_input.get("questions") or [])
+        if isinstance(q, dict)
+    ]
+
+    answers = raw_input.get("answers")
+    if not isinstance(answers, list) or not answers:
+        if message and questions:
+            answers = [
+                {"question": q, "selected": [], "other": message}
+                for q in questions
+            ]
+        else:
+            answers = []
+
+    result_block = ToolResultBlock(
+        id=tc.get("id") or "ask_user",
+        name=tc.get("name") or "AskUser",
+        output=[TextBlock(text="The user has answered the questions.")],
+        state=ToolResultState.SUCCESS,
+        metadata={"answers": answers},
+    )
+    return ExternalExecutionResultEvent(
+        reply_id=reply_id or "", execution_results=[result_block],
+    )
+
+
 def resume_hitl(handle: Any, action: str,
                 tool_calls: Optional[list[dict]] = None,
-                resume_payload: Optional[dict] = None) -> bool:
+                resume_payload: Optional[dict] = None,
+                pause_type: Optional[str] = None,
+                message: str = "") -> bool:
     """恢复暂停中的执行：新起 consumer 续跑 agent.reply_stream(恢复事件)。
 
     handle.status 置回 running，并向 out_q 投递 hitl_resume 控制事件
@@ -101,6 +181,10 @@ def resume_hitl(handle: Any, action: str,
     ``resume_payload`` 用于 SOP 人工验收路径（spec §4.9）：SOP 引擎以
     ``{"confirmed", "message"}`` 载荷结算验收，既不接受 agentscope 确认事件，
     也需要携带驳回原因，故与工具授权路径分开驱动。其余行为完全一致。
+
+    ``pause_type="ask_user"`` 且 action=approve：走 AskUser 对话式追问恢复
+    （ExternalExecutionResultEvent，``message`` 为用户自由文本回答）；
+    reject/interrupt 仍走中断路径。
     """
     from app.ai.skills.execution import SkillEvent
 
@@ -109,7 +193,11 @@ def resume_hitl(handle: Any, action: str,
         if action == "interrupt" and handle.handler is not None:
             # interrupt 恢复路径：ReplyEnd 的 finished_reason 应记为 interrupted
             handle.handler.interrupted_flag = True
-        event = build_resume_event(action, handle.reply_id, tcs)
+        if pause_type == "ask_user" and action == "approve":
+            event = build_ask_user_resume_event(
+                tcs, message=message, reply_id=handle.reply_id)
+        else:
+            event = build_resume_event(action, handle.reply_id, tcs)
 
         async def _resume() -> None:
             async for ev in handle.agent.reply_stream(inputs=event):

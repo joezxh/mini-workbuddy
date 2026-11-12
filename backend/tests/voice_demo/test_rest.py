@@ -4,7 +4,6 @@ import wave
 
 import httpx
 
-from app.config import settings
 from tests.voice_demo.test_health import make_client  # 复用（带 auth override）
 from app.services.voice_demo import gateway
 
@@ -19,31 +18,8 @@ def mock_wav_bytes() -> bytes:
     return buf.getvalue()
 
 
-def test_asr_mock():
-    r = make_client().post(
-        "/api/v1/voice-demo/asr/transcribe",
-        files={"file": ("a.wav", mock_wav_bytes(), "audio/wav")},
-        data={"language": "auto"},
-    )
-    assert r.status_code == 200
-    body = r.json()
-    assert {"text", "language", "cost_ms"} <= set(body)
-
-
-def test_tts_mock_wav():
-    r = make_client().post(
-        "/api/v1/voice-demo/tts/synthesize",
-        json={"text": "你好", "voice": "Aiden", "response_format": "wav"},
-    )
-    assert r.status_code == 200
-    assert r.headers["content-type"].startswith("audio/wav")
-    w = wave.open(io.BytesIO(r.content), "rb")
-    assert w.getnframes() > 0
-
-
 def test_asr_forward(monkeypatch):
     """httpx MockTransport 验证转发形状（multipart file+language，无 model）。"""
-    monkeypatch.setattr(settings, "VOICE_DEMO_MOCK", False)  # 走真实转发分支
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -64,7 +40,6 @@ def test_asr_forward(monkeypatch):
 
 
 def test_upstream_5xx_maps_502(monkeypatch):
-    monkeypatch.setattr(settings, "VOICE_DEMO_MOCK", False)  # 走真实转发分支
     monkeypatch.setattr(
         gateway, "_transport",
         lambda: httpx.MockTransport(lambda req: httpx.Response(500, text="boom")),

@@ -38,7 +38,7 @@ class AgentConfig(Base, TenantMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     agent_code = Column(String(100), nullable=False, unique=True, index=True, comment="唯一标识码")
     name = Column(String(200), nullable=False, comment="Agent名称")
-    agent_type = Column(String(20), nullable=False, comment="实现类型: CHAT/WORKFLOW/SKILL")
+    agent_type = Column(String(20), nullable=False, comment="实现类型: CHAT/WORKFLOW/SUPERAGENT（SKILL 已并入 CHAT）")
     category = Column(String(50), nullable=True, comment="用途分类（数据字典: agent_category）")
 
     # ── 策略配置（合并原 AgentStrategy）──────────────────────────────────
@@ -94,7 +94,7 @@ class AgentConfig(Base, TenantMixin):
         AgentFactory.build_agent（model_config / mcp_servers / tools / skills）一致：
             {
               "agent_code": "...",       # 身份标识（技能型装配/审计用）
-              "agent_type": "...",       # 实现类型 CHAT/WORKFLOW/SKILL（模板装配依据）
+              "agent_type": "...",       # 实现类型 CHAT/WORKFLOW/SUPERAGENT（SKILL 已并入 CHAT）
               "model_config": {...},     # 含 model_code 或 provider/model
               "mcp_servers": [...],
               "tools": [...],

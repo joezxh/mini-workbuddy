@@ -593,27 +593,6 @@ COMMENT ON COLUMN agent_trace.workspace_config_id IS '关联 Workspace 配置 ID
 COMMENT ON COLUMN agent_trace.component_ids IS '关联组件 ID 集合 {"skill": [...], "tool": [...]}';
 COMMENT ON COLUMN agent_trace.tenant_id IS '租户ID';
 
--- ai_agent_config
-
-CREATE TABLE ai_agent_config (
-	id BIGSERIAL NOT NULL, 
-	agent_id VARCHAR(64) NOT NULL, 
-	name VARCHAR(128), 
-	type VARCHAR(32) DEFAULT 'agentscope', 
-	model VARCHAR(64) DEFAULT 'qwen-plus', 
-	system_prompt TEXT, 
-	tool_bindings JSON, 
-	mcp_bindings JSON, 
-	max_react_iters INTEGER DEFAULT '5', 
-	enable_plan BOOLEAN DEFAULT 'true', 
-	created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	PRIMARY KEY (id)
-);
-COMMENT ON COLUMN ai_agent_config.type IS 'agentscope（dify/direct 已废弃，见 2026-09-20 spec）';
-COMMENT ON COLUMN ai_agent_config.tool_bindings IS '绑定的工具名列表';
-COMMENT ON COLUMN ai_agent_config.mcp_bindings IS '绑定的 MCP 服务列表';
-
 -- ai_api_key
 
 CREATE TABLE ai_api_key (
@@ -1186,28 +1165,6 @@ COMMENT ON COLUMN ai_web_search_log.results_count IS '结果条数';
 COMMENT ON COLUMN ai_web_search_log.success IS '是否成功';
 COMMENT ON COLUMN ai_web_search_log.error IS '错误信息';
 COMMENT ON COLUMN ai_web_search_log.tenant_id IS '租户ID';
-
--- duplex_voice_config
-
-CREATE TABLE duplex_voice_config (
-	id BIGSERIAL NOT NULL, 
-	role_id VARCHAR(64) NOT NULL, 
-	role_name VARCHAR(128), 
-	greeting TEXT, 
-	voice_identity VARCHAR(64), 
-	language VARCHAR(16) DEFAULT 'zh-CN', 
-	agent_id VARCHAR(64), 
-	case_type VARCHAR(64), 
-	created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	PRIMARY KEY (id)
-);
-COMMENT ON COLUMN duplex_voice_config.role_id IS '角色标识（如 mediator / party_a）';
-COMMENT ON COLUMN duplex_voice_config.role_name IS '角色展示名';
-COMMENT ON COLUMN duplex_voice_config.greeting IS '开场白';
-COMMENT ON COLUMN duplex_voice_config.voice_identity IS '音色标识';
-COMMENT ON COLUMN duplex_voice_config.agent_id IS '绑定的 Agent';
-COMMENT ON COLUMN duplex_voice_config.case_type IS '适用案件类型（空表示通用）';
 
 -- duplex_voice_session
 
@@ -1921,20 +1878,6 @@ COMMENT ON COLUMN sys_user_notification.is_read IS '已读状态';
 COMMENT ON COLUMN sys_user_notification.expire_at IS '过期时间(可空=不过期)';
 COMMENT ON COLUMN sys_user_notification.created_at IS '创建时间';
 COMMENT ON COLUMN sys_user_notification.tenant_id IS '租户ID';
-
--- tool_policy
-
-CREATE TABLE tool_policy (
-	id BIGSERIAL NOT NULL, 
-	tool_name VARCHAR(128) NOT NULL, 
-	enabled BOOLEAN DEFAULT 'true', 
-	timeout_ms INTEGER DEFAULT '8000', 
-	max_calls_per_turn INTEGER DEFAULT '2', 
-	max_result_bytes INTEGER DEFAULT '32768', 
-	created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT now(), 
-	PRIMARY KEY (id)
-);
 
 -- workflow_chain
 
@@ -3312,9 +3255,6 @@ CREATE INDEX ix_agent_trace_user_id ON agent_trace (user_id);
 -- index ix_agent_trace_team_config_id on agent_trace
 CREATE INDEX ix_agent_trace_team_config_id ON agent_trace (team_config_id);
 
--- index ix_ai_agent_config_agent_id on ai_agent_config
-CREATE UNIQUE INDEX ix_ai_agent_config_agent_id ON ai_agent_config (agent_id);
-
 -- index ix_ai_api_key_platform on ai_api_key
 CREATE INDEX ix_ai_api_key_platform ON ai_api_key (platform);
 
@@ -3474,9 +3414,6 @@ CREATE INDEX ix_ai_web_search_log_tenant_id ON ai_web_search_log (tenant_id);
 -- index ix_ai_web_search_log_web_search_id on ai_web_search_log
 CREATE INDEX ix_ai_web_search_log_web_search_id ON ai_web_search_log (web_search_id);
 
--- index ix_duplex_voice_config_role_id on duplex_voice_config
-CREATE UNIQUE INDEX ix_duplex_voice_config_role_id ON duplex_voice_config (role_id);
-
 -- index ix_duplex_voice_session_case_number on duplex_voice_session
 CREATE INDEX ix_duplex_voice_session_case_number ON duplex_voice_session (case_number);
 
@@ -3614,9 +3551,6 @@ CREATE INDEX ix_sys_user_notification_tenant_id ON sys_user_notification (tenant
 
 -- index ix_notif_user_read on sys_user_notification
 CREATE INDEX ix_notif_user_read ON sys_user_notification (user_id, is_read);
-
--- index ix_tool_policy_tool_name on tool_policy
-CREATE UNIQUE INDEX ix_tool_policy_tool_name ON tool_policy (tool_name);
 
 -- index uq_workflow_chain_code_tenant on workflow_chain
 CREATE UNIQUE INDEX uq_workflow_chain_code_tenant ON workflow_chain (chain_code, tenant_id);

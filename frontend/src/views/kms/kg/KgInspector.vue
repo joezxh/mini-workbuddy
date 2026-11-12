@@ -203,6 +203,7 @@ import { message } from 'ant-design-vue'
 import * as api from '@/api/kg'
 import type { KgEntity, KgRelation } from '@/api/kg'
 import { formatWeight, typeLabel, typeTone, weightColor } from '@/components/common/graph/graphTheme'
+import { SHELL_PATH } from '@/utils/shellTab'
 
 const props = defineProps<{
   knowledgeId: number
@@ -293,7 +294,7 @@ function statusBadgeClass(status?: string | null) {
 
 function openStandardCenter() {
   // 无独立标准路由：落到标准管理工作台的「数据源」Tab
-  void router.push({ path: '/admin', query: { tab: 'kg-data-source' } })
+  void router.push({ path: SHELL_PATH, query: { tab: 'kg-data-source' } })
 }
 
 async function load() {

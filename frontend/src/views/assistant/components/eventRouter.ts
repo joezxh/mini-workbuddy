@@ -13,6 +13,7 @@ import TeamExecutionPanel from './renderers/execution/TeamExecutionPanel.vue'
 import DeepResearchExecutionPanel from './renderers/execution/DeepResearchExecutionPanel.vue'
 import SkillExecutionPanel from './renderers/execution/SkillExecutionPanel.vue'
 import ThinkingExecutionPanel from './renderers/execution/ThinkingExecutionPanel.vue'
+import PlanExecutionPanel from './renderers/execution/PlanExecutionPanel.vue'
 import ReactTimeline from './ReactTimeline.vue'
 import ResearchPanel from './renderers/ResearchPanel.vue'
 import ResearchReportRenderer from './renderers/ResearchReportRenderer.vue'
@@ -32,6 +33,7 @@ export type RenderKind =
   | 'research-async'
   | 'scheduled'
   | 'sop'
+  | 'plan'
   | 'default'
 
 export interface RenderContext {
@@ -83,6 +85,9 @@ export function resolveRenderKind(msg: ChatMessage, ctx: RenderContext = {}): Re
   if (msg.renderKind === 'research-async') return 'research-async'
   if (msg.renderKind === 'scheduled' || (ctx.currentSessionType === 'scheduled' && msg.asyncTask)) {
     return 'scheduled'
+  }
+  if (msg.renderKind === 'plan' || (ctx.currentSessionType === 'plan' && msg.planSnapshot?.length)) {
+    return 'plan'
   }
   return 'default'
 }
@@ -202,6 +207,15 @@ export const RENDER_SPECS: Record<RenderKind, RenderSpec> = {
   scheduled: {
     primary: [{ component: ScheduledTaskCard, props: m => ({ task: m.asyncTask }) }],
     showArtifacts: false, showText: false,
+  },
+  plan: {
+    primary: [{
+      component: PlanExecutionPanel,
+      props: m => ({ tasks: m.planSnapshot || [], streaming: false }),
+      // 无快照数据时不渲染主组件（仅正文回退）
+      when: m => !!m.planSnapshot?.length,
+    }],
+    showArtifacts: false, showText: true,
   },
   default: { primary: [], showArtifacts: false, showText: true },
 }

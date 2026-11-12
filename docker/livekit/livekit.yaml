@@ -44,11 +44,15 @@ room:
 #    LIVEKIT_TURN_CERT/LIVEKIT_TURN_KEY），本机冒烟无需；
 #    生产跨严格 NAT 时再按官方 config-sample.yaml 的 turn 段配置。
 
-# 复用 infra 的 Redis（mwb-redis-stack）。单节点也建议开启：
+# 复用本地已部署的 Redis（名为 redis 的容器，宿主机 6379 已映射，
+# REDIS_ARGS=--requirepass password123）。单节点也建议开启：
 # 便于状态观测，未来加第二台 server 指向同一 Redis 即自动组网，
 # 同时是 egress/ingress 任务的消息总线。
+# mwb-livekit 在 mwb-infra-network、redis 在 infra_net，两网隔离，
+# 故走 host.docker.internal:6379 经宿主机端口映射访问。
 redis:
-  address: mwb-redis-stack:6379
+  address: host.docker.internal:6379
+  password: password123
 
 logging:
   level: info

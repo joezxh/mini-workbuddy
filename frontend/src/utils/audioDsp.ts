@@ -174,6 +174,7 @@ export function createStreamingResampler() {
       while (position < pending.length && outputCount < targetCount) {
         const before = Math.floor(position)
         const fraction = position - before
+        const after = Math.min(pending.length - 1, before + 1)
         values.push(pending[before] * (1 - fraction) + pending[after] * fraction)
         position += ratio
         outputCount += 1
@@ -285,4 +286,9 @@ export function rmsDb(samples: Float32Array): number {
   for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i]
   const rms = Math.sqrt(sum / samples.length)
   return rms <= 1e-10 ? -120 : 20 * Math.log10(rms)
+}
+
+/** 波形的感知电平 0..1：把 [-60, -6] dBFS 线性映射到 [0, 1]（静音→0，响亮语音→1） */
+export function rmsLevel(samples: Float32Array): number {
+  return Math.min(1, Math.max(0, (rmsDb(samples) + 60) / 54))
 }

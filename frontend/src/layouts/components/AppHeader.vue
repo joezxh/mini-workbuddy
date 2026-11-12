@@ -24,6 +24,7 @@ import ElectronServerButton from './ElectronServerButton.vue'
 import { LOCALE_LABELS, SUPPORTED_LOCALES } from '@/i18n'
 import { useI18n } from 'vue-i18n'
 import { resolveIcon } from '@/utils/icons'
+import { SHELL_PATH } from '@/utils/shellTab'
 import type { LocaleKey } from '@/i18n'
 
 const { t } = useI18n()
@@ -33,9 +34,9 @@ const router = useRouter()
 const route = useRoute()
 
 // ── 刷新当前激活 Tab ──
-// 控制台（/admin）的 Tab 系统监听该事件，重挂载当前激活 Tab 的组件；
+// 控制台壳（/dashboard）的 Tab 系统监听该事件，重挂载当前激活 Tab 的组件；
 // 仅在有 Tab 的页面展示按钮，避免无效操作。
-const showRefreshBtn = computed(() => route.path === '/admin')
+const showRefreshBtn = computed(() => route.path === SHELL_PATH)
 const refreshing = ref(false)
 let refreshTimer: number | undefined
 
@@ -81,17 +82,17 @@ function toggleFullscreen() {
 
 const initial = computed(() => user.userInfo?.realName?.charAt(0)?.toUpperCase() ?? 'U')
 
-/** 快捷导航：直达各业务首页，图标与侧栏保持一致。 */
+/** 快捷导航：直达各业务首页，图标与侧栏保持一致。
+ *  「控制台」即 Tab 外壳本身，不再另列重复的管理员入口。 */
 const QUICK_NAV = [
-  { path: '/dashboard', icon: 'DashboardOutlined', titleKey: 'sys.menu.dashboard' },
+  { path: SHELL_PATH, icon: 'DashboardOutlined', titleKey: 'sys.menu.dashboard' },
   { path: '/ai-assistant', icon: 'MessageOutlined', titleKey: 'sys.menu.assistant' },
   { path: '/wiki', icon: 'BookOutlined', titleKey: 'sys.menu.wiki' },
   { path: '/meeting', icon: 'VideoCameraOutlined', titleKey: 'sys.menu.meeting' },
-  { path: '/admin', icon: 'SettingOutlined', titleKey: 'sys.menu.admin' },
 ]
 
 function onUserMenu({ key }: { key: string | number }) {
-  if (key === 'profile') router.push('/admin?tab=profile')
+  if (key === 'profile') router.push({ path: SHELL_PATH, query: { tab: 'profile' } })
   if (key === 'logout') void onLogout()
 }
 

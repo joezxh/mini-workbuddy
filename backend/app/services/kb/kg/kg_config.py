@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session
 
 from app.models.wiki.wiki_knowledge import WikiKnowledge
 
+# 抽取输出预算的默认值单一真相源：放在抽取模块，配置层只做透传与钳制
+from app.services.kb.kg.kg_llm_extractor import DEFAULT_MAX_OUTPUT_TOKENS
+
 GRAPH_CONFIG_KEY = "graph"
 
 # 最近一次构建的运行元信息（不新增列，与 graph 配置并列存放）
@@ -28,6 +31,10 @@ DEFAULTS: dict[str, Any] = {
     "schema": "",                     # schema_source=free_text 时的自由文本约束
     "concurrency_count": 8,
     "timeout_seconds": 60,
+    # 抽取通道的输出 token 预算上限：小上下文自托管引擎（LM Studio/llama.cpp）
+    # 的窗口由并发请求共享，声明得越大越容易被整条拒绝（400 Context size
+    # has been exceeded），窗口小的部署要能把它调小。
+    "max_output_tokens": DEFAULT_MAX_OUTPUT_TOKENS,
     # ── 检索 ──
     "use_graph_retrieval": True,
     "graph_entity_top_k": 10,
@@ -42,6 +49,7 @@ DEFAULTS: dict[str, Any] = {
 _BOUNDS: dict[str, tuple[float, float]] = {
     "concurrency_count": (1, 1000),
     "timeout_seconds": (0, 600),
+    "max_output_tokens": (64, 32000),
     "graph_entity_top_k": (1, 200),
     "graph_triple_top_k": (1, 200),
     "graph_max_nodes": (100, 100000),
@@ -52,8 +60,9 @@ _BOUNDS: dict[str, tuple[float, float]] = {
 
 _BOOL_KEYS = ("use_graph_retrieval",)
 _INT_KEYS = (
-    "concurrency_count", "timeout_seconds", "graph_entity_top_k",
-    "graph_triple_top_k", "graph_max_nodes", "graph_top_k", "catalog_id",
+    "concurrency_count", "timeout_seconds", "max_output_tokens",
+    "graph_entity_top_k", "graph_triple_top_k", "graph_max_nodes",
+    "graph_top_k", "catalog_id",
 )
 _STR_KEYS = ("extractor_type", "schema_source", "schema")
 

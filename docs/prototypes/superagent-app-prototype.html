@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>超级智能体 · Demo-app（uni-app）原型</title>
+<style>
+:root{
+  --primary:#165DFF; --primary-l:#E8F1FF; --purple:#7B61FF; --purple-l:#F0EBFF;
+  --warn:#FF7D00; --warn-l:#FFF3E8; --danger:#F53F3F; --danger-l:#FFECE8;
+  --ok:#00B42A; --ok-l:#E8FFEA; --cyan:#0FC6C2; --cyan-l:#E8FFFE;
+  --text:#1D2129; --sub:#4E5969; --muted:#86909C; --line:#E5E6EB; --bg:#F7F8FA;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#1D2129;display:flex;justify-content:center;align-items:flex-start;gap:28px;padding:24px;min-height:100vh;flex-wrap:wrap}
+.page-title{position:fixed;top:8px;left:16px;color:#86909C;font-size:12px}
+/* 手机壳 */
+.phone{width:390px;height:800px;background:#fff;border-radius:44px;border:10px solid #232833;overflow:hidden;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5);flex-shrink:0}
+.statusbar{height:40px;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600}
+.screen{height:calc(100% - 40px - 76px);overflow-y:auto;background:var(--bg);padding:12px 12px 16px}
+/* 顶部导航 + Segmented */
+.navbar{height:44px;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;border-bottom:1px solid var(--line);position:relative}
+.navbar .back{position:absolute;left:14px;font-size:14px;color:var(--sub);cursor:pointer}
+.navbar .r{position:absolute;right:14px;font-size:12px;color:var(--primary)}
+.seg{display:flex;background:#EDEFF3;border-radius:10px;padding:3px;margin:4px 0 12px}
+.seg div{flex:1;text-align:center;padding:7px 0;font-size:13px;border-radius:8px;cursor:pointer;color:var(--sub)}
+.seg div.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+/* 底栏 tabbar */
+.tabbar{position:absolute;bottom:0;left:0;right:0;height:76px;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:14px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px;color:var(--muted);cursor:pointer;position:relative}
+.tab .ic{font-size:22px}
+.tab.on{color:var(--primary)}
+.tab .dot{position:absolute;top:6px;right:26%;background:var(--danger);color:#fff;font-size:9px;border-radius:8px;padding:0 5px;min-width:15px;text-align:center;line-height:15px}
+.homebar{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:#1D2129;opacity:.8}
+/* 悬浮对话入口 */
+.fab{position:absolute;right:16px;bottom:104px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--purple));color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(22,93,255,.4);cursor:pointer;z-index:15}
+/* 卡片通用 */
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+.muted{color:var(--muted);font-size:11px}
+.row{display:flex;align-items:center;gap:8px}
+.sp{flex:1}
+.k{font-size:10px;font-weight:700;padding:1px 7px;border-radius:7px;color:#fff}
+.k.system{background:var(--primary)}.k.ai_batch{background:var(--purple)}.k.reminder{background:var(--cyan)}.k.approval{background:var(--warn)}
+.appbtn{border:none;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;background:var(--primary);color:#fff}
+.appbtn.ghost{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+.appbtn.ok{background:var(--ok)}
+.appbtn.mini{padding:5px 10px;font-size:11px}
+.appbtn:disabled{opacity:.4}
+.view{display:none}.view.show{display:block}
+/* Feed */
+.fcard{border-left:4px solid var(--primary)}
+.fcard.ai_batch{border-left-color:var(--purple)}
+.fcard.reminder{border-left-color:var(--cyan)}
+.fcard.approval{border-left-color:var(--warn)}
+.fcard.read{opacity:.55}
+.fcard .t{font-weight:600;font-size:14px;line-height:1.5}
+.fcard .b{color:var(--sub);font-size:12px;margin:6px 0 10px;line-height:1.6}
+.pullhint{text-align:center;font-size:11px;color:var(--muted);padding:6px 0 10px}
+/* Ideas */
+.ocard{position:relative}
+.ocard .emo{font-size:24px}
+.ocard .p{font-weight:700;font-size:15px;margin:6px 0 4px}
+.ocard .d{color:var(--sub);font-size:12px;line-height:1.6}
+.ocard .meta{margin-top:10px;display:flex;gap:6px}
+.kindtag{font-size:10px;padding:1px 7px;border-radius:7px}
+.kindtag.chat{background:var(--primary-l);color:var(--primary)}
+.kindtag.goal{background:var(--purple-l);color:var(--purple)}
+.kindtag.routine{background:var(--cyan-l);color:#0B8E8B}
+.kindtag.src{background:#F2F3F5;color:var(--muted)}
+.ocard.pinned::after{content:"📌 置顶";position:absolute;top:12px;right:12px;font-size:10px;color:var(--warn)}
+/* sheet */
+.sheet-mask{position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:30;display:none}
+.sheet-mask.show{display:block}
+.sheet{position:absolute;left:0;right:0;bottom:-300px;background:#fff;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + 30px);transition:bottom .25s;z-index:31;width:100%}
+.sheet.show{bottom:0}
+.sheet h3{font-size:15px}
+.sheet .pd{background:var(--bg);border-radius:8px;padding:10px;font-size:12px;color:var(--sub);margin:10px 0;line-height:1.6}
+.sheet .act{display:flex;align-items:center;gap:10px;padding:13px 6px;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+.sheet .act:last-child{border-bottom:none}
+/* Goals */
+.prog{height:7px;background:#EDEFF3;border-radius:4px;overflow:hidden;margin:8px 0 4px}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),#6AA1FF);border-radius:4px;transition:width .4s}
+.st{font-size:10px;padding:1px 7px;border-radius:7px}
+.st.active{background:var(--primary-l);color:var(--primary)}.st.paused{background:var(--warn-l);color:var(--warn)}
+.st.done{background:var(--ok-l);color:var(--ok)}.st.cancelled{background:#F2F3F5;color:var(--muted)}
+.gcard .t{font-weight:700;font-size:14px}
+/* goal 详情页（二级） */
+.gpage{position:absolute;inset:0;top:40px;background:var(--bg);z-index:20;display:none;flex-direction:column}
+.gpage.show{display:flex}
+.gpage .gh{background:#fff;padding:12px 16px;border-bottom:1px solid var(--line)}
+.gpage .gb{flex:1;overflow-y:auto;padding:12px 14px}
+.step{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
+.step input{width:20px;height:20px;margin-top:1px;accent-color:var(--primary)}
+.step.done .st-t{color:var(--muted);text-decoration:line-through}
+.st-t{font-size:13px;line-height:1.5}
+.s-tag{font-size:10px;color:var(--muted);background:#F2F3F5;border-radius:6px;padding:1px 6px;flex-shrink:0}
+.h6{font-size:12px;font-weight:700;color:var(--sub);margin:14px 2px 8px}
+/* 审批摘要卡（D7 降级） */
+.acard{background:linear-gradient(135deg,#FFF7E8,#FFF3E8);border:1px solid #FFD8B0;border-radius:12px;padding:14px;margin-bottom:12px}
+.acard .lv{font-size:10px;font-weight:800;color:#fff;background:var(--warn);border-radius:7px;padding:1px 8px}
+.acard.l4 .lv{background:var(--purple)}
+.acard.l4{background:linear-gradient(135deg,#F5F1FF,#EFE9FF);border-color:#D9C8FF}
+.acard .qt{font-size:13px;font-weight:600;margin:8px 0 4px;line-height:1.5}
+.acard .sm{font-size:11px;color:var(--sub);line-height:1.6}
+.acard .acts{display:flex;gap:8px;margin-top:12px}
+/* Chat 全屏（WebView 模拟） */
+.chatpage{position:absolute;inset:0;top:40px;background:#fff;z-index:25;display:none;flex-direction:column}
+.chatpage.show{display:flex}
+.cbar{height:46px;display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line);gap:8px}
+.cbar .webtag{font-size:10px;background:var(--cyan-l);color:#0B8E8B;border-radius:7px;padding:2px 8px}
+.cbody{flex:1;overflow-y:auto;padding:14px;background:var(--bg)}
+.m{display:flex;gap:8px;margin-bottom:14px}
+.m .av{width:30px;height:30px;border-radius:50%;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.m.u{flex-direction:row-reverse}.m.u .av{background:var(--primary)}.m.a .av{background:var(--purple)}
+.bb{max-width:78%;background:#fff;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.65;white-space:pre-wrap}
+.m.u .bb{background:var(--primary);color:#fff}
+.tc{border:1px solid var(--cyan);background:#fff;border-radius:8px;font-size:11px;padding:8px 10px;margin-top:8px;color:#0B8E8B}
+.cinput{border-top:1px solid var(--line);padding:10px;display:flex;gap:8px;background:#fff}
+.cinput input{flex:1;border:1px solid var(--line);border-radius:20px;padding:9px 14px;font-size:13px;outline:none}
+.typing i{display:inline-block;width:5px;height:5px;background:var(--muted);border-radius:50%;margin-right:3px;animation:b 1s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes b{0,100%{opacity:.2}50%{opacity:1}}
+/* toast */
+.toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);background:rgba(29,33,41,.92);color:#fff;font-size:12px;padding:9px 16px;border-radius:8px;z-index:60;display:none;max-width:82%;text-align:center;line-height:1.5}
+/* 微信触达示意面板 */
+.side{width:330px;color:#C9D1E5;font-size:12px}
+.side h3{color:#fff;font-size:14px;margin-bottom:10px}
+.wxcard{background:#fff;color:var(--text);border-radius:12px;padding:12px 14px;margin-bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.wxcard .wt{display:flex;gap:8px;align-items:center;font-weight:600;font-size:13px}
+.wxcard .wb{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.6}
+.wxcard .deeplink{color:var(--primary);font-size:11px;margin-top:8px;text-decoration:underline}
+.wxcard .idem{font-size:10px;color:var(--muted);margin-top:6px}
+.legend div{margin-bottom:6px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="page-title">Demo-app（uni-app）· 智能体工作台原型 · 对应设计 §9：Segmented 动态/点子/目标 + 悬浮对话(WebView) + L3/L4 摘要卡降级（D6/D7）+ 微信触达（§11）</div>
+
+<div class="phone">
+  <div class="statusbar"><span>09:41</span><span>Demo平台 · 李Demo · tenant 1003</span><span>🔋 5G</span></div>
+  <div class="navbar" id="navbar">
+    <span class="back" id="navBack" style="visibility:hidden" onclick="closeSub()">‹ 返回</span>
+    <span id="navTitle">智能体</span>
+    <span class="r" onclick="toast('演示：灰度白名单内 mediator 全能力；party 仅见Case相关 Chat+精简 Goals')">⋯</span>
+  </div>
+
+  <div class="screen" id="mainScreen">
+    <div class="seg">
+      <div class="on" onclick="segTo(this,'feed')">🌊 动态</div>
+      <div onclick="segTo(this,'ideas')">💡 点子</div>
+      <div onclick="segTo(this,'goals')">🎯 目标</div>
+    </div>
+
+    <!-- 动态（只读列表 + 推送落地页，§9.1） -->
+    <div class="view show" id="v-feed">
+      <div class="acard" id="pushLanding" style="display:none"></div>
+      <div class="pullhint" id="pullHint">↓ 下拉刷新（GET /feed/page · 推送深链同源）</div>
+      <div id="feedBox"></div>
+    </div>
+
+    <!-- 点子 -->
+    <div class="view" id="v-ideas"><div id="ideaBox"></div></div>
+
+    <!-- 目标 -->
+    <div class="view" id="v-goals">
+      <div class="acard l4" id="propCard">
+        <span class="lv">L4 提案</span>
+        <div class="qt">赡养案：建议 due 顺延至 12-20 并新增\u201c探亲预演\u201d步骤</div>
+        <div class="sm">App 降级（D7）：小屏不展开完整表单，摘要 + 一键确认；详细比对可跳 Web。</div>
+        <div class="acts">
+          <button class="appbtn ok mini" onclick="acceptProp(this)">一键 accept</button>
+          <button class="appbtn ghost mini" onclick="toast('POST /goal/proposal/dismiss · 留痕，不改计划')">dismiss</button>
+          <button class="appbtn ghost mini" onclick="toast('深链 Demo-web 审批页（桌面/Web 完整处理）')">去 Web 处理</button>
+        </div>
+      </div>
+      <div id="goalBox"></div>
+    </div>
+  </div>
+
+  <!-- 目标详情（原生页，结构化 REST） -->
+  <div class="gpage" id="gpage">
+    <div class="gh">
+      <div class="row"><b id="gTitle" style="font-size:15px"></b><span class="sp"></span><span class="st" id="gSt"></span></div>
+      <div class="prog" style="margin-top:10px"><i id="gProg" style="width:0"></i></div>
+      <div class="muted"><span id="gMeta"></span></div>
+    </div>
+    <div class="gb">
+      <div class="h6">步骤（勾选 = L2 直执 + 留痕）</div>
+      <div id="gSteps"></div>
+      <div class="h6">进展时间线</div>
+      <div id="gNotes" style="font-size:12px;color:var(--sub);line-height:1.8"></div>
+      <div class="h6">check-in 到期确认（L3 摘要卡）</div>
+      <div class="acard">
+        <span class="lv">L3</span>
+        <div class="qt">今日 check-in：确认\u201c提出赔偿区间\u201d仍在推进？</div>
+        <div class="sm">确认后更新 next_check_in_at 并写 note；如需调整 due（L3）建议去 Web 完整操作。</div>
+        <div class="acts">
+          <button class="appbtn mini" onclick="toast('check-in 确认 → note 留痕 + next_check_in 滚动到明日 09:00')">已推进 ✓</button>
+          <button class="appbtn ghost mini" onclick="toast('step→blocked，Feed 产生停滞提示卡（不代办）')">遇到阻碍</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat 全屏（WebView 复用 Web 流式，§9.3-1） -->
+  <div class="chatpage" id="chatpage">
+    <div class="cbar">
+      <span style="cursor:pointer;font-size:13px;color:var(--sub)" onclick="closeChat()">‹</span>
+      <b style="font-size:14px">对话 · 漏水纠纷案</b>
+      <span class="webtag">WebView 承载 Web chat 页 · 复用 SSE 流式</span>
+    </div>
+    <div class="cbody" id="cbody">
+      <div class="m u"><span class="av">李</span><div class="bb">这起漏水纠纷的争议焦点和证据缺口是什么？</div></div>
+      <div class="m a"><span class="av">智</span><div class="bb">争议焦点是<b>损失金额认定</b>。证据缺口：①第三方定损 ②现场照片 ③沙发价值凭证。同类判例赔偿区间约 6,000–9,000 元。
+        <div class="tc">🔧 MCP 轨迹：case.get ✓ · Demo_record.list ✓ · case.search_similar ✓（事件流 TEXT_DELTA/TOOL_CALL/TOOL_RESULT/COMPLETE）</div></div></div>
+    </div>
+    <div class="cinput">
+      <input id="cin" placeholder="带着Case上下文提问…（uni.request 不支持 SSE → WebView 方案）">
+      <button class="appbtn" onclick="chatSend()">发送</button>
+    </div>
+  </div>
+
+  <!-- 悬浮对话入口 -->
+  <div class="fab" onclick="openChat()" title="对话（WebView）">💬</div>
+
+  <!-- 底部五 Tab（对齐 nanoMuse HomeTab 心智） -->
+  <div class="tabbar">
+    <div class="tab" onclick="openChat()"><span class="ic">💬</span>对话</div>
+    <div class="tab on" data-i="feed" onclick="tabTo('feed')"><span class="ic">🌊</span>动态<span class="dot" id="feedDot">3</span></div>
+    <div class="tab" data-i="ideas" onclick="tabTo('ideas')"><span class="ic">💡</span>点子</div>
+    <div class="tab" data-i="goals" onclick="tabTo('goals')"><span class="ic">🎯</span>目标</div>
+    <div class="tab" onclick="toast('我的：登录/租户切换 + 通知偏好（quiet hours / 微信绑定状态）')"><span class="ic">👤</span>我的</div>
+  </div>
+  <div class="homebar"></div>
+  <div class="sheet-mask" id="sMask" onclick="closeSheet()"></div>
+  <div class="sheet" id="sheet">
+    <h3 id="shTitle"></h3>
+    <div class="pd" id="shBody"></div>
+    <div class="act" onclick="sheetAct('chat')">💬 发送到对话 <span class="muted">打开 Chat 预填 prompt</span></div>
+    <div class="act" onclick="sheetAct('goal')">🎯 创建目标 <span class="muted">转多步 Goal（L3 确认）</span></div>
+    <div class="act" onclick="sheetAct('routine')">⏰ 建立提醒 <span class="muted">weekly check-in 节律</span></div>
+    <div class="act" onclick="sheetAct('dismiss')">🚫 忽略此点子</div>
+    <div style="text-align:center;margin-top:10px"><span class="muted" style="cursor:pointer" onclick="closeSheet()">取消</span></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<!-- 微信触达示意（§11） -->
+<div class="side">
+  <h3>微信通道触达示意（§11 · 出站 fan-out）</h3>
+  <div class="wxcard">
+    <div class="wt">🟢 企业微信 · Demo助手（应用消息）<span class="sp"></span><span class="muted">08:01</span></div>
+    <div class="wb">【今日建议】3 件待签协议到期：①漏水案评估已到，可约签约…<br><span style="color:var(--primary)">点此在平台中查看 ›</span>（deeplink → App/小程序）</div>
+    <div class="idem">idem_key=feed_20261102_batch1·wecom · 敏感正文不出微信（摘要+深链）</div>
+  </div>
+  <div class="wxcard">
+    <div class="wt">🔵 微信小程序 · Demo服务（订阅消息）<span class="sp"></span><span class="muted">09:00</span></div>
+    <div class="wb">目标check-in：您的\u201c漏水赔偿\u201d目标今日应推进\u201c提出赔偿区间\u201d。</div>
+    <div class="idem">channel=3 小程序 · receiver=openid·绑定 ai_channel_binding</div>
+  </div>
+  <div class="wxcard">
+    <div class="wt">🟡 服务号客服（当事人双向 · 入站）<span class="sp"></span><span class="muted">09:23</span></div>
+    <div class="wb">当事人王某：\u201c评估报告出来了吗？我这边能少赔点吗\u201d<br>→ 验签+openid→映射 party→scene=wechat 复用 Chat/Agent → 回复（48h 窗口）</div>
+    <div class="idem">ai_channel_message direction=in · uk_msg 去重 · 数据范围 party 仅本人Case</div>
+  </div>
+  <div class="legend" style="margin-top:14px">
+    <div>· 入站未绑定用户 → 自动回落站内信（§11.7）</div>
+    <div>· App 推送（uni-push）与微信通道并存互补</div>
+    <div>· quiet hours：22:00–08:00 出站静默</div>
+  </div>
+</div>
+
+<script>
+/* 数据（与后端契约字段对齐：kind 1system/2ai_batch/3reminder/4approval；step 五态；goal 四态） */
+const feed=[
+ {kind:'approval',t:'待确认：漏水目标新增\u201c伤残鉴定\u201d提案（L4）',b:'Agent 仅 propose，accept 才写入并把后续步骤顺延。',time:'09:12',read:false},
+ {kind:'system',t:'新派单：物业群诉系列案（23 户）',b:'dispatch=DISPATCHED，可长按卡片带入对话。',time:'08:47',read:false},
+ {kind:'ai_batch',t:'08:00 主动批次：今日 3 件待签到期',b:'漏水案评估报告已到，建议约双方定签约时间（quiet：仅一条通知，不进 chat）。',prompt:'梳理今天到期的待签协议Case并给出跟进顺序',time:'08:00',read:false},
+ {kind:'reminder',t:'check-in 到期：漏水赔偿目标',b:'daily 09:00 · 今日应推进\u201c提出赔偿区间\u201d，已同步推送企微。',time:'09:00',read:true},
+ {kind:'system',t:'司法确认结果回传：10·28 协议有效',b:'目标已自动完案（全 step done/skipped）。',time:'昨日',read:true},
+];
+const ideas=[
+ {emo:'🔍',p:'先评估、后议价：漏水三步定损',d:'引入第三方评估锁定基数，参照判例给区间，避免各执一词。',kind:'chat',pr:'帮我起草漏水纠纷Demo开场白并列出争议焦点与可引用判例',src:'AI',pin:true},
+ {emo:'🏠',p:'亲情修复 + 一次性补偿组合',d:'赡养案纪要自动提炼：对方更看重探望频率。',kind:'goal',pr:'',src:'AI·提炼',pin:false},
+ {emo:'💰',p:'欠薪分期支付模板协议',d:'小额多数欠薪案达成率高，团队共享。',kind:'routine',pr:'',src:'手动',pin:false},
+ {emo:'👥',p:'群体纠纷代表人谈判框架',d:'STARTER 预置：推举代表→背对背摸底→集中谈判。',kind:'chat',pr:'为物业群诉案起草代表人谈判流程',src:'STARTER',pin:false},
+];
+const goals=[
+ {t:'促成漏水一次性赔偿并签协议',ctx:'case 20261028001',st:'active',pg:33,cron:'daily 09:00',
+  steps:[{t:'联系双方确认到场',s:'done'},{t:'现场勘查/委托评估',s:'done'},{t:'提出赔偿区间',s:'in_progress'},{t:'草拟Demo协议',s:'pending'},{t:'双方签署',s:'pending'},{t:'申请司法确认',s:'pending'}],
+  notes:['[agent 09:30] 评估报告已到（7,800 元），建议以此为锚点（L2 留痕）','[progress 昨] 完成现场勘查，物业记录归档','[system 09:00] check-in 触发 Feed + 企微通知']},
+ {t:'赡养纠纷：亲情修复+补偿落地',ctx:'case 20260930012',st:'active',pg:50,cron:'weekly:MON 09:00',
+  steps:[{t:'单独沟通两兄弟底线',s:'done'},{t:'组织家庭会议',s:'done'},{t:'拟定探望+补偿协议',s:'in_progress'},{t:'签署并回访4次',s:'pending'}],
+  notes:['[system] 检测到停滞 16 天 → Feed 提示卡（不代办）']},
+ {t:'欠薪系列案（23户）分期签署',ctx:'case 20261102007',st:'paused',pg:16,cron:'weekdays 09:00',
+  steps:[{t:'推举职工代表3名',s:'done'},{t:'企业偿付能力摸底',s:'blocked'},{t:'分期模板谈判',s:'pending'},{t:'分批签署',s:'pending'}],
+  notes:['[system] 等待财务报表 → blocked']},
+];
+const kindN={system:'系统',ai_batch:'AI建议',reminder:'提醒',approval:'审批'};
+
+function T(s){const t=document.getElementById('toast');t.textContent=s;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2800)}
+/* Segmented 与 tabbar 同步 */
+function segTo(el,v){document.querySelectorAll('.seg div').forEach(d=>d.classList.remove('on'));el.classList.add('on');showV(v);syncTab(v)}
+function tabTo(v){const segs=document.querySelectorAll('.seg div');const idx={feed:0,ideas:1,goals:2}[v];segs.forEach(s=>s.classList.remove('on'));segs[idx].classList.add('on');showV(v);syncTab(v)}
+function syncTab(v){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.i===v))}
+function showV(v){document.querySelectorAll('.screen .view').forEach(e=>e.classList.remove('show'));document.getElementById('v-'+v).classList.add('show');document.getElementById('gpage').classList.remove('show')}
+/* Feed */
+function renderFeed(){
+  const b=document.getElementById('feedBox');b.innerHTML='';
+  feed.forEach((f,i)=>{
+    b.insertAdjacentHTML('beforeend',`<div class="card fcard ${f.kind} ${f.read?'read':''}">
+      <div class="row"><span class="k ${f.kind}">${kindN[f.kind]}</span><b class="t" style="font-size:13px;line-height:1.5">${f.t}</b><span class="sp"></span><span class="muted">${f.time}</span></div>
+      <div class="b">${f.b}</div>
+      <div class="row">${f.prompt?`<button class="appbtn mini" onclick="toChat('${f.prompt}')">带 prompt 对话</button>`:''}
+      ${f.kind==='approval'?`<button class="appbtn ghost mini" onclick="tabTo('goals')">去审批</button>`:''}
+      <button class="appbtn ghost mini" onclick="feedRead(${i})">${f.read?'已读':'标记已读'}</button>
+      <span class="muted">status=${f.read?'read':'unread'}</span></div></div>`);
+  });
+  document.getElementById('feedDot').textContent=feed.filter(f=>!f.read).length||'';
+}
+function feedRead(i){feed[i].read=true;renderFeed();T('POST /feed/read · unread→read')}
+function toChat(pr){openChat();document.getElementById('cin').value=pr;T('Feed 卡片动作→Chat 预填 prompt（acted）');feed.forEach(f=>{if(!f.prompt&&f.kind==='ai_batch')f.read=true});renderFeed()}
+document.getElementById('pullHint').addEventListener('click',()=>T('下拉刷新：GET /feed/page 拉取兜底（推送失败时以 DB 为准）'));
+
+/* Ideas：卡片 → sheet 三动作（对齐 nanoMuse IdeasTab） */
+function renderIdeas(){
+  const b=document.getElementById('ideaBox');b.innerHTML='';
+  ideas.forEach((d,i)=>{
+    b.insertAdjacentHTML('beforeend',`<div class="card ocard ${d.pin?'pinned':''}" onclick="openSheet(${i})">
+      <div class="emo">${d.emo}</div><div class="p">${d.p}</div><div class="d">${d.d}</div>
+      <div class="meta"><span class="kindtag ${d.kind}">${{chat:'转对话',goal:'转目标',routine:'转提醒'}[d.kind]}</span><span class="kindtag src">${d.src}</span></div></div>`);
+  });
+}
+let curIdea=0;
+function openSheet(i){curIdea=i;const d=ideas[i];
+  document.getElementById('shTitle').textContent=d.emo+' '+d.p;
+  document.getElementById('shBody').textContent=(d.pr?('prompt：'+d.pr):d.d);
+  document.getElementById('sheet').classList.add('show');document.getElementById('sMask').classList.add('show');}
+function closeSheet(){document.getElementById('sheet').classList.remove('show');document.getElementById('sMask').classList.remove('show')}
+function sheetAct(a){closeSheet();
+  const m={chat:'apply(kind=chat)：打开 Chat 预填 prompt',goal:'apply(kind=goal)：建目标拆步骤（L3 摘要卡确认后）',routine:'apply(kind=routine)：写 check_in_cron，Feed 到期提醒',dismiss:'PUT /idea/dismiss：status new→dismissed 留痕'};
+  if(a==='chat')openChat();if(a==='goal')tabTo('goals');
+  T('点子三型转化 · '+m[a]);}
+
+/* Goals 列表 + 详情 */
+function renderGoals(){
+  const b=document.getElementById('goalBox');b.innerHTML='';
+  goals.forEach((g,i)=>{
+    b.insertAdjacentHTML('beforeend',`<div class="card gcard" onclick="openGoal(${i})">
+      <div class="row"><span class="t">${g.t}</span><span class="sp"></span><span class="st ${g.st}">${g.st}</span></div>
+      <div class="muted" style="margin-top:4px">🔗 ${g.ctx} · ⏰ ${g.cron}</div>
+      <div class="prog"><i style="width:${g.pg}%"></i></div>
+      <div class="row" style="justify-content:space-between"><span class="muted">进度 ${g.pg}%</span><span class="muted">${g.steps.filter(s=>s.s==='done').length}/${g.steps.length} 步</span></div></div>`);
+  });
+}
+let curG=0;
+function openGoal(i){curG=i;const g=goals[i];
+  document.getElementById('gTitle').textContent=g.t;
+  const st=document.getElementById('gSt');st.textContent=g.st;st.className='st '+g.st;
+  document.getElementById('gProg').style.width=g.pg+'%';
+  document.getElementById('gMeta').textContent=g.ctx+' · check-in '+g.cron+' · next '+(g.st==='paused'?'暂停':(g.cron==='daily 09:00'?'明日 09:00':'11-09 09:00'));
+  const sb=document.getElementById('gSteps');sb.innerHTML='';
+  g.steps.forEach((s,j)=>{
+    const settled=s.s==='done'||s.s==='skipped';
+    sb.insertAdjacentHTML('beforeend',`<div class="step ${s.s}"><input type="checkbox" ${s.s==='done'?'checked':''} ${settled?'disabled':''} onchange="togStep(${j},this)">
+      <div style="flex:1"><div class="st-t">${j+1}. ${s.t}</div><div class="muted">${s.s==='done'?'done · 刚刚':s.s}</div></div>
+      ${!settled?`<button class="appbtn ghost mini" onclick="event.stopPropagation();skipStep(${j})">跳过</button>`:''}</div>`);
+  });
+  document.getElementById('gNotes').innerHTML=g.notes.map(n=>'· '+n).join('<br>');
+  document.getElementById('gpage').classList.add('show');
+  document.getElementById('navBack').style.visibility='visible';
+}
+function closeSub(){document.getElementById('gpage').classList.remove('show');document.getElementById('navBack').style.visibility='hidden'}
+function recalc(g){
+  const done=g.steps.filter(s=>s.s==='done'||s.s==='skipped').length;
+  g.pg=Math.round(done*100/g.steps.length);
+  if(done===g.steps.length&&g.st==='active'){g.st='done';g.notes.unshift('[system] 全 step 终结→自动完案；已向Case状态推进发出 L3 建议（人工确认，不静默改）')}
+}
+function togStep(j,cb){const g=goals[curG];g.steps[j].s=cb.checked?'done':'pending';recalc(g);
+  T(`step/update · L2 直执+审计 · progress→${g.pg}%`);renderGoals();openGoal(curG)}
+function skipStep(j){const g=goals[curG];g.steps[j].s='skipped';recalc(g);renderGoals();openGoal(curG);T('step→skipped，参与完案判定')}
+function acceptProp(btn){const c=btn.closest('.acard');c.innerHTML='<span class="lv" style="background:var(--ok)">已接受</span><div class="qt" style="margin-top:8px">提案 accepted：追加步骤\u201c探亲预演\u201d，due→12-20，goal.version+1</div><div class="sm">乐观锁 base_version 校验通过 · 审计留痕</div>';T('L4 一键确认（App 降级形态）')}
+
+/* Chat：全屏 WebView 模拟 */
+let timer=null;
+function openChat(){document.getElementById('chatpage').classList.add('show');document.getElementById('navBack').style.visibility='visible';document.getElementById('navbar').querySelector('b,#navTitle').textContent='对话'}
+function closeChat(){document.getElementById('chatpage').classList.remove('show');document.getElementById('navBack').style.visibility='hidden';document.getElementById('navTitle').textContent='智能体';if(timer)clearInterval(timer)}
+function chatSend(){
+  const inp=document.getElementById('cin');const text=inp.value.trim();if(!text)return;inp.value='';
+  const b=document.getElementById('cbody');
+  b.insertAdjacentHTML('beforeend',`<div class="m u"><span class="av">李</span><div class="bb">${text}</div></div>`);
+  const d=document.createElement('div');d.className='m a';
+  d.innerHTML='<span class="av">智</span><div class="bb"><span class="typing"><i></i><i></i><i></i></span><span class="dt"></span></div>';
+  b.appendChild(d);b.scrollTop=1e6;
+  const full='好的，已结合案卷生成。要点：先确认漏水事实与定损口径，再锚定判例区间协商。\n（工具：case.get · case.search_similar · Demo_record.list）';
+  const dt=d.querySelector('.dt');let i=0;
+  timer=setInterval(()=>{dt.textContent=full.slice(0,i+=2);b.scrollTop=1e6;
+    if(i>=full.length){clearInterval(timer);dt.insertAdjacentHTML('afterend','<div class="tc">🔧 SSE: TEXT_DELTA×n → TOOL_CALL → TOOL_RESULT → COMPLETE</div>')}
+  },24);
+}
+
+/* 推送深链演示：点击企微卡片→落地 Feed 对应条目 */
+document.querySelectorAll('.wxcard').forEach(w=>w.style.cursor='pointer');
+renderFeed();renderIdeas();renderGoals();
+</script>
+</body>
+</html>

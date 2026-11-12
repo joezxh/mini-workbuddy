@@ -51,6 +51,11 @@ export function useVoiceChannel(cfg: ConnectConfig) {
   const audioLevel = ref(0)
   const micOn = ref(false)
   const micState = ref<MicState | null>(null)
+  // 当前活跃 Agent（由后端编排器下发 agent_switched 帧更新）
+  const activeAgent = ref<{ key: string; name: string }>({
+    key: 'ecommerce_sales',
+    name: '电商销售顾问',
+  })
 
   const turn = useTurnState()
   const reconnect = useReconnect()
@@ -162,7 +167,11 @@ export function useVoiceChannel(cfg: ConnectConfig) {
       case 'audio.delta':
         turn.markSpeaking()
         if (typeof frame.data === 'string') playback.push(frame.data)
-        else if (frame.data) playback.push((frame.data as { audio?: string }).audio)
+        else if (frame.data) {
+            const audioData = (frame.data as { audio?: string }).audio
+            if (audioData !== undefined) playback.push(audioData)
+        }
+// End of Selection
         break
       case 'audio':
         turn.markSpeaking()
@@ -210,6 +219,17 @@ export function useVoiceChannel(cfg: ConnectConfig) {
         errorMsg.value =
           frame.data?.message || (frame as any).message || '语音服务错误'
         break
+      case 'agent_switched': {
+        // 后端编排器热切换 Agent 时下发此帧
+        const d = frame.data as { agent_key?: string; agent_name?: string }
+        if (d.agent_key) {
+          activeAgent.value = {
+            key: d.agent_key,
+            name: d.agent_name || d.agent_key,
+          }
+        }
+        break
+      }
       case 'pong':
         break
     }
@@ -274,6 +294,12 @@ export function useVoiceChannel(cfg: ConnectConfig) {
   function sendInterrupt() {
     toolCalls.clearPending()
     ws?.send(JSON.stringify({ type: 'interrupt' }))
+  }
+
+  /** 下发输出渠道配置到后端编排器（选中状态 + 输出模式） */
+  function sendChannelConfig(channels: Array<{ key: string; active: boolean; output: string }>) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ type: 'channel_config', data: { channels } }))
   }
 
   /** 回传工具确认结果（tool.confirm_required → 用户同意/拒绝） */
@@ -389,6 +415,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     audioLevel,
     micOn,
     micState,
+    activeAgent,
     // 子状态机
     turn,
     reconnect,
@@ -398,6 +425,7 @@ export function useVoiceChannel(cfg: ConnectConfig) {
     disconnect,
     sendText,
     sendInterrupt,
+    sendChannelConfig,
     sendAudio,
     respondToolConfirm,
     startMic,

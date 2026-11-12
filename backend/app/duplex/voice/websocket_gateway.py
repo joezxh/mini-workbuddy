@@ -40,6 +40,14 @@ from app.duplex.voice.voice_config import resolve_voice_config
 from app.duplex.voice.voice_turn_service import (
     append_turn, mark_interrupted, bump_generation, record_latency,
 )
+from app.duplex.voice.orchestrator import VoiceAgentOrchestrator
+from app.duplex.voice.plugins import BUILTIN_PLUGINS, PluginRegistry
+from app.duplex.voice.channels import (
+    ChannelOutputDispatcher,
+    ChannelRegistry,
+)
+from app.db.database import SessionLocal
+from app.services.ai.ai_chat_service import AiChatService
 
 # AgentScope 内核 Provider 通过 providers.registry._register_defaults 注册（import 即生效）
 
@@ -98,6 +106,27 @@ def _buffer_outbound(session_id: str, frame: Dict[str, Any]) -> None:
     buf.push(frame)
 
 
+def _save_chat_message(chat_session_id: int, role: str, content: str) -> None:
+    """将语音对话消息持久化到 AiChatMessage 表（复用现有会话存储）。
+
+    chat_session_id 为 AiChatSession.session_id（由前端 createSession 生成）。
+    失败仅记日志，不影响语音主链路。
+    """
+    if not chat_session_id or not content or not content.strip():
+        return
+    try:
+        with SessionLocal() as db:
+            svc = AiChatService(db)
+            svc.add_message(
+                session_id=chat_session_id,
+                role=role,
+                content=content.strip(),
+                message_type="text",
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Gateway] 持久化 {role} 消息失败: {e}")
+
+
 async def _normalize_outbound(event: ProviderEvent) -> Optional[Dict[str, Any]]:
     """Provider 事件 → 客户端协议帧（差距分析 §3.4.2）。"""
     etype = event.type
@@ -136,6 +165,8 @@ async def _handle_control_frame(
     turn: TurnState,
     voice_session_id: str,
     websocket: Optional[WebSocket] = None,
+    channel_registry: Optional["ChannelRegistry"] = None,
+    chat_session_id: int = 0,
 ) -> None:
     """处理客户端控制帧（协议 v2 + tool.confirm 增量）。
 
@@ -147,6 +178,8 @@ async def _handle_control_frame(
         turn.turn_id = str(uuid.uuid4())
         turn.on_speech_started()  # 代际 +1，进入 LISTENING
         append_turn(voice_session_id, turn.turn_id, "user", "text", transcript=text)
+        # 持久化用户文字消息到 AiChatMessage
+        _save_chat_message(chat_session_id, "user", text)
         timeout_s = settings.VOICE_RESPONSE_INACTIVITY_TIMEOUT_MS / 1000
         try:
             await asyncio.wait_for(realtime_provider.send_text(text), timeout=timeout_s)
@@ -174,6 +207,14 @@ async def _handle_control_frame(
         interrupt = getattr(realtime_provider, "interrupt", None)
         if interrupt is not None:
             await interrupt()
+    elif ftype == "channel_config":
+        # 前端编排器下发的输出渠道配置（选中状态 + 输出模式）
+        configs = frame.get("data", {}).get("channels", [])
+        if channel_registry is not None and isinstance(configs, list):
+            channel_registry.apply_config(configs)
+            logger.info(
+                f"[Gateway] 渠道配置已更新: active={channel_registry.active_count()}"
+            )
     elif ftype == "ping":
         # 修复：pong 回客户端，而非发给上游 Provider
         if websocket is not None:
@@ -219,6 +260,10 @@ async def voice_websocket(
     case_number = case_number or session_id or ""
     participant_id = participant_id or "party_a"
 
+    # 会话编号：前端通过 createSession() 获得 AiChatSession.session_id（数字），
+    # 作为 session_id 传入；用于消息持久化到 AiChatMessage 表。
+    chat_session_id = int(session_id) if session_id.isdigit() else 0
+
     # 能力协商
     provider_cls = get_provider(provider)
     provider_instance = provider_cls()
@@ -263,27 +308,14 @@ async def voice_websocket(
         else:
             voice_cfg = {}
 
-        # 会话级 MCP 工具注入：读取 Agent 绑定的工具/服务清单（失败不阻塞语音链路）
+        # 会话级 MCP 工具注入（Agent 配置表已移除，tool_bindings/mcp_bindings 暂为空）
         mcp_tool_schemas: list = []
         if agent_id:
             try:
-                from app.db.database import SessionLocal
-                from app.models.duplex.duplex_voice_config import AiAgentConfig
-                db = SessionLocal()
-                try:
-                    row = (
-                        db.query(AiAgentConfig)
-                        .filter(AiAgentConfig.agent_id == agent_id)
-                        .first()
-                    )
-                    tool_bindings = list(row.tool_bindings or []) if row else []
-                    mcp_bindings = list(row.mcp_bindings or []) if row else []
-                finally:
-                    db.close()
                 from app.duplex.voice.mcp_session_resolver import McpSessionResolver
                 mcp_tool_schemas = await McpSessionResolver(
-                    mcp_service_ids=mcp_bindings,
-                    tool_bindings=tool_bindings,
+                    mcp_service_ids=[],
+                    tool_bindings=[],
                 ).resolve_tools()
                 if mcp_tool_schemas:
                     logger.info(
@@ -294,7 +326,7 @@ async def voice_websocket(
                 logger.warning(f"MCP 工具注入失败（忽略）: {e}")
 
         await realtime_provider.connect(session_config={
-            "instructions": f"你是一位专业的 AI 调解员，正在处理案件 {case_number}。",
+            "instructions": "你是电商客服语音助手。",
             "tools": [],
             "voice": "default",
             "api_key": voice_cfg.get("api_key", ""),
@@ -302,6 +334,22 @@ async def voice_websocket(
             "base_url": voice_cfg.get("base_url"),
             "mcp_tools": mcp_tool_schemas,
         })
+
+        # 创建编排器并注册所有内置 Agent 插件
+        registry = PluginRegistry()
+        for plugin_cls in BUILTIN_PLUGINS:
+            await registry.register(plugin_cls())
+        orchestrator = VoiceAgentOrchestrator(registry, realtime_provider)
+        # 注入会话元数据（case_number 作为订单/会话标识）
+        orchestrator.context.session_metadata = {
+            "case_number": case_number,
+            "participant_id": participant_id,
+        }
+        # 多渠道输出：创建注册表 + 分发器并注入编排器
+        channel_registry = ChannelRegistry()
+        channel_dispatcher = ChannelOutputDispatcher(channel_registry)
+        orchestrator.set_channel_dispatcher(channel_dispatcher)
+        await orchestrator.start(default_key="ecommerce_sales")
     except Exception as e:
         logger.error(f"Provider 连接失败: {e}")
         voice_provider_errors.labels(provider=provider).inc()
@@ -337,16 +385,64 @@ async def voice_websocket(
                     elif data:
                         frame = json.loads(data)
                         await _handle_control_frame(
-                            frame, realtime_provider, turn, voice_session_id, websocket
+                            frame, realtime_provider, turn, voice_session_id,
+                            websocket, channel_registry, chat_session_id
                         )
             except WebSocketDisconnect:
                 break
 
+    # 编排器事件跟踪状态
+    user_transcript_buf = ""
+    assistant_transcript_buf = ""
+    last_active_agent = orchestrator.active_key
+
     async def provider_reader():
+        nonlocal user_transcript_buf, assistant_transcript_buf, last_active_agent
         async for event in realtime_provider.events():
             if event.type == "playback_cancelled":
                 # VAD barge-in：与客户端 interrupt 走同一代际仲裁入口
                 _apply_interrupt(turn, voice_session_id)
+
+            # ---- 编排器事件接入 ----
+            if event.type == "speech_started":
+                user_transcript_buf = ""
+                await orchestrator.on_user_speech_started("")
+            elif event.type == "transcript":
+                # 用户转写中间结果（边说边理解）
+                delta = event.data.get("text", "")
+                user_transcript_buf += delta
+                await orchestrator.on_user_speech_started(user_transcript_buf)
+            elif event.type == "speech_stopped":
+                await orchestrator.on_user_speech_ended(user_transcript_buf)
+                # 持久化用户消息到 AiChatMessage
+                if user_transcript_buf.strip():
+                    _save_chat_message(chat_session_id, "user", user_transcript_buf)
+                user_transcript_buf = ""
+            elif event.type == "tts_transcript":
+                assistant_transcript_buf += event.data.get("text", "")
+            elif event.type == "playback.ended":
+                await orchestrator.on_assistant_response_end(assistant_transcript_buf)
+                # 持久化助手回复到 AiChatMessage
+                if assistant_transcript_buf.strip():
+                    _save_chat_message(chat_session_id, "assistant", assistant_transcript_buf)
+                assistant_transcript_buf = ""
+
+            # Agent 切换检测：下发 agent_switched 帧到前端
+            current_agent = orchestrator.active_key
+            if current_agent != last_active_agent:
+                active_plugin = orchestrator.active_agent
+                switch_frame = {
+                    "type": "agent_switched",
+                    "data": {
+                        "agent_key": current_agent,
+                        "agent_name": active_plugin.display_name if active_plugin else current_agent,
+                        "previous_agent": last_active_agent,
+                    },
+                }
+                _buffer_outbound(session_id, switch_frame)
+                await websocket.send_text(json.dumps(switch_frame, ensure_ascii=False))
+                last_active_agent = current_agent
+
             frame = await _normalize_outbound(event)
             if not frame:
                 continue

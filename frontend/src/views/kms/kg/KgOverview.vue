@@ -175,6 +175,7 @@ import { useRouter } from 'vue-router'
 import * as api from '@/api/kg'
 import type { KgBuildStatus, KgCdmCheck, KgStats, KgVerdict } from '@/api/kg'
 import { typeLabel, typeTone } from '@/components/common/graph/graphTheme'
+import { SHELL_PATH } from '@/utils/shellTab'
 
 const props = defineProps<{ knowledgeId: number }>()
 
@@ -339,7 +340,7 @@ function verdictBadgeClass(verdict: KgVerdict) {
 
 /** 「在标准中心查看」→ 数据源面板的标准管理页 */
 function openStandardCenter() {
-  router.push({ path: '/admin', query: { tab: 'kg-data-source' } })
+  router.push({ path: SHELL_PATH, query: { tab: 'kg-data-source' } })
 }
 
 async function load() {

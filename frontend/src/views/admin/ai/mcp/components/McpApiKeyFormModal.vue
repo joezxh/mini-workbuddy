@@ -20,6 +20,7 @@
               <a-select-option value="nacos3">Nacos 3.x</a-select-option>
               <a-select-option value="http">HTTP</a-select-option>
               <a-select-option value="sse">SSE</a-select-option>
+              <a-select-option value="stdio">Stdio</a-select-option>
             </a-select>
           </a-form-item>
           <a-form-item :label="t('mcpSquare.platform')">
@@ -56,6 +57,35 @@
               <a-input v-model:value="form.access_path" :placeholder="t('mcpSquare.accessPathPlaceholder')" />
             </a-form-item>
           </template>
+          <!-- Stdio 特有字段：子进程启动配置（superagent 引擎经 ai_mcp_client.tools_config 消费） -->
+          <template v-if="isStdio">
+            <a-form-item :label="t('mcpSquare.transport')">
+              <a-input value="stdio" disabled />
+            </a-form-item>
+            <a-form-item :label="t('mcpSquare.command')" required>
+              <a-input
+                v-model:value="form.command"
+                :placeholder="t('mcpSquare.commandPlaceholder')"
+              />
+              <span class="form-hint">{{ t('mcpSquare.commandHint') }}</span>
+            </a-form-item>
+            <a-form-item :label="t('mcpSquare.args')">
+              <a-textarea
+                v-model:value="form.argsText"
+                :rows="2"
+                :placeholder="t('mcpSquare.argsPlaceholder')"
+              />
+              <span class="form-hint">{{ t('mcpSquare.argsHint') }}</span>
+            </a-form-item>
+            <a-form-item :label="t('mcpSquare.env')">
+              <a-textarea
+                v-model:value="form.envText"
+                :rows="2"
+                :placeholder="t('mcpSquare.envPlaceholder')"
+              />
+              <span class="form-hint">{{ t('mcpSquare.envHint') }}</span>
+            </a-form-item>
+          </template>
           <a-form-item label="API Key">
             <a-input-password v-model:value="form.api_key" :placeholder="t('mcpSquare.authKey')" />
           </a-form-item>
@@ -83,7 +113,14 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { createMcpApiKey, updateMcpApiKey, type McpApiKey } from '@/api/ai-mcp'
+import {
+  createMcpApiKey,
+  updateMcpApiKey,
+  getMcpClientPage,
+  createMcpClient,
+  updateMcpClient,
+  type McpApiKey,
+} from '@/api/ai-mcp'
 
 const props = defineProps<{
   visible: boolean
@@ -104,7 +141,7 @@ const submitting = ref(false)
 // 表单字段全部使用 snake_case（与服务端 McpApiKeyCreate / McpApiKeyUpdate 一致）
 const defaultForm = () => ({
   name: '',
-  service_type: 'http' as 'nacos2' | 'nacos3' | 'http' | 'sse',
+  service_type: 'http' as 'nacos2' | 'nacos3' | 'http' | 'sse' | 'stdio',
   platform: '',
   version: '',
   description: '',
@@ -116,18 +153,95 @@ const defaultForm = () => ({
   access_path: '',
   capabilities: [] as string[],
   remark: '',
+  // stdio 专属：子进程启动配置（落 ai_mcp_client.tools_config，顶层 {command,args,env}）
+  command: '',
+  argsText: '',
+  envText: '',
 })
 
 const form = reactive(defaultForm())
 
 const isNacos = computed(() => form.service_type === 'nacos2' || form.service_type === 'nacos3')
 const isHttpOrSse = computed(() => form.service_type === 'http' || form.service_type === 'sse')
+const isStdio = computed(() => form.service_type === 'stdio')
+
+/** args 文本（每行一个）→ 数组 */
+function parseArgs(text: string): string[] {
+  return (text || '')
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** env 文本（每行 KEY=VALUE）→ 对象 */
+function parseEnv(text: string): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const line of (text || '').split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const idx = trimmed.indexOf('=')
+    if (idx <= 0) continue
+    env[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim()
+  }
+  return env
+}
+
+/** 与后端解析形状一致的 tools_config（顶层 {command,args,env}） */
+function buildStdioToolsConfig(): Record<string, any> {
+  return {
+    command: form.command.trim(),
+    args: parseArgs(form.argsText),
+    env: parseEnv(form.envText),
+  }
+}
+
+async function restoreStdioClient(apiKeyId: number) {
+  // 编辑态：从既有 ai_mcp_client.tools_config 回填 command/args/env（取第一条 stdio client）
+  try {
+    const res = await getMcpClientPage({ api_key_id: apiKeyId, page: 1, pageSize: 20 })
+    const client = (res.data || []).find((c) => c.client_type === 'stdio') || (res.data || [])[0]
+    if (!client?.tools_config || typeof client.tools_config !== 'object') return
+    const cfg = client.tools_config as Record<string, any>
+    if (form.command) return // 已有值不覆盖
+    form.command = String(cfg.command || cfg.cmd || '')
+    const args = Array.isArray(cfg.args) ? cfg.args : []
+    form.argsText = args.map((a) => String(a)).join('\n')
+    const env = (cfg.env && typeof cfg.env === 'object') ? cfg.env : {}
+    form.envText = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n')
+  } catch {
+    /* 回填失败不阻断表单 */
+  }
+}
+
+/** 确保 stdio 服务存在携带 tools_config 的 ai_mcp_client（引擎按 client.name/id 解析） */
+async function ensureStdioClient(apiKeyId: number) {
+  const toolsConfig = buildStdioToolsConfig()
+  if (!toolsConfig.command) return
+  const res = await getMcpClientPage({ api_key_id: apiKeyId, page: 1, pageSize: 20 })
+  const existing = (res.data || [])[0]
+  if (existing) {
+    await updateMcpClient({
+      id: existing.id,
+      client_type: 'stdio',
+      tools_config: toolsConfig,
+    })
+  } else {
+    // client.name 与服务同名：agent 端 mcp_servers 以 [{name}] 登记时可按名解析
+    await createMcpClient({
+      api_key_id: apiKeyId,
+      name: form.name,
+      client_type: 'stdio',
+      mcp_type: 'tool',
+      tools_config: toolsConfig,
+    })
+  }
+}
 
 watch(() => props.visible, (val) => {
   if (val && props.record) {
     Object.assign(form, {
       name: props.record.name || '',
-      service_type: (props.record.service_type as 'nacos2' | 'nacos3' | 'http' | 'sse') || 'http',
+      service_type: (props.record.service_type as any) || 'http',
       platform: props.record.platform || '',
       version: props.record.version || '',
       description: props.record.description || '',
@@ -139,7 +253,11 @@ watch(() => props.visible, (val) => {
       access_path: props.record.access_path || '',
       capabilities: props.record.capabilities || [],
       remark: props.record.remark || '',
+      command: '',
+      argsText: '',
+      envText: '',
     })
+    if (form.service_type === 'stdio') restoreStdioClient(props.record.id)
   } else if (val) {
     Object.assign(form, defaultForm())
   }
@@ -170,15 +288,25 @@ async function handleSubmit() {
     message.warning(t('mcpSquare.fillRequired'))
     return
   }
+  if (isStdio.value && !form.command.trim()) {
+    message.warning(t('mcpSquare.commandRequired'))
+    return
+  }
   submitting.value = true
   try {
     const data = buildPayload()
+    let savedId = props.record?.id
     if (isEdit.value && props.record) {
       await updateMcpApiKey({ id: props.record.id, ...data })
       message.success(t('mcpSquare.updateSuccess'))
     } else {
-      await createMcpApiKey(data)
+      const created = await createMcpApiKey(data)
+      savedId = created?.id
       message.success(t('mcpSquare.createSuccess'))
+    }
+    // stdio：把 command/args/env 写入 ai_mcp_client.tools_config（引擎消费形状）
+    if (isStdio.value && savedId) {
+      await ensureStdioClient(savedId)
     }
     emit('update:visible', false)
     emit('success')
@@ -194,3 +322,12 @@ function handleCancel() {
   emit('update:visible', false)
 }
 </script>
+
+<style scoped>
+.form-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--fg-muted, #999);
+  margin-top: 2px;
+}
+</style>

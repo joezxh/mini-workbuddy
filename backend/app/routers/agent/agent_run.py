@@ -84,6 +84,25 @@ async def confirm_execution(
     resolve_pause(db, execution_id=execution_id, action=req.action,
                   accept_rules=req.accept_rules)
 
+    # 暂停类型决定恢复事件形态（tool_confirm/plan_approval/ask_user）；
+    # 旧记录（迁移前）无 pause_type 时回退 None，行为不变。
+    pause_type = None
+    try:
+        from app.models.agent.agent_hitl_pause import AgentHitlPause
+        waiting = (db.query(AgentHitlPause)
+                   .filter(AgentHitlPause.execution_id == execution_id,
+                           AgentHitlPause.status == "waiting")
+                   .order_by(AgentHitlPause.id.desc())
+                   .first())
+        if waiting is None:
+            waiting = (db.query(AgentHitlPause)
+                       .filter(AgentHitlPause.execution_id == execution_id)
+                       .order_by(AgentHitlPause.id.desc())
+                       .first())
+        pause_type = getattr(waiting, "pause_type", None) if waiting else None
+    except Exception:  # noqa: BLE001 - 表缺列等异常不阻断恢复
+        pause_type = None
+
     # SOP 步骤验收：改走引擎 resume 载荷（携带驳回原因），
     # 其余模式仍用 agentscope 确认事件，行为不变。
     resume_payload = None
@@ -98,7 +117,8 @@ async def confirm_execution(
         resume_payload = None
 
     resume_hitl(handle, req.action, req.tool_calls,
-                resume_payload=resume_payload)
+                resume_payload=resume_payload,
+                pause_type=pause_type, message=req.message or "")
     return {"ok": True, "action": req.action, "execution_id": execution_id}
 
 

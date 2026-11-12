@@ -28,10 +28,28 @@ export interface HitlToolCall {
   suggested_rules?: string[]
 }
 
+/** HITL 暂停类型（spec B4：tool_confirm 工具授权 / plan_approval 计划审批 / ask_user 对话追问） */
+export type HitlPauseType = 'tool_confirm' | 'plan_approval' | 'ask_user'
+
 export interface HitlPausePayload {
   reply_id?: string | null
   tool_calls?: HitlToolCall[]
   timeout_minutes?: number
+  pause_type?: HitlPauseType | string
+}
+
+/** AskUser 问题（tool_calls[0].input.questions 元素，spec F6/B3） */
+export interface HitlAskUserQuestion {
+  question: string
+  options?: string[]
+}
+
+/** 已完成 HITL 轮次（多轮队列语义，spec F3） */
+export interface HitlPauseHistoryItem {
+  pause_type: HitlPauseType | string
+  action: HitlAction | string
+  time: string
+  tools: string[]
 }
 
 export type HitlAction = 'approve' | 'reject' | 'interrupt'

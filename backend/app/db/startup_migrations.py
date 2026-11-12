@@ -237,6 +237,80 @@ def seed_session_type_dictionary(engine: Engine) -> None:
             logger.info(f"已登记 session_type 字典项: {item['item_code']}")
 
 
+def seed_agent_impl_type_dictionary(engine: Engine) -> None:
+    """幂等登记 agent_impl_type 字典的 SUPERAGENT 项（spec 步骤三 4.1）。
+
+    agent_impl_type 字典本身由管理后台维护（无代码 seed），此处仅补 SUPERAGENT
+    一项，保证 Agent 配置页能选到 SuperAgent 类型；其余项由既有数据维护。
+    """
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text(
+                "SELECT 1 FROM sys_dictionary_item "
+                "WHERE dict_code = 'agent_impl_type' AND item_code = 'SUPERAGENT'"
+            )
+        ).first()
+        if exists:
+            return
+        conn.execute(
+            text(
+                "INSERT INTO sys_dictionary_item "
+                "(dict_code, item_code, item_name, item_value, color, remark, "
+                " sort_order, is_active, is_deleted, tenant_id) "
+                "VALUES ('agent_impl_type', 'SUPERAGENT', 'SuperAgent 引擎', 'SUPERAGENT', "
+                " 'geekblue', 'SuperAgent 自主工单引擎（HITL/ReAct/MCP）', "
+                " 90, true, false, 0)"
+            )
+        )
+        logger.info("已登记 agent_impl_type 字典项: SUPERAGENT")
+
+
+# ── SuperAgent 管理菜单播种（幂等；spec 步骤三 4.4）──────────────────────────
+# 把 super-agent 域既有页面挂入「AI 能力配置」(sys_menu 2003) 导航组。
+# path 不落 /admin/<key>（非外壳 Tab 页），走真实路由直接导航（resolveMenuTarget）。
+# i18n_key 缺翻译时前端回退 name 字段，故 name 直接写中文标题。
+_SUPERAGENT_MENUS: list[dict] = [
+    {"path": "/super-agent", "name": "SuperAgent 看板", "icon": "RobotOutlined", "sort": 70, "i18n_key": "sys.menu.super-agent-board"},
+    {"path": "/super-agent/hitl", "name": "HITL 审批", "icon": "AuditOutlined", "sort": 71, "i18n_key": "sys.menu.super-agent-hitl"},
+    {"path": "/super-agent/config-source", "name": "Source 配置", "icon": "SettingOutlined", "sort": 72, "i18n_key": "sys.menu.super-agent-config-source"},
+    {"path": "/super-agent/chat", "name": "Agent 对话", "icon": "CommentOutlined", "sort": 73, "i18n_key": "sys.menu.super-agent-chat"},
+    {"path": "/super-agent/feed", "name": "动态 Feed", "icon": "UnorderedListOutlined", "sort": 74, "i18n_key": "sys.menu.super-agent-feed"},
+    {"path": "/super-agent/ideas", "name": "点子库", "icon": "BulbOutlined", "sort": 75, "i18n_key": "sys.menu.super-agent-ideas"},
+    {"path": "/super-agent/goals", "name": "目标", "icon": "AimOutlined", "sort": 76, "i18n_key": "sys.menu.super-agent-goals"},
+]
+
+
+def seed_superagent_menus(engine: Engine) -> None:
+    """幂等登记 SuperAgent 管理菜单（重复运行安全；按 path 判重，不与既有主键冲突）。"""
+    with engine.begin() as conn:
+        for m in _SUPERAGENT_MENUS:
+            exists = conn.execute(
+                text("SELECT 1 FROM sys_menu WHERE path = :path AND is_deleted = false LIMIT 1"),
+                {"path": m["path"]},
+            ).first()
+            if exists:
+                continue
+            conn.execute(
+                text(
+                    "INSERT INTO sys_menu "
+                    "(name, permission, path, type, sort, parent_id, icon, component, "
+                    " component_name, status, visible, keep_alive, always_show, "
+                    " i18n_key, is_deleted) "
+                    "VALUES (:name, :permission, :path, 2, :sort, 2003, :icon, '', "
+                    " '', 0, 1, 1, 0, :i18n_key, false)"
+                ),
+                {
+                    "name": m["name"],
+                    "permission": "super-agent:read",
+                    "path": m["path"],
+                    "sort": m["sort"],
+                    "icon": m["icon"],
+                    "i18n_key": m["i18n_key"],
+                },
+            )
+            logger.info(f"已登记 SuperAgent 菜单: {m['name']} ({m['path']})")
+
+
 # ── 索引迁移（幂等；Phase 3 T1）──────────────────────────────────────────
 # 每项依次尝试执行，任一项失败仅告警不阻断启动（索引属性能优化，非正确性依赖）。
 _INDEX_MIGRATIONS: list[str] = [
@@ -382,3 +456,62 @@ def align_vector_dimensions(engine: Engine) -> None:
                 f"但 {target} 超过 pgvector hnsw 索引上限 2000，已跳过向量索引"
                 "（顺序扫描，检索结果仍正确但更慢；如需索引请改用 ≤2000 维的嵌入模型）"
             )
+
+
+# ── 默认语音模型播种（幂等；语音 RTC 连接前置条件）────────────────────────
+# 语音网关连接前需解析到一条 type=7（语音实时）且可用的模型；若库内无任何
+# type=7 模型，前端下拉为空、连接直接报「请新增并启用语音模型(type=7)」。
+# 此处自动为已有 DashScope API Key 补一条默认实时模型，保证开箱即用。
+def seed_default_voice_model(engine: Engine) -> None:
+    """若库内无 type=7 语音模型，则基于首个 DashScope API Key 补建默认模型。
+
+    幂等：已存在任一 type=7 模型则直接返回。模型名取自
+    ``voice_config.VALID_DASHSCOPE_REALTIME_MODELS``（官方实时目录），
+    保证 ``_voice_row_usable`` 校验通过。若库内无任何 API Key，仅告警不建。
+    """
+    with engine.begin() as conn:
+        exists = conn.execute(text(
+            "SELECT 1 FROM ai_chat_model WHERE type = 7 LIMIT 1"
+        )).first()
+        if exists:
+            return
+
+        # 优先取 DashScope 平台 Key（平台名历史大小写不一，用 ILIKE 兜底）
+        key_row = conn.execute(text(
+            "SELECT id, name, platform FROM ai_api_key "
+            "WHERE status = 1 AND (platform ILIKE '%dashscope%' "
+            "   OR platform ILIKE '%通义%' OR platform ILIKE '%aliyun%') "
+            "ORDER BY sort DESC, id ASC LIMIT 1"
+        )).first()
+        if key_row is None:
+            # 退而求其次：取任意启用 Key（模型仍会展示，但 usable=False 提示用户配置）
+            key_row = conn.execute(text(
+                "SELECT id, name, platform FROM ai_api_key "
+                "WHERE status = 1 ORDER BY sort DESC, id ASC LIMIT 1"
+            )).first()
+        if key_row is None:
+            logger.warning(
+                "未找到任何启用的 API Key，跳过默认语音模型播种；"
+                "请先在「API 密钥管理」新增 DashScope Key，再到「语音模型配置」创建模型"
+            )
+            return
+
+        # 默认全双工语音模型 code（DashScope 官方推荐模型）。
+        # catalog 现从 DB 读取（voice_catalog.get_provider_catalog），此处迁移阶段
+        # 种子数据可能尚未写入，故直接使用默认模型 code，与 voice_full_duplex_models.sql 一致。
+        default_model = "qwen3.8-omni-flash-realtime"
+
+        conn.execute(text(
+            "INSERT INTO ai_chat_model "
+            "(code, key_id, name, model, platform, sort, status, type, is_default, created_at) "
+            "VALUES (:code, :key_id, :name, :model, :platform, 0, 1, 7, true, now())"
+        ), {
+            "code": "voice-realtime-default",
+            "key_id": key_row.id,
+            "name": "通义千问 Realtime（默认）",
+            "model": default_model,
+            "platform": key_row.platform or "DashScope",
+        })
+        logger.info(
+            f"已播种默认语音模型: {default_model}（Key={key_row.name}, type=7, is_default=true）"
+        )

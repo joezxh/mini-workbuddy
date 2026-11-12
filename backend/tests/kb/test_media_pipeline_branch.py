@@ -55,3 +55,24 @@ def test_non_media_file_does_not_branch(db, doc, monkeypatch):
     monkeypatch.setattr(dp, "run_pipeline_from_config", _raise)
     with pytest.raises(_Sentinel):
         dp.run_document_ingest(db, 1, doc.id, b"md-bytes", "a.md")
+
+
+def test_media_branch_still_submits_graph_build(db, doc, monkeypatch):
+    """媒体分支提前 return 也要提交图谱构建（仅 type=4 内部判定生效），
+    否则图谱库里的媒体文档切片就绪但图谱永远不自动建。"""
+    from app.services.kb import document_pipeline as dp
+    from app.services.kb.media import ingest as media_ingest
+
+    monkeypatch.setattr(
+        media_ingest, "run_media_ingest",
+        lambda *a, **kw: 5,
+    )
+    submitted = {}
+
+    def _fake_submit(db_, tenant_id, doc_id):
+        submitted["doc_id"] = doc_id
+
+    monkeypatch.setattr(dp, "_maybe_submit_graph_build", _fake_submit)
+    count = dp.run_document_ingest(db, 1, doc.id, b"mp3-bytes", "a.mp3")
+    assert count == 5
+    assert submitted == {"doc_id": doc.id}

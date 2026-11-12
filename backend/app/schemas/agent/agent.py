@@ -67,6 +67,7 @@ class AgentConfigModel(BaseModel):
     base_url: Optional[str] = Field(None, description="API 端点")
     temperature: float = Field(0.7, ge=0, le=2, description="温度参数")
     max_tokens: int = Field(4096, description="最大 token 数")
+    max_retries: Optional[int] = Field(None, ge=0, description="模型请求最大重试次数（agentscope ModelConfig，默认 0）")
     api_key_ref: Optional[str] = Field(None, description="API Key 引用（环境变量名）")
     model_code: Optional[str] = Field(None, description="关联的已注册 ChatModel 代码，后端据此解析已存储的 API Key 自动鉴权")
 

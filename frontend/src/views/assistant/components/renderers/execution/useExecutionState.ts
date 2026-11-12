@@ -7,6 +7,7 @@ import type {
 } from '../types/timeline'
 import { EventType } from '../types/timeline'
 import type { ExecutionEvent } from '@/types/shared'
+import type { PlanTaskSnapshot } from '../../types'
 
 export function useExecutionState(props: ExecutionPanelProps) {
   // ── 响应式状态 ──
@@ -27,6 +28,41 @@ export function useExecutionState(props: ExecutionPanelProps) {
 
   // ── 扁平事件收集（供 SkillExecutionPanel 使用，与 MediatorPanel ExecutionEvent 对齐） ──
   const flatEvents = ref<ExecutionEvent[]>([])
+
+  // ── 计划模式状态聚合（plan_task_activity / plan_snapshot 事件驱动，spec F4/T9） ──
+  const planTasks = ref<PlanTaskSnapshot[]>([])
+  const planActivity = ref<{ tool_name: string; tool_call_id?: string | null; time: number } | null>(null)
+  /** 计划进度：总数 / 已完成 / 百分比 */
+  const planProgress = computed(() => {
+    const total = planTasks.value.length
+    const completed = planTasks.value.filter(t => t.state === 'completed').length
+    return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 }
+  })
+  /** 消费 plan_task_activity：记录当前任务活动（TaskCreate/TaskUpdate/TaskGet/TaskList） */
+  function applyPlanActivity(raw: Record<string, any>) {
+    planActivity.value = {
+      tool_name: raw.tool_name || '',
+      tool_call_id: raw.tool_call_id ?? null,
+      time: Date.now(),
+    }
+  }
+  /** 消费 plan_snapshot：全量覆盖任务清单（后端为终态快照），并清除瞬时活动 */
+  function applyPlanSnapshot(raw: Record<string, any>) {
+    const list = Array.isArray(raw?.tasks) ? raw.tasks : []
+    planTasks.value = list.map((t: any, i: number) => ({
+      id: String(t.id ?? i + 1),
+      subject: t.subject || t.name || `任务 ${i + 1}`,
+      description: t.description || '',
+      state: t.state || 'pending',
+      blocked_by: Array.isArray(t.blocked_by) ? t.blocked_by.map((x: any) => String(x)) : [],
+    }))
+    planActivity.value = null
+  }
+  /** 新一轮对话前重置计划状态 */
+  function applyPlanReset() {
+    planTasks.value = []
+    planActivity.value = null
+  }
 
   // ── 内部状态 ──
   let eventQueue: TimelineEvent[] = []
@@ -521,6 +557,8 @@ export function useExecutionState(props: ExecutionPanelProps) {
     teamState, agentGroups, agentOrder, tasks, progressHistory,
     phase, hasError, errorMessage, selectedAgentId,
     planState,
+    // 计划模式聚合（spec F4/T9）
+    planTasks, planActivity, planProgress, applyPlanActivity, applyPlanSnapshot, applyPlanReset,
     stats, elapsed,
     retry, exportTimeline, init, enqueueEvent,
     flatEvents, resetFlatEvents,

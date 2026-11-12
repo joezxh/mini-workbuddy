@@ -4,6 +4,8 @@
 - 语音/实时模型在 ai_chat_model 中以 type=VOICE_MODEL_TYPE 标记（与对话/向量类型区分）。
 - 网关连接前调用 resolve_voice_config() 取得 api_key + model，避免硬编码/环境变量缺失导致连接失败。
 - 前端「语音模型配置」页通过 list_voice_models() / set_default_voice_model() 管理可选模型与默认模型。
+- 全双工语音模型的有效性校验统一依赖 voice_catalog.get_provider_catalog()
+  （从 DB 读取），确保仅各厂商官方发布的全双工语音大模型可被标记为 usable。
 """
 from typing import Dict, List, Optional
 
@@ -11,64 +13,67 @@ from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal
 from app.models.ai.ai_api_key import AiApiKey, AiChatModel
+from app.duplex.voice.voice_catalog import (
+    get_provider_catalog,
+    is_full_duplex_voice_model,
+    normalize_provider_key,
+)
 
 # 语音/实时模型类型（与 ai_chat_model.type 对齐：1=对话, 5=向量, 7=语音实时）
 # 注意：7 取自前端「模型类别」数据字典(model_type)中“语音模型”的取值，必须保持一致。
 VOICE_MODEL_TYPE = 7
 
-# DashScope 当前可用的实时语音模型（对齐 qwen-audio-agent
-# shared/realtime-model-catalog.mjs 的模型目录；无效模型名会导致 401/400）
-VALID_DASHSCOPE_REALTIME_MODELS = frozenset({
-    "qwen-audio-3.0-realtime-plus",
-    "qwen-audio-3.0-realtime-flash",
-    "qwen3.5-omni-flash-realtime",
-    "qwen3.5-omni-plus-realtime",
-})
-
-# 支持的语音平台（provider key 与 ai_api_key.platform 对齐；
-# DashScope 平台值历史上为 "DashScope"，openai 平台值小写）
-SUPPORTED_VOICE_PLATFORMS = ("DashScope", "openai")
-
 
 def _voice_row_platform(model: AiChatModel, key: Optional[AiApiKey]) -> str:
-    return key.platform if key else (model.platform or "DashScope")
+    """返回模型行归一化后的厂商 key（供目录匹配使用）。"""
+    raw = key.platform if key else (model.platform or "")
+    return normalize_provider_key(raw)
 
 
-def _voice_row_base_url(model: AiChatModel, key: Optional[AiApiKey]) -> Optional[str]:
+def _voice_row_base_url(
+    model: AiChatModel, key: Optional[AiApiKey], catalog: Dict
+) -> Optional[str]:
+    """优先取密钥自定义 url，其次取目录默认端点。"""
     if key and key.url:
         return key.url
-    return None
+    provider = catalog.get(_voice_row_platform(model, key))
+    return provider["default_base_url"] if provider else None
 
 
-def _voice_row_usable(model: AiChatModel, key: Optional[AiApiKey]) -> bool:
-    """模型行是否可用于建立实时连接（列表过滤与默认解析共用）。"""
-    platform = _voice_row_platform(model, key)
+def _voice_row_usable(
+    model: AiChatModel, key: Optional[AiApiKey], catalog: Dict
+) -> bool:
+    """模型行是否可用于建立实时连接。
+
+    校验规则（严格对齐全双工语音模型目录）：
+    1. 厂商必须在目录内（normalize_provider_key 命中）；
+    2. 模型名必须为该厂商官方发布的全双工语音大模型（is_full_duplex_voice_model）；
+    3. API Key 非空。
+    """
+    provider_key = _voice_row_platform(model, key)
+    if provider_key not in catalog:
+        return False
     api_key = key.api_key if key else None
-    if platform == "DashScope":
-        return (
-            model.model in VALID_DASHSCOPE_REALTIME_MODELS
-            and bool(api_key)
-        )
-    # openai 等其它平台：有 Key 且模型名非空即可用
-    # （模型有效性由 AgentScope 模型卡片在 connect 时校验）
-    return bool(api_key) and bool(model.model)
+    return is_full_duplex_voice_model(provider_key, model.model) and bool(api_key)
 
 
 def _platform_matches(want: Optional[str], row_platform: str) -> bool:
-    """provider key 与模型行平台匹配：None→仅排除 s2s；指定→忽略大小写精确匹配。"""
+    """provider key 与模型行平台匹配：None→全部；指定→归一化后精确匹配。"""
     if want is None:
-        return row_platform != "s2s"
-    return row_platform.lower() == want.lower()
+        return True
+    return normalize_provider_key(want) == row_platform
 
 
-def _row_dict(model: AiChatModel, key: Optional[AiApiKey]) -> Dict:
-    platform = _voice_row_platform(model, key)
-    base_url = _voice_row_base_url(model, key)
+def _row_dict(model: AiChatModel, key: Optional[AiApiKey], catalog: Dict) -> Dict:
+    provider_key = _voice_row_platform(model, key)
+    provider = catalog.get(provider_key)
+    base_url = _voice_row_base_url(model, key, catalog)
     return {
         "id": model.id,
         "name": model.name,
         "model": model.model,
-        "platform": platform,
+        "platform": provider["label"] if provider else (key.platform if key else model.platform or ""),
+        "provider_key": provider_key,
         "key_id": model.key_id,
         "key_name": key.name if key else None,
         "is_default": bool(model.is_default),
@@ -76,7 +81,17 @@ def _row_dict(model: AiChatModel, key: Optional[AiApiKey]) -> Dict:
         "sort": model.sort,
         "base_url": base_url,
         "api_key": key.api_key if key else "",
+        "usable": _voice_row_usable(model, key, catalog),
     }
+
+
+def list_voice_provider_catalog() -> Dict:
+    """返回全双工语音厂商目录（含各厂商官方模型清单）。
+
+    供前端「语音模型配置」页创建/编辑模型时按厂商过滤模型下拉，
+    以及 VoiceDemo 页 Provider 列表展示。
+    """
+    return get_provider_catalog()
 
 
 def resolve_voice_config(
@@ -102,6 +117,7 @@ def resolve_voice_config(
     """
     db: Session = SessionLocal()
     try:
+        catalog = get_provider_catalog()
         rows = (
             db.query(AiChatModel)
             .outerjoin(AiApiKey, AiChatModel.key_id == AiApiKey.id)
@@ -123,7 +139,7 @@ def resolve_voice_config(
             ):
                 return {"configured": False, "reason": "invalid_model",
                         "model_id": row.id, "model": row.model}
-            if not _voice_row_usable(row, key):
+            if not _voice_row_usable(row, key, catalog):
                 api_key = key.api_key if key else None
                 if api_key:
                     return {
@@ -139,29 +155,30 @@ def resolve_voice_config(
                     "model": row.model,
                     "key_name": key.name if key else None,
                 }
-            return _row_dict(row, key) | {"configured": True}
+            return _row_dict(row, key, catalog) | {"configured": True}
 
         candidates = [
             r for r in rows
             if _platform_matches(provider_key,
                                  _voice_row_platform(r, r.api_key_obj))
-            and _voice_row_usable(r, r.api_key_obj)
+            and _voice_row_usable(r, r.api_key_obj, catalog)
         ]
         if not candidates:
             return {"configured": False, "reason": "no_model"}
-        return _row_dict(candidates[0], candidates[0].api_key_obj) | {"configured": True}
+        return _row_dict(candidates[0], candidates[0].api_key_obj, catalog) | {"configured": True}
     finally:
         db.close()
 
 
 def list_voice_models() -> List[Dict]:
-    """返回所有启用且**可用**的语音模型（前端下拉 / 配置页使用）。
+    """返回所有启用的语音模型（前端下拉 / 配置页使用）。
 
-    不可用行（DashScope 模型名无效或密钥为空）被过滤，
-    避免前端选中后连接必然失败（表现为 401）。
+    不再按可用性过滤：即使模型不可用（DashScope 模型名无效或密钥为空），
+    也返回并携带 ``usable=False``，便于前端展示并提示用户去「语音模型配置」修复。
     """
     db: Session = SessionLocal()
     try:
+        catalog = get_provider_catalog()
         rows = (
             db.query(AiChatModel)
             .outerjoin(AiApiKey, AiChatModel.key_id == AiApiKey.id)
@@ -172,9 +189,8 @@ def list_voice_models() -> List[Dict]:
             .all()
         )
         return [
-            _row_dict(m, m.api_key_obj)
+            _row_dict(m, m.api_key_obj, catalog)
             for m in rows
-            if _voice_row_usable(m, m.api_key_obj)
         ]
     finally:
         db.close()

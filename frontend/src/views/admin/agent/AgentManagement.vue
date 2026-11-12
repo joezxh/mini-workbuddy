@@ -66,8 +66,8 @@
             allow-clear
             @change="loadAgents"
           >
-            <a-select-option v-for="item in agentTypeDict" :key="item.item_code" :value="item.item_code">
-              {{ item.item_name }}
+            <a-select-option v-for="item in agentTypeOptions" :key="item.value" :value="item.value">
+              {{ item.label }}
             </a-select-option>
           </a-select>
           <a-select
@@ -113,8 +113,8 @@
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'agent_type'">
-              <a-tag :color="dictColor(agentTypeDict, record.agent_type)">
-                {{ dictLabel(agentTypeDict, record.agent_type) }}
+              <a-tag :color="typeColor(record.agent_type)">
+                {{ typeLabel(record.agent_type) }}
               </a-tag>
             </template>
             <template v-else-if="column.key === 'category'">
@@ -185,11 +185,10 @@
       </a-spin>
     </a-card>
 
-    <!-- Agent 创建/编辑弹窗 -->
-    <AgentFormModal
-      v-model:visible="formModalVisible"
+    <!-- Agent 创建/编辑全屏抽屉 -->
+    <AgentConfigDrawer
+      v-model:visible="configDrawerVisible"
       :agent-id="editingAgent?.id"
-      :agent-data="editingAgent"
       @success="handleFormSuccess"
     />
 
@@ -296,7 +295,7 @@ import {
   deleteSkillRule,
   type SkillRule,
 } from '@/api/skillRule'
-import AgentFormModal from './components/AgentFormModal.vue'
+import AgentConfigDrawer from './components/AgentConfigDrawer.vue'
 import AgentDetailDrawer from './components/AgentDetailDrawer.vue'
 import SkillRuleFormModal from '@/views/admin/ai/skill/components/SkillRuleFormModal.vue'
 
@@ -323,9 +322,31 @@ const filterType = ref<string | undefined>()
 const filterCategory = ref<string | undefined>()
 const filterStatus = ref<boolean | undefined>()
 
-// 字典数据
-const agentTypeDict = ref<DictionaryItem[]>([])
+// 字典数据（用途分类；agent_type 收敛为静态 3 类，不再依赖 agent_impl_type 字典）
 const agentCategoryDict = ref<DictionaryItem[]>([])
+
+// agent_type 三类选项（SKILL 已并入 CHAT，spec B1）
+const agentTypeOptions = computed(() => [
+  { value: 'CHAT', label: t('agentMgmt.typeChat') },
+  { value: 'WORKFLOW', label: t('agentMgmt.typeWorkflow') },
+  { value: 'SUPERAGENT', label: t('agentMgmt.typeSuperagent') },
+])
+
+function typeLabel(type: string) {
+  return ({
+    CHAT: t('agentMgmt.typeChat'),
+    WORKFLOW: t('agentMgmt.typeWorkflow'),
+    SUPERAGENT: t('agentMgmt.typeSuperagent'),
+  } as Record<string, string>)[type] ?? type
+}
+
+function typeColor(type: string) {
+  return ({
+    CHAT: 'blue',
+    WORKFLOW: 'purple',
+    SUPERAGENT: 'geekblue',
+  } as Record<string, string>)[type] ?? 'default'
+}
 
 const pagination = reactive({
   current: 1,
@@ -335,7 +356,7 @@ const pagination = reactive({
   showTotal: (total: number) => t('common.total', { total }),
 })
 
-const formModalVisible = ref(false)
+const configDrawerVisible = ref(false)
 const editingAgent = ref<AgentConfig | null>(null)
 
 const detailDrawerVisible = ref(false)
@@ -428,12 +449,7 @@ function resetFilter() {
 
 async function loadDicts() {
   try {
-    const [types, cats] = await Promise.all([
-      getDictionaryItems('agent_impl_type'),
-      getDictionaryItems('agent_category'),
-    ])
-    agentTypeDict.value = types || []
-    agentCategoryDict.value = cats || []
+    agentCategoryDict.value = (await getDictionaryItems('agent_category')) || []
   } catch (e) {
     console.error('加载字典失败:', e)
   }
@@ -442,12 +458,12 @@ async function loadDicts() {
 // ── 增删改 ────────────────────────────────────────────────────────────────────
 function openCreateModal() {
   editingAgent.value = null
-  formModalVisible.value = true
+  configDrawerVisible.value = true
 }
 
 function openEditModal(record: AgentConfig) {
   editingAgent.value = record
-  formModalVisible.value = true
+  configDrawerVisible.value = true
 }
 
 async function toggleActive(record: AgentConfig, val: boolean) {
@@ -473,7 +489,7 @@ async function handleDelete(record: AgentConfig) {
 }
 
 function handleFormSuccess() {
-  formModalVisible.value = false
+  configDrawerVisible.value = false
   loadAgents()
   loadStats()
 }

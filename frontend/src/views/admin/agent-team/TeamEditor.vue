@@ -184,6 +184,7 @@ import {
 import * as api from '@/api/agentTeam'
 import { DictType } from '@/api/dictionary'
 import { loadAdminDicts, dictItems } from '@/composables/useAdminDict'
+import { SHELL_PATH } from '@/utils/shellTab'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -225,7 +226,7 @@ const goBack = () => {
   // 兜底：若非 tab 框架内直接访问（/admin/agent-team/:id），回到团队列表路由
   setTimeout(() => {
     if (router.currentRoute.value.path.startsWith('/admin/agent-team/')) {
-      router.push('/admin?tab=agent-team')
+      router.push(`${SHELL_PATH}?tab=agent-team`)
     }
   }, 0)
 }

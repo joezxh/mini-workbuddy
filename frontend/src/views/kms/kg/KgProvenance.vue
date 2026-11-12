@@ -119,13 +119,20 @@
 
           <div class="kg-sec-t">{{ t('kbMgmt.kg.provFailedTitle', { count: failed.length }) }}</div>
           <div class="kg-kvlist">
-            <div v-if="!failed.length" class="kg-muted">{{ t('kbMgmt.kg.noFailedSegments') }}</div>
-            <div v-for="item in failed" :key="`f-${item.segment_id}`" class="kg-kvrow">
-              <span class="kg-kvrow__k">{{ item.document_id }}</span>
+            <div v-if="!failedRows.length" class="kg-muted">{{ t('kbMgmt.kg.noFailedSegments') }}</div>
+            <div v-for="row in failedRows" :key="`f-${row.item.segment_id}`" class="kg-kvrow">
+              <span class="kg-kvrow__k">{{ row.item.document_id }}</span>
               <span class="kg-kvrow__v">
-                <span class="kg-badge kg-badge--err">
-                  {{ (item.details as any)?.error || t('kbMgmt.kg.failedStructure') }}
-                </span>
+                <a-tooltip v-if="row.reason.detail">
+                  <template #title>
+                    <div class="kg-prov-tip">
+                      <div>{{ t(row.reason.fixKey) }}</div>
+                      <div>{{ row.reason.detail }}</div>
+                    </div>
+                  </template>
+                  <span class="kg-badge kg-badge--err">{{ t(row.reason.textKey) }}</span>
+                </a-tooltip>
+                <span v-else class="kg-badge kg-badge--err">{{ t(row.reason.textKey) }}</span>
               </span>
             </div>
           </div>
@@ -165,6 +172,7 @@ import type { KgEntity, KgFailedSegment, KgMentionSlice, KgRelation } from '@/ap
 import type { TypeTone } from '@/components/common/graph/graphTheme'
 import { typeLabel, typeTone } from '@/components/common/graph/graphTheme'
 import SegmentDetail from '@/views/kms/kb/SegmentDetail.vue'
+import { resolveKgFailure } from '@/utils/kgFailureReason'
 
 const props = defineProps<{ knowledgeId: number }>()
 defineEmits<{ (e: 'inspect-entity', entityId: number): void }>()
@@ -265,6 +273,15 @@ const docRelationCount = computed(() => {
     (r) => ids.has(r.from_entity_id) && ids.has(r.to_entity_id),
   ).length
 })
+
+/**
+ * 失败切片行：徽标只放分类文案（短），悬浮给处置建议 + 后端原始串（长）。
+ *
+ * 徽标位很窄，直接把技术串塞进去会把整行挤变样，故拆分两层展示。
+ */
+const failedRows = computed(() =>
+  failed.value.map((item) => ({ item, reason: resolveKgFailure(item) })),
+)
 
 function isPicked(item: PickerItem) {
   return picked.value?.kind === item.kind && picked.value?.id === item.id
@@ -445,5 +462,12 @@ a.kg-mini__name:hover {
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
+}
+/* 失败徽标悬浮：上行处置建议、下行原始串 */
+.kg-prov-tip {
+  max-width: 420px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

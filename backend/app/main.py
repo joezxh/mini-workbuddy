@@ -142,6 +142,19 @@ async def lifespan(app: FastAPI):
         except Exception as _dim_err:
             logger.warning(f"向量维度对齐失败(忽略): {_dim_err}")
 
+        # 字典/菜单播种（幂等）：agent_impl_type 补 SUPERAGENT 项 + SuperAgent 管理菜单
+        try:
+            from app.db.startup_migrations import (
+                seed_agent_impl_type_dictionary,
+                seed_superagent_menus,
+                seed_default_voice_model,
+            )
+            seed_agent_impl_type_dictionary(engine)
+            seed_superagent_menus(engine)
+            seed_default_voice_model(engine)
+        except Exception as _seed_err:
+            logger.warning(f"字典/菜单播种失败(忽略): {_seed_err}")
+
     # 启动审计日志批量写入协程
     try:
         start_audit_writer()
@@ -199,7 +212,53 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"启动 AutoCompactionScheduler 失败: {e}")
 
+    # 启动 SuperAgent 引擎后台任务（b3：PipelineExecutor = EffectQueue + Source polling + resume）
+    try:
+        from app.ai.superagent.effects import EffectQueue
+        from app.ai.superagent.outbox import OutboxService
+        from app.ai.superagent.pipeline import PipelineExecutor
+        from app.routers.superagent import get_engine, get_registry
+
+        engine = get_engine()
+        app.state.superagent_engine = engine
+        outbox = OutboxService()
+        engine.outbox = outbox
+        queue = EffectQueue(engine.repository, engine=engine, outbox=outbox)
+        engine.effects = queue
+        app.state.superagent_effect_queue = queue
+
+        registry = get_registry()
+        app.state.superagent_registry = registry
+
+        pipeline = PipelineExecutor(
+            repo=engine.repository, engine=engine, queue=queue, registry=registry,
+        )
+        await pipeline.start()  # 内部已完成 queue/registry 启动 + resume() 崩溃恢复
+        app.state.superagent_pipeline = pipeline
+        logger.info("SuperAgent Pipeline 已启动（EffectQueue + Source polling + resume）")
+    except Exception as e:
+        logger.warning(f"启动 SuperAgent 后台任务失败（不影响启动）: {e}")
+
+    # 启动 MCP 端点子应用（挂载在模块底部，此处进入其 session manager 的 lifespan）
+    # Starlette 不会自动触发被 mount 子应用的 lifespan，不进入则 /mcp 全部请求报
+    # "Task group is not initialized"，详见 app/ai/mcp/server.py 模块注释
+    # 开关 MCP_SERVER_ENABLED 关闭时（默认）为 no-op
+    try:
+        from app.ai.mcp.server import start_mcp_endpoint
+
+        await start_mcp_endpoint()
+    except Exception as e:
+        logger.warning(f"启动 MCP 端点失败（不影响启动）: {e}")
+
     yield
+
+    # 停止 MCP 端点子应用（与 start_mcp_endpoint 成对）
+    try:
+        from app.ai.mcp.server import stop_mcp_endpoint
+
+        await stop_mcp_endpoint()
+    except Exception as e:
+        logger.error(f"关闭 MCP 端点失败: {e}")
 
     # 关闭审计日志批量写入协程
     try:
@@ -215,6 +274,22 @@ async def lifespan(app: FastAPI):
         await shutdown_scheduler()
     except Exception as e:
         logger.error(f"关闭 AutoCompactionScheduler 失败: {e}")
+
+    # 停止 SuperAgent 后台任务（b3）
+    try:
+        pipeline = getattr(app.state, "superagent_pipeline", None)
+        if pipeline is not None:
+            await pipeline.stop()
+        else:
+            registry = getattr(app.state, "superagent_registry", None)
+            if registry is not None:
+                await registry.stop_all_polling()
+            queue = getattr(app.state, "superagent_effect_queue", None)
+            if queue is not None:
+                await queue.stop()
+        logger.info("SuperAgent Pipeline 已停止")
+    except Exception as e:
+        logger.error(f"停止 SuperAgent 后台任务失败: {e}")
 
     logger.info(f"{settings.APP_NAME} 关闭")
 
@@ -277,19 +352,20 @@ register_routers(app)
 
 
 
-# 挂载 MCP Server SSE/Streamable HTTP 端点（供外部 MCP Client 连接）
+# 挂载 MCP Server Streamable HTTP 端点（供外部 MCP Client 连接）
+# 受 settings.MCP_SERVER_ENABLED 守卫，默认不挂载（端点不经 JWT 鉴权）；
+# 子应用内部路径/监听 host/DNS rebinding 设置统一由 server.py 决定；
+# 其 lifespan 启停在上面 lifespan() 内完成（Starlette 不自动触发子应用 lifespan）
 try:
-    from app.ai.mcp.server import get_mcp_server
-    _mcp_srv = get_mcp_server()
-    if _mcp_srv:
-        try:
-            mcp_http_app = _mcp_srv.streamable_http_app()
-            app.mount("/mcp", mcp_http_app)
-            logger.info("MCP Streamable HTTP 端点已挂载: /mcp")
-        except AttributeError:
-            mcp_sse_app = _mcp_srv.sse_app()
-            app.mount("/mcp", mcp_sse_app)
-            logger.info("MCP SSE 端点已挂载: /mcp")
+    from app.ai.mcp.server import build_mcp_asgi_app
+
+    _mcp_app = build_mcp_asgi_app()
+    if _mcp_app:
+        app.mount("/mcp", _mcp_app)
+        logger.info("MCP Streamable HTTP 端点已挂载: /mcp")
+    else:
+        # server.py 用 std logging（INFO 级不进 loguru 输出），此处给出可查的缺席原因
+        logger.info("MCP 端点未挂载：开关 MCP_SERVER_ENABLED 关闭或 mcp 包不可用")
 except Exception as e:
     logger.warning(f"MCP Server 端点挂载失败: {e}")
 

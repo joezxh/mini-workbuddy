@@ -91,6 +91,9 @@
         :is-team-streaming="isTeamStreaming"
         :is-research-streaming="isResearchStreaming"
         :streaming-research-sources="streamingResearchSources"
+        :is-plan-streaming="isPlanStreaming"
+        :streaming-plan-tasks="streamingPlanTasks"
+        :streaming-plan-activity="streamingPlanActivity"
         :streaming-unified-steps="streamingUnifiedStepsRef"
         :streaming-unified-artifacts="streamingUnifiedArtifactsRef"
         :streaming-thinking-content="streamingThinkingContent"
@@ -207,6 +210,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { UnorderedListOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 import { message as antMsg } from 'ant-design-vue'
 import CrossModeStatsPage from '@/views/context/CrossModeStatsPage.vue'
@@ -221,7 +225,8 @@ import {
 } from '@/api/aiSession'
 import { getAvailableModels, type AvailableModel } from '@/api/ai-apikey'
 import { getWorkspacesSimple, type WorkspaceSimple } from '@/api/workspace'
-import { getUnifiedEvents } from '@/api/agentExecution'
+import { getUnifiedEvents, cancelExecution } from '@/api/agentExecution'
+import { useAgentEventsStore } from '@/stores/agentEvents'
 import SessionSidebar from './SessionSidebar.vue'
 import ChatContainer from './ChatContainer.vue'
 import AgentEventStream from './AgentEventStream.vue'
@@ -235,6 +240,12 @@ import { getDictionaryItems, type DictionaryItem } from '@/api/dictionary'
 import { submitDeepResearch } from '@/api/agentWorkspace'
 import { getContextStats, getStatsForSessions } from '@/api/aiContext'
 import { useExecutionState } from './renderers/execution/useExecutionState'
+
+const { t: i18nT } = useI18n()
+
+// HITL 多轮 / 真实中断（spec F3）：主流 SSE 的 hitl_pause/resume 信封写入统一 store，
+// 由 AgentEventStream（订阅 /stream + 渲染 HitlConfirmPanel）消费
+const agentEventsStore = useAgentEventsStore()
 
 // 扩展全局 Window 类型以支持上下文统计
 declare global {
@@ -327,8 +338,18 @@ const selectedSopTemplateKey = ref<string | null>(null)
 
 // 流式请求中断控制器
 let abortController: AbortController | null = null
+// 用户主动中断标记（真实中断 + 前端 abort 兜底，spec F3/B3）
+let interruptRequested = false
 
-function stopStreaming() {
+async function stopStreaming() {
+  // 真实中断：通知后端取消当前 agent-run 执行（失败静默，可能已结束/非 agent 会话）
+  interruptRequested = true
+  const execId = currentExecutionId.value
+  if (execId) {
+    cancelExecution(execId).catch(() => { /* 静默：后端可能已结束或无该执行 */ })
+  }
+  // 前端 abort 兜底：立即断开主流读取；「已中断」提示由 sendMessage 的
+  // AbortError 兜底路径追加并随 finally 保存入库
   if (abortController) {
     abortController.abort()
     abortController = null
@@ -388,7 +409,7 @@ function t(key: string): string {
   }
   return translations[key] || key
 }
-const { enqueueEvent, agentGroups, agentOrder, teamState, tasks, progressHistory, phase: executionPhase, flatEvents, resetFlatEvents } = executionState
+const { enqueueEvent, agentGroups, agentOrder, teamState, tasks, progressHistory, phase: executionPhase, flatEvents, resetFlatEvents, planTasks, planActivity, applyPlanActivity, applyPlanSnapshot, applyPlanReset } = executionState
 // 保留 executionId 变量用于保存到消息
 const currentExecutionId = ref<string | undefined>(undefined)
 
@@ -436,6 +457,13 @@ const isTeamStreaming = computed(() =>
 const isResearchStreaming = computed(() =>
   streaming.value && sessionType.value === 'deep_research'
 )
+/** 计划模式流式执行（渲染走独立的 PlanExecutionPanel，spec F4/T9）。 */
+const isPlanStreaming = computed(() =>
+  streaming.value && sessionType.value === 'plan'
+)
+/** 计划模式流式状态：任务清单 + 当前活动 */
+const streamingPlanTasks = computed(() => planTasks.value)
+const streamingPlanActivity = computed(() => planActivity.value)
 /** 深度研究流式来源列表 */
 const streamingResearchSources = ref<Array<{ title: string; url?: string; snippet?: string }>>([])
 let userTabSelected = false
@@ -515,7 +543,10 @@ const parsedMessages = computed<ChatMessage[]>(() =>
     // SOP：运行状态与交接摘要从 extra_data 还原，刷新/重入后里程碑不丢（spec §4.8）
     const sopRun = (msg as any).sopRun || extra?.sopRun
     const sopHandover = (msg as any).sopHandover || extra?.sopHandover
-    return { ...msg, parsed, sqlbotData, executionId, skillEvent, thinkingMode, thinkingSteps, renderKind, asyncTask, sopRun, sopHandover }
+    // 计划模式：任务清单快照从 extra_data 还原（历史回放渲染最终清单，spec F4/T9）
+    const planSnapshot = (msg as any).planSnapshot
+      || (Array.isArray(extra?.planSnapshot) && extra.planSnapshot.length ? extra.planSnapshot : undefined)
+    return { ...msg, parsed, sqlbotData, executionId, skillEvent, thinkingMode, thinkingSteps, renderKind, asyncTask, sopRun, sopHandover, planSnapshot }
   })
 )
 
@@ -752,11 +783,11 @@ const filteredSessions = computed(() => {
 
 function typeLabel(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.item_name ?? ({ general: '通用', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度', react: 'ReAct 计划' } as Record<string, string>)[t] ?? t
+  return item?.item_name ?? ({ general: '通用', data: '数据', skill: '技能', agent: '智能体', team: '专家团', thinking: '思考', deep_research: '深度研究', scheduled: '云端调度', react: 'ReAct 计划', plan: i18nT('assistantChat.sessionPlan') } as Record<string, string>)[t] ?? t
 }
 function sessionTypeColor(t: string) {
   const item = sessionTypeOptions.value.find(o => (o.item_value || o.item_code) === t)
-  return item?.color ?? ({ general: 'cyan', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano', react: 'lime' } as Record<string, string>)[t] ?? 'default'
+  return item?.color ?? ({ general: 'cyan', data: 'orange', skill: 'green', agent: 'blue', team: 'geekblue', thinking: 'gold', deep_research: 'magenta', scheduled: 'volcano', react: 'lime', plan: 'purple' } as Record<string, string>)[t] ?? 'default'
 }
 function formatTime(t: string) { return t ? t.replace('T', ' ').slice(0, 16) : '' }
 async function copyText(t: string) { await navigator.clipboard.writeText(t); antMsg.success('已复制') }
@@ -1025,6 +1056,10 @@ async function sendMessage(text?: string) {
   streamingResearchSources.value = []
   currentExecutionId.value = undefined
   resetFlatEvents()
+  // 真实中断标记复位（spec F3）
+  interruptRequested = false
+  // 计划模式状态复位（spec F4/T9）
+  applyPlanReset()
   // ReAct 模式重置
   reactEvents.value = []
   reactGoal.value = ''
@@ -1084,6 +1119,17 @@ async function sendMessage(text?: string) {
   let accAnswer = '', newDifyConvId: string | undefined = difyConvId.value
   let _teamResultReceived = false // 标记 team_result 是否已收到，防止 completed/done 再次追加相同内容
   let _assistantMsgSaved = false // 非技能模式（含 team）消息是否已保存，防止 done/completed 双重 push
+  // 「已中断」标记只追加一次（用户 stop 与后端 reply_interrupted 双通道去重，spec F3）
+  let _interruptedHandled = false
+  const appendInterruptMarker = () => {
+    if (_interruptedHandled) return
+    _interruptedHandled = true
+    const marker = i18nT('assistantChat.interrupted')
+    accAnswer = accAnswer ? `${accAnswer}\n\n⏹ ${marker}` : `⏹ ${marker}`
+    streamingText.value = accAnswer
+  }
+  // 计划模式：快照仅持久化一次（spec F4 历史回放）
+  let _planSnapshotPersisted = false
 
   try {
     abortController = new AbortController()
@@ -1133,8 +1179,15 @@ async function sendMessage(text?: string) {
       }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    // X-Execution-Id 响应头兜底（spec B4）：主流 _gateway_meta 事件未达时回填当前执行
+    if (!currentExecutionId.value) {
+      const headerExecId = res.headers.get('X-Execution-Id')
+      if (headerExecId) currentExecutionId.value = headerExecId
+    }
 
     const reader = res.body!.getReader(); const decoder = new TextDecoder(); let buf = ''
+    // 当前 SSE 帧 event: 行携带的事件名（旧格式 event: <type>\ndata: <json>，spec B4）
+    let currentSseEventName = ''
     let _skillStreamDone = false  // 技能 done 已收到：进入收尾宽限读取（继续收 step(run_done)/completed）
     let _skillMsgSaved = false   // 技能消息是否已由 completed 事件保存
     while (true) {
@@ -1159,19 +1212,73 @@ async function sendMessage(text?: string) {
       buf += decoder.decode(value!, { stream: true })
       const lines = buf.split('\n'); buf = lines.pop() ?? ''
       for (const line of lines) {
+        // 旧格式 SSE 帧头：event: <type>（hitl_pause/_gateway_meta/plan_snapshot 等新契约
+        // 事件的类型仅在 event: 行、data JSON 内无 type 字段，需先捕获，spec B4）
+        if (line.startsWith('event:')) { currentSseEventName = line.slice(6).trim(); continue }
         if (!line.startsWith('data:')) continue
         const data = line.slice(5).trim(); if (!data || data === '[DONE]') continue
+        currentSseEventName = ''
         try {
           const chunk = JSON.parse(data)
-          // 兼容两种事件类型字段：type（旧/agent 模式）和 event_type（team 模式）
-          const eventType = chunk.type || chunk.event_type
+          // 兼容三种事件类型来源：JSON type（旧/agent 模式）、event_type（team 模式）、
+          // SSE event: 行（_gateway_meta/hitl_pause/hitl_resume/reply_interrupted/plan_* 等）
+          const eventType = chunk.type || chunk.event_type || currentSseEventName
           if (eventType === '_gateway_meta') {
-            // 注意：_gateway_meta 被后端 ai_agent.py 拦截（continue），实际不会到达前端。
-            // 保留此分支作为兼容：若未来后端放开此事件，可正确提取 execution_id。
-            currentExecutionId.value = chunk.extra_data?.execution_id || currentExecutionId.value
+            // 流开始时下发（spec B4）：回填当前 executionId。
+            // 新契约 payload 直接含 execution_id；保留 extra_data 兼容旧格式
+            currentExecutionId.value = chunk.execution_id || chunk.extra_data?.execution_id || currentExecutionId.value
             if (chunk.answer) {
               accAnswer = chunk.answer
               streamingText.value = accAnswer
+            }
+          } else if (eventType === 'hitl_pause') {
+            // HITL 暂停（spec F3）：一次执行可多轮出现。写入统一 store，
+            // AgentEventStream（订阅 /stream）与主流双通道汇入，store 按 reply_id 去重
+            agentEventsStore.addEvent({
+              execution_id: chunk.execution_id || currentExecutionId.value || '',
+              event_type: 'hitl_pause',
+              category: 'hitl',
+              levels: [2],
+              content: {
+                tool_calls: chunk.tool_calls || [],
+                pause_type: chunk.pause_type || 'tool_confirm',
+                timeout_minutes: chunk.timeout_minutes,
+              },
+              reply_id: chunk.reply_id || null,
+              ui_hint: 'confirm',
+            })
+          } else if (eventType === 'hitl_resume') {
+            // 恢复信封（spec F3）：标记当前轮已处理；多轮队列语义下面板保持可见等待下一轮
+            agentEventsStore.addEvent({
+              execution_id: chunk.execution_id || currentExecutionId.value || '',
+              event_type: 'hitl_resume',
+              category: 'hitl',
+              levels: [2],
+              content: { action: chunk.action },
+            })
+          } else if (eventType === 'reply_interrupted') {
+            // 后端真实中断/取消后的收尾标记（spec B3）：追加「已中断」提示，
+            // 复用 finally 兜底保存路径入库（用户 stop 与后端中断双通道去重）
+            appendInterruptMarker()
+          } else if (eventType === 'text_delta') {
+            // 原生 agent/plan 会话文本流（SSEBridge text_delta 事件，spec B4）
+            accAnswer += chunk.delta || chunk.text || ''
+            streamingText.value = accAnswer
+            scrollToBottom(false)
+          } else if (eventType === 'plan_task_activity') {
+            // 计划模式（spec F4/T9）：当前任务活动（TaskCreate/TaskUpdate/TaskGet/TaskList）
+            applyPlanActivity(chunk)
+          } else if (eventType === 'plan_snapshot') {
+            // 计划模式（spec F4/T9）：任务清单快照（终态），聚合渲染 + 持久化供历史回放
+            applyPlanSnapshot(chunk)
+            if (activeSessionType === 'plan' && !_planSnapshotPersisted && currentSession.value && Array.isArray(chunk.tasks) && chunk.tasks.length) {
+              _planSnapshotPersisted = true
+              try {
+                await addSessionMessage(currentSession.value.session_id, {
+                  role: 'assistant', content: '', message_type: 'text',
+                  extra_data: { renderKind: 'plan', planSnapshot: chunk.tasks },
+                })
+              } catch { /* 持久化失败不阻断实时展示 */ }
             }
           } else if (eventType === 'token') {
             accAnswer += chunk.token; streamingText.value = accAnswer
@@ -1734,7 +1841,9 @@ async function sendMessage(text?: string) {
     }
   } catch (e: any) {
     if (e?.name === 'AbortError') {
-      // 用户主动中断，不清空已产出内容
+      // 用户主动中断（spec F3）：不清空已产出内容，追加「已中断」提示
+      // 并随下方 finally 兜底保存路径入库
+      if (interruptRequested) appendInterruptMarker()
     } else {
       antMsg.error(`发送失败：${e.message || '网络错误'}`); accAnswer = ''
     }
@@ -1797,6 +1906,10 @@ async function sendMessage(text?: string) {
       } else if (activeSessionType === 'sop') {
         msg.renderKind = 'sop'
         msg.sopRun = streamingSopRun.value || undefined
+      } else if (activeSessionType === 'plan') {
+        // 计划模式（spec F4/T9）：最终清单快照随消息保存（回放直读）
+        msg.renderKind = 'plan'
+        msg.planSnapshot = planTasks.value.length ? [...planTasks.value] : undefined
       }
       messages.value.push(msg)
       scrollToBottom(); await loadSessions()

@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any, Iterable, Optional, Sequence
 
@@ -281,6 +282,9 @@ class KgNeo4jStore:
         normalized_name: str,
         attributes: Optional[dict] = None,
     ) -> None:
+        # Neo4j 属性值只允许基本类型或其数组：dict 会被驱动序列化成 Map{}，
+        # 触发 ClientError.Statement.TypeError（空 {} 同样失败），故整体存 JSON 串。
+        # 读路径不回读 attributes（PG 为真相源），串化无兼容代价。
         self._run(
             CYPHER_UPSERT_ENTITY,
             entity_id=entity_id,
@@ -288,7 +292,7 @@ class KgNeo4jStore:
             name=name,
             label=label,
             normalized_name=normalized_name,
-            attributes=attributes or {},
+            attributes=json.dumps(attributes or {}, ensure_ascii=False, default=str),
         )
 
     def upsert_mention(self, *, chunk_id: str, entity_id: str, document_id: str) -> None:
