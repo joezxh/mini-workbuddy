@@ -163,3 +163,63 @@ async def test_send_text_unsupported_emits_error():
     ev = (await _drain(p, 1))[0]
     assert ev.type == "error"
     assert "不支持文本输入" in ev.data["message"]
+
+
+# ── build_realtime_model 系列路由（不锁版本号）────────────────
+
+def _patch_dashscope(monkeypatch, audio_cls, omni_cls):
+    monkeypatch.setattr("agentscope.credential.DashScopeCredential",
+                        lambda api_key: {"api_key": api_key})
+    monkeypatch.setattr("agentscope.realtime.DashScopeAudioRealtimeModel",
+                        audio_cls, raising=False)
+    monkeypatch.setattr("agentscope.realtime.DashScopeRealtimeModel",
+                        omni_cls, raising=False)
+
+
+def test_build_model_routes_qwen_audio_any_version(monkeypatch):
+    from app.duplex.voice.providers import agentscope as mod
+    captured = {}
+
+    class FakeAudioModel:
+        def __init__(self, model, credential, model_card=None):
+            captured["model"] = model
+            captured["card"] = model_card
+
+    _patch_dashscope(monkeypatch, FakeAudioModel, None)
+    for name in ("qwen-audio-3.0-realtime", "qwen-audio-3.1-realtime-plus",
+                 "qwen-audio-3.1-realtime-flash"):
+        captured.clear()
+        mod.build_realtime_model("dashscope", name, "sk-x")
+        assert captured["model"] == name
+        # audio realtime 系列无内置 card，工厂必须显式传入（否则 _find_card 报错）
+        card = captured["card"]
+        assert card is not None and card.name == name
+        assert card.input_sample_rate == 16000
+        assert card.output_sample_rate == 24000
+
+
+def test_build_model_routes_omni_any_version(monkeypatch):
+    from app.duplex.voice.providers import agentscope as mod
+    captured = {}
+
+    class FakeOmniModel:
+        class Parameters:
+            def __init__(self, voice):
+                captured["voice"] = voice
+
+        def __init__(self, model, credential, parameters=None):
+            captured["model"] = model
+
+    _patch_dashscope(monkeypatch, None, FakeOmniModel)
+    for name in ("qwen3.5-omni-flash-realtime", "qwen3-omni-flash-realtime",
+                 "qwen-omni-turbo-realtime", "qwen3.8-omni-flash-realtime"):
+        captured.clear()
+        mod.build_realtime_model("dashscope", name, "sk-x", voice="Cherry")
+        assert captured == {"model": name, "voice": "Cherry"}
+
+
+def test_build_model_unknown_still_raises(monkeypatch):
+    from app.duplex.voice.providers import agentscope as mod
+    _patch_dashscope(monkeypatch, object, object)
+    with pytest.raises(ValueError, match="未知实时模型"):
+        mod.build_realtime_model("dashscope", "some-random-model", "sk-x")

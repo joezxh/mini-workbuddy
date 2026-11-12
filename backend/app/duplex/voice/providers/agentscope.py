@@ -1,8 +1,9 @@
-"""AgentScope 2.0.8 RealtimeAgent 内核 Provider（spec §2）。
+"""AgentScope RealtimeAgent 内核 Provider（spec §2；当前依赖 agentscope 2.0.11）。
 
 两个注册子类：
-- DashScopeAgentProvider(key="dashscope")：Qwen-Omni / Qwen-Audio-3.0 实时模型
-- OpenAIAgentProvider(key="openai")：gpt-realtime-*（注册位，2.0.8 暂不可用）
+- DashScopeAgentProvider(key="dashscope")：Qwen-Omni / Qwen-Audio 实时模型
+- OpenAIAgentProvider(key="openai")：gpt-realtime-*（2.0.11 已随包发布
+  OpenAIRealtimeModel 与 gpt-realtime card，惰性导入保留作降级兼容）
 
 事件映射（spec §3.1）：
 ReplyStart(user)→speech_started；ReplyStart(assistant)→response_started；
@@ -21,22 +22,51 @@ from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
 from app.duplex.voice.providers.agentscope_transport import BrowserTransport
 
 
+def _dashscope_audio_card(model_name: str):
+    """为 qwen-audio-*-realtime 系列构造显式 model card。
+
+    agentscope 2.0.11（实测）只为 omni 系列随包发布 YAML card（``_dashscope/_models/``），
+    audio realtime 系列的 ``_audio_models/`` 目录不存在 → ``_find_card`` 对任何
+    ``qwen-audio-*-realtime``（含 3.0）都抛 ``No realtime model card found``。
+    按官方规格显式构造（qwen-audio-3.x-realtime：输入 16kHz / 输出 24kHz / PCM）。
+    """
+    from agentscope.realtime import RealtimeModelCard
+    return RealtimeModelCard(
+        model_type="dashscope_audio_realtime",
+        name=model_name,
+        label=model_name,
+        status="active",
+        input_types=["audio/pcm"],
+        output_types=["audio/pcm", "text/plain"],
+        input_sample_rate=16000,
+        output_sample_rate=24000,
+        supports_tools=True,
+    )
+
+
 def build_realtime_model(provider_key: str, model_name: str, api_key: str,
                          base_url: Optional[str] = None,
                          voice: str = "default"):
-    """模型工厂（spec §2.3）：按模型名前缀选择 AgentScope 模型类。
+    """模型工厂（spec §2.3）：按模型系列前缀选择 AgentScope 模型类。
 
-    注意：agentscope 2.0.8 发布版不含 OpenAIRealtimeModel（官方文档与
-    GitHub main 超前于发布版）。gpt-realtime 分支做惰性导入，框架升级后
-    零代码自动启用；当前版本下抛出明确的 NotImplementedError。
+    系列匹配不锁版本号（模型目录来自 DB ai_chat_model type=7 行，会随
+    官方发布新增版本，如 qwen-audio-3.1-realtime-plus/flash）：
+    - ``qwen-audio-*``（3.0/3.1/… realtime）→ DashScopeAudioRealtimeModel
+    - ``qwen*-omni-*``（qwen3-omni/qwen3.5-omni/qwen3.8-omni/…）→ DashScopeRealtimeModel
+    - ``gpt-realtime-*`` → OpenAIRealtimeModel（惰性导入）
+
+    注意：OpenAIRealtimeModel 自 agentscope 2.0.11 起已随包发布（含
+    gpt-realtime-*/card）；gpt-realtime 分支保留惰性导入 + 明确报错，
+    仅作降级到旧版 agentscope 时的兼容兜底。
     """
     from agentscope.credential import DashScopeCredential
 
-    if model_name.startswith("qwen-audio-3.0-realtime"):
+    if model_name.startswith("qwen-audio"):
         from agentscope.realtime import DashScopeAudioRealtimeModel
         return DashScopeAudioRealtimeModel(
-            model=model_name, credential=DashScopeCredential(api_key=api_key))
-    if model_name.startswith(("qwen3.5-omni", "qwen3-omni", "qwen-omni")):
+            model=model_name, credential=DashScopeCredential(api_key=api_key),
+            model_card=_dashscope_audio_card(model_name))
+    if model_name.startswith("qwen") and "-omni" in model_name:
         from agentscope.realtime import DashScopeRealtimeModel
         return DashScopeRealtimeModel(
             model=model_name, credential=DashScopeCredential(api_key=api_key),
@@ -48,7 +78,7 @@ def build_realtime_model(provider_key: str, model_name: str, api_key: str,
         except ImportError as e:
             raise NotImplementedError(
                 f"当前 agentscope 版本不含 OpenAIRealtimeModel（gpt-realtime "
-                f"模型需升级 agentscope > 2.0.8 后使用）: {e}") from e
+                f"模型需 agentscope >= 2.0.11）: {e}") from e
         return OpenAIRealtimeModel(
             model=model_name, credential=OpenAICredential(api_key=api_key))
     raise ValueError(f"未知实时模型: {model_name}（provider={provider_key}）")
