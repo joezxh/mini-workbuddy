@@ -1,6 +1,9 @@
 # 多智能体组织模式范例设计（AgentScope 2.0.12 × agentTeam 专家组）
 
 > 状态：**已定稿**（2026-11-20，用户已确认全部关键决策）。
+> **迁移注记（2026-11-20）**：范例已正式收编进 `backend/app/ai/team/org_patterns/`
+> （业务改名 + 统一 run 入口），`backend/examples/` 已删除；现行权威文档见
+> `docs/design/org-pattern-teams-zh.md`。本文为历史设计稿，下文路径已同步指向新落点。
 > 实施计划：`docs/superpowers/plans/2026-11-20-org-pattern-examples.md`。
 > 关联文档：`docs/design/agent-architecture-patterns-zh.md`（10 种架构范式，基于 2.0.12dev 整理）。
 
@@ -100,7 +103,7 @@ mode 取值全部落在现有 `TeamMode.ALL`，**不新增枚举**；层级/交�
 
 ## 3. 共享脚手架与每模式设计
 
-### 3.0 共享脚手架 `backend/examples/org_patterns/_common.py`（一处复用）
+### 3.0 共享脚手架 `backend/app/ai/team/org_patterns/scaffolding.py`（一处复用，原 examples/_common.py）
 
 - `make_model(script=None)`：`script` 非 None → `FakeChatModel(script)`（离线确定性）；
   否则优先 `OPENAI_BASE_URL`+`OPENAI_API_KEY`（OpenAI 兼容端点），其次 `DASHSCOPE_API_KEY`；
@@ -291,21 +294,23 @@ flowchart TD
 ## 4. 文件清单与改动范围（方案 A 全量）
 
 ```
-新增：
-backend/examples/org_patterns/
-├── _common.py                 # 共享脚手架
-├── README.md                  # 运行说明、环境变量、8 模式索引
-├── 01_supervisor_worker.py
-├── 02_hierarchy_expansion.py
-├── 03_pipeline_inquiry.py
-├── 04_handoff_support.py
-├── 05_mesh_multiplatform.py
-├── 06_debate_adreview.py
-├── 07_parallel_budget.py
-└── 08_federated_supplychain.py
+新增（历史清单；范例已收编，现行落点见 docs/design/org-pattern-teams-zh.md）：
+backend/app/ai/team/org_patterns/          # 原 backend/examples/org_patterns/（已删除）
+├── scaffolding.py             # 共享脚手架（原 _common.py）
+├── seed_data.py               # 种子数据单一事实源
+├── listing_launch.py          # 原 01_supervisor_worker.py
+├── market_expansion.py        # 原 02_hierarchy_expansion.py
+├── inquiry_pipeline.py        # 原 03_pipeline_inquiry.py
+├── support_handoff.py         # 原 04_handoff_support.py
+├── multiplatform_ops.py       # 原 05_mesh_multiplatform.py
+├── ad_review_debate.py        # 原 06_debate_adreview.py
+├── budget_parallel.py         # 原 07_parallel_budget.py
+└── supply_chain_federation.py # 原 08_federated_supplychain.py
+backend/scripts/run_org_pattern.py          # 统一 CLI（收敛自原各脚本 __main__）
 backend/scripts/seed_org_pattern_teams.py   # 幂等 API 种子（8 团队 + 成员 agent_config）
-backend/tests/org_patterns/                 # 离线语义断言测试（pytest，不依赖网络/DB）
-docs/design/org-pattern-examples-zh.md      # 本文档
+backend/tests/ai/team/org_patterns/         # 离线语义断言测试（原 backend/tests/org_patterns/）
+docs/design/org-pattern-examples-zh.md      # 本文档（历史设计稿）
+docs/design/org-pattern-teams-zh.md         # 现行权威文档（原 README 迁移）
 docs/superpowers/plans/2026-11-20-org-pattern-examples.md
 
 修改（仅 2 处，均非主链路逻辑重写）：
@@ -333,9 +338,9 @@ Spike 结论回填本文档附录 A；S3 若证实中文 name 被改写，全部
 
 ## 7. 验收总则
 
-- 每个范例 `python backend/examples/org_patterns/0N_xxx.py --mock` 离线非交互跑通；
+- 每个模式 `python backend/scripts/run_org_pattern.py <pattern> --mock` 离线非交互跑通；
   无 API key 且未加 `--mock` 时给出清晰中文报错（不 hang）。
-- 编排语义由 `backend/tests/org_patterns/` 的 trace 断言保证（各模式验收见 §3）。
+- 编排语义由 `backend/tests/ai/team/org_patterns/` 的 trace 断言保证（各模式验收见 §3）。
 - 失败/超时/中断：所有驱动循环有硬上限（max_iters/max_hops/max_rounds/发言预算/`asyncio.wait_for`）；
   单成员失败按 continue 策略占位继续（联邦网关拒绝除外，那是预期行为）。
 - 种子脚本 `--dry-run` 可预览；重跑幂等（按 team_code/agent_code 查重）；缺成员跳过该团队不产生半成品。
