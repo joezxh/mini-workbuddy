@@ -20,6 +20,7 @@ from typing import Callable, Coroutine, List, Optional
 from agentscope.agent import Agent, ReActConfig
 from agentscope.console import ConsoleRenderer
 from agentscope.credential import DashScopeCredential, OpenAICredential
+from agentscope.formatter import OpenAIChatFormatter
 from agentscope.message import Msg, TextBlock, ToolCallBlock
 from agentscope.model import ChatModelBase, ChatResponse, DashScopeChatModel, OpenAIChatModel
 from agentscope.permission import PermissionMode
@@ -39,6 +40,8 @@ class FakeChatModel(ChatModelBase):
         )
         self.script = list(script)
         self.name = name
+        # Agent 运行时需要 model.formatter（真实模型自带，基类不设默认）
+        self.formatter = OpenAIChatFormatter()
 
     async def _call_api(self, model_name, messages, tools=None, tool_choice=None, **kwargs):
         if not self.script:
