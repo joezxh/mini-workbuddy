@@ -2,7 +2,7 @@
 """范例08 联邦式：越界字段被网关拒绝 + 协调者只拿白名单字段。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_cross_boundary_denied():

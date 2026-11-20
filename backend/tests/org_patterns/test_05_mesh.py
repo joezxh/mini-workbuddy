@@ -2,7 +2,7 @@
 """范例05 对等网状：广播全员可见 + 发言预算/轮次上限 + 无中心汇总者。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 PLATFORMS = {"amazon_ops", "shopee_ops", "tiktok_ops", "indie_ops"}
 

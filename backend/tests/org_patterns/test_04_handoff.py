@@ -2,7 +2,7 @@
 """范例04 交接式：只传摘要不传全量对话 + 交接跳数上限。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_handoff_summary_only_and_hops():

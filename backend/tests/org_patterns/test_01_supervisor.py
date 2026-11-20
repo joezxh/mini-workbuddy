@@ -2,7 +2,7 @@
 """范例01 Supervisor-Worker：4 成员均被派活、最终含 GO/NO-GO。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_supervisor_mock_semantics():

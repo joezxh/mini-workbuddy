@@ -2,7 +2,7 @@
 """范例03 流水线：步骤严格顺序 + verifier 重试上限。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_pipeline_order_and_retry():

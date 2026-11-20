@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_real_concurrency_by_timestamps():

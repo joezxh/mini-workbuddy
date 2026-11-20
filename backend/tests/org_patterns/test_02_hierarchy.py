@@ -2,7 +2,7 @@
 """范例02 层级式：总监不越权直派 Worker + 子团队超时不中断总监。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_no_skip_level():

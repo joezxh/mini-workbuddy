@@ -2,7 +2,7 @@
 """范例06 辩论/群聊：≤3 轮收敛 + 双方互见 + 裁判恒 continue 时代码兜底终局。"""
 import asyncio
 
-from conftest import load_example
+from .conftest import load_example
 
 
 def test_debate_converges_within_3_rounds():
