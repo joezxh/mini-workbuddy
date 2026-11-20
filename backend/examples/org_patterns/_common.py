@@ -40,6 +40,7 @@ class FakeChatModel(ChatModelBase):
         )
         self.script = list(script)
         self.name = name
+        self._call_seq = 0
         # Agent 运行时需要 model.formatter（真实模型自带，基类不设默认）
         self.formatter = OpenAIChatFormatter()
 
@@ -47,6 +48,7 @@ class FakeChatModel(ChatModelBase):
         if not self.script:
             raise RuntimeError(f"FakeChatModel 脚本耗尽: {self.name}")
         item = self.script.pop(0)
+        self._call_seq += 1
         blocks: list = []
         if isinstance(item, str):
             blocks.append(TextBlock(type="text", text=item))
@@ -55,7 +57,7 @@ class FakeChatModel(ChatModelBase):
                 blocks.append(TextBlock(type="text", text=item["text"]))
             for i, tc in enumerate(item.get("tool_calls", [])):
                 blocks.append(ToolCallBlock(
-                    id=tc.get("id", f"call_{self.name}_{i}"),
+                    id=tc.get("id", f"call_{self.name}_{self._call_seq}_{i}"),
                     name=tc["name"],
                     input=json.dumps(tc.get("input", {}), ensure_ascii=False),
                 ))

@@ -49,3 +49,19 @@ def test_gateway_whitelist():
 
 def test_fx_rate_deterministic():
     assert mock_fx_rate("USD/JPY")["rate"] == 155.0
+
+
+def test_fake_model_tool_call_ids_unique_across_calls():
+    """回归：跨响应的 tool_call id 重复会被 Agent 误判为已完成而跳过执行。"""
+    m = FakeChatModel([
+        {"tool_calls": [{"name": "t1", "input": {}}]},
+        {"tool_calls": [{"name": "t2", "input": {}}]},
+    ], name="t")
+
+    async def go():
+        r1 = await m(_ask())
+        r2 = await m(_ask())
+        return r1.content[0].id, r2.content[0].id
+
+    id1, id2 = asyncio.run(go())
+    assert id1 != id2
