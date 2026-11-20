@@ -137,7 +137,7 @@ class AgentScopeOrchestrator:
         ).first()
 
         if agent_config:
-            system_prompt = agent_config.sys_prompt
+            system_prompt = agent_config.system_prompt
             tool_keys = agent_config.tools
         else:
             system_prompt = f"你是团队中的 {member.role_name}，负责特定领域的任务。"

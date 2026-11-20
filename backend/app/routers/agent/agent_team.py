@@ -295,7 +295,7 @@ async def chat_team(
                 name=getattr(team, "name", "团队"),
             )
             from agentscope.message import UserMsg
-            user_msg = UserMsg(content=payload.message)
+            user_msg = UserMsg(name="user", content=payload.message)
 
             async for event in agent.reply_stream(user_msg):
                 if isinstance(event, dict):
