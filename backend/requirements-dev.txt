@@ -103,5 +103,5 @@ graphiti-core>=0.5.0
 mcp>=2.0.0,<3.0.0
 
 # AgentScope 2.x 运行时
-agentscope>=2.0.11,<3.0
+agentscope>=2.0.12,<3.0
 ripgrep>=15.0.0
