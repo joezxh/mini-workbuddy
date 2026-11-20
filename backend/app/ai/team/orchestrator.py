@@ -228,22 +228,13 @@ class AgentScopeOrchestrator:
             response = await self._leader.reply(user_msg)
             final_text = text_of(response)
 
-            # 5. 记录执行事件
-            self._record_execution_done(final_text)
+            # 完成事件（team_done）统一由端点层 RunCollector 归口发送，
+            # orchestrator 不再写任何完成事件，避免非 canonical 枚举漂移。
             return final_text
         finally:
             if run_id and ORCHESTRATOR_REGISTRY.get(run_id) is self:
                 ORCHESTRATOR_REGISTRY.pop(run_id, None)
             await self._close_model()
-
-    def _record_execution_done(self, final_text: str) -> None:
-        """记录执行完成事件。"""
-        if self.event_svc:
-            self.event_svc.record(
-                event_type="TEAM_COMPLETE",
-                content={"result": final_text},
-                source="agent_scope_orchestrator",
-            )
 
     # ── 运行态干预（由干预端点同步调用，故为同步方法）────────
     def request_pause(self) -> None:
