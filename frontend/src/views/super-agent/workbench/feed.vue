@@ -115,7 +115,7 @@ function toGoals(goalId?: string | null) {
   else router.push({ path: '/super-agent/muse', query: goalId ? { view: 'goals', goal: goalId } : { view: 'goals' } })
 }
 
-// Feed SSE 由 SuperAgentShell 统一订阅；这里只拉数据。
+// Feed SSE 由 SuperAgentWorkspace 统一订阅；这里只拉数据。
 onMounted(() => {
   store.fetchFeed()
 })

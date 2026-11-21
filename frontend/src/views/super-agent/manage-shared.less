@@ -44,8 +44,8 @@ code {
 }
 
 .sa-note-ok {
-  background: rgba(166, 227, 161, 0.12);
-  border: 1px solid rgba(166, 227, 161, 0.3);
+  background: var(--sa-green-dim);
+  border: 1px solid color-mix(in srgb, var(--sa-green) 30%, transparent);
   border-radius: var(--sa-radius-sm);
   padding: 12px 14px;
   margin-bottom: 16px;
@@ -57,8 +57,8 @@ code {
 }
 
 .sa-note-demo {
-  background: rgba(250, 179, 135, 0.1);
-  border: 1px solid rgba(250, 179, 135, 0.3);
+  background: var(--sa-peach-dim);
+  border: 1px solid color-mix(in srgb, var(--sa-peach) 30%, transparent);
   border-radius: var(--sa-radius-sm);
   padding: 10px 14px;
   font-size: 12px;
@@ -81,7 +81,7 @@ code {
 
   &:hover {
     border-color: var(--sa-accent);
-    box-shadow: 0 4px 16px rgba(137, 180, 250, 0.12);
+    box-shadow: 0 4px 16px var(--sa-accent-dim);
     transform: translateY(-1px);
   }
 

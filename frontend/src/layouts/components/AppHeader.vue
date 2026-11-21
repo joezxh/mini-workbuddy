@@ -105,6 +105,16 @@ function onLocale({ key }: { key: string }) {
   app.setAppLocale(key as LocaleKey)
 }
 
+// 主题下拉：三套皮肤共用 app.setTheme（与顶部/个人中心同一 Pinia 状态）。
+const THEME_OPTIONS = [
+  { key: 'light', labelKey: 'sys.header.themeLight' },
+  { key: 'dark', labelKey: 'sys.header.themeDark' },
+  { key: 'purple', labelKey: 'sys.header.themePurple' },
+] as const
+function onTheme({ key }: { key: string | number }) {
+  app.setTheme(String(key) as 'light' | 'dark' | 'purple')
+}
+
 function onQuickNav({ key }: { key: string | number }) {
   const path = String(key)
   if (path && path !== 'undefined') router.push(path)
@@ -169,10 +179,23 @@ function onQuickNav({ key }: { key: string | number }) {
       </template>
     </a-dropdown>
 
-    <button class="icon-btn" type="button" :title="t('sys.header.theme')" @click="app.toggleTheme()">
-      <BulbFilled v-if="app.isDark" />
-      <BulbOutlined v-else />
-    </button>
+    <a-dropdown placement="bottomRight">
+      <button class="icon-btn" type="button" :title="t('sys.header.theme')">
+        <span v-if="app.theme === 'purple'" class="theme-purple-dot" aria-hidden="true" />
+        <BulbFilled v-else-if="app.isDarkMode" />
+        <BulbOutlined v-else />
+      </button>
+      <template #overlay>
+        <a-menu :selected-keys="[app.theme]" @click="onTheme">
+          <a-menu-item v-for="opt in THEME_OPTIONS" :key="opt.key">
+            <span v-if="opt.key === 'purple'" class="theme-purple-dot inline" aria-hidden="true" />
+            <BulbFilled v-else-if="opt.key === 'dark'" />
+            <BulbOutlined v-else />
+            <span class="theme-label">{{ t(opt.labelKey) }}</span>
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
 
     <!-- 桌面端：可运行时切换后端地址；浏览器部署下该组件不渲染 -->
     <ElectronServerButton />
@@ -206,6 +229,17 @@ function onQuickNav({ key }: { key: string | number }) {
 </template>
 
 <style scoped>
+/* SA 主题标识：Catppuccin 渐变圆点 */
+.theme-purple-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.4);
+  vertical-align: middle;
+}
+
 .topbar {
   position: relative;
   height: var(--header-h);
@@ -420,4 +454,21 @@ function onQuickNav({ key }: { key: string | number }) {
   }
 }
 
+</style>
+
+<!-- 主题下拉的 overlay 由 a-dropdown teleport 到 body，scoped 样式不命中，故全局兜底 -->
+<style>
+.theme-purple-dot.inline {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.4);
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.ant-dropdown-menu-item .theme-label {
+  margin-left: 8px;
+}
 </style>

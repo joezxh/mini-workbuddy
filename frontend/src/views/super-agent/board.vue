@@ -2,18 +2,10 @@
 <template>
   <div class="sa-board">
     <div class="sa-board__header">
-      <div>
-        <h1 class="sa-board__title">📊 Dashboard 看板</h1>
-        <p class="sa-board__desc">实时查看所有 Ticket 状态，快速进入执行详情</p>
-        <span class="sa-board__sub">
-          <a-badge :status="store.connected ? 'success' : 'default'" />
-          {{ store.connected ? 'SSE 已连接' : '未连接（轮询中）' }}
-          <template v-if="store.lastEvent">· 最近事件：{{ store.lastEvent.event }}</template>
-        </span>
-      </div>
+
       <div class="sa-board__actions">
         <a-space>
-          <a-button @click="router.push('/super-agent/workbench/demo')">▶ Demo 一键运行</a-button>
+          <a-button @click="nav.go('demo')">▶ Demo 一键运行</a-button>
           <a-button type="primary" @click="openCreate">➕ 新建 Ticket</a-button>
         </a-space>
       </div>
@@ -47,7 +39,7 @@
               v-for="t in store.stageGroups[stage]"
               :key="t.id"
               class="sa-ticket-card"
-              @click="router.push(`/super-agent/workbench/detail/${t.id}`)"
+              @click="nav.go('detail', { id: t.id })"
             >
               <div class="sa-ticket-card__title">{{ t.title }}</div>
               <div class="sa-ticket-card__meta">
@@ -77,12 +69,12 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { createTicket } from '@/api/super-agent'
 import { STAGES, useSuperAgentStore } from '@/stores/super-agent'
+import { useWorkspaceNav } from './workspace-nav'
 
-const router = useRouter()
+const nav = useWorkspaceNav()!
 const store = useSuperAgentStore()
 
 const createOpen = ref(false)
@@ -142,7 +134,7 @@ async function doCreate() {
   }
 }
 
-// SSE 由 SuperAgentShell 统一订阅；这里只拉数据，离开看板不再断开全局连接。
+// SSE 由 SuperAgentWorkspace 统一订阅；这里只拉数据，离开看板不再断开全局连接。
 onMounted(() => {
   store.fetchTickets()
 })

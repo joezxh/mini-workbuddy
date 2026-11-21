@@ -1,4 +1,4 @@
-// 控制台级 UI 偏好：皮肤（深色 / 浅色）、侧栏状态与当前语言镜像。
+// 控制台级 UI 偏好：皮肤（浅色 / 深色 / 紫色 Catppuccin）、侧栏状态与当前语言镜像。
 //
 // 语言本身由 vue-i18n 持有（@/i18n），这里只做镜像，让组件能响应语言变化。
 // 皮肤默认浅色；选择持久化到 localStorage。
@@ -11,7 +11,14 @@ import dayjs from 'dayjs'
 const THEME_KEY = 'app-theme'
 const SIDEBAR_KEY = 'app-sidebar-collapsed'
 
-export type ThemeName = 'dark' | 'light'
+export type ThemeName = 'light' | 'dark' | 'purple'
+
+/** 主题对应的 CSS color-scheme：紫色属暗色系，浏览器控件应按深色渲染。 */
+const THEME_COLOR_SCHEME: Record<ThemeName, 'light' | 'dark'> = {
+  light: 'light',
+  dark: 'dark',
+  purple: 'dark',
+}
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -29,9 +36,24 @@ function syncDayjs(locale: LocaleKey) {
 }
 
 export const useAppStore = defineStore('app', () => {
-  const THEMES = ['dark', 'light'] as const
+  const THEMES = ['light', 'dark', 'purple'] as const
 
-  const theme = ref<ThemeName>(readStored(THEME_KEY, THEMES, 'light'))
+  // 迁移：旧版本紫色主题的内部 key 为 'sa'，升级后统一为 'purple'。
+  // 已在 data-theme='sa' / --sa-* 上留下兼容选择器，这里只需把存储值迁移并回写。
+  function readTheme(): ThemeName {
+    try {
+      const raw = globalThis.localStorage?.getItem(THEME_KEY)
+      if (raw === 'sa') {
+        globalThis.localStorage?.setItem(THEME_KEY, 'purple')
+        return 'purple'
+      }
+    } catch {
+      /* 存储不可用（隐私模式等） */
+    }
+    return readStored(THEME_KEY, THEMES, 'light')
+  }
+
+  const theme = ref<ThemeName>(readTheme())
   const locale = ref<LocaleKey>(getLocale())
   const sidebarCollapsed = ref(readStored(SIDEBAR_KEY, ['true', 'false'], 'false') === 'true')
 
@@ -42,12 +64,15 @@ export const useAppStore = defineStore('app', () => {
   /** 面包屑 */
   const breadcrumbs = ref<Array<{ name: string; path?: string }>>([])
 
+  /** 语义上的纯 dark 主题（不含 sa）。 */
   const isDark = computed(() => theme.value === 'dark')
+  /** 暗色系（含 sa）：AntD 算法、暗色态图标/文案据此判断。 */
+  const isDarkMode = computed(() => theme.value !== 'light')
 
   function applyTheme(next: ThemeName = theme.value) {
     if (typeof document === 'undefined') return
     document.documentElement.setAttribute('data-theme', next)
-    document.documentElement.style.colorScheme = next
+    document.documentElement.style.colorScheme = THEME_COLOR_SCHEME[next]
   }
 
   function setTheme(next: ThemeName) {
@@ -116,6 +141,7 @@ export const useAppStore = defineStore('app', () => {
     selectedMenu,
     breadcrumbs,
     isDark,
+    isDarkMode,
     setTheme,
     toggleTheme,
     setAppLocale,

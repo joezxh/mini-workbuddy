@@ -411,6 +411,12 @@ onMounted(loadConfig)
   color: #b37feb;
   border-color: rgba(146, 84, 222, 0.34);
 }
+[data-theme='purple'] .kg-tag--g,
+[data-theme='sa'] .kg-tag--g {
+  background: rgba(203, 166, 247, 0.16);
+  color: #cba6f7;
+  border-color: rgba(203, 166, 247, 0.34);
+}
 .kg-hit__b {
   color: var(--kg-text-2);
   font-size: 12.5px;

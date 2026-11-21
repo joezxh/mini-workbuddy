@@ -1,13 +1,7 @@
 <!-- SuperAgent Demo 页面（Task 4.4）—— 预设脚本：一键运行 → 实时进度 → 最终报告 -->
 <template>
   <div class="sa-demo">
-    <div class="sa-page-head demo-head">
-      <h1>🎯 电商营销 Demo · 完整端到端范例</h1>
-      <p>数据采集 → 竞品分析 → 方案生成 → 反思校验 → ERP 执行，完整跑通 SuperAgent 流水线</p>
-      <a-button class="demo-run" type="primary" :loading="running" :disabled="running" @click="run">
-        {{ running ? '运行中…' : '🚀 一键运行' }}
-      </a-button>
-    </div>
+
 
     <!-- 预设脚本说明 -->
     <a-card title="Demo 脚本" size="small" class="mb12">
@@ -62,7 +56,7 @@
             <pre class="sa-demo__report">{{ reportText }}</pre>
           </a-descriptions-item>
         </a-descriptions>
-        <a-button type="link" @click="router.push(`/super-agent/workbench/detail/${ticketId}`)">
+        <a-button type="link" @click="nav.go('detail', { id: ticketId })">
           查看 Ticket 详情 →
         </a-button>
       </a-card>
@@ -72,12 +66,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { type TicketDetail, createTicket, getTicket, openEventsSSE } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useWorkspaceNav } from './workspace-nav'
 
-const router = useRouter()
+const nav = useWorkspaceNav()!
 const store = useSuperAgentStore()
 
 // ============ 预设 Demo 脚本 ============

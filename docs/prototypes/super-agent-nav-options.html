@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SuperAgent 内部导航形式对比 · MinWorkBuddy</title>
+<style>
+:root{
+  --bg:#1e1e2e;--surface:#252538;--surface-2:#2d2d44;--surface-3:#363653;
+  --border:#3d3d5c;--border-light:#4a4a6e;
+  --text-1:#f5f5ff;--text-2:#b8b8d0;--text-3:#8888a8;--text-dim:#606080;
+  --accent:#89b4fa;--accent-dim:rgba(137,180,250,.15);
+  --green:#a6e3a1;--peach:#fab387;--yellow:#f9e2af;--red:#f38ba8;
+  --mauve:#cba6f7;--teal:#94e2d5;--pink:#f5c2e7;
+  --shadow:0 2px 8px rgba(0,0,0,.35);--radius:10px;--radius-sm:6px;
+  font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Noto Sans CJK SC";
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#11111b;color:var(--text-1);min-height:100vh;padding:20px}
+
+/* ===== 原型选择器（非产品界面） ===== */
+.picker{max-width:1400px;margin:0 auto 18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px}
+.picker h1{font-size:17px;margin-bottom:4px}
+.picker p{font-size:12px;color:var(--text-3);margin-bottom:14px}
+.picker-btns{display:flex;gap:8px;flex-wrap:wrap}
+.picker-btn{padding:9px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-2);font-size:13px;cursor:pointer;transition:all .15s}
+.picker-btn:hover{border-color:var(--accent);color:var(--text-1)}
+.picker-btn.active{background:var(--accent);color:#1a1a2e;font-weight:600;border-color:var(--accent)}
+.picker-note{margin-top:12px;font-size:12px;color:var(--text-3);line-height:1.7;border-left:3px solid var(--accent);padding-left:12px}
+.hidden{display:none !important}
+
+/* ===== 浏览器窗口外框 ===== */
+.frame{max-width:1400px;margin:0 auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.frame-bar{height:34px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:6px}
+.frame-bar .dot{width:10px;height:10px;border-radius:50%}
+.frame-bar .url{margin-left:12px;font-size:11px;color:var(--text-3);background:var(--bg);padding:3px 12px;border-radius:10px}
+
+/* 系统外层顶部 tab（示意，所有形式都保留） */
+.sys-shell-topbar{height:44px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 16px;gap:2px}
+.sys-tab{padding:9px 18px;font-size:12px;color:var(--text-3);border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:6px}
+.sys-tab.active{background:var(--bg);color:var(--accent);border-color:var(--border);font-weight:600;margin-bottom:-1px}
+.sys-tab .x{font-size:11px;color:var(--text-dim);margin-left:6px}
+
+/* 系统左侧 rail（示意，所有形式都保留） */
+.sys-rail{width:60px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;flex-shrink:0}
+.sys-rail .ri{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-3)}
+.sys-rail .ri.active{background:var(--accent-dim);color:var(--accent)}
+
+.demo-body{display:flex;min-height:560px}
+
+/* 通用内容块 */
+.phead{margin-bottom:16px}
+.phead h2{font-size:20px;font-weight:700}
+.phead p{font-size:12px;color:var(--text-3);margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.card h3{font-size:14px;margin-bottom:10px;color:var(--text-1)}
+.chip{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface-3);color:var(--text-2);margin-right:6px}
+.chip.a{background:var(--accent-dim);color:var(--accent)}
+.chip.g{background:rgba(166,227,161,.15);color:var(--green)}
+.chip.m{background:rgba(203,166,247,.15);color:var(--mauve)}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+.stat .l{font-size:11px;color:var(--text-3)}
+.stat .v{font-size:24px;font-weight:800;margin-top:4px}
+.mini-list{display:flex;flex-direction:column;gap:6px}
+.mini-item{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px}
+.mini-item .tag{margin-left:auto;font-size:10px;color:var(--text-3)}
+.card-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+
+.badge-pill{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--green);color:#1a1a2e;font-weight:700}
+
+/* ===== 形式A：左侧分组侧栏 ===== */
+.A-side{width:210px;background:var(--surface);border-right:1px solid var(--border);padding:12px 8px;flex-shrink:0;overflow:auto}
+.A-group{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;padding:12px 10px 5px}
+.A-item{padding:8px 10px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:2px}
+.A-item:hover{background:var(--surface-2)}
+.A-item.active{background:var(--accent-dim);color:var(--accent);font-weight:600}
+
+/* ===== 形式B：图标Rail + 二级侧栏 ===== */
+.B-rail{width:64px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;flex-shrink:0}
+.B-ri{width:46px;height:46px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:18px;color:var(--text-3);cursor:pointer}
+.B-ri span{font-size:9px;margin-top:2px}
+.B-ri.active{background:var(--accent-dim);color:var(--accent)}
+.B-sub{width:172px;background:var(--surface);border-right:1px solid var(--border);padding:12px 8px;flex-shrink:0}
+.B-sub h4{font-size:11px;color:var(--text-3);padding:4px 10px 8px;text-transform:uppercase;letter-spacing:.08em}
+
+/* ===== 形式C：Hub 卡片入口 ===== */
+.hub-hero{text-align:center;padding:26px 0 20px}
+.hub-hero h2{font-size:24px}
+.hub-hero p{font-size:13px;color:var(--text-3);margin-top:6px}
+.hub-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 8px}
+.hub-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.hub-card::before{content:"";position:absolute;inset:0 0 auto 0;height:3px}
+.hub-card.c1::before{background:linear-gradient(90deg,var(--accent),var(--mauve))}
+.hub-card.c2::before{background:linear-gradient(90deg,var(--peach),var(--yellow))}
+.hub-card.c3::before{background:linear-gradient(90deg,var(--green),var(--teal))}
+.hub-card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(137,180,250,.12);border-color:var(--accent)}
+.hub-card .emo{font-size:34px}
+.hub-card h3{font-size:16px;margin:10px 0 6px}
+.hub-card p{font-size:12px;color:var(--text-3);line-height:1.6}
+.hub-card .go{color:var(--accent);font-size:12px;margin-top:14px;display:inline-block}
+
+/* ===== 形式D：单页仪表盘 ===== */
+.D-flow .sec{margin-bottom:18px}
+.D-flow .sec-head{display:flex;align-items:center;margin-bottom:10px}
+.D-flow .sec-head h3{font-size:15px}
+.D-flow .sec-head .more{margin-left:auto;font-size:11px;color:var(--accent)}
+.D-two{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+
+/* 形式内说明条 */
+.form-note{font-size:11px;color:var(--text-3);padding:8px 14px;background:var(--surface-2);border-bottom:1px dashed var(--border);display:flex;align-items:center;gap:8px}
+.form-note b{color:var(--peach)}
+.main-area{flex:1;min-width:0;padding:18px;background:var(--bg);overflow:auto}
+</style>
+</head>
+<body>
+
+<div class="picker">
+  <h1>SuperAgent 内部导航形式对比（4 选 1）</h1>
+  <p>共同前提：外层系统顶部 Tab 栏（控制台 / 超级智能体）与左侧系统菜单保持原样，下面只改「超级智能体」Tab 内部如何组织三模块。点击切换查看。</p>
+  <div class="picker-btns">
+    <button class="picker-btn active" data-f="A">A · 左侧分组侧栏（对齐原始原型）</button>
+    <button class="picker-btn" data-f="B">B · 图标 Rail + 二级侧栏</button>
+    <button class="picker-btn" data-f="C">C · Hub 卡片入口页</button>
+    <button class="picker-btn" data-f="D">D · 单页仪表盘（无模块切换）</button>
+  </div>
+  <div class="picker-note" id="note"></div>
+</div>
+
+<!-- ============ 形式 A ============ -->
+<div class="frame form" id="form-A">
+  <div class="frame-bar"><span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--yellow)"></span><span class="dot" style="background:var(--green)"></span><span class="url">/dashboard?tab=super-agent</span></div>
+  <div class="sys-shell-topbar"><div class="sys-tab">🏠 控制台 <span class="x">×</span></div><div class="sys-tab active">🦸 超级智能体 <span class="x">×</span></div></div>
+  <div class="demo-body">
+    <div class="sys-rail"><div class="ri">🏠</div><div class="ri">💬</div><div class="ri active">🦸</div><div class="ri">📚</div><div class="ri">⚙️</div></div>
+    <div class="A-side" id="aSide">
+      <div class="A-group">SuperAgent</div>
+      <div class="A-item active" data-t="看板">📊 Dashboard 看板</div>
+      <div class="A-item" data-t="demo">🎯 电商营销 Demo</div>
+      <div class="A-item" data-t="detail">📋 执行详情</div>
+      <div class="A-group">Agent 工作台</div>
+      <div class="A-item" data-t="chat">💬 SuperAgent 对话</div>
+      <div class="A-item" data-t="feed">🌊 动态 <span class="badge-pill">3</span></div>
+      <div class="A-item" data-t="ideas">💡 点子</div>
+      <div class="A-item" data-t="goals">🎯 目标</div>
+      <div class="A-group">配置</div>
+      <div class="A-item" data-t="model">🧠 模型配置</div>
+      <div class="A-item" data-t="mcp">🔌 MCP Server</div>
+      <div class="A-item" data-t="policy">🛡️ Policy 规则</div>
+      <div class="A-item" data-t="source">🔗 Source 管理</div>
+    </div>
+    <div class="main-area">
+      <div class="form-note"><b>形式 A</b> 左侧分组侧栏：三模块与全部二级视图平铺在一列，点哪切哪，零内部 tab。完全对齐最初的 super-agent-demo 原型。</div>
+      <div class="phead"><h2 id="aTitle">📊 Dashboard 看板</h2><p id="aDesc">实时查看所有 Ticket 状态，快速进入执行详情</p></div>
+      <div class="stat-row"><div class="stat"><div class="l">执行中</div><div class="v">3</div></div><div class="stat"><div class="l">待决策</div><div class="v">2</div></div><div class="stat"><div class="l">本周完成</div><div class="v">18</div></div><div class="stat"><div class="l">等待人工</div><div class="v">1</div></div></div>
+      <div class="card"><h3>Ticket 看板 <span class="chip">按 Stage 分组</span></h3><div class="mini-list"><div class="mini-item">📈 电商营销周更 · 本周方案 <span class="tag">执行中 · browser+kb</span></div><div class="mini-item">竞品分析报告 draft v3 <span class="tag">反思中</span></div><div class="mini-item">⚠️ ERP 提交失败 <span class="tag">等人类</span></div></div></div>
+      <div class="card"><h3>最近对话</h3><div class="mini-item">双十一促销页竞品分析 · T-0017 <span class="tag">今天</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 形式 B ============ -->
+<div class="frame form" id="form-B">
+  <div class="frame-bar"><span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--yellow)"></span><span class="dot" style="background:var(--green)"></span><span class="url">/dashboard?tab=super-agent</span></div>
+  <div class="sys-shell-topbar"><div class="sys-tab">🏠 控制台 <span class="x">×</span></div><div class="sys-tab active">🦸 超级智能体 <span class="x">×</span></div></div>
+  <div class="demo-body">
+    <div class="sys-rail"><div class="ri">🏠</div><div class="ri">💬</div><div class="ri active">🦸</div><div class="ri">📚</div><div class="ri">⚙️</div></div>
+    <div class="B-rail" id="bRail">
+      <div class="B-ri active" data-t="工作台">📊<span>工作台</span></div>
+      <div class="B-ri" data-t="Muse">💬<span>Muse</span></div>
+      <div class="B-ri" data-t="管理">🛡️<span>管理</span></div>
+    </div>
+    <div class="B-sub">
+      <h4 id="bSubTitle">工作台</h4>
+      <div class="A-item active" data-b="看板">📊 Dashboard 看板</div>
+      <div class="A-item" data-b="demo">🎯 电商营销 Demo</div>
+      <div class="A-item" data-b="detail">📋 执行详情</div>
+      <div class="A-item" data-b="chat2">💬 对话入口</div>
+    </div>
+    <div class="main-area">
+      <div class="form-note"><b>形式 B</b> 图标 Rail（三模块）+ 二级侧栏（模块内视图）：像 VS Code 的活动栏，左侧两级导航，主区只放内容。无内部 tab。</div>
+      <div class="phead"><h2 id="bTitle">📊 Dashboard 看板</h2><p>左侧图标切模块，二级侧栏切视图</p></div>
+      <div class="stat-row"><div class="stat"><div class="l">执行中</div><div class="v">3</div></div><div class="stat"><div class="l">待决策</div><div class="v">2</div></div><div class="stat"><div class="l">本周完成</div><div class="v">18</div></div><div class="stat"><div class="l">等待人工</div><div class="v">1</div></div></div>
+      <div class="card"><h3>Ticket 看板</h3><div class="mini-list"><div class="mini-item">📈 电商营销周更 · 本周方案 <span class="tag">执行中</span></div><div class="mini-item">竞品分析报告 draft v3 <span class="tag">反思中</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 形式 C ============ -->
+<div class="frame form" id="form-C">
+  <div class="frame-bar"><span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--yellow)"></span><span class="dot" style="background:var(--green)"></span><span class="url">/dashboard?tab=super-agent</span></div>
+  <div class="sys-shell-topbar"><div class="sys-tab">🏠 控制台 <span class="x">×</span></div><div class="sys-tab active">🦸 超级智能体 <span class="x">×</span></div></div>
+  <div class="demo-body">
+    <div class="sys-rail"><div class="ri">🏠</div><div class="ri">💬</div><div class="ri active">🦸</div><div class="ri">📚</div><div class="ri">⚙️</div></div>
+    <div class="main-area">
+      <div class="form-note"><b>形式 C</b> Hub 卡片入口：进入先看到三张模块卡片，点卡片进入模块（模块内用「← 返回中枢 + 二级导航」）。适合模块切换不频繁、希望首屏清爽。</div>
+      <div class="hub-hero"><h2>🦸 超级智能体工作台</h2><p>选择一个模块开始 · Workspace=电商营销工作空间</p></div>
+      <div class="hub-cards">
+        <div class="hub-card c1" data-hub="工作台"><div class="emo">📊</div><h3>工作台</h3><p>Dashboard 看板、电商营销端到端 Demo、Ticket 执行详情与实时事件流。</p><span class="go">进入模块 →</span></div>
+        <div class="hub-card c2" data-hub="Muse"><div class="emo">💬</div><h3>Muse 执行界面</h3><p>独立对话空间、动态 Feed、点子库与结构化目标，持续运行不打断。</p><span class="go">进入模块 →</span></div>
+        <div class="hub-card c3" data-hub="管理"><div class="emo">🛡️</div><h3>管理界面</h3><p>模型、MCP、Policy、知识库绑定、执行参数、安全与 Source 配置。</p><span class="go">进入模块 →</span></div>
+      </div>
+      <div class="card" style="margin-top:18px"><h3>⚡ 快速继续</h3><div class="mini-list"><div class="mini-item">📈 电商营销周更 · 本周方案 <span class="tag">执行中 · 2m34s</span></div><div class="mini-item">💬 双十一促销页竞品分析 <span class="tag">上次对话</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 形式 D ============ -->
+<div class="frame form" id="form-D">
+  <div class="frame-bar"><span class="dot" style="background:var(--red)"></span><span class="dot" style="background:var(--yellow)"></span><span class="dot" style="background:var(--green)"></span><span class="url">/dashboard?tab=super-agent</span></div>
+  <div class="sys-shell-topbar"><div class="sys-tab">🏠 控制台 <span class="x">×</span></div><div class="sys-tab active">🦸 超级智能体 <span class="x">×</span></div></div>
+  <div class="demo-body">
+    <div class="sys-rail"><div class="ri">🏠</div><div class="ri">💬</div><div class="ri active">🦸</div><div class="ri">📚</div><div class="ri">⚙️</div></div>
+    <div class="main-area D-flow">
+      <div class="form-note"><b>形式 D</b> 单页仪表盘：三模块内容融进一页，滚动即可纵览，区块内「查看全部」就地展开详情。完全无导航切换、无 tab，最扁平。</div>
+      <div class="phead"><h2>🦸 超级智能体 · 工作台首页</h2><p>一屏纵览任务、对话、目标与配置，往下滚动</p></div>
+      <div class="stat-row"><div class="stat"><div class="l">执行中</div><div class="v">3</div></div><div class="stat"><div class="l">待决策</div><div class="v">2</div></div><div class="stat"><div class="l">活跃目标</div><div class="v">4</div></div><div class="stat"><div class="l">未读动态</div><div class="v">3</div></div></div>
+      <div class="D-two">
+        <div class="card sec"><div class="sec-head"><h3>🎯 正在执行</h3><span class="more">查看全部 →</span></div><div class="mini-list"><div class="mini-item">📈 电商营销周更 · 本周方案 <span class="tag">2m34s</span></div><div class="mini-item">知识入库队列 <span class="tag">反思中</span></div></div></div>
+        <div class="card sec"><div class="sec-head"><h3>💬 最近对话</h3><span class="more">进入对话 →</span></div><div class="mini-list"><div class="mini-item">双十一促销页竞品分析 <span class="tag">今天</span></div><div class="mini-item">客服消息批量回复 <span class="tag">上周</span></div></div></div>
+      </div>
+      <div class="D-two">
+        <div class="card sec"><div class="sec-head"><h3>🌊 动态</h3><span class="more">查看全部 →</span></div><div class="mini-item">AI 批次建议 · 促销方案 3 条 <span class="tag">quiet</span></div></div>
+        <div class="card sec"><div class="sec-head"><h3>🥅 目标进展</h3><span class="more">查看全部 →</span></div><div class="mini-item">促销转化率提升 20% <span class="tag">45%</span></div></div>
+      </div>
+      <div class="card sec"><div class="sec-head"><h3>⚙️ 配置状态</h3><span class="more">进入管理 →</span></div><div><span class="chip a">模型 GPT-4o</span><span class="chip g">3 个 MCP 就绪</span><span class="chip m">Policy 已加载</span><span class="chip">Source: GitHub/飞书</span></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NOTES={
+ A:'推荐度：★★★★☆。最忠于最初原型，用户零学习成本；缺点是左侧一长列 14 项，项多时略拥挤。',
+ B:'推荐度：★★★★☆。层级最清晰、最像专业工具（VS Code 式）；缺点是需要两级侧栏，占横向空间。',
+ C:'推荐度：★★★☆☆。首屏最清爽、引导性强；缺点是每次回模块要多点一次「返回中枢」。',
+ D:'推荐度：★★★☆☆。最扁平、信息一目了然；缺点是深度操作（多步对话/配置）仍要就地展开，复杂任务承载弱。'
+};
+const btns=document.querySelectorAll('.picker-btn');
+const forms=document.querySelectorAll('.form');
+function show(f){
+  btns.forEach(b=>b.classList.toggle('active',b.dataset.f===f));
+  forms.forEach(el=>el.classList.toggle('hidden',el.id!=='form-'+f));
+  document.getElementById('note').textContent=NOTES[f];
+}
+btns.forEach(b=>b.addEventListener('click',()=>show(b.dataset.f)));
+show('A');
+
+// 形式A：侧栏项切换标题
+const aTitles={看板:['📊 Dashboard 看板','实时查看所有 Ticket 状态'],demo:['🎯 电商营销 Demo','数据采集 → 竞品分析 → 方案生成 → ERP 执行'],detail:['📋 执行详情','Ticket 生命周期与时间线'],chat:['💬 SuperAgent 对话','独立对话空间 · SSE 流式'],feed:['🌊 动态时间线','Agent 主动推送与提醒'],ideas:['💡 点子库','策略沉淀与复用'],goals:['🎯 目标','结构化推进'],model:['🧠 模型配置','API Key 与模型注册'],mcp:['🔌 MCP Server','stdio 服务登记'],policy:['🛡️ Policy 规则','准入与决策阈值'],source:['🔗 Source 管理','GitHub / 飞书触发源']};
+document.querySelectorAll('#aSide .A-item').forEach(it=>it.addEventListener('click',()=>{
+  document.querySelectorAll('#aSide .A-item').forEach(x=>x.classList.remove('active'));it.classList.add('active');
+  const t=aTitles[it.dataset.t]||aTitles['看板'];document.getElementById('aTitle').textContent=t[0];document.getElementById('aDesc').textContent=t[1];
+}));
+
+// 形式B：图标切模块 + 二级切视图
+const bSubs={工作台:['Dashboard 看板','电商营销 Demo','执行详情','对话入口'],Muse:['SuperAgent 对话','动态','点子','目标'],管理:['模型配置','MCP Server','Policy 规则','Source 管理']};
+document.querySelectorAll('#bRail .B-ri').forEach(it=>it.addEventListener('click',()=>{
+  document.querySelectorAll('#bRail .B-ri').forEach(x=>x.classList.remove('active'));it.classList.add('active');
+  const m=it.dataset.t;document.getElementById('bSubTitle').textContent=m;
+  const sub=document.querySelector('.B-sub');
+  sub.querySelectorAll('.A-item').forEach((n,i)=>{n.textContent=['📊 ','🎯 ','📋 ','💬 '][i]+bSubs[m][i]||n.textContent;n.classList.toggle('active',i===0)});
+  document.getElementById('bTitle').textContent=(m==='工作台'?'📊 ':m==='Muse'?'💬 ':'🛡️ ')+bSubs[m][0];
+}));
+document.querySelectorAll('.B-sub .A-item').forEach(it=>it.addEventListener('click',()=>{document.querySelectorAll('.B-sub .A-item').forEach(x=>x.classList.remove('active'));it.classList.add('active')}));
+
+// 形式C：Hub 卡片
+document.querySelectorAll('.hub-card').forEach(c=>c.addEventListener('click',()=>{
+  c.style.borderColor='var(--accent)';c.style.boxShadow='0 10px 30px rgba(137,180,250,.2)';
+  setTimeout(()=>{c.style.borderColor='';c.style.boxShadow=''},900);
+}));
+</script>
+</body>
+</html>

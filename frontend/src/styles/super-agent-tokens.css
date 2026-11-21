@@ -1,241 +1,52 @@
 /*
- * SuperAgent 工作台局部皮肤 —— Catppuccin Mocha。
+ * SuperAgent 工作台皮肤变量 —— 跟随全局主题。
  *
- * 以 docs/prototypes/super-agent-demo/super-agent-demo.html 为唯一视觉基准。
- * 作用域限定在 .super-agent-shell：只覆盖 CSS 变量，不污染全站其它路由。
+ * 历史：曾把 Catppuccin Mocha 硬编码在 .super-agent-shell 局部，导致 super-agent
+ * 在 light/dark 下始终保持独立暗色外观。现改为把 --sa-* 私有变量别名到全局语义
+ * 变量（由 styles/tokens.css 的 :root[data-theme='light'|'dark'|'purple'] 提供），
+ * 因此 super-agent 与整站同步切换三套主题：light 跟随浅色、dark 跟随深色、
+ * sa 天然得到与原型一致的 Catppuccin Mocha。
  *
- * App.vue 的全局 ConfigProvider 开启 cssVar + hashed:false，Ant Design 组件
- * 颜色全部解析为 --ant-* 变量；在此子树重定义同名变量即可局部换肤，
- * 无需嵌套 ConfigProvider，也不会把 Catppuccin 色带到后台控制台。
+ * 不再在此重映射 --ant-*：AntD 组件跟随 App.vue 全局 ConfigProvider 的算法与
+ * tokens.css 的主题变量，避免局部强制暗色算法造成色值冲突。
  */
 
 .super-agent-shell {
-  color-scheme: dark;
+  /* ---- 私有变量：别名到全局语义变量，随 <html data-theme> 切换 ---- */
+  --sa-bg: var(--bg-page);
+  --sa-surface: var(--bg-surface);
+  --sa-surface-2: var(--bg-elevated);
+  --sa-surface-3: var(--bg-subtle);
+  --sa-border: var(--border);
+  --sa-border-light: var(--border-strong);
 
-  /* ---- 原型 Catppuccin 调色板（私有变量，供外壳新组件直接使用）---- */
-  --sa-bg: #1e1e2e;
-  --sa-surface: #252538;
-  --sa-surface-2: #2d2d44;
-  --sa-surface-3: #363653;
-  --sa-border: #3d3d5c;
-  --sa-border-light: #4a4a6e;
-  --sa-text-1: #f5f5ff;
-  --sa-text-2: #b8b8d0;
-  --sa-text-3: #8888a8;
-  --sa-text-dim: #606080;
-  --sa-accent: #89b4fa;
-  --sa-accent-dim: rgba(137, 180, 250, 0.15);
-  --sa-green: #a6e3a1;
-  --sa-peach: #fab387;
-  --sa-yellow: #f9e2af;
-  --sa-red: #f38ba8;
-  --sa-mauve: #cba6f7;
-  --sa-teal: #94e2d5;
-  --sa-pink: #f5c2e7;
-  --sa-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --sa-radius: 10px;
-  --sa-radius-sm: 6px;
+  --sa-text-1: var(--fg);
+  --sa-text-2: var(--fg-secondary);
+  --sa-text-3: var(--fg-muted);
+  --sa-text-dim: var(--fg-muted);
+
+  --sa-accent: var(--accent);
+  --sa-accent-dim: var(--accent-soft);
+  --sa-green: var(--ok);
+  --sa-green-dim: var(--ok-soft);
+  --sa-peach: var(--accent-2);
+  --sa-peach-dim: var(--accent-2-soft);
+  --sa-yellow: var(--warn);
+  --sa-red: var(--err);
+  /* 装饰色（渐变 / 统计卡顶边）：映射到全局色系，随主题变化 */
+  --sa-mauve: var(--accent-2);
+  --sa-teal: var(--ok);
+  --sa-pink: var(--err);
+
+  --sa-shadow: var(--shadow);
+  --sa-radius: var(--radius);
+  --sa-radius-sm: var(--radius-sm);
+
+  /* 布局尺寸（非颜色，保持固定） */
   --sa-sidebar-w: 240px;
   --sa-topbar-h: 56px;
-
-  /* ---- 语义变量重映射：让迁入的 9 个页面自动得到 Catppuccin 配色 ---- */
-  --bg-base: #1e1e2e;
-  --bg-page: #1e1e2e;
-  --bg-surface: #252538;
-  --bg-elevated: #2d2d44;
-  --bg-hover: rgba(137, 180, 250, 0.1);
-  --bg-active: rgba(137, 180, 250, 0.16);
-  --bg-input: rgba(30, 30, 46, 0.8);
-  --bg-subtle: #2d2d44;
-
-  --fg: #f5f5ff;
-  --fg-secondary: #b8b8d0;
-  --fg-muted: #8888a8;
-  --fg-inverse: #1e1e2e;
-
-  --border: #3d3d5c;
-  --border-strong: #4a4a6e;
-  --divider: rgba(61, 61, 92, 0.7);
-  --rail-bg: #252538;
-  --rail-border: #3d3d5c;
-  --topbar-bg: #252538;
-
-  --accent: #89b4fa;
-  --accent-hover: #a6c8ff;
-  --accent-soft: rgba(137, 180, 250, 0.15);
-  --accent-2: #fab387;
-  --accent-2-soft: rgba(250, 179, 135, 0.15);
-
-  --ok: #a6e3a1;
-  --ok-soft: rgba(166, 227, 161, 0.14);
-  --warn: #f9e2af;
-  --warn-soft: rgba(249, 226, 175, 0.14);
-  --err: #f38ba8;
-  --err-soft: rgba(243, 139, 168, 0.14);
-  --info: #89b4fa;
-  --info-soft: rgba(137, 180, 250, 0.14);
-
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
-  --glow-a: none;
-  --glow-b: none;
-  --glass: saturate(140%) blur(18px);
-
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ---- Ant Design Vue 组件变量覆盖（cssVar 模式全局生效于本子树）---- */
-  --ant-color-primary: #89b4fa;
-  --ant-color-primary-hover: #a6c8ff;
-  --ant-color-primary-active: #74a0e6;
-  --ant-color-success: #a6e3a1;
-  --ant-color-warning: #f9e2af;
-  --ant-color-error: #f38ba8;
-  --ant-color-info: #89b4fa;
-  --ant-color-text: #f5f5ff;
-  --ant-color-text-secondary: #b8b8d0;
-  --ant-color-text-tertiary: #8888a8;
-  --ant-color-border: #3d3d5c;
-  --ant-color-border-secondary: #363653;
-  --ant-color-bg-container: #252538;
-  --ant-color-bg-elevated: #2d2d44;
-  --ant-color-bg-layout: #1e1e2e;
-  --ant-color-fill-tertiary: rgba(137, 180, 250, 0.1);
-  --ant-border-radius: 10px;
-  --ant-border-radius-lg: 14px;
-  --ant-border-radius-sm: 6px;
 
   /* 字体栈对齐原型 */
   --font-sans: ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Noto Sans CJK SC',
     'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-
-/* 外壳内强制暗色背景，抹平全局 body 的 explorer 径向光晕 */
-.super-agent-shell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--sa-bg);
-  color: var(--sa-text-1);
-  font-family: var(--font-sans);
-  font-size: 13px;
-}
-
-/* 组件白底兜底：迁入页面的少数硬编码 #fff 卡片/气泡在此统一纠正 */
-.super-agent-shell .ant-card,
-.super-agent-shell .ant-table,
-.super-agent-shell .ant-table-thead > tr > th,
-.super-agent-shell .ant-modal-content,
-.super-agent-shell .ant-drawer-content,
-.super-agent-shell .ant-popover-inner {
-  background: var(--sa-surface) !important;
-  color: var(--sa-text-1);
-}
-
-.super-agent-shell .ant-table-thead > tr > th {
-  background: var(--sa-surface-2) !important;
-  color: var(--sa-text-3);
-}
-
-.super-agent-shell .ant-input,
-.super-agent-shell .ant-input-number,
-.super-agent-shell .ant-select-selector {
-  background: var(--sa-surface) !important;
-  color: var(--sa-text-1) !important;
-  border-color: var(--sa-border) !important;
-}
-
-.super-agent-shell ::-webkit-scrollbar-thumb {
-  background: var(--sa-border-light);
-}
-
-.super-agent-shell ::selection {
-  background: var(--sa-accent-dim);
-  color: var(--sa-text-1);
-}
-
-/* 通用原型语言：卡片 / 描述文字 / 主按钮 / 胶囊 / 标题 */
-.sa-card {
-  background: var(--sa-surface);
-  border: 1px solid var(--sa-border);
-  border-radius: var(--sa-radius);
-  box-shadow: var(--sa-shadow);
-}
-
-.sa-page-head {
-  margin-bottom: 16px;
-}
-
-.sa-page-head h1 {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--sa-text-1);
-  line-height: 1.35;
-}
-
-.sa-page-head p {
-  font-size: 13px;
-  color: var(--sa-text-3);
-  margin-top: 4px;
-}
-
-.sa-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  color: var(--sa-text-2);
-  background: var(--sa-surface-2);
-  border: 1px solid var(--sa-border);
-}
-
-.sa-pill .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sa-text-dim);
-}
-
-.sa-pill.on .dot { background: var(--sa-green); box-shadow: 0 0 8px var(--sa-green); }
-.sa-pill.accent { color: var(--sa-accent); border-color: var(--sa-border-light); }
-.sa-pill.peach { color: var(--sa-peach); border-color: var(--sa-border-light); }
-
-.sa-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: var(--sa-radius-sm);
-  border: 1px solid var(--sa-border);
-  background: var(--sa-surface-2);
-  color: var(--sa-text-2);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.sa-btn:hover {
-  background: var(--sa-surface-3);
-  border-color: var(--sa-border-light);
-  color: var(--sa-text-1);
-}
-
-.sa-btn-primary {
-  background: var(--sa-accent);
-  color: #1a1a2e;
-  border-color: var(--sa-accent);
-  font-weight: 600;
-}
-
-.sa-btn-primary:hover {
-  filter: brightness(1.1);
-  color: #1a1a2e;
 }

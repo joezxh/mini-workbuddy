@@ -152,6 +152,7 @@ class MenuCreate(BaseModel):
     sort: int = 0
     parent_id: Optional[int] = 0
     icon: Optional[str] = None
+    color_icon: Optional[str] = None  # 彩色图标 data URL（base64）
     component: Optional[str] = None
     component_name: Optional[str] = None
     status: int = 0  # 0=开启 1=关闭
@@ -169,6 +170,7 @@ class MenuUpdate(BaseModel):
     sort: Optional[int] = None
     parent_id: Optional[int] = None
     icon: Optional[str] = None
+    color_icon: Optional[str] = None  # 彩色图标 data URL（base64）；传空串可清除
     component: Optional[str] = None
     component_name: Optional[str] = None
     status: Optional[int] = None
@@ -189,6 +191,7 @@ def _menu_to_dict(m) -> dict:
         "sort": m.sort,
         "parentId": m.parent_id,
         "icon": m.icon,
+        "colorIcon": m.color_icon,
         "component": m.component,
         "componentName": m.component_name,
         "status": m.status,
@@ -297,6 +300,7 @@ def create_menu(menu_in: MenuCreate, db: Session = Depends(get_db), admin: SysUs
         sort=menu_in.sort,
         parent_id=menu_in.parent_id if menu_in.parent_id else 0,
         icon=menu_in.icon,
+        color_icon=menu_in.color_icon,
         component=menu_in.component,
         component_name=menu_in.component_name,
         status=menu_in.status,
@@ -334,6 +338,9 @@ def update_menu(
         menu.parent_id = menu_in.parent_id
     if menu_in.icon is not None:
         menu.icon = menu_in.icon
+    if menu_in.color_icon is not None:
+        # 传空串表示清除彩色图标，回退到 antd icon
+        menu.color_icon = menu_in.color_icon or None
     if menu_in.component is not None:
         menu.component = menu_in.component
     if menu_in.component_name is not None:

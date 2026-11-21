@@ -11,8 +11,8 @@
             {{ health?.pool ? '上游已连接' : '上游未连接' }}
           </a-tag>
           <a-tag>BASE: {{ health?.base_url || '—' }}</a-tag>
-          <a-tooltip title="切换深色/浅色主题（useAppStore）">
-            <a-button size="small" @click="app.toggleTheme()">{{ app.isDark ? '☀️ 浅色' : '🌙 深色' }}</a-button>
+          <a-tooltip title="循环切换 浅色 / 深色 / 紫色 三套主题（useAppStore）">
+            <a-button size="small" @click="cycleTheme">🎨 {{ app.theme === 'light' ? '浅色' : app.theme === 'dark' ? '深色' : '紫色' }}</a-button>
           </a-tooltip>
         </div>
       </div>
@@ -36,6 +36,12 @@ import S2sPanel from './components/S2sPanel.vue'
 import GuidePanel from './components/GuidePanel.vue'
 
 const app = useAppStore()
+// 三主题循环：浅色 → 深色 → 紫色 → 浅色（与顶部下拉共用同一 Pinia 状态）
+const THEME_CYCLE = ['light', 'dark', 'purple'] as const
+function cycleTheme() {
+  const idx = THEME_CYCLE.indexOf(app.theme)
+  app.setTheme(THEME_CYCLE[(idx + 1) % THEME_CYCLE.length])
+}
 const activeTab = ref('asr') // D2：ASR 默认选中
 const health = ref<VoiceDemoHealth | null>(null)
 onMounted(async () => { try { health.value = await getVoiceDemoHealth() } catch { /* 未探测到时展示占位 */ } })

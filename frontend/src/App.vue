@@ -58,14 +58,16 @@ const componentTokens = computed(() => ({
 }))
 
 const algorithm = computed(() =>
-  app.isDark ? [antdTheme.darkAlgorithm, antdTheme.compactAlgorithm] : [antdTheme.defaultAlgorithm],
+  app.isDarkMode ? [antdTheme.darkAlgorithm, antdTheme.compactAlgorithm] : [antdTheme.defaultAlgorithm],
 )
 
-// 把皮肤写到 <html>，tokens.css 据此选择调色板
+// 把皮肤写到 <html>，tokens.css 据此选择调色板。
+// 紫色主题属暗色系，color-scheme 必须写 dark 而非非法的 "purple"。
+const THEME_COLOR_SCHEME: Record<string, 'light' | 'dark'> = { light: 'light', dark: 'dark', purple: 'dark' }
 watchEffect(() => {
   if (typeof document === 'undefined') return
   document.documentElement.setAttribute('data-theme', app.theme)
-  document.documentElement.style.colorScheme = app.theme
+  document.documentElement.style.colorScheme = THEME_COLOR_SCHEME[app.theme] ?? 'light'
 })
 
 onMounted(() => {

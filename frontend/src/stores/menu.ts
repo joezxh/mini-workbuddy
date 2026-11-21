@@ -9,6 +9,7 @@ function mapMenu(m: any): MenuNode {
     name: m.name ?? '',
     path: m.permissionCode || m.path || '',
     icon: m.icon || 'FileOutlined',
+    colorIcon: m.colorIcon ?? undefined,
     i18nKey: m.i18nKey ?? undefined,
     titleKey: m.i18nKey ?? m.titleKey,
     type: m.type ?? 2,

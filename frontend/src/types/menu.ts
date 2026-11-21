@@ -17,6 +17,8 @@ export interface MenuNode {
   path?: string
   /** 图标名，例如 'DashboardOutlined'，由 @/utils/icons 解析 */
   icon?: string
+  /** 彩色图标 data URL（base64），优先于 icon 渲染 */
+  colorIcon?: string
   // —— 后端字段兼容 ——
   /** 菜单唯一键，等于 path 末段，与后端 componentMap 对应 */
   menuKey?: string

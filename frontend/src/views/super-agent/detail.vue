@@ -1,12 +1,7 @@
 <!-- Ticket 详情 + 时间线（Task 4.3）—— 左：基本信息 + Mandate；右：执行时间线 -->
 <template>
   <div class="sa-detail">
-    <!-- 页头对齐原型 page-head；返回工作台看板 -->
-    <div class="sa-page-head detail-head">
-      <h1>📋 执行详情 <span v-if="ticket?.id" class="detail-sub">· {{ ticket.id }}</span></h1>
-      <p>Ticket 生命周期 · Mandate 授权 · Assignment 执行 · SSE 实时事件时间线</p>
-      <button class="sa-btn" @click="router.push('/super-agent/workbench')">← 返回看板</button>
-    </div>
+
 
     <a-empty v-if="!props.id" description="请从看板选择一个 Ticket 查看执行详情" style="margin-top: 60px" />
 
@@ -85,14 +80,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { type TicketDetail, getTicket } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useWorkspaceNav } from './workspace-nav'
 
 const props = defineProps<{ id?: string }>()
-const router = useRouter()
+const nav = useWorkspaceNav()!
 const store = useSuperAgentStore()
 
 const loading = ref(false)
@@ -135,18 +130,22 @@ function statusColor(s: string): string {
   return ({ open: 'blue', working: 'geekblue', completed: 'green', failed: 'red', dropped: 'default' } as Record<string, string>)[s] || 'default'
 }
 
-onMounted(async () => {
-  if (!props.id) return
+async function load(id?: string) {
+  if (!id) { ticket.value = null; return }
   loading.value = true
   try {
-    ticket.value = await getTicket(props.id) as any
+    ticket.value = await getTicket(id) as any
     if (!ticket.value) message.error('Ticket 不存在')
   } catch {
     /* request 拦截器已提示 */
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(() => { void load(props.id) })
+// 组件在 Tab 内常驻（v-show），切换 Ticket 时 id 变化需重新加载
+watch(() => props.id, id => { void load(id) })
 </script>
 
 <style scoped lang="less">

@@ -1,10 +1,11 @@
 /*
  * Design tokens for the RCS console.
  *
- * Two skins — `dark` (default) and `light` — are selected by a `data-theme`
- * attribute on <html>. Every colour in the app (including the Ant Design Vue
- * component palette, remapped further down) resolves through these variables,
- * so switching skins never requires a component-level change.
+ * Three skins — `dark` (default), `light` and `sa` (Catppuccin Mocha, 与
+ * super-agent 一致) — are selected by a `data-theme` attribute on <html>.
+ * Every colour in the app (including the Ant Design Vue component palette,
+ * remapped further down) resolves through these variables, so switching skins
+ * never requires a component-level change.
  *
  * The palette, typography, radii and surface treatment follow the
  * Semantica "explorer" reference skin: blue accent (#3b82f6 / #2563eb) with a
@@ -227,7 +228,107 @@
 }
 
 /* ------------------------------------------------------------------ *
- * Global resets shared by both skins
+ * Purple skin — Catppuccin Mocha，与 super-agent 工作台视觉完全一致。
+ * 作为全局第三套皮肤：整站生效，色值对齐 styles/super-agent-tokens.css。
+ * 内部 key=purple（兼容旧值 sa）；属暗色系，color-scheme: dark，AntD 走 darkAlgorithm。
+ * ------------------------------------------------------------------ */
+:root[data-theme='purple'],
+:root[data-theme='sa'] {
+  color-scheme: dark;
+
+  /* 背景 */
+  --bg-base: #1e1e2e;
+  --bg-page: #1e1e2e;
+  --bg-surface: #252538;
+  --bg-elevated: #2d2d44;
+  --bg-hover: rgba(137, 180, 250, 0.1);
+  --bg-active: rgba(137, 180, 250, 0.16);
+  --bg-input: rgba(30, 30, 46, 0.8);
+  --bg-subtle: #2d2d44;
+
+  /* 文字 */
+  --fg: #f5f5ff;
+  --fg-secondary: #b8b8d0;
+  --fg-muted: #8888a8;
+  --fg-inverse: #1e1e2e;
+
+  /* 边框 */
+  --border: #3d3d5c;
+  --border-strong: #4a4a6e;
+  --divider: rgba(61, 61, 92, 0.7);
+
+  /* 强调 */
+  --accent: #89b4fa;
+  --accent-hover: #a6c8ff;
+  --accent-soft: rgba(137, 180, 250, 0.15);
+  --accent-2: #fab387;
+  --accent-2-soft: rgba(250, 179, 135, 0.15);
+
+  /* 状态色 */
+  --ok: #a6e3a1;
+  --ok-soft: rgba(166, 227, 161, 0.14);
+  --warn: #f9e2af;
+  --warn-soft: rgba(249, 226, 175, 0.14);
+  --err: #f38ba8;
+  --err-soft: rgba(243, 139, 168, 0.14);
+  --info: #89b4fa;
+  --info-soft: rgba(137, 180, 250, 0.14);
+
+  /* 阴影 / 光晕 / 玻璃 */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --glow-a: none;
+  --glow-b: none;
+  --glass: saturate(140%) blur(18px);
+
+  /* 侧栏 / 顶栏（对齐 super-agent 外壳） */
+  --rail-bg: #252538;
+  --rail-fg: #f5f5ff;
+  --rail-fg-muted: #b8b8d0;
+  --rail-border: #3d3d5c;
+  --rail-hover: rgba(137, 180, 250, 0.1);
+  --rail-active-bg: rgba(137, 180, 250, 0.16);
+  --rail-active-fg: #89b4fa;
+  --rail-brand-fg: #f5f5ff;
+  --topbar-bg: #252538;
+
+  /* 圆角 / 过渡 / 字体（对齐原型） */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --font-sans: ui-sans-serif, -apple-system, 'Segoe UI', Roboto, 'Noto Sans CJK SC',
+    'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+:root[data-theme='purple'] .ant-app,
+:root[data-theme='purple'],
+:root[data-theme='sa'] .ant-app,
+:root[data-theme='sa'] {
+  --ant-color-primary: #89b4fa;
+  --ant-color-primary-hover: #a6c8ff;
+  --ant-color-primary-active: #74a0e6;
+  --ant-color-success: #a6e3a1;
+  --ant-color-warning: #f9e2af;
+  --ant-color-error: #f38ba8;
+  --ant-color-info: #89b4fa;
+  --ant-color-text: #f5f5ff;
+  --ant-color-text-secondary: #b8b8d0;
+  --ant-color-text-tertiary: #8888a8;
+  --ant-color-border: #3d3d5c;
+  --ant-color-border-secondary: #363653;
+  --ant-color-bg-container: #252538;
+  --ant-color-bg-elevated: #2d2d44;
+  --ant-color-bg-layout: #1e1e2e;
+  --ant-color-fill-tertiary: rgba(137, 180, 250, 0.1);
+  --ant-border-radius: 10px;
+  --ant-border-radius-lg: 14px;
+  --ant-border-radius-sm: 6px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Global resets shared by all skins
  * ------------------------------------------------------------------ */
 *,
 *::before,

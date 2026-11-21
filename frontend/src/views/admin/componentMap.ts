@@ -31,6 +31,8 @@ import OntologyWorkspace from '@/views/data-source/ontology/OntologyWorkspace.vu
 import SimulationSandbox from '@/views/sandbox/SimulationSandbox.vue'
 // 孪生应用（Plan 2）：sys_menu 2407 (/admin/digital-twin)，与真实路由 /admin/digital-twin 共用同一组件
 import TwinWorkspace from '@/views/twin/TwinWorkspace.vue'
+// 超级智能体：sys_menu 2061 (/admin/super-agent)，作为控制台 Tab 组件渲染
+import SuperAgentWorkspace from '@/views/super-agent/SuperAgentWorkspace.vue'
 import KnowledgeBasePanel from '@/views/kms/KnowledgeBasePanel.vue'
 import ExternalKbPanel from '@/views/kms/ExternalKbPanel.vue'
 // wiki 知识库（以控制台 Tab 方式展示）
@@ -87,6 +89,8 @@ export const componentMap: Record<string, Component> = {
   'voice-models': markRaw(VoiceModelConfig),
   // 孪生应用：sys_menu 2407 (/admin/digital-twin)，path 末段 = menuKey = i18n_key 末段
   'digital-twin': markRaw(TwinWorkspace),
+  // 超级智能体：sys_menu 2061 (/admin/super-agent)，末段 super-agent 即 tab key
+  'super-agent': markRaw(SuperAgentWorkspace),
 }
 
 /**

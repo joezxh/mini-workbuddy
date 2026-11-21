@@ -198,6 +198,7 @@ def _get_user_menu_tree(current_user: SysUser, db: Session) -> list:
         "type": m.type,
         "parentId": m.parent_id,
         "icon": m.icon,
+        "colorIcon": m.color_icon,
         "component": m.component,
         "sortOrder": m.sort,
         # 国际化翻译 key：前端据此通过 vue-i18n 渲染多语言菜单标题，缺失时回退到 name

@@ -151,75 +151,12 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    // SuperAgent 独立全屏外壳：顶栏 + 左侧分组导航 + 主区，1:1 对齐 super-agent-demo 原型。
-    // 不套 AppLayout，三大模块（工作台 / Muse 执行界面 / 管理界面）在此切换。
-    path: '/super-agent',
-    component: () => import('@/layouts/SuperAgentShell.vue'),
-    redirect: '/super-agent/workbench',
-    meta: { requiresAuth: true },
-    children: [
-      // 模块一：工作台（Dashboard 看板 / 电商营销 Demo / 执行详情）
-      {
-        path: 'workbench',
-        name: 'SaWorkbench',
-        component: () => import('@/views/super-agent/workbench/index.vue'),
-        meta: { title: 'Dashboard 看板' },
-        children: [
-          {
-            path: '',
-            name: 'SaBoard',
-            component: () => import('@/views/super-agent/board.vue'),
-            meta: { title: 'Dashboard 看板' },
-          },
-          {
-            path: 'demo',
-            name: 'SaDemo',
-            component: () => import('@/views/super-agent/demo.vue'),
-            meta: { title: '电商营销 Demo' },
-          },
-          {
-            path: 'detail/:id?',
-            name: 'SaDetail',
-            component: () => import('@/views/super-agent/detail.vue'),
-            props: true,
-            meta: { title: '执行详情' },
-          },
-        ],
-      },
-      // 模块二：Muse 执行界面（对话 / 动态 / 点子 / 目标，单路由 + 内部视图）
-      {
-        path: 'muse',
-        name: 'SaMuse',
-        component: () => import('@/views/super-agent/muse.vue'),
-        meta: { title: 'Muse 执行界面' },
-      },
-      // 模块三：管理界面（模型 / MCP / Policy / KB / 执行参数 / 安全 / Source）
-      {
-        path: 'manage',
-        name: 'SaManage',
-        component: () => import('@/views/super-agent/manage.vue'),
-        meta: { title: '管理界面' },
-      },
-    ]
+    // 超级智能体：作为控制台外壳（admin/index.vue）的 Tab 组件渲染，唯一入口 /dashboard?tab=super-agent。
+    // 下方旧 /super-agent/* 路径统一重定向到该 Tab，避免历史书签 404。
+    path: '/super-agent', redirect: '/dashboard?tab=super-agent',
   },
   {
-    // 旧路由兼容：重定向到新外壳，避免历史书签 / 外部跳转 404。
-    path: '/super-agent/chat', redirect: '/super-agent/muse?view=chat',
-  },
-  {
-    path: '/super-agent/feed', redirect: '/super-agent/muse?view=feed',
-  },
-  {
-    path: '/super-agent/ideas', redirect: '/super-agent/muse?view=ideas',
-  },
-  {
-    path: '/super-agent/goals', redirect: '/super-agent/muse?view=goals',
-  },
-  {
-    path: '/super-agent/hitl', redirect: '/super-agent/workbench',
-  },
-  {
-    path: '/super-agent/config-source', redirect: '/super-agent/manage?view=source',
+    path: '/super-agent/:pathMatch(.*)*', redirect: '/dashboard?tab=super-agent',
   },
   {
     path: '/:pathMatch(.*)*',

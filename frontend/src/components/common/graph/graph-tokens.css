@@ -50,8 +50,10 @@
   color: var(--kg-text);
 }
 
-/* ── 令牌：暗色（保留度量，映射表面色） ─────────────────────────────── */
-[data-theme='dark'] .kb-graph-pane {
+/* ── 令牌：暗色系（dark + purple，保留度量，映射表面色） ─────────────── */
+[data-theme='dark'] .kb-graph-pane,
+[data-theme='purple'] .kb-graph-pane,
+[data-theme='sa'] .kb-graph-pane {
   --kg-primary: #4aa3ff;
   --kg-primary-hover: #6fb4ff;
   --kg-bg: #0e141d;
@@ -83,6 +85,38 @@
   --kg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --kg-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   --kg-code-fg: #ff9db1;
+}
+
+/* ── 紫色主题：图谱表面色微调为 Catppuccin（在暗色系令牌之上覆盖） ─── */
+[data-theme='purple'] .kb-graph-pane,
+[data-theme='sa'] .kb-graph-pane {
+  --kg-primary: #89b4fa;
+  --kg-primary-hover: #a6c8ff;
+  --kg-bg: #1e1e2e;
+  --kg-card: #252538;
+  --kg-subtle: #2d2d44;
+  --kg-text: #f5f5ff;
+  --kg-text-2: #b8b8d0;
+  --kg-text-3: #8888a8;
+  --kg-border: #3d3d5c;
+  --kg-border-2: #4a4a6e;
+  --kg-tint: rgba(137, 180, 250, 0.16);
+  --kg-info-bg: rgba(137, 180, 250, 0.1);
+  --kg-info-border: rgba(137, 180, 250, 0.34);
+  --kg-info-fg: #89b4fa;
+  --kg-ok: #a6e3a1;
+  --kg-ok-fg: #a6e3a1;
+  --kg-ok-bg: rgba(166, 227, 161, 0.14);
+  --kg-ok-border: rgba(166, 227, 161, 0.34);
+  --kg-err: #f38ba8;
+  --kg-err-fg: #f38ba8;
+  --kg-err-bg: rgba(243, 139, 168, 0.14);
+  --kg-err-border: rgba(243, 139, 168, 0.34);
+  --kg-warn: #f9e2af;
+  --kg-warn-fg: #f9e2af;
+  --kg-warn-bg: rgba(249, 226, 175, 0.14);
+  --kg-warn-border: rgba(249, 226, 175, 0.34);
+  --kg-code-fg: #f5c2e7;
 }
 
 /* ── antd：按钮 / 输入 / 下拉 / 复选 ─────────────────────────────────── */

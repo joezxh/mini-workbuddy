@@ -107,7 +107,8 @@ class SysMenu(Base):
     type = Column(Integer, default=2)  # 1=目录, 2=菜单, 3=按钮
     sort = Column(Integer, default=0)  # 显示顺序
     parent_id = Column(BigInteger, index=True)  # 父菜单ID，0或NULL表示顶级
-    icon = Column(String(100))  # 菜单图标
+    icon = Column(String(100))  # 菜单图标（antd 图标名，如 RobotOutlined）
+    color_icon = Column(Text, nullable=True)  # 彩色图标 data URL（base64），优先于 icon 渲染
     component = Column(String(255))  # 前端组件路径
     component_name = Column(String(100))  # 组件名
     status = Column(Integer, default=0)  # 状态: 0=开启 1=关闭

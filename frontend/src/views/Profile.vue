@@ -222,10 +222,10 @@ onMounted(() => {
             </a-form-item>
 
             <a-form-item :label="t('profile.cardTheme')">
-              <a-radio-group default-value="light">
+              <a-radio-group :value="appStore.theme" @change="(e: any) => appStore.setTheme(e.target.value)">
                 <a-radio value="light">{{ t('profile.themeLight') }}</a-radio>
                 <a-radio value="dark">{{ t('profile.themeDark') }}</a-radio>
-                <a-radio value="auto">{{ t('profile.themeAuto') }}</a-radio>
+                <a-radio value="purple">{{ t('profile.themePurple') }}</a-radio>
               </a-radio-group>
             </a-form-item>
           </a-form>

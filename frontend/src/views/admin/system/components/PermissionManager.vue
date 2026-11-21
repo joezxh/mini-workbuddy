@@ -61,9 +61,14 @@
       <template #bodyCell="{ column, record }">
         <template v-if="column.key === 'name'">
           <div style="display: flex; align-items: center">
+            <img
+              v-if="record.colorIcon"
+              :src="record.colorIcon"
+              style="margin-right: 6px; width: 16px; height: 16px; object-fit: contain"
+            />
             <component
               :is="getIconComponent(record.icon)"
-              v-if="record.icon"
+              v-else-if="record.icon"
               style="margin-right: 6px; font-size: 14px; color: var(--accent-cyan)"
             />
             <component
@@ -221,6 +226,34 @@
           <a-col :span="12">
             <a-form-item :label="t('sys.permission.routePath')" name="path">
               <a-input v-model:value="formData.path" :placeholder="t('sys.permission.routePlaceholder')" allow-clear />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <!-- 彩色图标（上传 data URL，优先于 antd 图标名渲染） -->
+        <a-row v-show="formData.type !== 3" :gutter="16">
+          <a-col :span="24">
+            <a-form-item :label="t('sys.permission.colorIcon')">
+              <div class="color-icon-row">
+                <a-upload
+                  :file-list="[]"
+                  :show-upload-list="false"
+                  :before-upload="beforeColorIconUpload"
+                  accept="image/png,image/jpeg,image/svg+xml"
+                >
+                  <a-button>
+                    <template #icon><UploadOutlined /></template>
+                    {{ t('sys.permission.colorIconUpload') }}
+                  </a-button>
+                </a-upload>
+                <div v-if="formData.colorIcon" class="color-icon-preview">
+                  <img :src="formData.colorIcon" :alt="t('sys.permission.colorIcon')" />
+                  <a-button type="text" size="small" danger @click="clearColorIcon">
+                    {{ t('sys.permission.colorIconClear') }}
+                  </a-button>
+                </div>
+                <span class="color-icon-hint">{{ t('sys.permission.colorIconHint') }}</span>
+              </div>
             </a-form-item>
           </a-col>
         </a-row>
@@ -626,6 +659,31 @@ const formLoading = ref(false)
 const formRef = ref()
 const menuTree = ref<any[]>([])
 
+const MAX_COLOR_ICON_BYTES = 100 * 1024
+
+/** 彩色图标上传：校验类型与大小后用 FileReader 转 data URL，直接写入表单（不自动上传）。 */
+function beforeColorIconUpload(file: File) {
+  if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) {
+    message.error(t('sys.permission.colorIconInvalidType'))
+    return false
+  }
+  if (file.size > MAX_COLOR_ICON_BYTES) {
+    message.error(t('sys.permission.colorIconTooLarge'))
+    return false
+  }
+  const reader = new FileReader()
+  reader.onload = () => {
+    if (typeof reader.result === 'string') formData.value.colorIcon = reader.result
+  }
+  reader.onerror = () => message.error(t('sys.permission.colorIconInvalidType'))
+  reader.readAsDataURL(file)
+  return false
+}
+
+function clearColorIcon() {
+  formData.value.colorIcon = ''
+}
+
 function createDefaultForm(): MenuForm {
   return {
     name: '',
@@ -635,6 +693,7 @@ function createDefaultForm(): MenuForm {
     sort: 0,
     parentId: 0,
     icon: '',
+    colorIcon: '',
     component: '',
     componentName: '',
     status: 0,
@@ -736,6 +795,7 @@ async function openForm(type: 'create' | 'update', id?: number, parentId?: numbe
           sort: d.sort || 0,
           parentId: d.parentId || 0,
           icon: d.icon || '',
+          colorIcon: d.colorIcon || '',
           component: d.component || '',
           componentName: d.componentName || '',
           status: d.status ?? 0,
@@ -767,6 +827,7 @@ function toApiData(data: MenuForm): any {
     sort: data.sort,
     parent_id: data.parentId,
     icon: data.icon,
+    color_icon: data.colorIcon || '',
     component: data.component,
     component_name: data.componentName,
     status: data.status,
@@ -894,6 +955,34 @@ onMounted(() => {
 .icon-item.selected {
   background: var(--accent);
   color: var(--fg-inverse);
+}
+
+.color-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.color-icon-preview {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+
+  img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+}
+
+.color-icon-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
 }
 
 .i18n-preview {

@@ -57,7 +57,10 @@ function onGroupClick() {
   <!-- Group with children -->
   <div v-if="node.children?.length" class="nav-group" :class="{ 'nav-group--open': open }">
     <button class="nav-row nav-row--group" :title="label" @click="onGroupClick">
-      <span class="nav-ico"><component :is="resolveIcon(node.icon)" /></span>
+      <span class="nav-ico">
+        <img v-if="node.colorIcon" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+        <component :is="resolveIcon(node.icon)" v-else />
+      </span>
       <span v-show="!collapsed" class="nav-label">{{ label }}</span>
       <span v-show="!collapsed" class="nav-caret">⌄</span>
     </button>
@@ -80,7 +83,10 @@ function onGroupClick() {
     :title="label"
     @click="onLeafClick(node)"
   >
-    <span class="nav-ico"><component :is="resolveIcon(node.icon)" /></span>
+    <span class="nav-ico">
+      <img v-if="node.colorIcon" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+      <component :is="resolveIcon(node.icon)" v-else />
+    </span>
     <span v-show="!collapsed" class="nav-label">{{ label }}</span>
   </button>
 </template>
@@ -130,6 +136,13 @@ function onGroupClick() {
   place-items: center;
   font-size: 16px;
   color: inherit;
+
+  &__img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: block;
+  }
 }
 
 .nav-label {

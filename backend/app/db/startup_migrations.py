@@ -266,26 +266,31 @@ def seed_agent_impl_type_dictionary(engine: Engine) -> None:
 
 
 # ── SuperAgent 管理菜单播种（幂等；spec 步骤三 4.4）──────────────────────────
-# 把 super-agent 域既有页面挂入「AI 能力配置」(sys_menu 2003) 导航组。
-# path 不落 /admin/<key>（非外壳 Tab 页），走真实路由直接导航（resolveMenuTarget）。
-# i18n_key 缺翻译时前端回退 name 字段，故 name 直接写中文标题。
-_SUPERAGENT_MENUS: list[dict] = [
-    # 显示端整合后：主入口指向独立 SuperAgent 外壳（顶栏 + 分组导航 + 三模块）。
-    {"path": "/super-agent", "name": "超级智能体工作台", "icon": "RobotOutlined", "sort": 70, "i18n_key": "sys.menu.super-agent-home"},
-    # 以下为旧入口兼容项：path 由前端重定向到新外壳对应视图，避免历史书签 404。
-    {"path": "/super-agent/hitl", "name": "HITL 审批", "icon": "AuditOutlined", "sort": 71, "i18n_key": "sys.menu.super-agent-hitl"},
-    {"path": "/super-agent/config-source", "name": "Source 配置", "icon": "SettingOutlined", "sort": 72, "i18n_key": "sys.menu.super-agent-config-source"},
-    {"path": "/super-agent/chat", "name": "Agent 对话", "icon": "CommentOutlined", "sort": 73, "i18n_key": "sys.menu.super-agent-chat"},
-    {"path": "/super-agent/feed", "name": "动态 Feed", "icon": "UnorderedListOutlined", "sort": 74, "i18n_key": "sys.menu.super-agent-feed"},
-    {"path": "/super-agent/ideas", "name": "点子库", "icon": "BulbOutlined", "sort": 75, "i18n_key": "sys.menu.super-agent-ideas"},
-    {"path": "/super-agent/goals", "name": "目标", "icon": "AimOutlined", "sort": 76, "i18n_key": "sys.menu.super-agent-goals"},
+# 显示端整合后：左侧系统菜单只保留一个「超级智能体」入口，进入后用右侧顶部 3 Tab
+# 切换工作台 / Muse 执行界面 / 管理界面。下方旧入口 path 由前端重定向，避免历史书签 404，
+# 但不再作为菜单展示（seed 时置 visible=0）。
+_SUPERAGENT_MENU = {
+    # /admin/super-agent 经 resolveMenuTarget 转为 /dashboard?tab=super-agent，
+    # 作为控制台外壳的 Tab 打开（path 末段 super-agent 即 componentMap 的 tab key）。
+    "path": "/admin/super-agent", "name": "超级智能体", "icon": "RobotOutlined",
+    "sort": 70, "i18n_key": "sys.menu.super-agent-home",
+}
+_SUPERAGENT_LEGACY_MENU_PATHS = [
+    "/super-agent", "/super-agent/hitl", "/super-agent/config-source", "/super-agent/chat",
+    "/super-agent/feed", "/super-agent/ideas", "/super-agent/goals",
 ]
 
 
 def seed_superagent_menus(engine: Engine) -> None:
-    """幂等登记 SuperAgent 管理菜单（重复运行安全；按 path 判重，不与既有主键冲突）。"""
+    """幂等登记单一 SuperAgent 入口，并把旧入口菜单置为不可见（重复运行安全）。"""
     with engine.begin() as conn:
-        for m in _SUPERAGENT_MENUS:
+        # 旧入口不再显示在左侧菜单（路由重定向仍保留）
+        for legacy in _SUPERAGENT_LEGACY_MENU_PATHS:
+            conn.execute(
+                text("UPDATE sys_menu SET visible = 0 WHERE path = :path AND is_deleted = false"),
+                {"path": legacy},
+            )
+        for m in [_SUPERAGENT_MENU]:
             exists = conn.execute(
                 text("SELECT 1 FROM sys_menu WHERE path = :path AND is_deleted = false LIMIT 1"),
                 {"path": m["path"]},

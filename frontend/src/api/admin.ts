@@ -438,6 +438,7 @@ export interface MenuItem {
   sort: number
   parentId: number | null
   icon?: string
+  colorIcon?: string  // 彩色图标 data URL（base64）
   component?: string
   componentName?: string
   status: number  // 0=开启 1=关闭
@@ -463,6 +464,7 @@ export interface MenuForm {
   sort: number
   parentId: number
   icon?: string
+  colorIcon?: string  // 彩色图标 data URL（base64）
   component?: string
   componentName?: string
   status: number

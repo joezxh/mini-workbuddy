@@ -53,7 +53,7 @@
       WS 容器内 E2E：<code>docker exec speech-to-speech-thirdparty-pipeline-1 python3 /tmp/e2e_realtime_test.py --url ws://127.0.0.1:8765/v1/realtime --audio /tmp/prompt.wav --out-dir /tmp/e2e --timeout 90</code>。</p>
 
     <h3>主题</h3>
-    <p>浅色 / 深色双主题可切换（顶栏按钮），与控制台一致：<code>&lt;html data-theme="light|dark"&gt;</code> + <code>localStorage['app-theme']</code>，默认浅色。复用 <code>useAppStore().toggleTheme()</code> 与 <code>styles/tokens.css</code> 双皮肤变量，不另建主题机制。</p>
+    <p>浅色 / 深色 / 紫色（Catppuccin，与超级智能体一致；内部 key 为 purple）三套主题可切换（顶栏下拉），与控制台一致：<code>&lt;html data-theme="light|dark|purple"&gt;</code> + <code>localStorage['app-theme']</code>，默认浅色。复用 <code>useAppStore().setTheme()</code> 与 <code>styles/tokens.css</code> 三套皮肤变量，不另建主题机制。</p>
 
     <h3>已知限制与风险</h3>
     <ul>

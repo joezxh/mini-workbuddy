@@ -64,7 +64,7 @@
         <div class="sa-chat__ctx-item" @click="goView('feed')">
           📋 Feed 未读 <a-badge :count="store.unreadFeedCount" size="small" />
         </div>
-        <div class="sa-chat__ctx-item" @click="router.push('/super-agent/workbench')">
+        <div class="sa-chat__ctx-item" @click="wsNav?.go('dashboard')">
           🤖 看板
         </div>
       </a-card>
@@ -89,11 +89,13 @@ import {
 } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
 import { useMuseNav } from '../muse-nav'
+import { useWorkspaceNav } from '../workspace-nav'
 
 const route = useRoute()
 const router = useRouter()
 const store = useSuperAgentStore()
 const museNav = useMuseNav()
+const wsNav = useWorkspaceNav()
 
 /** 容器内切视图；独立打开（旧路由仍可达）时回退到 router.push。 */
 function goView(view: string, params?: Record<string, any>) {

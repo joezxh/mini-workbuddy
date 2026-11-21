@@ -74,13 +74,14 @@ INSERT INTO "public"."sys_menu" VALUES (4, '语音对话', '', '/admin/voice-dem
 INSERT INTO "public"."sys_menu" VALUES (2022, '会话管理', 'ai-assistant:sessions:read', '/admin/ai-sessions', 2, 200, 2002, 'CommentOutlined', '/views/assistant/AiSessionPanel.vue', '', 0, 1, 1, 0, 'sys.menu.ai-sessions', 'f', '2026-09-05 19:25:45.436047', '2026-09-14 21:28:58.74485');
 INSERT INTO "public"."sys_menu" VALUES (2023, '异步任务', 'ai-assistant:async-task:read', '/admin/async-task-manage', 2, 100, 2002, 'ClockCircleOutlined', '/views/assistant/AsyncTaskManage.vue', '', 0, 1, 1, 0, 'sys.menu.async-task-manage', 'f', '2026-09-05 19:25:45.436047', '2026-09-14 21:29:07.14613');
 INSERT INTO "public"."sys_menu" VALUES (2021, '智能对话', 'ai-assistant:chat:read', '/admin/ai-chat', 2, 3, 2002, 'MessageOutlined', '/views/assistant/components/AssistantPanel.vue', '', 0, 1, 1, 0, 'sys.menu.ai-chat', 'f', '2026-09-05 19:25:45.436047', '2026-09-14 21:29:14.006333');
--- SuperAgent 管理入口：显示端整合为独立外壳（顶栏 + 分组导航 + 三模块）。
--- /super-agent 为主入口；其余为旧入口兼容项（前端重定向到新外壳对应视图）。
+-- SuperAgent 入口：左侧系统菜单只保留一个「超级智能体」，作为控制台外壳 Tab 打开
+-- （path=/admin/super-agent → /dashboard?tab=super-agent），进入后用顶部 3 Tab 切换三模块。
+-- 旧入口 path 由前端重定向（历史书签不 404），但不再显示（visible=0）。
 -- 运行库由 startup_migrations.seed_superagent_menus 幂等播种并同步展示字段；此处为初始化基线数据。
-INSERT INTO "public"."sys_menu" VALUES (2061, '超级智能体工作台', 'super-agent:read', '/super-agent', 2, 70, 2003, 'RobotOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-home', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2062, 'HITL 审批', 'super-agent:read', '/super-agent/hitl', 2, 71, 2003, 'AuditOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-hitl', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2063, 'Source 配置', 'super-agent:read', '/super-agent/config-source', 2, 72, 2003, 'SettingOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-config-source', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2064, 'Agent 对话', 'super-agent:read', '/super-agent/chat', 2, 73, 2003, 'CommentOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-chat', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2065, '动态 Feed', 'super-agent:read', '/super-agent/feed', 2, 74, 2003, 'UnorderedListOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-feed', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2066, '点子库', 'super-agent:read', '/super-agent/ideas', 2, 75, 2003, 'BulbOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-ideas', 'f', now(), now());
-INSERT INTO "public"."sys_menu" VALUES (2067, '目标', 'super-agent:read', '/super-agent/goals', 2, 76, 2003, 'AimOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-goals', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2061, '超级智能体', 'super-agent:read', '/admin/super-agent', 2, 70, 2003, 'RobotOutlined', '', '', 0, 1, 1, 0, 'sys.menu.super-agent-home', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2062, 'HITL 审批', 'super-agent:read', '/super-agent/hitl', 2, 71, 2003, 'AuditOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-hitl', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2063, 'Source 配置', 'super-agent:read', '/super-agent/config-source', 2, 72, 2003, 'SettingOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-config-source', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2064, 'Agent 对话', 'super-agent:read', '/super-agent/chat', 2, 73, 2003, 'CommentOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-chat', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2065, '动态 Feed', 'super-agent:read', '/super-agent/feed', 2, 74, 2003, 'UnorderedListOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-feed', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2066, '点子库', 'super-agent:read', '/super-agent/ideas', 2, 75, 2003, 'BulbOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-ideas', 'f', now(), now());
+INSERT INTO "public"."sys_menu" VALUES (2067, '目标', 'super-agent:read', '/super-agent/goals', 2, 76, 2003, 'AimOutlined', '', '', 0, 0, 1, 0, 'sys.menu.super-agent-goals', 'f', now(), now());
