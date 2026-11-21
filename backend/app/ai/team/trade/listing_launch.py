@@ -22,7 +22,7 @@ from agentscope.message import Msg, TextBlock
 from agentscope.pipeline import TeamMember, TeamPipeline
 from agentscope.tool import FunctionTool
 
-from app.ai.team.org_patterns.scaffolding import (
+from app.ai.team.trade.scaffolding import (
     Trace,
     make_agent,
     make_model,

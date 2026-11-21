@@ -2,7 +2,7 @@
 """广告策略评审（辩论/群聊）：≤3 轮收敛 + 双方互见 + 裁判恒 continue 时代码兜底终局。"""
 import asyncio
 
-from app.ai.team.org_patterns import ad_review_debate
+from app.ai.team.trade import ad_review_debate
 
 
 def test_debate_converges_within_3_rounds():

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""org_patterns 注册表契约：模式 → 实现映射与种子数据一致。"""
+"""trade 注册表契约：模式 → 实现映射与种子数据一致。"""
 import inspect
 
-from app.ai.team.org_patterns import PATTERNS
-from app.ai.team.org_patterns.seed_data import TEAMS
+from app.ai.team.trade import PATTERNS
+from app.ai.team.trade.seed_data import TEAMS
 
 
 def test_registry_covers_eight_teams():

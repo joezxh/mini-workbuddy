@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""org_patterns 种子数据契约：8 个 xborder-* 团队 + 34 Agent（纯数据断言，不触网）。"""
-from app.ai.team.org_patterns.seed_data import AGENTS, TEAMS
+"""trade 种子数据契约：8 个 xborder-* 团队 + 34 Agent（纯数据断言，不触网）。"""
+from app.ai.team.trade.seed_data import AGENTS, TEAMS
 
 
 def test_seed_data_contract():

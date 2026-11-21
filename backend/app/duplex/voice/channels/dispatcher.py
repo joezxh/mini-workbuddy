@@ -6,7 +6,7 @@ Agent 回复结束后，按各选中渠道的输出模式（text/voice/both）�
 """
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -67,6 +67,47 @@ class ChannelOutputDispatcher:
             f"channels={len(active_channels)}, results={results}"
         )
         return results
+
+    async def dispatch_detailed(
+        self,
+        text: str,
+        audio_url: Optional[str] = None,
+        agent_key: str = "",
+    ) -> list[dict[str, Any]]:
+        """结构化分发：为每个目标渠道返回模式、状态与能力标注。
+
+        与 dispatch() 共用底层推送逻辑，但返回结构化列表，便于落库 extra_data
+        与 WS output.dispatched 事件。保持 dispatch() 旧返回结构不变以兼容存量测试。
+        """
+        active_channels = self._registry.list_active()
+        if not active_channels:
+            return []
+
+        detailed: list[dict[str, Any]] = []
+        for ch in active_channels:
+            entry: dict[str, Any] = {
+                "key": ch.key,
+                "name": ch.name,
+                "mode": ch.output,
+                "capability": ch.capability,
+                "status": "sent",
+            }
+            try:
+                if ch.output in ("text", "both"):
+                    entry["text_status"] = await self._push_text(ch, text, agent_key)
+                if ch.output in ("voice", "both"):
+                    if audio_url:
+                        entry["voice_status"] = await self._push_voice(ch, audio_url, agent_key)
+                    else:
+                        entry["voice_status"] = "skipped(no audio_url)"
+                self._registry.record_dispatch(ch.key, succeeded=True)
+            except Exception as e:  # noqa: BLE001
+                logger.error(f"[ChannelDispatcher] 分发失败 {ch.name}: {e}")
+                entry["status"] = "error"
+                entry["error"] = str(e)
+                self._registry.record_dispatch(ch.key, succeeded=False)
+            detailed.append(entry)
+        return detailed
 
     async def _push_text(
         self, ch: ChannelConfig, text: str, agent_key: str

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""跨境电商组织模式统一 CLI（收敛自 examples/org_patterns 各脚本的 __main__）。
+"""跨境电商组织模式统一 CLI（收敛自 examples/trade 各脚本的 __main__）。
 
-按 PATTERNS 注册表分派到 app/ai/team/org_patterns/<pattern>.py 的 run 入口，
+按 PATTERNS 注册表分派到 app/ai/team/trade/<pattern>.py 的 run 入口，
 打印 final 与 trace 摘要；--mock 离线确定性运行，真实模型走 --model-id
 （factory_ext DB 配置）或 OPENAI/DASHSCOPE 环境变量兜底。
 
@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # 沿用 scripts/apply_ddl.py 惯例：挂 backend 以 import app
 
-from app.ai.team.org_patterns import PATTERNS  # noqa: E402
+from app.ai.team.trade import PATTERNS  # noqa: E402
 
 
 def main() -> None:

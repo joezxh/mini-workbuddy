@@ -61,15 +61,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { markFeedRead } from '@/api/super-agent'
 import { type FeedPost } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useMuseNav } from '../muse-nav'
 
 const router = useRouter()
 const store = useSuperAgentStore()
+const museNav = useMuseNav()
 
 const filter = ref('')
 
@@ -104,20 +106,18 @@ async function markRead(p: FeedPost) {
 }
 
 function toChat(prompt: string) {
-  router.push({ path: '/super-agent/chat', query: { prompt } })
+  if (museNav) museNav.switchView('chat', { prompt })
+  else router.push({ path: '/super-agent/muse', query: { view: 'chat', prompt } })
 }
 
 function toGoals(goalId?: string | null) {
-  router.push({ path: '/super-agent/goals', query: goalId ? { goal: goalId } : {} })
+  if (museNav) museNav.switchView('goals', goalId ? { goal: goalId } : {})
+  else router.push({ path: '/super-agent/muse', query: goalId ? { view: 'goals', goal: goalId } : { view: 'goals' } })
 }
 
+// Feed SSE 由 SuperAgentShell 统一订阅；这里只拉数据。
 onMounted(() => {
   store.fetchFeed()
-  store.connectFeed()
-})
-
-onUnmounted(() => {
-  store.disconnectFeed()
 })
 </script>
 
@@ -179,8 +179,8 @@ onUnmounted(() => {
     display: flex;
     gap: 10px;
     padding: 12px;
-    background: #fff;
-    border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+    background: var(--sa-surface, var(--ant-color-bg-container, #fff));
+    border: 1px solid var(--sa-border, var(--ant-color-border-secondary, #f0f0f0));
     border-radius: 8px;
 
     &.is-unread {

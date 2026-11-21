@@ -57,3 +57,58 @@ export function upsertVoiceModel(payload: Partial<VoiceModel> & { key_id: number
 export function setDefaultVoiceModel(modelId: number) {
   return request.post(`${ADMIN_BASE}/voice-models/set-default`, { model_id: modelId })
 }
+
+// ── 双工编排管理（Agent 编排设计 + 输出渠道 + voice 会话） ──
+const DUPLEX_BASE = `/api/v1/duplex`
+
+export interface DuplexAgentConfig {
+  key: string
+  name: string
+  icon?: string
+  desc?: string
+  enabled: boolean
+  priority: number
+  prompt: string
+  rules: string[]
+  tools: string[]
+}
+
+export interface DuplexChannelConfig {
+  key: string
+  name: string
+  icon?: string
+  desc?: string
+  active: boolean
+  output: 'text' | 'voice' | 'both' | 'off'
+  capability?: 'enabled' | 'configured' | 'pending_backend' | 'unsupported'
+}
+
+/** 列出 Agent 设计配置 */
+export function listDuplexAgents() {
+  return request.get<{ items: DuplexAgentConfig[] }>(`${DUPLEX_BASE}/agents`)
+}
+
+/** 新增/更新 Agent 设计配置 */
+export function upsertDuplexAgent(data: Partial<DuplexAgentConfig> & { key: string }) {
+  return request.post<DuplexAgentConfig>(`${DUPLEX_BASE}/agents`, data)
+}
+
+/** 删除 Agent 设计配置 */
+export function deleteDuplexAgent(key: string) {
+  return request.delete(`${DUPLEX_BASE}/agents/${encodeURIComponent(key)}`)
+}
+
+/** 列出输出渠道配置 */
+export function listDuplexChannels() {
+  return request.get<{ items: DuplexChannelConfig[] }>(`${DUPLEX_BASE}/channels`)
+}
+
+/** 新增/更新输出渠道配置 */
+export function upsertDuplexChannel(data: Partial<DuplexChannelConfig> & { key: string }) {
+  return request.post<DuplexChannelConfig>(`${DUPLEX_BASE}/channels`, data)
+}
+
+/** 删除输出渠道配置 */
+export function deleteDuplexChannel(key: string) {
+  return request.delete(`${DUPLEX_BASE}/channels/${encodeURIComponent(key)}`)
+}

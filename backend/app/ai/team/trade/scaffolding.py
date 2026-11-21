@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""org_patterns 共享脚手架（agentscope 2.0.12）—— 正式收编自 examples/org_patterns/_common.py。
+"""trade 共享脚手架（agentscope 2.0.12）—— 正式收编自 examples/trade/_common.py。
 
 设计约定（见 docs/design/org-pattern-teams-zh.md）：
 - FakeChatModel 继承 ChatModelBase，覆写 async _call_api；脚本项 str → 纯文本，

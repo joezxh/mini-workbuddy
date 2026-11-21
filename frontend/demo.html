@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>全双工语音交互 · 页面改造预览 v2</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --panel:#111827; --panel2:#1f2937; --line:#374151;
+    --t1:#e5e7eb; --t2:#9ca3af; --t3:#6b7280;
+    --p:#6366f1; --p2:#8b5cf6; --p3:#818cf8;
+    --green:#10b981; --blue:#3b82f6; --amber:#f59e0b; --red:#ef4444;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--t1);font-size:12px;line-height:1.6;padding:16px;min-height:100vh}
+  .demo-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .header-left{display:flex;align-items:center;gap:12px}
+  .demo-title{font-size:20px;font-weight:600;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .demo-badge{background:#1f2937;border:1px solid var(--line);padding:4px 12px;border-radius:12px;font-size:12px;color:var(--t2)}
+  .header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .sel,.inp,.ta{background:#0f1424;border:1px solid var(--line);color:var(--t1);border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:inherit}
+  .sel:focus,.inp:focus,.ta:focus{border-color:var(--p)}
+  .ta{width:100%;resize:vertical;min-height:56px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--t1);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;transition:.2s;white-space:nowrap}
+  .btn:hover{border-color:#4b5563;background:#2a3648}
+  .btn.primary{background:linear-gradient(135deg,var(--p),var(--p2));border-color:transparent;color:#fff}
+  .btn.danger{border-color:var(--red);color:#fca5a5}
+  .btn.active{background:rgba(16,185,129,.12);border-color:var(--green);color:#6ee7b7}
+  .btn.mini{padding:3px 8px;font-size:11px}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .icon-btn{background:none;border:none;color:var(--t2);cursor:pointer;padding:2px 5px;font-size:13px}
+  .icon-btn:hover{color:var(--t1)}
+
+  .demo-grid{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 0 0 1px rgba(99,102,241,.04),0 8px 30px rgba(0,0,0,.3)}
+  .panel-title{padding:9px 14px;font-size:13px;font-weight:600;color:var(--t2);letter-spacing:.5px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .panel-title .right{margin-left:auto;display:flex;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#6b7280}
+  .dot.on{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  /* 主工作区三 Tab */
+  .workspace{min-height:400px;display:flex;flex-direction:column}
+  .tab-bar{display:flex;gap:4px;padding:8px 12px 0;border-bottom:1px solid var(--line);flex-shrink:0}
+  .tab{padding:8px 15px;font-size:13px;color:var(--t2);cursor:pointer;border-radius:8px 8px 0 0;display:flex;align-items:center;gap:6px;transition:.2s;white-space:nowrap}
+  .tab:hover{color:var(--t1);background:rgba(55,65,81,.5)}
+  .tab.on{color:var(--p3);background:rgba(99,102,241,.1);border-bottom:2px solid var(--p)}
+  .tab .badge{background:var(--p);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;min-width:16px;text-align:center}
+  .tab-body{flex:1;min-height:0;overflow-y:auto}
+  .pane{display:none}
+  .pane.on{display:block}
+
+  /* 语音通道 Tab */
+  .voice-main{height:400px;display:flex;flex-direction:column}
+  .voice-stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;background:radial-gradient(ellipse at center,rgba(99,102,241,.1) 0%,transparent 70%)}
+  .agent-ring{position:relative;width:88px;height:88px;display:flex;align-items:center;justify-content:center}
+  .agent-ring .ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--line)}
+  .agent-ring .ring.active{border-color:var(--p);border-top-color:transparent;animation:spin 4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .agent-ring .core{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--p),var(--p2));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px rgba(99,102,241,.45)}
+  .agent-label{margin-top:8px;text-align:center}
+  .agent-label .name{font-size:15px;font-weight:600}
+  .agent-label .status{font-size:11px;color:var(--t2);margin-top:2px}
+  .waveform{display:flex;align-items:center;justify-content:center;gap:3px;height:24px;margin-top:8px}
+  .waveform i{width:3px;background:var(--p);border-radius:2px;animation:wave 1s ease-in-out infinite}
+  @keyframes wave{0%,100%{height:4px}50%{height:20px}}
+  .transcript{max-height:140px;overflow-y:auto;padding:8px 12px;border-top:1px solid var(--line);background:rgba(0,0,0,.2);flex-shrink:0}
+  .turn{margin-bottom:6px}
+  .turn .role{font-size:11px;color:var(--t2);display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  .turn .tag{padding:1px 6px;border-radius:4px;font-size:10px;background:var(--panel2)}
+  .turn.user .tag{background:var(--blue);color:#fff}
+  .turn.assistant .tag{background:var(--p);color:#fff}
+  .turn .text{font-size:12px;line-height:1.6;padding:5px 9px;background:var(--panel2);border-radius:8px;display:inline-block;max-width:86%}
+  .turn.assistant .text{background:rgba(99,102,241,.15)}
+  .controls{padding:8px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0}
+  .controls .inp{flex:1;min-width:140px;max-width:340px}
+  .caps{margin-left:auto;font-size:11px;color:var(--t3);font-family:monospace}
+
+  /* 管理工具栏 */
+  .mgr-bar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .mgr-bar .hint{font-size:11px;color:var(--t3)}
+  .mgr-bar .spacer{flex:1}
+  .mgr-body{padding:12px;max-height:420px;overflow-y:auto}
+  .section-label{font-size:10px;color:var(--t3);letter-spacing:1px;margin:2px 2px 7px;text-transform:uppercase}
+
+  /* 渠道管理卡片 */
+  .ch-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden;transition:.2s}
+  .ch-card.on{border-color:rgba(16,185,129,.5)}
+  .ch-main{display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer}
+  .ch-main:hover{background:rgba(255,255,255,.02)}
+  .ch-ic{font-size:18px;width:24px;text-align:center}
+  .ch-info{flex:1;min-width:0}
+  .ch-nm{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .ch-desc{font-size:10px;color:var(--t2);margin-top:1px}
+  .st{font-size:9px;padding:1px 6px;border-radius:6px;font-weight:500;white-space:nowrap}
+  .st.ok{background:rgba(16,185,129,.16);color:#6ee7b7}
+  .st.cfg{background:rgba(59,130,246,.16);color:#93c5fd}
+  .st.off{background:rgba(148,163,184,.14);color:#9ca3af}
+  .st.warn{background:rgba(245,158,11,.16);color:#fcd34d}
+  .st.err{background:rgba(239,68,68,.16);color:#fca5a5}
+  .ch-main .sel{width:100px;padding:4px 6px}
+  .switch{width:30px;height:16px;border-radius:10px;background:#374151;position:relative;cursor:pointer;flex-shrink:0;transition:.2s}
+  .switch::after{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:#9ca3af;top:2px;left:2px;transition:.2s}
+  .switch.on{background:var(--green)}
+  .switch.on::after{left:16px;background:#fff}
+  .ch-detail{display:none;border-top:1px solid var(--line);padding:10px 12px;background:rgba(0,0,0,.15)}
+  .ch-card.open .ch-detail{display:block}
+  .stat-row{display:flex;gap:16px;flex-wrap:wrap}
+  .stat{flex:1;min-width:90px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  .stat .k{font-size:10px;color:var(--t3)}
+  .stat .v{font-size:16px;font-weight:600;color:var(--p3);margin-top:2px}
+  .stat .v.ok{color:var(--green)}
+  .detail-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .cap-tip{font-size:10px;color:var(--amber);margin-top:6px}
+
+  /* Agent 编排管理卡片 */
+  .ag-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden;transition:.2s}
+  .ag-card.active{border-color:var(--p);box-shadow:0 0 14px rgba(99,102,241,.18)}
+  .ag-main{display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer}
+  .ag-main:hover{background:rgba(255,255,255,.02)}
+  .ag-ic{font-size:18px;width:24px;text-align:center}
+  .ag-info{flex:1;min-width:0}
+  .ag-nm{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .ag-key{font-size:10px;color:var(--t3);font-family:monospace}
+  .ag-desc{font-size:10px;color:var(--t2);margin-top:1px}
+  .prio{display:flex;align-items:center;gap:3px;font-size:10px;color:var(--t2)}
+  .prio .num{background:var(--p);color:#fff;padding:1px 7px;border-radius:6px}
+  .ag-detail{display:none;border-top:1px solid var(--line);padding:10px 12px;background:rgba(0,0,0,.15)}
+  .ag-card.open .ag-detail{display:block}
+  .field{margin-bottom:9px}
+  .field label{display:block;font-size:10px;color:var(--t2);margin-bottom:3px}
+  .rules{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:5px}
+  .rule{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.35);color:var(--p3);padding:2px 8px;border-radius:6px;font-size:10px;display:inline-flex;align-items:center;gap:5px}
+  .rule .x{cursor:pointer;color:var(--t3)}
+  .rule .x:hover{color:var(--red)}
+  .tools{display:flex;gap:12px;flex-wrap:wrap}
+  .tools label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t1);cursor:pointer}
+  .reason{font-size:10px;margin-top:5px;display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px}
+  .reason.voice{background:rgba(16,185,129,.14);color:#6ee7b7}
+  .reason.text{background:rgba(59,130,246,.14);color:#93c5fd}
+  .reason.default{background:rgba(148,163,184,.14);color:#cbd5e1}
+  .reason.intent{background:rgba(245,158,11,.14);color:#fcd34d}
+  .reason.off{display:none}
+
+  /* 右侧会话列表 */
+  .side{display:flex;flex-direction:column;max-height:640px}
+  .sess-list{padding:10px;overflow-y:auto}
+  .sess{padding:9px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;margin-bottom:7px;cursor:pointer;transition:.2s}
+  .sess:hover{border-color:var(--p);background:rgba(99,102,241,.07)}
+  .sess.on{border-color:var(--p);background:rgba(99,102,241,.1)}
+  .sess .h{display:flex;justify-content:space-between;align-items:center}
+  .sess .t{font-weight:600;font-size:12px}
+  .sess .c{font-size:10px;color:var(--p3);background:rgba(99,102,241,.12);padding:1px 8px;border-radius:8px}
+  .sess .m{display:flex;justify-content:space-between;font-size:10px;color:var(--t2);margin-top:5px}
+
+  /* 底部 IO 流 */
+  .io-panel{grid-column:1/-1;margin-top:14px}
+  .io-head{padding:8px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .io-head .src{font-size:12px;color:var(--t2)}
+  .io-head .src b{color:var(--p3)}
+  .io-head .spacer{flex:1}
+  .io-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  .io-col{padding:11px 14px;min-height:150px;max-height:210px;overflow-y:auto}
+  .io-col+.io-col{border-left:1px solid var(--line)}
+  .io-col h4{font-size:12px;font-weight:600;display:flex;align-items:center;gap:7px;margin-bottom:9px}
+  .io-col.in h4{color:#93c5fd}
+  .io-col.out h4{color:#c4b5fd}
+  .io-col h4 .cnt{margin-left:auto;font-size:10px;color:var(--t3);font-weight:400}
+  .io-item{padding:7px 9px;border-radius:8px;margin-bottom:6px;background:var(--panel2);font-size:12px}
+  .io-col.in .io-item{border-left:2px solid var(--blue)}
+  .io-col.out .io-item{border-left:2px solid var(--p)}
+  .io-item .meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t3);margin-bottom:3px;flex-wrap:wrap}
+  .io-item .tm{font-family:monospace}
+  .io-item .tx{color:var(--t1);word-break:break-word}
+  .vst{font-size:9px;padding:1px 6px;border-radius:6px}
+  .vst.play{background:rgba(16,185,129,.16);color:#6ee7b7}
+  .vst.done{background:rgba(148,163,184,.14);color:#9ca3af}
+  .vst.none{background:rgba(148,163,184,.1);color:#6b7280}
+  .vst.fail{background:rgba(239,68,68,.16);color:#fca5a5}
+  .target{font-size:9px;padding:1px 6px;border-radius:6px;background:rgba(99,102,241,.14);color:var(--p3)}
+
+  /* 事件流 */
+  .event-panel{grid-column:1/-1;margin-top:14px}
+  .event-log{max-height:120px;overflow-y:auto;padding:8px 14px;background:rgba(0,0,0,.3);font-family:monospace;font-size:11px}
+  .event-line{padding:2px 0;display:flex;gap:8px;border-bottom:1px solid rgba(255,255,255,.03)}
+  .event-line .ts{color:var(--t3);flex-shrink:0}
+  .event-line .ev{color:var(--p3);flex-shrink:0;min-width:88px}
+  .event-line .msg{color:var(--t1)}
+
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .note{margin-top:14px;text-align:center;color:var(--t3);font-size:11px}
+</style>
+</head>
+<body>
+<div class="demo-header">
+  <div class="header-left">
+    <h1 class="demo-title">🛒 可插拔全双工语音交互 — 电商跨境贸易</h1>
+    <span class="demo-badge">多 Agent 编排 · 意图+状态双触发 · 热切换</span>
+  </div>
+  <div class="header-right">
+    <select class="sel"><option>通义千问 · DashScope</option></select>
+    <select class="sel"><option>Qwen-Omni-Realtime（默认）</option></select>
+    <button class="btn primary">进入语音通道</button>
+  </div>
+</div>
+
+<div class="demo-grid">
+  <!-- 主工作区：三 Tab -->
+  <section class="panel workspace">
+    <div class="tab-bar">
+      <div class="tab on" data-tab="voice">🎙️ 语音通道</div>
+      <div class="tab" data-tab="channels">📡 输出渠道管理 <span class="badge">6</span></div>
+      <div class="tab" data-tab="agents">🧩 Agent 编排器设计管理 <span class="badge">5</span></div>
+    </div>
+    <div class="tab-body">
+      <!-- 语音通道 -->
+      <div class="pane on" id="pane-voice">
+        <div class="voice-main">
+          <div class="voice-stage">
+            <div class="agent-ring"><div class="ring"></div><div class="ring active"></div><div class="core">🛒</div></div>
+            <div class="agent-label"><div class="name">电商销售顾问</div><div class="status">正在聆听...</div></div>
+            <div class="waveform" id="wave"></div>
+          </div>
+          <div class="transcript">
+            <div class="turn user"><div class="role"><span class="tag">客户</span><span>14:32:05</span></div><div class="text">这款面向欧盟的跨境套装，含 CE 认证吗？</div></div>
+            <div class="turn assistant"><div class="role"><span class="tag">电商销售顾问</span><span>14:32:07</span></div><div class="text">包含的，这款已通过 CE 认证，并配套欧盟海外仓发货，清关资料我们可以一并准备。</div></div>
+            <div class="turn user"><div class="role"><span class="tag">客户</span><span>14:32:12</span></div><div class="text">那关税大概按多少算？</div></div>
+          </div>
+          <div class="controls">
+            <button class="btn danger">⏹ 断开</button>
+            <button class="btn active">🎤 关闭麦克风</button>
+            <button class="btn">⏹ 打断</button>
+            <input class="inp" placeholder="输入文字与助手对话，回车发送" />
+            <button class="btn primary">发送</button>
+            <span class="caps">16000/24000Hz · server_vad</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 输出渠道管理 -->
+      <div class="pane" id="pane-channels">
+        <div class="mgr-bar">
+          <button class="btn primary mini" id="addCh">＋ 新增渠道</button>
+          <span class="hint">点击渠道行展开配置 · 开关控制启用 · 变更实时同步至语音会话</span>
+          <span class="spacer"></span>
+          <span class="hint" id="chSync">同步状态：<b style="color:#6ee7b7">已下发（本地）</b></span>
+        </div>
+        <div class="mgr-body" id="chList">
+          <div class="section-label">即时通信渠道</div>
+          <div class="ch-card on" data-ch="wechat">
+            <div class="ch-main">
+              <div class="ch-ic">💬</div>
+              <div class="ch-info"><div class="ch-nm">微信 <span class="st ok">已启用</span><span class="st warn">模拟分发</span></div><div class="ch-desc">国内主流即时通信 · 已配置客服消息 API 凭据</div></div>
+              <select class="sel"><option>语音</option><option>文字</option><option>文字+语音</option><option>关闭 / 不发送</option></select>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ch-detail">
+              <div class="stat-row">
+                <div class="stat"><div class="k">今日分发</div><div class="v">128</div></div>
+                <div class="stat"><div class="k">成功数</div><div class="v ok">126</div></div>
+                <div class="stat"><div class="k">成功率</div><div class="v ok">98.4%</div></div>
+                <div class="stat"><div class="k">输出模式</div><div class="v" style="font-size:12px">语音</div></div>
+              </div>
+              <div class="cap-tip">⚠ 真实外发待后端启用（当前为模拟分发，不会实际发送消息）</div>
+              <div class="detail-actions"><button class="btn mini testCh">▶ 测试发送</button><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div>
+            </div>
+          </div>
+          <div class="ch-card on" data-ch="whatsapp">
+            <div class="ch-main">
+              <div class="ch-ic">🟢</div>
+              <div class="ch-info"><div class="ch-nm">WhatsApp <span class="st ok">已启用</span><span class="st warn">模拟分发</span></div><div class="ch-desc">全球 180+ 国家 · 已配置 Business API 凭据</div></div>
+              <select class="sel"><option>文字</option><option>语音</option><option>文字+语音</option><option>关闭 / 不发送</option></select>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ch-detail">
+              <div class="stat-row">
+                <div class="stat"><div class="k">今日分发</div><div class="v">64</div></div>
+                <div class="stat"><div class="k">成功数</div><div class="v ok">64</div></div>
+                <div class="stat"><div class="k">成功率</div><div class="v ok">100%</div></div>
+                <div class="stat"><div class="k">输出模式</div><div class="v" style="font-size:12px">文字</div></div>
+              </div>
+              <div class="cap-tip">⚠ 真实外发待后端启用（当前为模拟分发）</div>
+              <div class="detail-actions"><button class="btn mini testCh">▶ 测试发送</button><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div>
+            </div>
+          </div>
+          <div class="section-label" style="margin-top:12px">其他渠道</div>
+          <div class="ch-card" data-ch="telegram">
+            <div class="ch-main">
+              <div class="ch-ic">✈️</div>
+              <div class="ch-info"><div class="ch-nm">Telegram <span class="st off">未启用</span></div><div class="ch-desc">海外加密即时通信 · 尚未配置凭据</div></div>
+              <select class="sel"><option>语音</option><option>文字</option><option>文字+语音</option><option>关闭 / 不发送</option></select>
+              <div class="switch"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ch-detail">
+              <div class="stat-row">
+                <div class="stat"><div class="k">今日分发</div><div class="v">0</div></div>
+                <div class="stat"><div class="k">成功数</div><div class="v">0</div></div>
+                <div class="stat"><div class="k">成功率</div><div class="v">—</div></div>
+                <div class="stat"><div class="k">状态</div><div class="v" style="font-size:12px">未启用</div></div>
+              </div>
+              <div class="cap-tip">⚠ 尚未配置 Bot Token，启用后仍待后端启用真实外发</div>
+              <div class="detail-actions"><button class="btn mini testCh">▶ 测试发送</button><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div>
+            </div>
+          </div>
+          <div class="ch-card" data-ch="messenger"><div class="ch-main"><div class="ch-ic">💙</div><div class="ch-info"><div class="ch-nm">Messenger <span class="st off">未启用</span></div><div class="ch-desc">Meta 旗下即时通信</div></div><select class="sel"><option>文字</option><option>语音</option><option>文字+语音</option><option>关闭 / 不发送</option></select><div class="switch"></div><span class="icon-btn exp">▾</span></div><div class="ch-detail"><div class="detail-actions"><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div></div></div>
+          <div class="ch-card" data-ch="line"><div class="ch-main"><div class="ch-ic">🟢</div><div class="ch-info"><div class="ch-nm">LINE <span class="st off">未启用</span></div><div class="ch-desc">日韩/东南亚主流</div></div><select class="sel"><option>文字</option><option>语音</option><option>文字+语音</option><option>关闭 / 不发送</option></select><div class="switch"></div><span class="icon-btn exp">▾</span></div><div class="ch-detail"><div class="detail-actions"><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div></div></div>
+          <div class="ch-card" data-ch="sms"><div class="ch-main"><div class="ch-ic">📱</div><div class="ch-info"><div class="ch-nm">短信 <span class="st cfg">已配置</span><span class="st err">暂不支持</span></div><div class="ch-desc">全球短信触达 · 后端无短信网关</div></div><select class="sel"><option>文字</option><option>语音</option><option>文字+语音</option><option>关闭 / 不发送</option></select><div class="switch"></div><span class="icon-btn exp">▾</span></div><div class="ch-detail"><div class="cap-tip">✖ 暂不支持真实发送：后端未接入短信网关，启用后仅记录日志</div><div class="detail-actions"><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div></div></div>
+        </div>
+      </div>
+
+      <!-- Agent 编排器设计管理 -->
+      <div class="pane" id="pane-agents">
+        <div class="mgr-bar">
+          <button class="btn primary mini" id="addAg">＋ 新增 Agent</button>
+          <span class="hint">展开卡片编辑触发规则 / Prompt / 工具绑定 · ← 标识当前活跃 · 优先级决定编排顺序</span>
+          <span class="spacer"></span>
+          <span class="hint">5 个插件</span>
+        </div>
+        <div class="mgr-body" id="agList">
+          <div class="ag-card active" data-ag="ecommerce_sales">
+            <div class="ag-main">
+              <div class="ag-ic">🛒</div>
+              <div class="ag-info"><div class="ag-nm">电商销售顾问 <span class="st ok">运行中</span></div><div class="ag-key">ecommerce_sales</div><div class="ag-desc">默认活跃 Agent，推荐商品、促成交易、提升转化率</div><span class="reason voice">● 语音激活 · 当前会话默认 Agent</span></div>
+              <div class="prio">优先级 <span class="num">1</span> <span class="icon-btn up">▲</span><span class="icon-btn down">▼</span></div>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ag-detail">
+              <div class="field"><label>触发规则（意图 / 关键词）</label><div class="rules"><span class="rule">推荐商品 <span class="x">×</span></span><span class="rule">价格咨询 <span class="x">×</span></span><span class="rule">促成交易 <span class="x">×</span></span><button class="btn mini addRule">＋ 规则</button></div></div>
+              <div class="field"><label>System Prompt</label><textarea class="ta">你是跨境电商销售顾问，熟悉欧盟 CE 认证与海外仓流程。用简洁专业的语气推荐商品、促成交易，并主动说明关税与物流方案。</textarea></div>
+              <div class="field"><label>工具绑定</label><div class="tools"><label><input type="checkbox" checked /> 商品检索</label><label><input type="checkbox" checked /> 关税计算</label><label><input type="checkbox" /> 优惠券发放</label><label><input type="checkbox" /> 人工转接</label></div></div>
+              <div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini">设为活跃</button><button class="btn mini danger delAg">删除</button></div>
+            </div>
+          </div>
+          <div class="ag-card" data-ag="product_catalog">
+            <div class="ag-main">
+              <div class="ag-ic">📦</div>
+              <div class="ag-info"><div class="ag-nm">商品知识库助手 <span class="st cfg">待命</span></div><div class="ag-key">product_catalog</div><div class="ag-desc">检索商品详情、规格、价格、库存</div><span class="reason off"></span></div>
+              <div class="prio">优先级 <span class="num">2</span> <span class="icon-btn up">▲</span><span class="icon-btn down">▼</span></div>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ag-detail"><div class="field"><label>触发规则</label><div class="rules"><span class="rule">商品详情 <span class="x">×</span></span><span class="rule">库存查询 <span class="x">×</span></span><button class="btn mini addRule">＋ 规则</button></div></div><div class="field"><label>System Prompt</label><textarea class="ta">你是商品知识库助手，基于知识库准确回答商品的规格、价格、库存问题，不臆造数据。</textarea></div><div class="field"><label>工具绑定</label><div class="tools"><label><input type="checkbox" checked /> 商品检索</label><label><input type="checkbox" /> 库存查询</label></div></div><div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini">设为活跃</button><button class="btn mini danger delAg">删除</button></div></div>
+          </div>
+          <div class="ag-card" data-ag="cross_border">
+            <div class="ag-main">
+              <div class="ag-ic">🌍</div>
+              <div class="ag-info"><div class="ag-nm">跨境贸易助手 <span class="st cfg">待命</span></div><div class="ag-key">cross_border</div><div class="ag-desc">跨境物流、关税计算、清关、海外仓</div><span class="reason off"></span></div>
+              <div class="prio">优先级 <span class="num">3</span> <span class="icon-btn up">▲</span><span class="icon-btn down">▼</span></div>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ag-detail"><div class="field"><label>触发规则</label><div class="rules"><span class="rule">关税 <span class="x">×</span></span><span class="rule">清关 <span class="x">×</span></span><span class="rule">海外仓 <span class="x">×</span></span><button class="btn mini addRule">＋ 规则</button></div></div><div class="field"><label>System Prompt</label><textarea class="ta">你是跨境贸易专家，熟悉欧盟关税、清关与海外仓流程，提供准确的税费估算与物流方案。</textarea></div><div class="field"><label>工具绑定</label><div class="tools"><label><input type="checkbox" checked /> 关税计算</label><label><input type="checkbox" checked /> 物流查询</label></div></div><div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini">设为活跃</button><button class="btn mini danger delAg">删除</button></div></div>
+          </div>
+          <div class="ag-card" data-ag="marketing">
+            <div class="ag-main">
+              <div class="ag-ic">🎯</div>
+              <div class="ag-info"><div class="ag-nm">市场推广助手 <span class="st off">未启用</span></div><div class="ag-key">marketing</div><div class="ag-desc">促销活动、优惠券、会员权益、积分</div><span class="reason off"></span></div>
+              <div class="prio">优先级 <span class="num">4</span> <span class="icon-btn up">▲</span><span class="icon-btn down">▼</span></div>
+              <div class="switch"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ag-detail"><div class="field"><label>触发规则</label><div class="rules"><span class="rule">优惠 <span class="x">×</span></span><span class="rule">会员 <span class="x">×</span></span><button class="btn mini addRule">＋ 规则</button></div></div><div class="field"><label>System Prompt</label><textarea class="ta">你是市场推广助手，负责促销活动、优惠券与会员权益的说明与发放。</textarea></div><div class="field"><label>工具绑定</label><div class="tools"><label><input type="checkbox" checked /> 优惠券发放</label></div></div><div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini">设为活跃</button><button class="btn mini danger delAg">删除</button></div></div>
+          </div>
+          <div class="ag-card" data-ag="dispute_resolution">
+            <div class="ag-main">
+              <div class="ag-ic">⚖️</div>
+              <div class="ag-info"><div class="ag-nm">销售纠纷解决助手 <span class="st cfg">待命</span></div><div class="ag-key">dispute_resolution</div><div class="ag-desc">AI 自动处理投诉：分类、方案、补偿、升级人工</div><span class="reason off"></span></div>
+              <div class="prio">优先级 <span class="num">5</span> <span class="icon-btn up">▲</span><span class="icon-btn down">▼</span></div>
+              <div class="switch on"></div><span class="icon-btn exp">▾</span>
+            </div>
+            <div class="ag-detail"><div class="field"><label>触发规则</label><div class="rules"><span class="rule">投诉 <span class="x">×</span></span><span class="rule">退款 <span class="x">×</span></span><span class="rule">纠纷 <span class="x">×</span></span><button class="btn mini addRule">＋ 规则</button></div></div><div class="field"><label>System Prompt</label><textarea class="ta">你是纠纷解决助手，对投诉进行分类，给出补偿方案，必要时升级人工处理。</textarea></div><div class="field"><label>工具绑定</label><div class="tools"><label><input type="checkbox" checked /> 工单创建</label><label><input type="checkbox" checked /> 人工转接</label></div></div><div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini">设为活跃</button><button class="btn mini danger delAg">删除</button></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右侧会话列表 -->
+  <section class="panel side">
+    <div class="panel-title">📋 会话列表 <span class="right"><span class="st cfg">voice 类型</span></span></div>
+    <div class="sess-list" id="sessList">
+      <div class="sess on" data-sid="1081"><div class="h"><span class="t">跨境订单关税咨询</span><span class="c">12 条</span></div><div class="m"><span>ID: 1081</span><span>11-16 14:30</span></div></div>
+      <div class="sess" data-sid="1079"><div class="h"><span class="t">欧盟 CE 认证商品查询</span><span class="c">8 条</span></div><div class="m"><span>ID: 1079</span><span>11-15 09:12</span></div></div>
+      <div class="sess" data-sid="1076"><div class="h"><span class="t">双十一促销权益说明</span><span class="c">6 条</span></div><div class="m"><span>ID: 1076</span><span>11-14 16:48</span></div></div>
+      <div class="sess" data-sid="1072"><div class="h"><span class="t">海外仓物流时效咨询</span><span class="c">15 条</span></div><div class="m"><span>ID: 1072</span><span>11-13 11:20</span></div></div>
+    </div>
+  </section>
+
+  <!-- 底部输入/输出流 -->
+  <section class="panel io-panel">
+    <div class="io-head">
+      <span class="src">数据源：<b id="ioSource">当前语音会话 · 实时</b></span>
+      <span class="spacer"></span>
+      <button class="btn" id="backLive" style="display:none">↩ 返回当前语音会话</button>
+    </div>
+    <div class="io-grid">
+      <div class="io-col in">
+        <h4>🎤 麦克风 STT / 客户输入 <span class="cnt" id="inCnt">3 条</span></h4>
+        <div id="ioIn">
+          <div class="io-item"><div class="meta"><span class="tm">14:32:05</span><span class="st cfg">STT 已定稿</span></div><div class="tx">这款面向欧盟的跨境套装，含 CE 认证吗？</div></div>
+          <div class="io-item"><div class="meta"><span class="tm">14:32:12</span><span class="st cfg">STT 已定稿</span></div><div class="tx">那关税大概按多少算？</div></div>
+          <div class="io-item"><div class="meta"><span class="tm">14:32:20</span><span class="st warn">识别中…</span></div><div class="tx">如果我在德国仓发货呢</div></div>
+        </div>
+      </div>
+      <div class="io-col out">
+        <h4>🔊 TTS / 助手输出 <span class="cnt" id="outCnt">1 条</span></h4>
+        <div id="ioOut">
+          <div class="io-item"><div class="meta"><span class="tm">14:32:07</span><span class="vst play">● 播放中</span><span class="target">→ 微信(语音) · WhatsApp(文字)</span></div><div class="tx">包含的，这款已通过 CE 认证，并配套欧盟海外仓发货，清关资料我们可以一并准备。</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 事件流 -->
+  <section class="panel event-panel">
+    <div class="panel-title">📜 运行时事件流</div>
+    <div class="event-log">
+      <div class="event-line"><span class="ts">[00:00]</span><span class="ev">init</span><span class="msg">页面就绪，等待进入语音通道</span></div>
+      <div class="event-line"><span class="ts">[00:02]</span><span class="ev">session_created</span><span class="msg">后端生成会话编号 #1084</span></div>
+      <div class="event-line"><span class="ts">[00:04]</span><span class="ev">connected</span><span class="msg">语音通道已连接，活跃 Agent=ecommerce_sales (default)</span></div>
+      <div class="event-line"><span class="ts">[00:09]</span><span class="ev">speech_stopped</span><span class="msg">这款面向欧盟的跨境套装，含 CE 认证吗？</span></div>
+      <div class="event-line"><span class="ts">[00:11]</span><span class="ev">output_dispatched</span><span class="msg">agent=ecommerce_sales channels=[wechat:voice,whatsapp:text] status=simulated</span></div>
+      <div class="event-line"><span class="ts">[00:16]</span><span class="ev">channel_config_ack</span><span class="msg">渠道配置已同步：active=2 modes={wechat:voice,whatsapp:text}</span></div>
+    </div>
+  </section>
+</div>
+
+<div class="note">静态视觉预览 v2 · 主工作区三 Tab（语音通道 / 输出渠道管理 / Agent 编排器设计管理）· 右侧会话列表 · 底部 IO 流 · 数据为演示用模拟内容</div>
+
+<script>
+  function tabInit(){
+    document.querySelectorAll('.tab-bar .tab').forEach(function(t){
+      t.addEventListener('click',function(){
+        var bar=t.closest('.tab-bar');
+        bar.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on')});
+        var body=bar.parentElement.querySelector('.tab-body');
+        body.querySelectorAll('.pane').forEach(function(x){x.classList.remove('on')});
+        t.classList.add('on');
+        document.getElementById('pane-'+t.dataset.tab).classList.add('on');
+      });
+    });
+  }
+  tabInit();
+
+  document.querySelectorAll('.ch-card').forEach(function(c){
+    var main=c.querySelector('.ch-main');
+    main.querySelector('.exp').addEventListener('click',function(e){e.stopPropagation();c.classList.toggle('open');this.textContent=c.classList.contains('open')?'▴':'▾'});
+    main.querySelector('.switch').addEventListener('click',function(e){
+      e.stopPropagation();
+      this.classList.toggle('on');
+      var on=this.classList.contains('on');
+      var badge=c.querySelector('.ch-nm .st');
+      if(on){badge.className='st ok';badge.textContent='已启用';c.classList.add('on')}
+      else{badge.className='st off';badge.textContent='未启用';c.classList.remove('on')}
+      document.getElementById('chSync').innerHTML='同步状态：<b style="color:#fcd34d">已下发（本地）· 等待 ACK</b>';
+      setTimeout(function(){document.getElementById('chSync').innerHTML='同步状态：<b style="color:#6ee7b7">已下发（本地）</b>'},800);
+    });
+    main.querySelector('.sel').addEventListener('click',function(e){e.stopPropagation()});
+    main.querySelector('.sel').addEventListener('change',function(e){e.stopPropagation()});
+    var test=c.querySelector('.testCh');
+    if(test) test.addEventListener('click',function(e){e.stopPropagation();this.textContent='✓ 已模拟发送';var b=this;setTimeout(function(){b.textContent='▶ 测试发送'},1200)});
+    var del=c.querySelector('.delCh');
+    if(del) del.addEventListener('click',function(e){e.stopPropagation();if(confirm('确认删除该渠道？'))c.remove()});
+  });
+  document.getElementById('addCh').addEventListener('click',function(){
+    var list=document.getElementById('chList');
+    var d=document.createElement('div');d.className='ch-card';
+    d.innerHTML='<div class="ch-main"><div class="ch-ic">🔗</div><div class="ch-info"><div class="ch-nm">新渠道 <span class="st off">未启用</span></div><div class="ch-desc">自定义输出渠道（演示新增）</div></div><select class="sel"><option>文字</option><option>语音</option><option>文字+语音</option><option>关闭 / 不发送</option></select><div class="switch"></div><span class="icon-btn exp">▾</span></div><div class="ch-detail"><div class="detail-actions"><button class="btn mini editCh">编辑配置</button><button class="btn mini danger delCh">删除</button></div></div>';
+    list.appendChild(d);
+  });
+
+  var reasons=['● 语音激活 · 语音识别中切换','● 文字激活 · 文本回复触发','● 正在处理…','● 意图命中 · intent 切换'];
+  document.querySelectorAll('.ag-card').forEach(function(c){
+    var main=c.querySelector('.ag-main');
+    main.querySelector('.exp').addEventListener('click',function(e){e.stopPropagation();c.classList.toggle('open');this.textContent=c.classList.contains('open')?'▴':'▾'});
+    main.querySelector('.switch').addEventListener('click',function(e){
+      e.stopPropagation();this.classList.toggle('on');
+      var on=this.classList.contains('on');var b=c.querySelector('.ag-nm .st');
+      b.className=on?'st cfg':'st off';b.textContent=on?'待命':'未启用';
+    });
+    main.querySelectorAll('.setActive').forEach(function(b){});
+    var up=main.querySelector('.up'),down=main.querySelector('.down');
+    if(up) up.addEventListener('click',function(e){e.stopPropagation();var n=c.querySelector('.prio .num');if(+n.value>1)n.textContent=+n.textContent-1});
+    if(down) down.addEventListener('click',function(e){e.stopPropagation();var n=c.querySelector('.prio .num');n.textContent=+n.textContent+1});
+    var addRule=c.querySelector('.addRule');
+    if(addRule) addRule.addEventListener('click',function(e){
+      e.stopPropagation();var r=document.createElement('span');r.className='rule';r.innerHTML='新规则 <span class="x">×</span>';
+      addRule.parentElement.insertBefore(r,addRule);bindRuleX(r);
+    });
+    c.querySelectorAll('.rule .x').forEach(bindRuleX);
+    function bindRuleX(x){x.addEventListener('click',function(e){e.stopPropagation();x.parentElement.remove()})}
+    var save=c.querySelector('.saveAg');
+    if(save) save.addEventListener('click',function(e){e.stopPropagation();this.textContent='✓ 已保存';var b=this;setTimeout(function(){b.textContent='保存设计'},1000)});
+    var del=c.querySelector('.delAg');
+    if(del) del.addEventListener('click',function(e){e.stopPropagation();if(confirm('确认删除该 Agent？'))c.remove()});
+    main.addEventListener('click',function(e){
+      if(e.target.closest('.switch')||e.target.closest('.exp')||e.target.closest('.prio')||e.target.closest('.up')||e.target.closest('.down'))return;
+      document.querySelectorAll('.ag-card').forEach(function(x){x.classList.remove('active');var r=x.querySelector('.reason');if(r){r.className='reason off';r.textContent=''}});
+      c.classList.add('active');
+      var r=c.querySelector('.reason');r.className='reason '+['voice','text','intent'][Math.floor(Math.random()*3)];r.textContent=reasons[Math.floor(Math.random()*reasons.length)];
+    });
+  });
+  document.getElementById('addAg').addEventListener('click',function(){
+    var list=document.getElementById('agList');var d=document.createElement('div');d.className='ag-card';
+    d.innerHTML='<div class="ag-main"><div class="ag-ic">🤖</div><div class="ag-info"><div class="ag-nm">新 Agent <span class="st off">未启用</span></div><div class="ag-key">custom_agent</div><div class="ag-desc">自定义 Agent（演示新增）</div><span class="reason off"></span></div><div class="prio">优先级 <span class="num">6</span></div><div class="switch"></div><span class="icon-btn exp">▾</span></div><div class="ag-detail"><div class="detail-actions"><button class="btn mini saveAg">保存设计</button><button class="btn mini danger delAg">删除</button></div></div>';
+    list.appendChild(d);
+  });
+
+  var liveIn=document.getElementById('ioIn').innerHTML;
+  var liveOut=document.getElementById('ioOut').innerHTML;
+  var liveInCnt=document.getElementById('inCnt').textContent;
+  var liveOutCnt=document.getElementById('outCnt').textContent;
+  var history={
+    1081:{in:['订单 EP-20481 的关税是按 CIF 还是 FOB 计算？','德国仓和荷兰仓哪个清关更快？','能帮我预估一下这批货的综合税费吗？'],out:['您好，欧盟关税一般按 CIF 计算，可提供正式 CIF 商业发票。','德国仓清关通常 1-2 个工作日，建议优先走德国仓。']},
+    1079:{in:['这款产品有 CE 证书编号吗？','可以提供检测报告吗？'],out:['有的，CE 证书编号 EU-2026-CE-04812，可随货提供。','检测报告已上传至商品详情页 attachment。']},
+    1076:{in:['双十一满减和会员折扣能叠加吗？','优惠券什么时候生效？'],out:['可以叠加，先计算满减再叠加会员 95 折。','优惠券活动期间 00:00 起自动生效。']},
+    1072:{in:['发往法国的海外仓一般几天到？','支持海外仓退换货吗？'],out:['法国海外仓通常 3-5 个工作日送达。','支持当地仓直接退换，无需退回国内。']}
+  };
+  document.querySelectorAll('.sess').forEach(function(s){
+    s.addEventListener('click',function(){
+      document.querySelectorAll('.sess').forEach(function(x){x.classList.remove('on')});s.classList.add('on');
+      var d=history[s.dataset.sid];
+      document.getElementById('ioSource').textContent='历史会话 #'+s.dataset.sid+' · '+s.querySelector('.t').textContent;
+      document.getElementById('backLive').style.display='';
+      document.getElementById('ioIn').innerHTML=d.in.map(function(t,i){return '<div class="io-item"><div class="meta"><span class="tm">历史 '+(i+1)+'</span><span class="st cfg">用户输入</span></div><div class="tx">'+t+'</div></div>'}).join('');
+      document.getElementById('ioOut').innerHTML=d.out.map(function(t,i){return '<div class="io-item"><div class="meta"><span class="tm">历史 '+(i+1)+'</span><span class="vst done">助手输出</span></div><div class="tx">'+t+'</div></div>'}).join('');
+      document.getElementById('inCnt').textContent=d.in.length+' 条';document.getElementById('outCnt').textContent=d.out.length+' 条';
+    });
+  });
+  document.getElementById('backLive').addEventListener('click',function(){
+    document.querySelectorAll('.sess').forEach(function(x){x.classList.remove('on')});
+    document.getElementById('ioSource').textContent='当前语音会话 · 实时';this.style.display='none';
+    document.getElementById('ioIn').innerHTML=liveIn;document.getElementById('ioOut').innerHTML=liveOut;
+    document.getElementById('inCnt').textContent=liveInCnt;document.getElementById('outCnt').textContent=liveOutCnt;
+  });
+
+  var wave=document.getElementById('wave');
+  for(var i=0;i<24;i++){var b=document.createElement('i');b.style.animationDelay=(i*0.05)+'s';b.style.animationDuration=(0.7+Math.random()*0.6)+'s';wave.appendChild(b)}
+</script>
+</body>
+</html>

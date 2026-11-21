@@ -106,11 +106,18 @@ def _buffer_outbound(session_id: str, frame: Dict[str, Any]) -> None:
     buf.push(frame)
 
 
-def _save_chat_message(chat_session_id: int, role: str, content: str) -> None:
+def _save_chat_message(
+    chat_session_id: int,
+    role: str,
+    content: str,
+    message_type: str = "text",
+    extra_data: Optional[Dict[str, Any]] = None,
+) -> None:
     """将语音对话消息持久化到 AiChatMessage 表（复用现有会话存储）。
 
     chat_session_id 为 AiChatSession.session_id（由前端 createSession 生成）。
-    失败仅记日志，不影响语音主链路。
+    message_type / extra_data 用于承载输出目标、Agent key、播放状态等结构化信息，
+    供前端 IoStreamPanel 与会话历史回显。失败仅记日志，不影响语音主链路。
     """
     if not chat_session_id or not content or not content.strip():
         return
@@ -121,7 +128,8 @@ def _save_chat_message(chat_session_id: int, role: str, content: str) -> None:
                 session_id=chat_session_id,
                 role=role,
                 content=content.strip(),
-                message_type="text",
+                message_type=message_type,
+                extra_data=extra_data,
             )
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[Gateway] 持久化 {role} 消息失败: {e}")
@@ -215,6 +223,16 @@ async def _handle_control_frame(
             logger.info(
                 f"[Gateway] 渠道配置已更新: active={channel_registry.active_count()}"
             )
+            # 回执：让前端同步状态可信（不再只显示「已下发（本地）」）
+            if websocket is not None:
+                await websocket.send_text(json.dumps({
+                    "type": EventType.CHANNEL_CONFIG_ACK.value,
+                    "data": {
+                        "applied": True,
+                        "active_count": channel_registry.active_count(),
+                        "channels": channel_registry.snapshot(),
+                    },
+                }, ensure_ascii=False))
     elif ftype == "ping":
         # 修复：pong 回客户端，而非发给上游 Provider
         if websocket is not None:
@@ -335,21 +353,33 @@ async def voice_websocket(
             "mcp_tools": mcp_tool_schemas,
         })
 
-        # 创建编排器并注册所有内置 Agent 插件
+        # 创建编排器并按 REST 配置注册启用的 Agent 插件（默认与内置一致）
+        from app.duplex.voice import orchestration_store as orch_store
+
         registry = PluginRegistry()
+        enabled_agent_cfg = {a["key"]: a for a in orch_store.enabled_agents()}
+        default_key = "ecommerce_sales"
         for plugin_cls in BUILTIN_PLUGINS:
-            await registry.register(plugin_cls())
+            plugin = plugin_cls()
+            cfg = enabled_agent_cfg.get(plugin.key)
+            if cfg is None:
+                # 被 REST 停用：不注册，编排器无法切换到该 Agent
+                continue
+            await registry.register(plugin)
         orchestrator = VoiceAgentOrchestrator(registry, realtime_provider)
+        # 按优先级选择默认 Agent（若默认被停用则取第一个启用的）
+        if default_key not in enabled_agent_cfg and enabled_agent_cfg:
+            default_key = min(enabled_agent_cfg.values(), key=lambda a: a.get("priority", 99))["key"]
         # 注入会话元数据（case_number 作为订单/会话标识）
         orchestrator.context.session_metadata = {
             "case_number": case_number,
             "participant_id": participant_id,
         }
-        # 多渠道输出：创建注册表 + 分发器并注入编排器
-        channel_registry = ChannelRegistry()
+        # 多渠道输出：按 REST 配置创建注册表 + 分发器并注入编排器
+        channel_registry = orch_store.build_channel_registry()
         channel_dispatcher = ChannelOutputDispatcher(channel_registry)
         orchestrator.set_channel_dispatcher(channel_dispatcher)
-        await orchestrator.start(default_key="ecommerce_sales")
+        await orchestrator.start(default_key=default_key)
     except Exception as e:
         logger.error(f"Provider 连接失败: {e}")
         voice_provider_errors.labels(provider=provider).inc()
@@ -421,22 +451,48 @@ async def voice_websocket(
             elif event.type == "tts_transcript":
                 assistant_transcript_buf += event.data.get("text", "")
             elif event.type == "playback.ended":
+                ended_agent_key = orchestrator.active_key
                 await orchestrator.on_assistant_response_end(assistant_transcript_buf)
-                # 持久化助手回复到 AiChatMessage
+                dispatch_result = orchestrator.last_dispatch
+                # 持久化助手回复：message_type=voice + 结构化输出目标落 extra_data
                 if assistant_transcript_buf.strip():
-                    _save_chat_message(chat_session_id, "assistant", assistant_transcript_buf)
+                    extra = {
+                        "playback_status": "ended",
+                        "agent_key": ended_agent_key,
+                        "channels": [
+                            {"key": c.key, "output": c.output}
+                            for c in channel_registry.list_active()
+                        ] if channel_registry else [],
+                        "dispatch": dispatch_result,
+                    }
+                    _save_chat_message(
+                        chat_session_id, "assistant", assistant_transcript_buf,
+                        message_type="voice", extra_data=extra,
+                    )
+                # 下发结构化输出事件，供前端 IO 流展示目标渠道与播放完成状态
+                output_frame = {
+                    "type": EventType.OUTPUT_DISPATCHED.value,
+                    "data": {
+                        "agent_key": ended_agent_key,
+                        "playback_status": "ended",
+                        "channels": channel_registry.snapshot() if channel_registry else [],
+                        "dispatch": dispatch_result,
+                    },
+                }
+                await websocket.send_text(json.dumps(output_frame, ensure_ascii=False))
                 assistant_transcript_buf = ""
 
-            # Agent 切换检测：下发 agent_switched 帧到前端
+            # Agent 切换检测：下发 agent_switched 帧到前端（携带 reason）
             current_agent = orchestrator.active_key
             if current_agent != last_active_agent:
                 active_plugin = orchestrator.active_agent
                 switch_frame = {
-                    "type": "agent_switched",
+                    "type": EventType.AGENT_SWITCHED.value,
                     "data": {
                         "agent_key": current_agent,
                         "agent_name": active_plugin.display_name if active_plugin else current_agent,
                         "previous_agent": last_active_agent,
+                        "reason": orchestrator.last_switch_reason,
                     },
                 }
                 _buffer_outbound(session_id, switch_frame)

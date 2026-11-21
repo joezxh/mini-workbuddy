@@ -2,7 +2,7 @@
 """多平台运营协同（对等网状）：广播全员可见 + 发言预算/轮次上限 + 无中心汇总者。"""
 import asyncio
 
-from app.ai.team.org_patterns import multiplatform_ops
+from app.ai.team.trade import multiplatform_ops
 
 PLATFORMS = {"xborder-amazon-ops", "xborder-shopee-ops", "xborder-tiktok-ops", "xborder-indie-ops"}
 

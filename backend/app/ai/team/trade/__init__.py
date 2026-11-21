@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""跨境电商 AgentTeam 组织模式实现（正式收编自 examples/org_patterns）。
+"""跨境电商 AgentTeam 组织模式实现（正式收编自 examples/trade）。
 
 8 个模式与系统 AgentTeam（xborder-* 团队）一一对应，每个模式模块暴露统一入口：
 
@@ -19,7 +19,7 @@ CLI：python scripts/run_org_pattern.py <pattern_key> --mock
 """
 from __future__ import annotations
 
-from app.ai.team.org_patterns import (
+from app.ai.team.trade import (
     ad_review_debate,
     budget_parallel,
     inquiry_pipeline,
@@ -29,7 +29,7 @@ from app.ai.team.org_patterns import (
     supply_chain_federation,
     support_handoff,
 )
-from app.ai.team.org_patterns.scaffolding import Trace
+from app.ai.team.trade.scaffolding import Trace
 
 # 模式 → 实现注册表：key 为业务模块名，value 为各模块 PATTERN 元数据
 # （team_code / name / mode / sample_input / run），team_code 与 seed_data.TEAMS 对齐。

@@ -1,11 +1,14 @@
 <!-- Ticket 详情 + 时间线（Task 4.3）—— 左：基本信息 + Mandate；右：执行时间线 -->
 <template>
   <div class="sa-detail">
-    <a-page-header
-      :title="ticket?.title || 'Ticket 详情'"
-      :sub-title="ticket?.id"
-      @back="router.push('/super-agent')"
-    />
+    <!-- 页头对齐原型 page-head；返回工作台看板 -->
+    <div class="sa-page-head detail-head">
+      <h1>📋 执行详情 <span v-if="ticket?.id" class="detail-sub">· {{ ticket.id }}</span></h1>
+      <p>Ticket 生命周期 · Mandate 授权 · Assignment 执行 · SSE 实时事件时间线</p>
+      <button class="sa-btn" @click="router.push('/super-agent/workbench')">← 返回看板</button>
+    </div>
+
+    <a-empty v-if="!props.id" description="请从看板选择一个 Ticket 查看执行详情" style="margin-top: 60px" />
 
     <a-spin :spinning="loading">
       <div class="sa-detail__grid">
@@ -88,7 +91,7 @@ import { message } from 'ant-design-vue'
 import { type TicketDetail, getTicket } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id?: string }>()
 const router = useRouter()
 const store = useSuperAgentStore()
 
@@ -133,6 +136,7 @@ function statusColor(s: string): string {
 }
 
 onMounted(async () => {
+  if (!props.id) return
   loading.value = true
   try {
     ticket.value = await getTicket(props.id) as any
@@ -146,6 +150,12 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="less">
+.detail-head {
+  position: relative;
+  .sa-btn { position: absolute; right: 0; top: 2px; }
+  .detail-sub { font-size: 13px; color: var(--sa-text-3); font-weight: 400; }
+}
+
 .sa-detail {
   padding: 0 4px;
 

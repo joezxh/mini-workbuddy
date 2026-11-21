@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""org_patterns 脚手架离线单测（不依赖网络/DB/真实模型）。"""
+"""trade 脚手架离线单测（不依赖网络/DB/真实模型）。"""
 import asyncio
 
 import pytest
@@ -7,7 +7,7 @@ import pytest
 from agentscope.message import Msg, TextBlock
 from agentscope.model import DashScopeChatModel, OpenAIChatModel
 
-from app.ai.team.org_patterns.scaffolding import (
+from app.ai.team.trade.scaffolding import (
     FakeChatModel,
     Trace,
     erp_gateway,

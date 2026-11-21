@@ -21,7 +21,7 @@ from agentscope.message import Msg, UserMsg
 from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.tool import ToolBase
 
-from app.ai.team.org_patterns.scaffolding import Trace, make_agent, make_model
+from app.ai.team.trade.scaffolding import Trace, make_agent, make_model
 
 MAX_HOPS = 3
 

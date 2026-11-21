@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from agentscope.message import UserMsg
 
-from app.ai.team.org_patterns.scaffolding import Trace, make_agent, make_model
+from app.ai.team.trade.scaffolding import Trace, make_agent, make_model
 
 MAX_ROUNDS = 3
 TOPIC = "黑五网一：$5000 预算押注 TikTok 激进投放 vs Google 稳健投放"

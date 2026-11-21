@@ -18,7 +18,7 @@ from typing import Optional
 from agentscope.message import UserMsg
 from agentscope.tool import FunctionTool
 
-from app.ai.team.org_patterns.scaffolding import Trace, make_agent, make_model, mock_channel_roi
+from app.ai.team.trade.scaffolding import Trace, make_agent, make_model, mock_channel_roi
 
 CHANNELS = ["xborder-roi-google", "xborder-roi-meta", "xborder-roi-tiktok"]
 TOTAL_BUDGET = 10000.0

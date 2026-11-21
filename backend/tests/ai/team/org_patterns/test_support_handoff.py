@@ -2,7 +2,7 @@
 """跨语种客服交接（交接式）：只传摘要不传全量对话 + 交接跳数上限。"""
 import asyncio
 
-from app.ai.team.org_patterns import support_handoff
+from app.ai.team.trade import support_handoff
 
 
 def test_handoff_summary_only_and_hops():

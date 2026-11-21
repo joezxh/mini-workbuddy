@@ -2,7 +2,7 @@
 """跨境新品上架统筹（Supervisor-Worker）：4 成员均被派活、最终含 GO/NO-GO。"""
 import asyncio
 
-from app.ai.team.org_patterns import listing_launch
+from app.ai.team.trade import listing_launch
 
 WORKERS = {"xborder-product-picker", "xborder-listing-writer",
            "xborder-compliance-checker", "xborder-pricing-analyst"}

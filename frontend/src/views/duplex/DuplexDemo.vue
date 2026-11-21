@@ -57,242 +57,93 @@
     />
 
     <div v-if="showChannel" class="demo-grid">
-      <!-- 左：语音通道 -->
-      <div class="panel voice-main">
-        <div class="panel-title">
-          <span class="dot" :class="{ active: status === 'open' }"></span>
-          语音通道 (VoiceChannel)
-        </div>
-
-        <div class="voice-stage" :class="stageState">
-          <div class="agent-ring">
-            <div class="ring"></div>
-            <div class="ring" :class="{ active: status === 'open' }"></div>
-            <div class="core">{{ currentAgent.icon }}</div>
-          </div>
-          <div class="agent-label">
-            <div class="name">{{ activeAgent.name }}</div>
-            <div class="status-text">{{ statusText }}</div>
-          </div>
-          <div class="waveform">
-            <div
-              v-for="i in 24"
-              :key="i"
-              class="bar"
-              :style="{ height: barHeight(i) + 'px' }"
-            ></div>
-          </div>
-        </div>
-
-        <div class="transcript-area">
-          <div
-            v-for="t in transcripts"
-            :key="t.id"
-            class="turn"
-            :class="t.role"
-          >
-            <div class="role">
-              <span class="tag">{{ t.role === 'user' ? '客户' : activeAgent.name }}</span>
-              <span class="time">{{ formatTime(t.started_at) }}</span>
-            </div>
-            <div class="text">{{ t.text }}</div>
-          </div>
-          <div v-if="!transcripts.length" class="empty-hint">
-            点击「开启麦克风」开始对话，或在下方输入文字
-          </div>
-        </div>
-
-        <div class="controls">
-          <a-button
-            v-if="status !== 'open'"
-            type="primary"
-            @click="connect"
-          >
-            🔌 连接
-          </a-button>
-          <a-button v-else danger @click="disconnect">⏹ 断开</a-button>
-
-          <a-button
-            :type="micOn ? 'default' : 'primary'"
-            :disabled="status !== 'open'"
-            @click="onToggleMic"
-          >
-            {{ micOn ? '🎤 关闭麦克风' : '🎤 开启麦克风' }}
-          </a-button>
-
-          <a-button
-            :disabled="status !== 'open'"
-            @click="sendInterrupt"
-          >
-            ⏹ 打断
-          </a-button>
-
-          <a-input
-            v-model:value="textInput"
-            placeholder="输入文字与助手对话，回车发送"
-            style="flex: 1; max-width: 360px"
-            :disabled="status !== 'open'"
-            @pressEnter="onSendText"
-          />
-          <a-button
-            type="primary"
-            :disabled="status !== 'open' || !textInput.trim()"
-            @click="onSendText"
-          >
-            发送
-          </a-button>
-
-          <span v-if="ready" class="caps">
-            {{ ready.input_sample_rate }}/{{ ready.output_sample_rate }}Hz · {{ ready.vad_mode }}
-          </span>
-        </div>
-
-        <a-alert v-if="errorMsg" type="error" :message="errorMsg" show-icon class="error-alert" />
-      </div>
-
-      <!-- 右：Agent 编排器 + 输出渠道 + 会话列表（Tab 切换） -->
-      <div class="panel agent-panel">
+      <!-- 主工作区：三 Tab -->
+      <section class="panel workspace">
         <div class="tab-bar">
-          <div
-            class="tab"
-            :class="{ active: activeTab === 'agents' }"
-            @click="activeTab = 'agents'"
-          >
-            🧩 Agent 编排器
+          <div class="tab" :class="{ active: activeTab === 'voice' }" @click="activeTab = 'voice'">
+            🎙️ 语音通道
           </div>
-          <div
-            class="tab"
-            :class="{ active: activeTab === 'channels' }"
-            @click="activeTab = 'channels'"
-          >
-            📡 输出渠道
-            <span class="tab-badge">{{ activeChannelCount }}</span>
+          <div class="tab" :class="{ active: activeTab === 'channels' }" @click="activeTab = 'channels'">
+            📡 输出渠道管理 <span class="tab-badge">{{ channels.length }}</span>
           </div>
-          <div
-            class="tab"
-            :class="{ active: activeTab === 'sessions' }"
-            @click="activeTab = 'sessions'; loadSessions()"
-          >
-            📋 会话列表
+          <div class="tab" :class="{ active: activeTab === 'agents' }" @click="activeTab = 'agents'">
+            🧩 Agent 编排器设计管理 <span class="tab-badge">{{ agents.length }}</span>
           </div>
         </div>
+        <div class="tab-body">
+          <div v-show="activeTab === 'voice'" class="tab-pane">
+            <VoiceChannelPanel
+              :status="status"
+              :ready="ready"
+              :error-msg="errorMsg"
+              :transcripts="transcripts"
+              :audio-level="audioLevel"
+              :mic-on="micOn"
+              :active-agent-name="activeAgent.name"
+              :agent-icon="currentAgent.icon"
+              v-model:text-input="textInput"
+              @connect="connect"
+              @disconnect="disconnect"
+              @toggle-mic="onToggleMic"
+              @interrupt="sendInterrupt"
+              @send-text="onSendText"
+            />
+          </div>
+          <div v-show="activeTab === 'channels'" class="tab-pane">
+            <ChannelManagerPanel
+              :channels="channels"
+              :sync-state="channelSyncState"
+              @toggle="toggleChannel"
+              @change-output="onChannelOutputChange"
+              @add="addChannel"
+              @remove="removeChannel"
+              @update="updateChannel"
+              @test="testChannel"
+            />
+          </div>
+          <div v-show="activeTab === 'agents'" class="tab-pane">
+            <AgentOrchestratorManagerPanel
+              :agents="agents"
+              :active-key="activeAgent.key"
+              @activate="activateAgent"
+              @toggle="toggleAgent"
+              @add="addAgent"
+              @remove="removeAgent"
+              @update="updateAgent"
+              @save="saveAgent"
+              @reorder="reorderAgent"
+            />
+          </div>
+        </div>
+      </section>
 
-        <!-- Agent 编排 Tab -->
-        <div v-show="activeTab === 'agents'" class="tab-pane">
-          <div class="agent-list">
-            <div
-              v-for="a in agents"
-              :key="a.key"
-              class="agent-card"
-              :class="{ active: activeAgent.key === a.key }"
-            >
-              <div class="head">
-                <span class="icon">{{ a.icon }}</span>
-                <span class="name">{{ a.name }}</span>
-              </div>
-              <div class="desc">{{ a.desc }}</div>
-              <div class="switch-hint">
-                {{ activeAgent.key === a.key ? '← 活跃中' : '' }}
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- 右侧：会话列表 -->
+      <SessionListPanel
+        :sessions="sessionList"
+        :loading="sessionLoading"
+        :error="sessionError"
+        :selected-id="selectedSessionId"
+        @select="openSessionDetail"
+      />
 
-        <!-- 输出渠道 Tab -->
-        <div v-show="activeTab === 'channels'" class="tab-pane">
-          <div class="channel-list">
-            <div
-              v-for="ch in channels"
-              :key="ch.key"
-              class="channel-card"
-              :class="{ active: ch.active }"
-              @click="toggleChannel(ch)"
-            >
-              <div class="ch-icon">{{ ch.icon }}</div>
-              <div class="ch-info">
-                <div class="ch-name">{{ ch.name }}</div>
-                <div class="ch-desc">{{ ch.desc }}</div>
-              </div>
-              <a-select
-                :value="ch.output"
-                size="small"
-                class="ch-output"
-                :options="outputModeOptions"
-                @click.stop
-                @change="onChannelOutputChange(ch)"
-              />
-              <div class="ch-toggle" :class="{ on: ch.active }"></div>
-            </div>
-          </div>
-          <div class="channel-summary">
-            <span>已选中 <span class="active-count">{{ activeChannelCount }}</span> 个输出渠道</span>
-            <span class="summary-text">{{ channelSummaryText }}</span>
-          </div>
-        </div>
+      <!-- 底部：输入 / 输出流 -->
+      <IoStreamPanel
+        :source-label="ioSourceLabel"
+        :is-history="ioSource !== 'live'"
+        :loading="historyLoading"
+        :error="historyError"
+        :input-messages="inputMessages"
+        :output-messages="outputMessages"
+        @back-to-live="backToLive"
+      />
 
-        <!-- 会话列表 Tab -->
-        <div v-show="activeTab === 'sessions'" class="tab-pane">
-          <div class="session-list">
-            <div v-if="sessionLoading" class="session-loading">加载中...</div>
-            <a-empty v-else-if="sessionList.length === 0" description="暂无会话" />
-            <div
-              v-for="s in sessionList"
-              :key="s.session_id"
-              class="session-item"
-              @click="openSessionDetail(s)"
-            >
-              <div class="session-item-head">
-                <span class="session-title">{{ s.session_title || '未命名会话' }}</span>
-                <span class="session-count">{{ s.message_count }} 条</span>
-              </div>
-              <div class="session-item-meta">
-                <span>ID: {{ s.session_id }}</span>
-                <span>{{ formatDate(s.updated_at) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 下：架构分层 -->
-      <div class="panel arch-panel">
-        <div class="panel-title">🏗️ 架构分层 (可插拔多 Agent 编排)</div>
-        <div class="arch-content">
-          <div class="arch-layers">
-            <div class="arch-layer" v-for="layer in archLayers" :key="layer.label">
-              <span class="layer-label" :style="{ color: layer.highlight ? '#f59e0b' : '#9ca3af' }">
-                {{ layer.label }}
-              </span>
-              <div class="layer-body">
-                <template v-for="(node, idx) in layer.nodes" :key="idx">
-                  <span
-                    class="arch-node"
-                    :class="node.kind"
-                  >{{ node.name }}</span>
-                  <span v-if="idx < layer.nodes.length - 1" class="arch-arrow">→</span>
-                </template>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 下：运行时事件流 -->
-      <div class="panel arch-panel">
-        <div class="panel-title">📜 运行时事件流</div>
-        <div class="event-log">
-          <div v-for="(e, i) in eventLog" :key="i" class="event-line">
-            <span class="ts">{{ e.ts }}</span>
-            <span class="evt">{{ e.evt }}</span>
-            <span class="msg">{{ e.msg }}</span>
-          </div>
-        </div>
-      </div>
+      <!-- 底部：运行时事件流 -->
+      <EventLogPanel :logs="eventLog" />
     </div>
 
     <a-empty v-else description="选择语音模型后进入语音通道" />
 
-    <!-- 会话详情弹窗 -->
+    <!-- 会话详情弹窗（保留既有能力） -->
     <a-modal
       v-model:open="sessionDetailVisible"
       :title="`会话详情 #${selectedSession?.session_id ?? ''}`"
@@ -319,11 +170,11 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">创建时间</span>
-          <span class="detail-value">{{ formatDate(selectedSession.created_at) }}</span>
+          <span class="detail-value">{{ formatDateTime(selectedSession.created_at) }}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">更新时间</span>
-          <span class="detail-value">{{ formatDate(selectedSession.updated_at) }}</span>
+          <span class="detail-value">{{ formatDateTime(selectedSession.updated_at) }}</span>
         </div>
 
         <div class="detail-messages">
@@ -338,7 +189,7 @@
           >
             <span class="msg-role">{{ m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '系统' }}</span>
             <span class="msg-content">{{ m.content }}</span>
-            <span class="msg-time">{{ formatDate(m.created_at) }}</span>
+            <span class="msg-time">{{ formatDateTime(m.created_at) }}</span>
           </div>
         </div>
       </div>
@@ -348,9 +199,22 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
 import { useVoiceChannel } from '@/composables/useVoiceChannel'
 import type { VoiceModel, VoiceProvider, VoiceProviderCatalog } from '@/types/voice'
-import { listVoiceModels, getVoiceModelDefault, getVoiceProviderCatalog } from '@/api/voice'
+import {
+  listVoiceModels,
+  getVoiceModelDefault,
+  getVoiceProviderCatalog,
+  listDuplexAgents,
+  listDuplexChannels,
+  upsertDuplexAgent,
+  upsertDuplexChannel,
+  deleteDuplexAgent,
+  deleteDuplexChannel,
+  type DuplexAgentConfig,
+  type DuplexChannelConfig,
+} from '@/api/voice'
 import {
   createSession,
   getMySessions,
@@ -359,12 +223,27 @@ import {
   type AiChatSession,
   type AiChatMessage,
 } from '@/api/aiSession'
+import VoiceChannelPanel from './components/VoiceChannelPanel.vue'
+import ChannelManagerPanel from './components/ChannelManagerPanel.vue'
+import AgentOrchestratorManagerPanel from './components/AgentOrchestratorManagerPanel.vue'
+import SessionListPanel from './components/SessionListPanel.vue'
+import IoStreamPanel from './components/IoStreamPanel.vue'
+import EventLogPanel from './components/EventLogPanel.vue'
+import type {
+  AgentView,
+  ChannelItem,
+  IoMessage,
+  LogEntry,
+  SessionItem,
+  ActivationReason,
+  BackendOutputMode,
+} from './types'
+import { formatDateTime, formatClock, ACTIVATION_LABEL, OUTPUT_MODE_LABEL } from './types'
 
 // ── 配置 ──
 const provider = ref<VoiceProvider>('dashscope')
 const showChannel = ref(false)
 const creatingSession = ref(false)
-// 后端自动生成的会话编号（AiChatSession.session_id）
 const backendSessionId = ref<number | null>(null)
 
 const voiceModels = ref<VoiceModel[]>([])
@@ -372,19 +251,13 @@ const providerCatalog = ref<VoiceProviderCatalog>({} as VoiceProviderCatalog)
 const selectedModel = ref<number | undefined>(undefined)
 const modelLoading = ref(false)
 
-// Provider 下拉：仅展示已配置有「可用」全双工语音模型的厂商
 const providerOptions = computed(() => {
   const usableProviders = new Set(
-    voiceModels.value
-      .filter((m) => m.usable && m.provider_key)
-      .map((m) => m.provider_key as string),
+    voiceModels.value.filter((m) => m.usable && m.provider_key).map((m) => m.provider_key as string),
   )
   return (Object.values(providerCatalog.value) as VoiceProviderCatalog[keyof VoiceProviderCatalog][])
     .filter((p) => usableProviders.has(p.key))
-    .map((p) => ({
-      label: p.label,
-      value: p.key as VoiceProvider,
-    }))
+    .map((p) => ({ label: p.label, value: p.key as VoiceProvider }))
 })
 
 function modelsFor(p: VoiceProvider): VoiceModel[] {
@@ -398,9 +271,7 @@ const modelOptions = computed(() =>
   })),
 )
 
-const selectedModelInfo = computed(() =>
-  voiceModels.value.find((m) => m.id === selectedModel.value),
-)
+const selectedModelInfo = computed(() => voiceModels.value.find((m) => m.id === selectedModel.value))
 
 watch(provider, () => {
   const pool = modelsFor(provider.value)
@@ -409,7 +280,6 @@ watch(provider, () => {
   }
 })
 
-// 归一化平台名（与后端 normalize_provider_key 保持一致）
 function normalizeProviderKey(platform?: string): VoiceProvider {
   const p = (platform || '').trim().toLowerCase()
   const aliases: Record<string, VoiceProvider> = {
@@ -433,20 +303,15 @@ async function loadVoiceModels() {
     voiceModels.value = models
     providerCatalog.value = catalog
 
-    const applyDefault = (model: VoiceModel) => {
-      provider.value = model.provider_key
-        ? (model.provider_key as VoiceProvider)
-        : normalizeProviderKey(model.platform)
-      selectedModel.value = model.id
+    const applyDefault = (m: VoiceModel) => {
+      provider.value = m.provider_key ? (m.provider_key as VoiceProvider) : normalizeProviderKey(m.platform)
+      selectedModel.value = m.id
     }
-    // 优先选可用的默认模型
     const defaultModel = def?.configured
       ? models.find((m) => m.id === def.model_id && m.usable)
       : undefined
-    if (defaultModel) {
-      applyDefault(defaultModel)
-    } else {
-      // 否则选第一个可用模型
+    if (defaultModel) applyDefault(defaultModel)
+    else {
       const firstUsable = models.find((m) => m.usable)
       if (firstUsable) applyDefault(firstUsable)
       else selectedModel.value = undefined
@@ -456,100 +321,362 @@ async function loadVoiceModels() {
   }
 }
 
-onMounted(loadVoiceModels)
-
-// ── 5 个 Agent 定义（与后端插件一一对应）──
-const agents = [
-  { key: 'ecommerce_sales', name: '电商销售顾问', icon: '🛒', desc: '默认活跃 Agent，推荐商品、促成交易、提升转化率' },
-  { key: 'product_catalog', name: '商品知识库助手', icon: '📦', desc: '检索商品详情、规格、价格、库存' },
-  { key: 'cross_border', name: '跨境贸易助手', icon: '🌍', desc: '跨境物流、关税计算、清关、海外仓' },
-  { key: 'marketing', name: '市场推广助手', icon: '🎯', desc: '促销活动、优惠券、会员权益、积分' },
-  { key: 'dispute_resolution', name: '销售纠纷解决助手', icon: '⚖️', desc: 'AI 自动处理投诉：分类、方案、补偿、升级人工' },
-]
-
-const currentAgent = computed(() =>
-  agents.find((a) => a.key === activeAgent.value.key) || agents[0],
-)
-
-// ── 输出渠道（与后端 ChannelRegistry / 设计文档 11.2 节对齐）──
-type OutputMode = 'text' | 'voice' | 'both'
-interface ChannelItem {
-  key: string
-  name: string
-  icon: string
-  desc: string
-  active: boolean
-  output: OutputMode
-}
-const channels = reactive<ChannelItem[]>([
-  { key: 'wechat', name: '微信', icon: '💬', desc: '国内主流即时通信', active: true, output: 'voice' },
-  { key: 'whatsapp', name: 'WhatsApp', icon: '🟢', desc: '全球 180+ 国家', active: true, output: 'text' },
-  { key: 'telegram', name: 'Telegram', icon: '✈️', desc: '海外加密即时通信', active: false, output: 'voice' },
-  { key: 'messenger', name: 'Messenger', icon: '💙', desc: 'Meta 旗下即时通信', active: false, output: 'text' },
-  { key: 'line', name: 'LINE', icon: '🟢', desc: '日韩/东南亚主流', active: false, output: 'text' },
-  { key: 'sms', name: '短信', icon: '📱', desc: '全球短信触达', active: false, output: 'text' },
-])
-
-const outputModeOptions = [
-  { value: 'text', label: '文字' },
-  { value: 'voice', label: '语音' },
-  { value: 'both', label: '文字+语音' },
-]
-const outputModeLabel: Record<OutputMode, string> = { text: '文字', voice: '语音', both: '文字+语音' }
-
-const activeChannelCount = computed(() => channels.filter((c) => c.active).length)
-const channelSummaryText = computed(() => {
-  const active = channels.filter((c) => c.active)
-  if (active.length === 0) return '未选中任何渠道，Agent 将仅在语音通道回复'
-  return active.map((c) => `${c.name}(${outputModeLabel[c.output]})`).join(' + ')
+onMounted(() => {
+  loadVoiceModels()
+  loadSessions()
+  loadAgentConfig()
+  loadChannelConfig()
 })
 
-// 右侧面板 Tab：agents / channels / sessions
-const activeTab = ref<'agents' | 'channels' | 'sessions'>('agents')
+/** 从后端加载 Agent 设计配置（失败时保留本地默认，优雅降级） */
+async function loadAgentConfig() {
+  try {
+    const res = await listDuplexAgents()
+    if (!res?.items?.length) return
+    const byKey = new Map(res.items.map((c) => [c.key, c]))
+    agents.forEach((a) => {
+      const cfg = byKey.get(a.key)
+      if (!cfg) return
+      a.enabled = cfg.enabled
+      a.priority = cfg.priority
+      a.prompt = cfg.prompt || a.prompt
+      a.rules = cfg.rules || a.rules
+      a.tools = cfg.tools || a.tools
+      a.runtimeStatus = a.enabled ? a.runtimeStatus : 'disabled'
+    })
+    pushLog('agent_config_loaded', `已从后端加载 ${res.items.length} 个 Agent 配置`)
+  } catch (e) {
+    pushLog('agent_config_fallback', `Agent 配置加载失败，使用本地默认：${(e as Error).message}`)
+  }
+}
 
-function toggleChannel(ch: ChannelItem) {
+/** 从后端加载渠道配置（失败时保留本地默认，优雅降级） */
+async function loadChannelConfig() {
+  try {
+    const res = await listDuplexChannels()
+    if (!res?.items?.length) return
+    const byKey = new Map(res.items.map((c) => [c.key, c]))
+    channels.forEach((ch) => {
+      const cfg = byKey.get(ch.key)
+      if (!cfg) return
+      ch.active = cfg.active
+      if (cfg.output && cfg.output !== 'off') {
+        ch.output = cfg.output
+        ch.lastValidOutput = cfg.output
+      }
+      if (cfg.capability) ch.capability = cfg.capability
+    })
+    pushLog('channel_config_loaded', `已从后端加载 ${res.items.length} 个渠道配置`)
+  } catch (e) {
+    pushLog('channel_config_fallback', `渠道配置加载失败，使用本地默认：${(e as Error).message}`)
+  }
+}
+
+// ── Agent 编排（与后端插件 key 一一对应）──
+const agents = reactive<AgentView[]>([
+  { key: 'ecommerce_sales', name: '电商销售顾问', icon: '🛒', desc: '默认活跃 Agent，推荐商品、促成交易、提升转化率', enabled: true, priority: 1, prompt: '你是跨境电商销售顾问，熟悉欧盟 CE 认证与海外仓流程。', rules: ['推荐商品', '价格咨询', '促成交易'], tools: ['商品检索', '关税计算'], runtimeStatus: 'running', activationReason: 'default' },
+  { key: 'product_catalog', name: '商品知识库助手', icon: '📦', desc: '检索商品详情、规格、价格、库存', enabled: true, priority: 2, prompt: '你是商品知识库助手，基于知识库准确回答商品问题。', rules: ['商品详情', '库存查询'], tools: ['商品检索'], runtimeStatus: 'standby' },
+  { key: 'cross_border', name: '跨境贸易助手', icon: '🌍', desc: '跨境物流、关税计算、清关、海外仓', enabled: true, priority: 3, prompt: '你是跨境贸易专家，提供准确的税费估算与物流方案。', rules: ['关税', '清关', '海外仓'], tools: ['关税计算', '物流查询'], runtimeStatus: 'standby' },
+  { key: 'marketing', name: '市场推广助手', icon: '🎯', desc: '促销活动、优惠券、会员权益、积分', enabled: false, priority: 4, prompt: '你是市场推广助手，负责促销与会员权益说明。', rules: ['优惠', '会员'], tools: ['优惠券发放'], runtimeStatus: 'disabled' },
+  { key: 'dispute_resolution', name: '销售纠纷解决助手', icon: '⚖️', desc: 'AI 自动处理投诉：分类、方案、补偿、升级人工', enabled: true, priority: 5, prompt: '你是纠纷解决助手，对投诉分类并给出补偿方案。', rules: ['投诉', '退款', '纠纷'], tools: ['工单创建', '人工转接'], runtimeStatus: 'standby' },
+])
+
+const currentAgent = computed(() => agents.find((a) => a.key === activeAgent.value.key) || agents[0])
+
+// ── 输出渠道 ──
+const channels = reactive<ChannelItem[]>([
+  { key: 'wechat', name: '微信', icon: '💬', desc: '国内主流即时通信 · 已配置客服消息 API 凭据', active: true, output: 'voice', capability: 'pending_backend', lastValidOutput: 'voice', stats: { dispatched: 128, succeeded: 126, successRate: '98.4%' } },
+  { key: 'whatsapp', name: 'WhatsApp', icon: '🟢', desc: '全球 180+ 国家 · 已配置 Business API 凭据', active: true, output: 'text', capability: 'pending_backend', lastValidOutput: 'text', stats: { dispatched: 64, succeeded: 64, successRate: '100%' } },
+  { key: 'telegram', name: 'Telegram', icon: '✈️', desc: '海外加密即时通信 · 尚未配置凭据', active: false, output: 'voice', capability: 'configured', lastValidOutput: 'voice', stats: { dispatched: 0, succeeded: 0, successRate: '—' } },
+  { key: 'messenger', name: 'Messenger', icon: '💙', desc: 'Meta 旗下即时通信', active: false, output: 'text', capability: 'enabled', lastValidOutput: 'text' },
+  { key: 'line', name: 'LINE', icon: '🟢', desc: '日韩/东南亚主流', active: false, output: 'text', capability: 'enabled', lastValidOutput: 'text' },
+  { key: 'sms', name: '短信', icon: '📱', desc: '全球短信触达 · 后端无短信网关', active: false, output: 'text', capability: 'unsupported', lastValidOutput: 'text' },
+])
+
+const channelSyncState = ref<'idle' | 'pending' | 'acked'>('idle')
+let ackTimer: number | null = null
+
+function markChannelPending() {
+  channelSyncState.value = 'pending'
+  if (ackTimer !== null) window.clearTimeout(ackTimer)
+  // 后端暂无 ACK 时，短暂 pending 后回落到本地已下发，不谎称后端确认
+  ackTimer = window.setTimeout(() => {
+    channelSyncState.value = 'idle'
+  }, 800)
+}
+
+function syncChannelConfig() {
+  sendChannelConfig(
+    channels.map((c) => {
+      const backendOutput: BackendOutputMode =
+        c.output === 'off' ? c.lastValidOutput : c.output
+      return { key: c.key, active: c.active && c.output !== 'off', output: backendOutput }
+    }),
+  )
+  markChannelPending()
+}
+
+function toggleChannel(key: string) {
+  const ch = channels.find((c) => c.key === key)
+  if (!ch) return
   ch.active = !ch.active
   pushLog('channel_toggle', `${ch.name} ${ch.active ? '已选中' : '已取消'}`)
   syncChannelConfig()
 }
 
-function onChannelOutputChange(ch: ChannelItem) {
-  pushLog('channel_output_mode', `${ch.name} → ${outputModeLabel[ch.output]}`)
+function onChannelOutputChange(p: { key: string; output: ChannelItem['output'] }) {
+  const ch = channels.find((c) => c.key === p.key)
+  if (!ch) return
+  if (p.output !== 'off') ch.lastValidOutput = p.output
+  ch.output = p.output
+  if (p.output === 'off') ch.active = false
+  pushLog('channel_output_mode', `${ch.name} → ${OUTPUT_MODE_LABEL[p.output]}`)
   syncChannelConfig()
 }
 
-function syncChannelConfig() {
-  sendChannelConfig(
-    channels.map((c) => ({ key: c.key, active: c.active, output: c.output })),
-  )
+function toChannelPayload(ch: ChannelItem): DuplexChannelConfig {
+  return {
+    key: ch.key, name: ch.name, icon: ch.icon, desc: ch.desc,
+    active: ch.active && ch.output !== 'off',
+    output: ch.output === 'off' ? ch.lastValidOutput : ch.output,
+    capability: ch.capability,
+  }
+}
+
+async function addChannel(ch: ChannelItem) {
+  channels.push(ch)
+  pushLog('channel_add', `新增渠道 ${ch.name}`)
+  syncChannelConfig()
+  try { await upsertDuplexChannel(toChannelPayload(ch)) } catch (e) { pushLog('channel_sync_fail', (e as Error).message) }
+}
+
+async function removeChannel(key: string) {
+  const ch = channels.find((c) => c.key === key)
+  channels.splice(channels.findIndex((c) => c.key === key), 1)
+  pushLog('channel_remove', `删除渠道 ${ch?.name || key}`)
+  syncChannelConfig()
+  try { await deleteDuplexChannel(key) } catch (e) { pushLog('channel_sync_fail', (e as Error).message) }
+}
+
+async function updateChannel(ch: ChannelItem) {
+  const idx = channels.findIndex((c) => c.key === ch.key)
+  if (idx >= 0) channels[idx] = ch
+  pushLog('channel_update', `更新渠道 ${ch.name}`)
+  syncChannelConfig()
+  try { await upsertDuplexChannel(toChannelPayload(ch)) } catch (e) { pushLog('channel_sync_fail', (e as Error).message) }
+}
+
+function testChannel(key: string) {
+  const ch = channels.find((c) => c.key === key)
+  pushLog('channel_test', `${ch?.name || key} 测试发送（模拟，未真实外发）`)
+  message.info(`${ch?.name || key}：已模拟发送（未真实外发）`)
+}
+
+// ── Agent 管理操作（前端本地，后续接 REST）──
+const activationReason = ref<ActivationReason>('default')
+
+function activateAgent(key: string) {
+  const a = agents.find((x) => x.key === key)
+  if (!a) return
+  agents.forEach((x) => {
+    x.runtimeStatus = x.key === key ? 'running' : x.enabled ? 'standby' : 'disabled'
+  })
+  activeAgent.value = { key: a.key, name: a.name }
+  activationReason.value = 'manual'
+  a.activationReason = 'manual'
+  a.activationLabel = ACTIVATION_LABEL.manual
+  pushLog('agent_manual_switch', `手动切换 → ${a.key}`)
+  sendChannelConfig(buildChannelPayload())
+}
+
+function toggleAgent(key: string) {
+  const a = agents.find((x) => x.key === key)
+  if (!a) return
+  a.enabled = !a.enabled
+  if (!a.enabled) a.runtimeStatus = 'disabled'
+  else if (a.key !== activeAgent.value.key) a.runtimeStatus = 'standby'
+  pushLog('agent_toggle', `${a.name} ${a.enabled ? '已启用' : '已停用'}`)
+}
+
+function toAgentPayload(a: AgentView): DuplexAgentConfig {
+  return {
+    key: a.key, name: a.name, icon: a.icon, desc: a.desc,
+    enabled: a.enabled, priority: a.priority,
+    prompt: a.prompt, rules: a.rules, tools: a.tools,
+  }
+}
+
+async function addAgent(a: AgentView) {
+  agents.push(a)
+  pushLog('agent_add', `新增 Agent ${a.name}`)
+  try { await upsertDuplexAgent(toAgentPayload(a)) } catch (e) { pushLog('agent_sync_fail', (e as Error).message) }
+}
+
+async function removeAgent(key: string) {
+  const idx = agents.findIndex((x) => x.key === key)
+  const a = agents[idx]
+  agents.splice(idx, 1)
+  pushLog('agent_remove', `删除 Agent ${a?.name || key}`)
+  try { await deleteDuplexAgent(key) } catch (e) { pushLog('agent_sync_fail', (e as Error).message) }
+}
+
+async function updateAgent(a: AgentView) {
+  const idx = agents.findIndex((x) => x.key === a.key)
+  if (idx >= 0) agents[idx] = a
+  try { await upsertDuplexAgent(toAgentPayload(a)) } catch (e) { pushLog('agent_sync_fail', (e as Error).message) }
+}
+
+async function saveAgent(a: AgentView) {
+  pushLog('agent_save', `保存 Agent 设计 ${a.name}（规则 ${a.rules.length} / 工具 ${a.tools.length}）`)
+  try {
+    await upsertDuplexAgent(toAgentPayload(a))
+    message.success(`${a.name} 设计已保存并同步后端`)
+  } catch (e) {
+    message.success(`${a.name} 设计已保存（本地，后端同步失败：${(e as Error).message}）`)
+  }
+}
+
+function reorderAgent(p: { key: string; delta: number }) {
+  const idx = agents.findIndex((x) => x.key === p.key)
+  const target = idx + p.delta
+  if (idx < 0 || target < 0 || target >= agents.length) return
+  const [item] = agents.splice(idx, 1)
+  agents.splice(target, 0, item)
+  agents.forEach((a, i) => { a.priority = i + 1 })
+  pushLog('agent_reorder', `调整优先级：${item.name} → ${item.priority}`)
+}
+
+function buildChannelPayload() {
+  return channels.map((c) => ({
+    key: c.key,
+    active: c.active && c.output !== 'off',
+    output: c.output === 'off' ? c.lastValidOutput : c.output,
+  }))
 }
 
 // ── 会话列表 ──
-const sessionList = ref<AiChatSession[]>([])
+const sessionList = ref<SessionItem[]>([])
 const sessionLoading = ref(false)
+const sessionError = ref<string | null>(null)
+
 async function loadSessions() {
   sessionLoading.value = true
+  sessionError.value = null
   try {
     const res = await getMySessions({ page_size: 50 })
-    sessionList.value = res.items || []
+    sessionList.value = (res.items || []).filter((s) => s.session_type === 'voice').map(toSessionItem)
   } catch (e) {
-    pushLog('session_error', `加载会话失败：${(e as Error).message}`)
+    sessionError.value = `加载会话失败：${(e as Error).message}`
+    pushLog('session_error', sessionError.value!)
   } finally {
     sessionLoading.value = false
   }
 }
 
-// ── 会话详情 ──
+function toSessionItem(s: AiChatSession): SessionItem {
+  return {
+    session_id: s.session_id,
+    session_title: s.session_title,
+    message_count: s.message_count,
+    updated_at: s.updated_at,
+    session_type: s.session_type,
+    status: s.status,
+  }
+}
+
+// ── 会话详情（保留既有弹窗）──
 const sessionDetailVisible = ref(false)
 const selectedSession = ref<AiChatSession | null>(null)
+const selectedSessionId = ref<number | null>(null)
 const detailMessages = ref<AiChatMessage[]>([])
 const detailMessagesLoading = ref(false)
 
-async function openSessionDetail(s: AiChatSession) {
-  selectedSession.value = s
+// ── 底部 IO 流 ──
+const ioSource = ref<'live' | number>('live')
+const historyMessages = ref<AiChatMessage[]>([])
+const historyLoading = ref(false)
+const historyError = ref<string | null>(null)
+
+const ioSourceLabel = computed(() =>
+  ioSource.value === 'live'
+    ? '当前语音会话 · 实时'
+    : `历史会话 #${ioSource.value} · ${sessionList.value.find((s) => s.session_id === ioSource.value)?.session_title || ''}`,
+)
+
+const inputMessages = computed<IoMessage[]>(() => {
+  if (ioSource.value !== 'live') {
+    return historyMessages.value
+      .filter((m) => m.role === 'user')
+      .map((m, i) => ({
+        key: `h-in-${m.message_id ?? i}`,
+        role: 'user',
+        text: m.content,
+        time: formatClock(m.created_at),
+        source: 'history',
+        statusLabel: '用户输入',
+      }))
+  }
+  return transcripts.value
+    .filter((t) => t.role === 'user')
+    .map((t) => ({
+      key: t.id,
+      role: 'user',
+      text: t.text,
+      time: formatClock(t.started_at),
+      source: 'live',
+      statusLabel: t.finalized ? 'STT 已定稿' : '识别中…',
+    }))
+})
+
+const outputMessages = computed<IoMessage[]>(() => {
+  if (ioSource.value !== 'live') {
+    return historyMessages.value
+      .filter((m) => m.role === 'assistant' || m.role === 'system')
+      .map((m, i) => ({
+        key: `h-out-${m.message_id ?? i}`,
+        role: m.role === 'system' ? 'system' : 'assistant',
+        text: m.content,
+        time: formatClock(m.created_at),
+        source: 'history',
+        voiceStatus: m.message_type === 'voice' ? 'done' : 'none',
+      }))
+  }
+  const list = transcripts.value.filter((t) => t.role === 'assistant' || t.role === 'system')
+  return list.map((t, idx) => ({
+    key: t.id,
+    role: t.role === 'system' ? 'system' : 'assistant',
+    text: t.text,
+    time: formatClock(t.started_at),
+    source: 'live',
+    voiceStatus: liveVoiceStatus(idx, list.length),
+    channelTargets: activeChannelTargets.value,
+  }))
+})
+
+/** 播放状态：仅最新 assistant 且正在播放时标 playing，其余已完成；无文本则 none */
+function liveVoiceStatus(idx: number, total: number): 'playing' | 'done' | 'none' {
+  const isLatest = idx === total - 1
+  if (isLatest && isPlaying.value) return 'playing'
+  return 'done'
+}
+
+const isPlaying = computed(() => turn.isPlaying.value || turn.voiceState.value === 'speaking')
+const activeChannelTargets = computed(() =>
+  channels.filter((c) => c.active && c.output !== 'off').map((c) => `${c.name}(${OUTPUT_MODE_LABEL[c.output]})`),
+)
+
+async function openSessionDetail(s: SessionItem) {
+  selectedSessionId.value = s.session_id
   sessionDetailVisible.value = true
   detailMessages.value = []
   detailMessagesLoading.value = true
+
+  // 底部 IO 流同步切换到该会话
+  ioSource.value = s.session_id
+  historyMessages.value = []
+  historyError.value = null
+  historyLoading.value = true
+
   try {
     const [sess, msgs] = await Promise.all([
       getSession(s.session_id),
@@ -557,75 +684,26 @@ async function openSessionDetail(s: AiChatSession) {
     ])
     if (sess) selectedSession.value = sess
     detailMessages.value = msgs.items || []
+    historyMessages.value = msgs.items || []
   } catch (e) {
-    pushLog('session_detail_error', `加载详情失败：${(e as Error).message}`)
+    const err = `加载详情失败：${(e as Error).message}`
+    historyError.value = err
+    pushLog('session_detail_error', err)
   } finally {
     detailMessagesLoading.value = false
+    historyLoading.value = false
   }
 }
 
-// 日期格式化
-function formatDate(val?: string | null): string {
-  if (!val) return '-'
-  const d = new Date(val)
-  if (isNaN(d.getTime())) return val
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+function backToLive() {
+  ioSource.value = 'live'
+  historyMessages.value = []
+  historyError.value = null
+  selectedSessionId.value = null
+  pushLog('io_stream', '切换回实时语音会话')
 }
 
-// ── 架构分层数据 ──
-const archLayers = [
-  {
-    label: '前端',
-    highlight: false,
-    nodes: [
-      { name: 'useVoiceChannel', kind: 'existing' },
-      { name: 'DSP (去直流/噪声门/重采样)', kind: 'existing' },
-      { name: 'WebSocket PCM16', kind: 'existing' },
-    ],
-  },
-  {
-    label: '网关',
-    highlight: false,
-    nodes: [
-      { name: 'websocket_gateway.py', kind: 'existing' },
-      { name: '能力协商 + 事件归一化', kind: 'existing' },
-    ],
-  },
-  {
-    label: '编排层 (新)',
-    highlight: true,
-    nodes: [
-      { name: 'VoiceAgentOrchestrator', kind: 'new' },
-      { name: 'IntentRouter (意图分类)', kind: 'new' },
-      { name: 'ContextSync (含购物车状态)', kind: 'new' },
-      { name: 'PluginRegistry', kind: 'new' },
-    ],
-  },
-  {
-    label: '可插拔 Agent (新)',
-    highlight: true,
-    nodes: [
-      { name: 'EcommerceSales', kind: 'new' },
-      { name: 'ProductCatalog', kind: 'new' },
-      { name: 'CrossBorder', kind: 'new' },
-      { name: 'Marketing', kind: 'new' },
-      { name: 'DisputeResolution', kind: 'new' },
-    ],
-  },
-  {
-    label: '执行器',
-    highlight: false,
-    nodes: [
-      { name: 'AgentscopeRealtimeProvider', kind: 'existing' },
-      { name: 'RealtimeAgent (Qwen-Omni)', kind: 'existing' },
-      { name: 'server VAD + barge-in + 流式 STT/TTS', kind: 'existing' },
-    ],
-  },
-]
-
 // ── 语音通道 ──
-// 用响应式配置对象；会话编号由后端 createSession() 自动生成（AiChatSession.session_id）
 const channelConfig = reactive({
   caseNumber: '' as string,
   participantId: 'party_a' as const,
@@ -646,6 +724,7 @@ const {
   audioLevel,
   micOn,
   activeAgent,
+  turn,
   connect,
   disconnect,
   sendInterrupt,
@@ -655,15 +734,11 @@ const {
   stopMic,
 } = useVoiceChannel(channelConfig)
 
-// 进入语音通道：先调用后端 createSession() 自动生成会话编号，再连接 WebSocket
 async function enterVoiceChannel() {
   if (!selectedModel.value) return
   creatingSession.value = true
   try {
-    const sess = await createSession({
-      session_title: '全双工语音会话',
-      session_type: 'voice',
-    })
+    const sess = await createSession({ session_title: '全双工语音会话', session_type: 'voice' })
     backendSessionId.value = sess.session_id
     channelConfig.caseNumber = String(sess.session_id)
     pushLog('session_created', `后端生成会话编号 #${sess.session_id}`)
@@ -679,11 +754,13 @@ async function enterVoiceChannel() {
 
 const textInput = ref('')
 
-function onSendText() {
-  const t = textInput.value.trim()
+function onSendText(text?: string) {
+  const t = (text ?? textInput.value).trim()
   if (!t) return
   sendText(t)
   textInput.value = ''
+  activationReason.value = 'text'
+  pushLog('text_input', t.slice(0, 30))
 }
 
 function onToggleMic() {
@@ -691,40 +768,10 @@ function onToggleMic() {
   else void startMic()
 }
 
-// ── 状态展示 ──
-const statusText = computed(() => {
-  const map: Record<string, string> = {
-    idle: '待机中 · 等待语音输入',
-    connecting: '连接中...',
-    open: micOn.value ? '正在聆听...' : '已连接 · 点击麦克风开始',
-    closed: '已断开',
-    error: '连接错误',
-  }
-  return map[status.value] || status.value
-})
-
-const stageState = computed(() => {
-  if (status.value === 'open' && micOn.value) return 'listening'
-  if (status.value === 'open') return 'speaking'
-  return ''
-})
-
-function barHeight(i: number): number {
-  if (status.value !== 'open' || !micOn.value) return 4
-  const base = Math.sin(Date.now() / 200 + i * 0.5) * 0.5 + 0.5
-  return 4 + base * audioLevel.value * 30
-}
-
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString()
-  } catch {
-    return ''
-  }
-}
+// ── 三 Tab ──
+const activeTab = ref<'voice' | 'channels' | 'agents'>('voice')
 
 // ── 事件日志 ──
-interface LogEntry { ts: string; evt: string; msg: string }
 const eventLog = ref<LogEntry[]>([
   { ts: '[00:00]', evt: 'init', msg: '页面就绪，等待进入语音通道' },
 ])
@@ -738,29 +785,32 @@ function pushLog(evt: string, msg: string) {
   if (eventLog.value.length > 100) eventLog.value.shift()
 }
 
-// 监听连接状态变化
 watch(status, (val) => {
   if (val === 'open') pushLog('connected', `语音通道已连接，活跃 Agent=${activeAgent.value.key}`)
   else if (val === 'closed') pushLog('disconnected', '语音通道已断开')
   else if (val === 'error') pushLog('error', errorMsg.value || '连接错误')
 })
 
-// 监听 Agent 切换
 watch(
   () => activeAgent.value.key,
   (newKey, oldKey) => {
     if (oldKey && newKey !== oldKey) {
       pushLog('agent_switch', `${oldKey} → ${newKey}`)
+      const a = agents.find((x) => x.key === newKey)
+      if (a) {
+        a.activationReason = activationReason.value
+        a.activationLabel = ACTIVATION_LABEL[activationReason.value]
+      }
     }
   },
 )
 
-// 监听转写
 watch(transcripts, (list) => {
   const last = list[list.length - 1]
   if (last && last.finalized) {
     const preview = last.text.slice(0, 30)
     pushLog(last.role === 'user' ? 'speech_stopped' : 'tts_play', preview)
+    if (last.role === 'user') activationReason.value = 'voice'
   }
 })
 </script>
@@ -772,8 +822,6 @@ watch(transcripts, (list) => {
   background: #0a0e1a;
   color: #e5e7eb;
 }
-
-/* ── 顶部 ── */
 .demo-header {
   display: flex;
   align-items: center;
@@ -782,11 +830,7 @@ watch(transcripts, (list) => {
   flex-wrap: wrap;
   gap: 12px;
 }
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.header-left { display: flex; align-items: center; gap: 12px; }
 .demo-title {
   font-size: 20px;
   font-weight: 600;
@@ -804,279 +848,32 @@ watch(transcripts, (list) => {
   font-size: 12px;
   color: #9ca3af;
 }
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.model-warn {
-  margin-bottom: 12px;
-}
+.header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.model-warn { margin-bottom: 12px; }
 
-/* ── 网格布局 ── */
 .demo-grid {
   display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 16px;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  align-items: start;
 }
-
-/* ── 面板通用 ── */
 .panel {
   background: #111827;
   border: 1px solid #374151;
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.04), 0 8px 30px rgba(0, 0, 0, 0.3);
 }
-.panel-title {
-  padding: 12px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #9ca3af;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #374151;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.panel-title .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #6b7280;
-}
-.panel-title .dot.active {
-  background: #10b981;
-  box-shadow: 0 0 8px #10b981;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-/* ── 语音主区 ── */
-.voice-main {
-  display: flex;
-  flex-direction: column;
-  height: 600px;
-}
-.voice-stage {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
-}
-.agent-ring {
-  position: relative;
-  width: 120px;
-  height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.agent-ring .ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid #374151;
-}
-.agent-ring .ring.active {
-  border-color: #6366f1;
-  animation: spin 4s linear infinite;
-  border-top-color: transparent;
-}
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-.agent-ring .core {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  box-shadow: 0 0 32px rgba(99, 102, 241, 0.4);
-  transition: transform 0.3s;
-}
-.voice-stage.listening .core {
-  transform: scale(1.1);
-  box-shadow: 0 0 48px rgba(16, 185, 129, 0.6);
-}
-.agent-label {
-  margin-top: 16px;
-  text-align: center;
-}
-.agent-label .name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #e5e7eb;
-}
-.agent-label .status-text {
-  font-size: 12px;
-  color: #9ca3af;
-  margin-top: 4px;
-}
-.waveform {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  height: 32px;
-  margin-top: 16px;
-}
-.waveform .bar {
-  width: 3px;
-  background: #6366f1;
-  border-radius: 2px;
-  transition: height 0.1s;
-}
-
-/* ── 转写区 ── */
-.transcript-area {
-  max-height: 180px;
-  overflow-y: auto;
-  padding: 12px 16px;
-  border-top: 1px solid #374151;
-  background: rgba(0, 0, 0, 0.2);
-}
-.turn {
-  margin-bottom: 10px;
-}
-.turn .role {
-  font-size: 11px;
-  color: #9ca3af;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.turn .role .tag {
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  background: #1f2937;
-}
-.turn.user .role .tag {
-  background: #3b82f6;
-  color: white;
-}
-.turn.assistant .role .tag {
-  background: #6366f1;
-  color: white;
-}
-.turn .text {
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 6px 10px;
-  background: #1f2937;
-  border-radius: 8px;
-  display: inline-block;
-  max-width: 85%;
-}
-.turn.assistant .text {
-  background: rgba(99, 102, 241, 0.15);
-}
-.empty-hint {
-  text-align: center;
-  color: #6b7280;
-  font-size: 13px;
-  padding: 20px;
-}
-
-/* ── 控制条 ── */
-.controls {
-  padding: 12px 16px;
-  border-top: 1px solid #374151;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.caps {
-  margin-left: auto;
-  font-size: 11px;
-  color: #6b7280;
-  font-family: monospace;
-}
-.error-alert {
-  margin: 8px 16px 12px;
-}
-
-/* ── Agent 面板 ── */
-.agent-panel {
-  display: flex;
-  flex-direction: column;
-}
-.agent-list {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto;
-}
-.agent-card {
-  padding: 12px;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 10px;
-  transition: all 0.3s;
-  position: relative;
-}
-.agent-card.active {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
-}
-.agent-card.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #6366f1;
-  border-radius: 3px 0 0 3px;
-}
-.agent-card .head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-.agent-card .name {
-  font-weight: 600;
-  font-size: 13px;
-  color: #e5e7eb;
-}
-.agent-card .icon {
-  font-size: 16px;
-}
-.agent-card .desc {
-  font-size: 11px;
-  color: #9ca3af;
-  line-height: 1.5;
-}
-.agent-card .switch-hint {
-  font-size: 10px;
-  color: #f59e0b;
-  margin-top: 4px;
-}
-
-/* ── Tab 切换 ── */
+.workspace { min-height: 400px; display: flex; flex-direction: column; }
 .tab-bar {
   display: flex;
   gap: 4px;
   padding: 8px 12px 0;
   border-bottom: 1px solid #374151;
+  flex-shrink: 0;
 }
-.tab-bar .tab {
-  padding: 8px 14px;
+.tab {
+  padding: 8px 15px;
   font-size: 13px;
   color: #9ca3af;
   cursor: pointer;
@@ -1085,17 +882,15 @@ watch(transcripts, (list) => {
   display: flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
-.tab-bar .tab:hover {
-  color: #e5e7eb;
-  background: rgba(55, 65, 81, 0.5);
-}
-.tab-bar .tab.active {
+.tab:hover { color: #e5e7eb; background: rgba(55, 65, 81, 0.5); }
+.tab.active {
   color: #818cf8;
   background: rgba(99, 102, 241, 0.1);
   border-bottom: 2px solid #6366f1;
 }
-.tab-bar .tab .tab-badge {
+.tab .tab-badge {
   background: #6366f1;
   color: #fff;
   font-size: 10px;
@@ -1104,323 +899,26 @@ watch(transcripts, (list) => {
   min-width: 16px;
   text-align: center;
 }
-.tab-pane {
-  flex: 1;
-  overflow-y: auto;
-}
+.tab-body { flex: 1; min-height: 0; overflow-y: auto; }
+.tab-pane { min-height: 400px; }
 
-/* ── 渠道列表 ── */
-.channel-list {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.channel-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-}
-.channel-card:hover {
-  border-color: #4b5563;
-}
-.channel-card.active {
-  border-color: #10b981;
-  background: rgba(16, 185, 129, 0.08);
-}
-.channel-card.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: #10b981;
-  border-radius: 3px 0 0 3px;
-}
-.channel-card .ch-icon {
-  font-size: 18px;
-}
-.channel-card .ch-info {
-  flex: 1;
-  min-width: 0;
-}
-.channel-card .ch-name {
-  font-weight: 600;
-  font-size: 13px;
-  color: #e5e7eb;
-}
-.channel-card .ch-desc {
-  font-size: 11px;
-  color: #9ca3af;
-  margin-top: 2px;
-}
-.channel-card .ch-output {
-  width: 90px;
-}
-.channel-card .ch-toggle {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #4b5563;
-  border-radius: 4px;
-  flex-shrink: 0;
-  position: relative;
-}
-.channel-card .ch-toggle.on {
-  background: #10b981;
-  border-color: #10b981;
-}
-.channel-card .ch-toggle.on::after {
-  content: '✓';
-  position: absolute;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  top: -2px;
-  left: 2px;
-}
-.channel-summary {
-  padding: 10px 12px;
-  border-top: 1px solid #374151;
-  font-size: 12px;
-  color: #9ca3af;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.channel-summary .active-count {
-  color: #10b981;
-  font-weight: 600;
-}
-.channel-summary .summary-text {
-  color: #d1d5db;
-  font-size: 11px;
-}
+.session-detail { display: flex; flex-direction: column; gap: 12px; }
+.detail-row { display: flex; gap: 12px; font-size: 13px; }
+.detail-row .detail-label { color: #6b7280; width: 70px; flex-shrink: 0; }
+.detail-row .detail-value { color: #1f2937; flex: 1; }
+.detail-messages { border-top: 1px solid #e5e7eb; padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.detail-messages-title { font-weight: 600; font-size: 13px; color: #374151; }
+.session-loading { text-align: center; color: #9ca3af; font-size: 13px; padding: 24px 0; }
+.detail-msg { display: flex; gap: 8px; padding: 8px 10px; background: #f9fafb; border-radius: 8px; font-size: 13px; align-items: baseline; }
+.detail-msg.user { background: #eff6ff; }
+.detail-msg.assistant { background: #f0fdf4; }
+.detail-msg.system { background: #fef3c7; }
+.detail-msg .msg-role { font-weight: 600; color: #6366f1; flex-shrink: 0; width: 36px; }
+.detail-msg .msg-content { color: #1f2937; flex: 1; word-break: break-word; }
+.detail-msg .msg-time { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
 
-/* ── 会话列表 ── */
-.session-list {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.session-loading {
-  text-align: center;
-  color: #9ca3af;
-  font-size: 13px;
-  padding: 24px 0;
-}
-.session-item {
-  padding: 10px 12px;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.session-item:hover {
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.08);
-}
-.session-item-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.session-item .session-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: #e5e7eb;
-}
-.session-item .session-count {
-  font-size: 11px;
-  color: #818cf8;
-  background: rgba(99, 102, 241, 0.12);
-  padding: 1px 8px;
-  border-radius: 8px;
-}
-.session-item-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #9ca3af;
-  margin-top: 6px;
-}
-
-/* ── 会话详情弹窗 ── */
-.session-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.detail-row {
-  display: flex;
-  gap: 12px;
-  font-size: 13px;
-}
-.detail-row .detail-label {
-  color: #6b7280;
-  width: 70px;
-  flex-shrink: 0;
-}
-.detail-row .detail-value {
-  color: #1f2937;
-  flex: 1;
-}
-.detail-messages {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.detail-messages-title {
-  font-weight: 600;
-  font-size: 13px;
-  color: #374151;
-}
-.detail-msg {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
-  background: #f9fafb;
-  border-radius: 8px;
-  font-size: 13px;
-  align-items: baseline;
-}
-.detail-msg.user {
-  background: #eff6ff;
-}
-.detail-msg.assistant {
-  background: #f0fdf4;
-}
-.detail-msg.system {
-  background: #fef3c7;
-}
-.detail-msg .msg-role {
-  font-weight: 600;
-  color: #6366f1;
-  flex-shrink: 0;
-  width: 36px;
-}
-.detail-msg .msg-content {
-  color: #1f2937;
-  flex: 1;
-  word-break: break-word;
-}
-.detail-msg .msg-time {
-  font-size: 11px;
-  color: #9ca3af;
-  flex-shrink: 0;
-}
-
-/* ── 架构面板 ── */
-.arch-panel {
-  grid-column: 1 / -1;
-}
-.arch-content {
-  padding: 16px;
-}
-.arch-layers {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.arch-layer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: #1f2937;
-  border-radius: 8px;
-  border: 1px solid #374151;
-}
-.arch-layer .layer-label {
-  width: 110px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-.arch-layer .layer-body {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.arch-node {
-  padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.15);
-  border: 1px solid #6366f1;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #e5e7eb;
-}
-.arch-node.existing {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: #10b981;
-}
-.arch-node.new {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: #f59e0b;
-}
-.arch-arrow {
-  color: #9ca3af;
-  font-size: 14px;
-}
-
-/* ── 事件日志 ── */
-.event-log {
-  max-height: 180px;
-  overflow-y: auto;
-  padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.3);
-  font-family: monospace;
-  font-size: 11px;
-}
-.event-line {
-  padding: 2px 0;
-  display: flex;
-  gap: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-}
-.event-line .ts {
-  color: #6b7280;
-  flex-shrink: 0;
-}
-.event-line .evt {
-  color: #6366f1;
-  flex-shrink: 0;
-  min-width: 80px;
-}
-.event-line .msg {
-  color: #d1d5db;
-}
-
-/* ── 滚动条 ── */
-::-webkit-scrollbar {
-  width: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
-}
-
-/* 暗色模式下覆盖 antd 组件 */
-:deep(.ant-btn),
-:deep(.ant-select),
-:deep(.ant-input) {
-  color-scheme: dark;
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+:deep(.ant-btn), :deep(.ant-select), :deep(.ant-input), :deep(.ant-input-textarea textarea) { color-scheme: dark; }
 </style>

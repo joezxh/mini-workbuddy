@@ -29,7 +29,7 @@ from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.pipeline import TeamMember, TeamPipeline
 from agentscope.tool import ToolBase
 
-from app.ai.team.org_patterns.scaffolding import Trace, make_agent, make_model
+from app.ai.team.trade.scaffolding import Trace, make_agent, make_model
 
 SAMPLE_INPUT = "为便携咖啡机制定东南亚与欧洲市场渠道拓展方案"
 TEAM_TIMEOUT = 60

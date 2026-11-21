@@ -1,7 +1,7 @@
 <!-- Source 配置页（Task 8.5 / 6.6 API）—— GitHub + Feishu Source 配置管理 -->
 <template>
   <div class="sa-src">
-    <a-page-header title="Source 配置" sub-title="GitHub / Feishu 触发源" @back="router.push('/super-agent')" />
+    <div class="sa-src__intro">🐙 GitHub / 💬 飞书触发源 · Thread / Subscription / Mandate 预览</div>
 
     <a-spin :spinning="loading">
       <div class="sa-src__grid">
@@ -130,11 +130,9 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { listSources, getSourceConfig, updateSourceConfig, listThreads, listTickets, getTicket, listTicketSubscriptions } from '@/api/super-agent'
 
-const router = useRouter()
 const loading = ref(false)
 const saving = ref('')
 const sources = ref<any[]>([])
@@ -230,6 +228,12 @@ async function save(kind: string, value: any) {
 
 <style scoped lang="less">
 .sa-src {
+  &__intro {
+    font-size: 13px;
+    color: var(--sa-text-3);
+    margin-bottom: 14px;
+  }
+
   &__grid {
     display: grid;
     grid-template-columns: 1fr;

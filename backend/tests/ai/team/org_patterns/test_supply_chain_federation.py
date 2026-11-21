@@ -2,7 +2,7 @@
 """跨组织供应链协同（联邦式）：越界字段被网关拒绝 + 协调者只拿白名单字段。"""
 import asyncio
 
-from app.ai.team.org_patterns import supply_chain_federation
+from app.ai.team.trade import supply_chain_federation
 
 
 def test_cross_boundary_denied():

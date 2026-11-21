@@ -148,65 +148,78 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/meeting/MeetingRoom.vue'),
         meta: { title: '视频会议', icon: 'VideoCameraOutlined' }
       },
-      // ── SuperAgent（Task 4：前端入口 + Demo）──
-      {
-        path: 'super-agent',
-        name: 'SuperAgentBoard',
-        component: () => import('@/views/super-agent/board.vue'),
-        meta: { title: 'SuperAgent 看板', icon: 'RobotOutlined' }
-      },
-      {
-        path: 'super-agent/detail/:id',
-        name: 'SuperAgentTicketDetail',
-        component: () => import('@/views/super-agent/detail.vue'),
-        props: true,
-        meta: { title: 'Ticket 详情', hidden: true }
-      },
-      {
-        path: 'super-agent/demo',
-        name: 'SuperAgentDemo',
-        component: () => import('@/views/super-agent/demo.vue'),
-        meta: { title: 'SuperAgent Demo', hidden: true }
-      },
-      {
-        path: 'super-agent/config-source',
-        name: 'SuperAgentConfigSource',
-        component: () => import('@/views/super-agent/config-source.vue'),
-        meta: { title: 'Source 配置', hidden: true }
-      },
-      {
-        // HITL 审批列表（spec 步骤三 4.4）：agent_hitl_pause 只读表格
-        path: 'super-agent/hitl',
-        name: 'SuperAgentHitl',
-        component: () => import('@/views/super-agent/hitl.vue'),
-        meta: { title: 'HITL 审批', icon: 'AuditOutlined' }
-      },
-      // ── SuperAgent Agent 工作台（Task 4.6：Chat/Feed/Ideas/Goals）──
-      {
-        path: 'super-agent/chat',
-        name: 'SuperAgentChat',
-        component: () => import('@/views/super-agent/workbench/chat.vue'),
-        meta: { title: 'Agent 对话', icon: 'CommentOutlined' }
-      },
-      {
-        path: 'super-agent/feed',
-        name: 'SuperAgentFeed',
-        component: () => import('@/views/super-agent/workbench/feed.vue'),
-        meta: { title: '动态 Feed', icon: 'UnorderedListOutlined' }
-      },
-      {
-        path: 'super-agent/ideas',
-        name: 'SuperAgentIdeas',
-        component: () => import('@/views/super-agent/workbench/ideas.vue'),
-        meta: { title: '点子库', icon: 'BulbOutlined' }
-      },
-      {
-        path: 'super-agent/goals',
-        name: 'SuperAgentGoals',
-        component: () => import('@/views/super-agent/workbench/goals.vue'),
-        meta: { title: '目标', icon: 'AimOutlined' }
-      }
     ]
+  },
+  {
+    // SuperAgent 独立全屏外壳：顶栏 + 左侧分组导航 + 主区，1:1 对齐 super-agent-demo 原型。
+    // 不套 AppLayout，三大模块（工作台 / Muse 执行界面 / 管理界面）在此切换。
+    path: '/super-agent',
+    component: () => import('@/layouts/SuperAgentShell.vue'),
+    redirect: '/super-agent/workbench',
+    meta: { requiresAuth: true },
+    children: [
+      // 模块一：工作台（Dashboard 看板 / 电商营销 Demo / 执行详情）
+      {
+        path: 'workbench',
+        name: 'SaWorkbench',
+        component: () => import('@/views/super-agent/workbench/index.vue'),
+        meta: { title: 'Dashboard 看板' },
+        children: [
+          {
+            path: '',
+            name: 'SaBoard',
+            component: () => import('@/views/super-agent/board.vue'),
+            meta: { title: 'Dashboard 看板' },
+          },
+          {
+            path: 'demo',
+            name: 'SaDemo',
+            component: () => import('@/views/super-agent/demo.vue'),
+            meta: { title: '电商营销 Demo' },
+          },
+          {
+            path: 'detail/:id?',
+            name: 'SaDetail',
+            component: () => import('@/views/super-agent/detail.vue'),
+            props: true,
+            meta: { title: '执行详情' },
+          },
+        ],
+      },
+      // 模块二：Muse 执行界面（对话 / 动态 / 点子 / 目标，单路由 + 内部视图）
+      {
+        path: 'muse',
+        name: 'SaMuse',
+        component: () => import('@/views/super-agent/muse.vue'),
+        meta: { title: 'Muse 执行界面' },
+      },
+      // 模块三：管理界面（模型 / MCP / Policy / KB / 执行参数 / 安全 / Source）
+      {
+        path: 'manage',
+        name: 'SaManage',
+        component: () => import('@/views/super-agent/manage.vue'),
+        meta: { title: '管理界面' },
+      },
+    ]
+  },
+  {
+    // 旧路由兼容：重定向到新外壳，避免历史书签 / 外部跳转 404。
+    path: '/super-agent/chat', redirect: '/super-agent/muse?view=chat',
+  },
+  {
+    path: '/super-agent/feed', redirect: '/super-agent/muse?view=feed',
+  },
+  {
+    path: '/super-agent/ideas', redirect: '/super-agent/muse?view=ideas',
+  },
+  {
+    path: '/super-agent/goals', redirect: '/super-agent/muse?view=goals',
+  },
+  {
+    path: '/super-agent/hitl', redirect: '/super-agent/workbench',
+  },
+  {
+    path: '/super-agent/config-source', redirect: '/super-agent/manage?view=source',
   },
   {
     path: '/:pathMatch(.*)*',

@@ -3248,3 +3248,5 @@ fanruan
 /backend/.pytest_tmp_t51/
 /backend/.pytest_tmp_t51b/
 /frontend/dist-verify-new/
+/.codebuddy/
+/.screenshots/

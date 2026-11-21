@@ -309,6 +309,15 @@ export default {
       'tenant-package-management': '租户套餐',
       workflow: '工作流管理',
       'workflow-management': '工作流列表',
+      // SuperAgent 显示端整合（独立外壳 + 三模块）
+      'super-agent-home': '超级智能体工作台',
+      'super-agent-board': 'Dashboard 看板',
+      'super-agent-hitl': 'HITL 审批',
+      'super-agent-config-source': 'Source 配置',
+      'super-agent-chat': 'Agent 对话',
+      'super-agent-feed': '动态 Feed',
+      'super-agent-ideas': '点子库',
+      'super-agent-goals': '目标',
     },
     systemTabs: {
       users: '用户管理',

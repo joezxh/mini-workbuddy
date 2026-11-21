@@ -55,16 +55,16 @@
     <!-- 右栏：上下文卡 -->
     <div class="sa-chat__context">
       <a-card title="上下文" size="small">
-        <div class="sa-chat__ctx-item" @click="router.push('/super-agent/goals')">
+        <div class="sa-chat__ctx-item" @click="goView('goals')">
           🎯 目标 <a-badge :count="store.goals.length" size="small" />
         </div>
-        <div class="sa-chat__ctx-item" @click="router.push('/super-agent/ideas')">
+        <div class="sa-chat__ctx-item" @click="goView('ideas')">
           💡 点子 <a-badge :count="store.ideas.length" size="small" />
         </div>
-        <div class="sa-chat__ctx-item" @click="router.push('/super-agent/feed')">
+        <div class="sa-chat__ctx-item" @click="goView('feed')">
           📋 Feed 未读 <a-badge :count="store.unreadFeedCount" size="small" />
         </div>
-        <div class="sa-chat__ctx-item" @click="router.push('/super-agent')">
+        <div class="sa-chat__ctx-item" @click="router.push('/super-agent/workbench')">
           🤖 看板
         </div>
       </a-card>
@@ -81,17 +81,25 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   abortChat, createChatSession, getChatSession, streamChatSend,
 } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useMuseNav } from '../muse-nav'
 
 const route = useRoute()
 const router = useRouter()
 const store = useSuperAgentStore()
+const museNav = useMuseNav()
+
+/** 容器内切视图；独立打开（旧路由仍可达）时回退到 router.push。 */
+function goView(view: string, params?: Record<string, any>) {
+  if (museNav) museNav.switchView(view, params)
+  else router.push(params ? { path: `/super-agent/muse`, query: { view, ...params } } : `/super-agent/muse`)
+}
 
 const input = ref('')
 const creatingSession = ref(false)
@@ -168,13 +176,21 @@ onMounted(async () => {
   await store.fetchIdeas()
   await store.fetchFeed()
   // 预填：从 Feed/Ideas「带 prompt 发起对话」跳转
-  const prefill = route.query.prompt as string | undefined
+  const prefill = (museNav?.params.value.prompt || route.query.prompt) as string | undefined
   if (prefill) input.value = prefill
   // 有历史会话则自动打开最近一个
   if (!store.activeSessionId && store.chatSessions.length) {
     await switchSession(store.chatSessions[0].id)
   }
 })
+
+// 内嵌态下组件不会重新挂载，监听跨视图传入的 prompt
+if (museNav) {
+  watch(
+    () => museNav.params.value.prompt,
+    (p) => { if (typeof p === 'string' && p) input.value = p },
+  )
+}
 </script>
 
 <style scoped lang="less">

@@ -178,7 +178,7 @@ git commit -m "docs: 回填 org-pattern spike 结论（FakeModel 基类/SOPEngin
 - [ ] **Step 1: 写失败测试**
 
 ```python
-# tests/org_patterns/test_common.py
+# tests/trade/test_common.py
 import pytest
 from _common import FakeChatModel, make_model, Trace, mock_fx_rate, erp_gateway  # conftest 注入 examples 路径
 

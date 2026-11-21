@@ -215,6 +215,9 @@ ROUTER_SPECS: List[RouterSpec] = [
     RouterSpec("app.duplex.voice.websocket_gateway", prefix=API_V1_PREFIX, tags=["调解语音"]),
     # admin_voice_config 自带 prefix /duplex/config，此处叠加 /api/v1/admin
     RouterSpec("app.routers.admin_voice_config", prefix=f"{API_V1_PREFIX}/admin", tags=["语音配置"]),
+    # orchestration 自带 prefix /duplex，此处叠加 /api/v1 → /api/v1/duplex/*
+    # Agent 编排设计管理 / 输出渠道管理 / voice 会话列表
+    RouterSpec("app.routers.duplex.orchestration", prefix=API_V1_PREFIX, tags=["双工编排管理"]),
 
     # --- 33. 孪生应用（同一模块两个 router，均自带完整 prefix，故此处不叠加）---
     # 先例：app.routers.kb.kg 的 router + build_router 两条目（:202/:204）。

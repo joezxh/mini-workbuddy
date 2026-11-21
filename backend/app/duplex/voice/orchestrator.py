@@ -37,6 +37,9 @@ class VoiceAgentOrchestrator:
         self._context = AgentContext()
         self._switch_lock = asyncio.Lock()
         self._channel_dispatcher = channel_dispatcher
+        # 最近一次切换的原因与来源，供 agent_switched 帧下发给前端展示细粒度激活徽章
+        self._last_switch_reason: str = "default"
+        self._last_switch_from: Optional[str] = None
 
     @property
     def active_agent(self) -> Optional[VoiceAgentPlugin]:
@@ -52,6 +55,34 @@ class VoiceAgentOrchestrator:
     def context(self) -> AgentContext:
         """当前上下文快照。"""
         return self._context
+
+    @property
+    def last_switch_reason(self) -> str:
+        """最近一次 Agent 切换原因（intent/voice/text/state_yield/manual/default）。"""
+        return self._last_switch_reason
+
+    @property
+    def last_switch_from(self) -> Optional[str]:
+        """最近一次切换的来源 Agent key。"""
+        return self._last_switch_from
+
+    def list_agents(self) -> list[dict]:
+        """列出已注册 Agent 的展示快照（供 REST 暴露给前端编排器面板）。"""
+        result: list[dict] = []
+        for key in self._registry.list_keys():
+            plugin = self._registry.get(key)
+            if plugin is None:
+                continue
+            result.append({
+                "key": key,
+                "name": plugin.display_name,
+                "system_prompt": plugin.system_prompt,
+                "tools": getattr(plugin, "tools", []),
+                "priority": getattr(plugin, "priority", 0),
+                "enabled": getattr(plugin, "enabled", True),
+                "active": key == self._active_key,
+            })
+        return result
 
     def set_channel_dispatcher(self, dispatcher: ChannelOutputDispatcher) -> None:
         """注入多渠道输出分发器（gateway 创建后调用）。"""
@@ -119,14 +150,20 @@ class VoiceAgentOrchestrator:
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[Orchestrator] on_assistant_turn_end 异常: {e}")
 
-        # 多渠道输出分发
+        # 多渠道输出分发（结构化结果供 WS output.dispatched 与 extra_data 落库）
+        self._last_dispatch = []
         if self._channel_dispatcher:
             try:
-                await self._channel_dispatcher.dispatch(
+                self._last_dispatch = await self._channel_dispatcher.dispatch_detailed(
                     text=text, agent_key=self._active_key
                 )
             except Exception as e:  # noqa: BLE001
                 logger.error(f"[Orchestrator] 渠道分发异常: {e}")
+
+    @property
+    def last_dispatch(self) -> list[dict]:
+        """最近一次回复的多渠道结构化分发结果。"""
+        return getattr(self, "_last_dispatch", [])
 
     async def on_tool_call(self, tool_name: str, arguments: dict) -> Optional[dict]:
         """工具调用钩子，转发给当前活跃 Agent。"""
@@ -172,6 +209,8 @@ class VoiceAgentOrchestrator:
             # 3. 激活新 Agent
             self._active_key = key
             self._context.active_agent = key
+            self._last_switch_reason = reason
+            self._last_switch_from = current_key
             try:
                 await target.on_activate(self._context)
             except Exception as e:  # noqa: BLE001

@@ -1,0 +1,91 @@
+// 管理界面配置项页共享样式（对齐原型 config-* 区块）。
+.sa-cfg {
+  max-width: 980px;
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--sa-text-3);
+    margin: 12px 0 6px;
+  }
+}
+
+.mono,
+.mono :deep(textarea) {
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  font-size: 11px;
+}
+
+.cfg-card {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+
+.cfg-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sa-text-1);
+  margin-bottom: 8px;
+}
+
+.cfg-hint {
+  font-size: 12px;
+  color: var(--sa-text-3);
+  line-height: 1.7;
+  margin-bottom: 4px;
+
+  .peach { color: var(--sa-peach); }
+}
+
+code {
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--sa-teal);
+  font-size: 12px;
+}
+
+.sa-note-ok {
+  background: rgba(166, 227, 161, 0.12);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+  border-radius: var(--sa-radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sa-text-2);
+
+  b { color: var(--sa-green); }
+}
+
+.sa-note-demo {
+  background: rgba(250, 179, 135, 0.1);
+  border: 1px solid rgba(250, 179, 135, 0.3);
+  border-radius: var(--sa-radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--sa-peach);
+}
+
+.sa-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--sa-border);
+  border-radius: var(--sa-radius);
+  background: var(--sa-surface);
+  color: var(--sa-text-1);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 16px;
+
+  &:hover {
+    border-color: var(--sa-accent);
+    box-shadow: 0 4px 16px rgba(137, 180, 250, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .emo { font-size: 24px; }
+  .txt b { display: block; font-size: 14px; }
+  .txt span { font-size: 12px; color: var(--sa-text-3); }
+}

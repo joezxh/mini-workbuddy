@@ -42,10 +42,16 @@ class EventType(str, Enum):
     EXPERT_JOIN = "expert.join"
     EXPERT_LEAVE = "expert.leave"
     AGENT_ACTIVITY = "agent.activity"
+    # 注意：值用下划线，与前端 useVoiceChannel 的 agent_switched 帧名保持一致
+    AGENT_SWITCHED = "agent_switched"
     INSIGHT_DELTA = "insight.delta"
     RESPONSE_REQUEST = "response.request"
     PARTICIPANT_JOINED = "participant.joined"
     PARTICIPANT_LEFT = "participant.left"
+    # 编排器/渠道管理增量（Agent 编排 + 输出渠道联动）
+    CHANNEL_CONFIG = "channel_config"
+    CHANNEL_CONFIG_ACK = "channel_config_ack"
+    OUTPUT_DISPATCHED = "output.dispatched"
 
 
 class ProviderKey(str, Enum):

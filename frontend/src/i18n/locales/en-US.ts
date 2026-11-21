@@ -304,6 +304,15 @@ export default {
       'tenant-package-management': 'Tenant Packages',
       workflow: 'Workflow',
       'workflow-management': 'Workflow List',
+      // SuperAgent unified display shell + three modules
+      'super-agent-home': 'SuperAgent Workbench',
+      'super-agent-board': 'Dashboard',
+      'super-agent-hitl': 'HITL Approvals',
+      'super-agent-config-source': 'Source Config',
+      'super-agent-chat': 'Agent Chat',
+      'super-agent-feed': 'Activity Feed',
+      'super-agent-ideas': 'Ideas',
+      'super-agent-goals': 'Goals',
     },
     systemTabs: {
       users: 'User Management',

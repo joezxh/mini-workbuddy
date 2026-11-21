@@ -2,7 +2,7 @@
 """跨境电商 8 组织模式团队的种子数据（单一事实源）。
 
 供 backend/scripts/seed_org_pattern_teams.py 经 HTTP API 幂等注册，
-也供 org_patterns 注册表（PATTERNS）对齐 team_code / sample_input。
+也供 trade 注册表（PATTERNS）对齐 team_code / sample_input。
 
 契约：
 - agent_code / team_code 前缀 xborder-，全 ASCII；中文业务名入 name/描述/system_prompt；
@@ -135,7 +135,7 @@ TEAMS = [
     {
         "team_code": "xborder-supervisor-listing",
         "name": "跨境新品上架统筹",
-        "description": "Supervisor-Worker：Leader 运行时自动生成并派活汇总，4 专家独立上下文。模式实现语义见 app/ai/team/org_patterns/listing_launch.py；UI 会话统一走 Leader 派活。",
+        "description": "Supervisor-Worker：Leader 运行时自动生成并派活汇总，4 专家独立上下文。模式实现语义见 app/ai/team/trade/listing_launch.py；UI 会话统一走 Leader 派活。",
         "category": CATEGORY,
         "mode": "supervisor",
         "members": ["xborder-product-picker", "xborder-listing-writer",
@@ -148,7 +148,7 @@ TEAMS = [
     {
         "team_code": "xborder-hierarchy-expansion",
         "name": "海外市场拓展",
-        "description": "层级式：总监→渠道负责人→Worker 两层（表结构无层级字段，6 角色平铺，层级见角色描述）。真实层级语义由 app/ai/team/org_patterns/market_expansion.py 保证。",
+        "description": "层级式：总监→渠道负责人→Worker 两层（表结构无层级字段，6 角色平铺，层级见角色描述）。真实层级语义由 app/ai/team/trade/market_expansion.py 保证。",
         "category": CATEGORY,
         "mode": "supervisor",
         "members": ["xborder-region-director", "xborder-sea-leader", "xborder-eu-leader",
@@ -162,7 +162,7 @@ TEAMS = [
     {
         "team_code": "xborder-pipeline-inquiry",
         "name": "外贸询盘报价",
-        "description": "流水线：询盘解析→报价（带验收重试≤3）→合同条款→跟单催单。模式实现语义见 app/ai/team/org_patterns/inquiry_pipeline.py（原生 agentscope.sop）。",
+        "description": "流水线：询盘解析→报价（带验收重试≤3）→合同条款→跟单催单。模式实现语义见 app/ai/team/trade/inquiry_pipeline.py（原生 agentscope.sop）。",
         "category": CATEGORY,
         "mode": "sequential",
         "members": ["xborder-inquiry-parser", "xborder-quotation-maker",
@@ -176,7 +176,7 @@ TEAMS = [
     {
         "team_code": "xborder-handoff-support",
         "name": "跨语种客服交接",
-        "description": "交接式：控制权一次性交出，只传 <handover>摘要</handover> 不传全量对话，max_hops=3。交接语义由 app/ai/team/org_patterns/support_handoff.py 保证。",
+        "description": "交接式：控制权一次性交出，只传 <handover>摘要</handover> 不传全量对话，max_hops=3。交接语义由 app/ai/team/trade/support_handoff.py 保证。",
         "category": CATEGORY,
         "mode": "sequential",
         "members": ["xborder-presale-es", "xborder-logistics-en", "xborder-returns-zh"],
@@ -188,7 +188,7 @@ TEAMS = [
     {
         "team_code": "xborder-mesh-multiplatform",
         "name": "多平台运营协同",
-        "description": "对等网状：无中心节点，共享消息板全员可见，轮转发言预算 16 条/max_rounds=4。语义见 app/ai/team/org_patterns/multiplatform_ops.py。",
+        "description": "对等网状：无中心节点，共享消息板全员可见，轮转发言预算 16 条/max_rounds=4。语义见 app/ai/team/trade/multiplatform_ops.py。",
         "category": CATEGORY,
         "mode": "msghub",
         "members": ["xborder-amazon-ops", "xborder-shopee-ops", "xborder-tiktok-ops", "xborder-indie-ops"],
@@ -200,7 +200,7 @@ TEAMS = [
     {
         "team_code": "xborder-debate-adreview",
         "name": "广告策略评审",
-        "description": "辩论/群聊：正反方互见全量辩论记录，裁判每轮结构化裁决，max_rounds=3 硬终局。语义见 app/ai/team/org_patterns/ad_review_debate.py。",
+        "description": "辩论/群聊：正反方互见全量辩论记录，裁判每轮结构化裁决，max_rounds=3 硬终局。语义见 app/ai/team/trade/ad_review_debate.py。",
         "category": CATEGORY,
         "mode": "msghub",
         "members": ["xborder-pro-creative", "xborder-con-creative", "xborder-ad-judge"],
@@ -212,7 +212,7 @@ TEAMS = [
     {
         "team_code": "xborder-parallel-budget",
         "name": "多渠道预算测算",
-        "description": "并行聚合：三渠道无依赖真并发（asyncio.gather+wait_for），单路失败占位继续，聚合师汇总。语义见 app/ai/team/org_patterns/budget_parallel.py。",
+        "description": "并行聚合：三渠道无依赖真并发（asyncio.gather+wait_for），单路失败占位继续，聚合师汇总。语义见 app/ai/team/trade/budget_parallel.py。",
         "category": CATEGORY,
         "mode": "parallel",
         "members": ["xborder-roi-google", "xborder-roi-meta", "xborder-roi-tiktok", "xborder-budget-aggregator"],
@@ -225,7 +225,7 @@ TEAMS = [
     {
         "team_code": "xborder-federated-supplychain",
         "name": "跨组织供应链协同",
-        "description": "联邦式：协调者经白名单网关扇出 3 信任域（工厂/物流/广告），越界字段拒绝，只交换最小必要结果。语义见 app/ai/team/org_patterns/supply_chain_federation.py。",
+        "description": "联邦式：协调者经白名单网关扇出 3 信任域（工厂/物流/广告），越界字段拒绝，只交换最小必要结果。语义见 app/ai/team/trade/supply_chain_federation.py。",
         "category": CATEGORY,
         "mode": "dag",
         "members": ["xborder-brand-coordinator", "xborder-factory-erp-agent",

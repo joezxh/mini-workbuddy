@@ -270,7 +270,9 @@ def seed_agent_impl_type_dictionary(engine: Engine) -> None:
 # path 不落 /admin/<key>（非外壳 Tab 页），走真实路由直接导航（resolveMenuTarget）。
 # i18n_key 缺翻译时前端回退 name 字段，故 name 直接写中文标题。
 _SUPERAGENT_MENUS: list[dict] = [
-    {"path": "/super-agent", "name": "SuperAgent 看板", "icon": "RobotOutlined", "sort": 70, "i18n_key": "sys.menu.super-agent-board"},
+    # 显示端整合后：主入口指向独立 SuperAgent 外壳（顶栏 + 分组导航 + 三模块）。
+    {"path": "/super-agent", "name": "超级智能体工作台", "icon": "RobotOutlined", "sort": 70, "i18n_key": "sys.menu.super-agent-home"},
+    # 以下为旧入口兼容项：path 由前端重定向到新外壳对应视图，避免历史书签 404。
     {"path": "/super-agent/hitl", "name": "HITL 审批", "icon": "AuditOutlined", "sort": 71, "i18n_key": "sys.menu.super-agent-hitl"},
     {"path": "/super-agent/config-source", "name": "Source 配置", "icon": "SettingOutlined", "sort": 72, "i18n_key": "sys.menu.super-agent-config-source"},
     {"path": "/super-agent/chat", "name": "Agent 对话", "icon": "CommentOutlined", "sort": 73, "i18n_key": "sys.menu.super-agent-chat"},
@@ -289,6 +291,17 @@ def seed_superagent_menus(engine: Engine) -> None:
                 {"path": m["path"]},
             ).first()
             if exists:
+                # 已存在则同步展示字段（幂等更新），使显示端整合后的入口名称生效。
+                conn.execute(
+                    text(
+                        "UPDATE sys_menu SET name = :name, icon = :icon, i18n_key = :i18n_key, "
+                        "sort = :sort WHERE path = :path AND is_deleted = false"
+                    ),
+                    {
+                        "name": m["name"], "icon": m["icon"], "i18n_key": m["i18n_key"],
+                        "sort": m["sort"], "path": m["path"],
+                    },
+                )
                 continue
             conn.execute(
                 text(

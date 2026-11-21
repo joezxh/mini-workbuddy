@@ -75,9 +75,16 @@ import { message } from 'ant-design-vue'
 import { createGoal, createIdea, pinIdea, refreshIdeas } from '@/api/super-agent'
 import { type Idea } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useMuseNav } from '../muse-nav'
 
 const router = useRouter()
 const store = useSuperAgentStore()
+const museNav = useMuseNav()
+
+function goView(view: string, params?: Record<string, any>) {
+  if (museNav) museNav.switchView(view, params)
+  else router.push(params ? { path: '/super-agent/muse', query: { view, ...params } } : `/super-agent/muse`)
+}
 
 const actionOpen = ref(false)
 const createOpen = ref(false)
@@ -98,7 +105,7 @@ function openAction(i: Idea) {
 function toChat() {
   if (!active.value) return
   actionOpen.value = false
-  router.push({ path: '/super-agent/chat', query: { prompt: active.value.prompt || active.value.pitch } })
+  goView('chat', { prompt: active.value.prompt || active.value.pitch })
 }
 
 async function toGoal() {
@@ -113,7 +120,7 @@ async function toGoal() {
     })
     message.success('Goal 已创建（L3 确认）')
     actionOpen.value = false
-    router.push('/super-agent/goals')
+    goView('goals')
   } catch {
     /* request 拦截器已提示 */
   } finally {
@@ -135,7 +142,7 @@ async function toRoutine() {
     })
     message.success('Routine 已建立（每日 9:00 check-in）')
     actionOpen.value = false
-    router.push('/super-agent/goals')
+    goView('goals')
   } catch {
     /* request 拦截器已提示 */
   } finally {
@@ -229,8 +236,8 @@ onMounted(() => {
 }
 
 .sa-idea-card {
-  background: #fff;
-  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  background: var(--sa-surface, var(--ant-color-bg-container, #fff));
+  border: 1px solid var(--sa-border, var(--ant-color-border-secondary, #f0f0f0));
   border-radius: 8px;
   padding: 14px;
   cursor: pointer;

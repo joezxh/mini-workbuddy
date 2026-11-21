@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from app.ai.team.org_patterns import budget_parallel
+from app.ai.team.trade import budget_parallel
 
 
 def test_real_concurrency_by_timestamps():

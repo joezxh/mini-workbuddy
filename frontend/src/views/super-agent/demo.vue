@@ -1,13 +1,13 @@
 <!-- SuperAgent Demo 页面（Task 4.4）—— 预设脚本：一键运行 → 实时进度 → 最终报告 -->
 <template>
   <div class="sa-demo">
-    <a-page-header title="SuperAgent Demo" sub-title="浏览器 → 自动化 → 反思 → 交付" @back="router.push('/super-agent')">
-      <template #extra>
-        <a-button type="primary" :loading="running" :disabled="running" @click="run">
-          {{ running ? '运行中…' : '▶ 一键运行' }}
-        </a-button>
-      </template>
-    </a-page-header>
+    <div class="sa-page-head demo-head">
+      <h1>🎯 电商营销 Demo · 完整端到端范例</h1>
+      <p>数据采集 → 竞品分析 → 方案生成 → 反思校验 → ERP 执行，完整跑通 SuperAgent 流水线</p>
+      <a-button class="demo-run" type="primary" :loading="running" :disabled="running" @click="run">
+        {{ running ? '运行中…' : '🚀 一键运行' }}
+      </a-button>
+    </div>
 
     <!-- 预设脚本说明 -->
     <a-card title="Demo 脚本" size="small" class="mb12">
@@ -62,7 +62,7 @@
             <pre class="sa-demo__report">{{ reportText }}</pre>
           </a-descriptions-item>
         </a-descriptions>
-        <a-button type="link" @click="router.push(`/super-agent/detail/${ticketId}`)">
+        <a-button type="link" @click="router.push(`/super-agent/workbench/detail/${ticketId}`)">
           查看 Ticket 详情 →
         </a-button>
       </a-card>
@@ -129,6 +129,7 @@ function pushEvent(event: string, data: any) {
 }
 
 let es: EventSource | null = null
+let fallbackTimer: number | null = null
 
 async function run() {
   if (running.value) return
@@ -155,7 +156,8 @@ async function run() {
     ticketId.value = t.id
     message.success(`Ticket ${t.id} 已创建`)
     // ② 轮询兜底：SSE 收不到 ticket_completed 时 60s 后拉详情收尾
-    setTimeout(() => { if (running.value) finish(ticketId.value) }, 60000)
+    if (fallbackTimer) window.clearTimeout(fallbackTimer)
+    fallbackTimer = window.setTimeout(() => { if (running.value) finish(ticketId.value) }, 60000)
   } catch {
     es?.close(); es = null
     running.value = false
@@ -181,10 +183,16 @@ async function finish(id: string) {
 
 onUnmounted(() => {
   es?.close()
+  if (fallbackTimer) window.clearTimeout(fallbackTimer)
 })
 </script>
 
 <style scoped lang="less">
+.demo-head {
+  position: relative;
+  .demo-run { position: absolute; right: 0; top: 2px; }
+}
+
 .sa-demo {
   &__grid {
     display: grid;

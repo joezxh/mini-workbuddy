@@ -3,8 +3,8 @@
 
 只走 HTTP API（POST /api/v1/agent-config、GET/POST /api/v1/ai-team），
 不做 DB 迁移；范式照 seed_domain_content.py（按 code 查重跳过、缺成员跳过整团队）。
-种子数据单一事实源：app/ai/team/org_patterns/seed_data.py（AGENTS/TEAMS）；
-真实模式语义由 app/ai/team/org_patterns/ 各模式模块实现（--mock 离线可跑）。
+种子数据单一事实源：app/ai/team/trade/seed_data.py（AGENTS/TEAMS）；
+真实模式语义由 app/ai/team/trade/ 各模式模块实现（--mock 离线可跑）。
 挂载 mode 仅记录来源模板 + 前端展示（UI 会话运行时统一 Leader+ask_xxx 派活，不读 mode）。
 
 用法（需先启动后端 uvicorn）：
@@ -22,7 +22,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # 沿用 scripts/apply_ddl.py 惯例：挂 backend 以 import app
 
-from app.ai.team.org_patterns.seed_data import AGENTS, TEAMS  # noqa: E402
+from app.ai.team.trade.seed_data import AGENTS, TEAMS  # noqa: E402
 
 BASE = "http://127.0.0.1:8000"
 TOKEN = ""

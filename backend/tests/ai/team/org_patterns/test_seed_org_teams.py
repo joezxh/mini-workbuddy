@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""种子脚本 HTTP 层契约：payload 来自 org_patterns.seed_data（纯数据断言，不触网）。"""
+"""种子脚本 HTTP 层契约：payload 来自 trade.seed_data（纯数据断言，不触网）。"""
 import importlib.util
 from pathlib import Path
 
@@ -16,7 +16,7 @@ def load_script(filename: str):
 
 
 def test_build_payloads_consistency():
-    from app.ai.team.org_patterns.seed_data import AGENTS, TEAMS
+    from app.ai.team.trade.seed_data import AGENTS, TEAMS
 
     mod = load_script("seed_org_pattern_teams.py")
     agent_payloads, team_payloads = mod.build_payloads()
@@ -39,7 +39,7 @@ def test_build_payloads_consistency():
 def test_script_has_no_inline_data_drift():
     """种子数据单一事实源在 seed_data：脚本不得再内联 AGENTS/TEAMS 定义。"""
     mod = load_script("seed_org_pattern_teams.py")
-    from app.ai.team.org_patterns import seed_data
+    from app.ai.team.trade import seed_data
 
     assert mod.AGENTS is seed_data.AGENTS
     assert mod.TEAMS is seed_data.TEAMS

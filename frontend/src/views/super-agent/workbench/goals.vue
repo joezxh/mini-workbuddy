@@ -116,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -125,9 +125,11 @@ import {
   getGoal, patchGoal, proposeGoal, skipGoalStep, toggleGoalStep,
 } from '@/api/super-agent'
 import { useSuperAgentStore } from '@/stores/super-agent'
+import { useMuseNav } from '../muse-nav'
 
 const route = useRoute()
 const store = useSuperAgentStore()
+const museNav = useMuseNav()
 
 const createOpen = ref(false)
 const creating = ref(false)
@@ -257,9 +259,17 @@ async function addNote() {
 onMounted(async () => {
   await store.fetchGoals()
   // Feed approval 卡片 / SSE goal_updated 跳转直达 drawer
-  const goalId = route.query.goal as string | undefined
-  if (goalId) openDrawer(goalId)
+  const goalId = (museNav?.params.value.goal || route.query.goal) as string | undefined
+  if (goalId) await openDrawer(goalId)
 })
+
+// 内嵌态下组件不会重新挂载，监听跨视图传入的 goal
+if (museNav) {
+  watch(
+    () => museNav.params.value.goal,
+    (goalId) => { if (typeof goalId === 'string' && goalId) void openDrawer(goalId) },
+  )
+}
 </script>
 
 <style scoped lang="less">
@@ -370,8 +380,8 @@ onMounted(async () => {
 }
 
 .sa-goal-card {
-  background: #fff;
-  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  background: var(--sa-surface, var(--ant-color-bg-container, #fff));
+  border: 1px solid var(--sa-border, var(--ant-color-border-secondary, #f0f0f0));
   border-radius: 8px;
   padding: 14px;
   cursor: pointer;

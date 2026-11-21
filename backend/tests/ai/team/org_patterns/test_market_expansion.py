@@ -2,7 +2,7 @@
 """海外市场拓展（层级式）：总监不越权直派 Worker + 子团队超时不中断总监。"""
 import asyncio
 
-from app.ai.team.org_patterns import market_expansion
+from app.ai.team.trade import market_expansion
 
 
 def test_no_skip_level():

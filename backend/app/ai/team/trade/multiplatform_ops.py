@@ -16,7 +16,7 @@ from typing import Optional
 from agentscope.message import UserMsg
 from agentscope.tool import FunctionTool
 
-from app.ai.team.org_patterns.scaffolding import (
+from app.ai.team.trade.scaffolding import (
     Trace,
     make_agent,
     make_model,

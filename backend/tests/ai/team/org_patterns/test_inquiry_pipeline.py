@@ -2,7 +2,7 @@
 """外贸询盘报价（流水线）：步骤严格顺序 + verifier 重试上限。"""
 import asyncio
 
-from app.ai.team.org_patterns import inquiry_pipeline
+from app.ai.team.trade import inquiry_pipeline
 
 
 def test_pipeline_order_and_retry():

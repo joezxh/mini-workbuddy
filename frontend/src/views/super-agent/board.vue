@@ -3,20 +3,35 @@
   <div class="sa-board">
     <div class="sa-board__header">
       <div>
-        <h2 class="sa-board__title">SuperAgent 看板</h2>
+        <h1 class="sa-board__title">📊 Dashboard 看板</h1>
+        <p class="sa-board__desc">实时查看所有 Ticket 状态，快速进入执行详情</p>
         <span class="sa-board__sub">
           <a-badge :status="store.connected ? 'success' : 'default'" />
           {{ store.connected ? 'SSE 已连接' : '未连接（轮询中）' }}
-          <template v-if="store.lastEvent">
-            · 最近事件：{{ store.lastEvent.event }}
-          </template>
+          <template v-if="store.lastEvent">· 最近事件：{{ store.lastEvent.event }}</template>
         </span>
       </div>
       <div class="sa-board__actions">
         <a-space>
-          <a-button @click="router.push('/super-agent/demo')">▶ Demo 一键运行</a-button>
-          <a-button type="primary" @click="openCreate">+ 创建 Ticket</a-button>
+          <a-button @click="router.push('/super-agent/workbench/demo')">▶ Demo 一键运行</a-button>
+          <a-button type="primary" @click="openCreate">➕ 新建 Ticket</a-button>
         </a-space>
+      </div>
+    </div>
+
+    <!-- 原型 Dashboard 4 统计卡 -->
+    <div class="sa-stats">
+      <div class="sa-stat">
+        <div class="lab">执行中</div><div class="val">{{ stat('working') }}</div><div class="delta">WORKING + REFLECTING</div>
+      </div>
+      <div class="sa-stat peach">
+        <div class="lab">待决策</div><div class="val">{{ stat('pending') }}</div><div class="delta">需要你审批</div>
+      </div>
+      <div class="sa-stat green">
+        <div class="lab">本周完成</div><div class="val">{{ stat('completed') }}</div><div class="delta">COMPLETED</div>
+      </div>
+      <div class="sa-stat red">
+        <div class="lab">阻塞 / 等待人工</div><div class="val">{{ stat('blocked') }}</div><div class="delta">BLOCKED + WAITING</div>
       </div>
     </div>
 
@@ -32,7 +47,7 @@
               v-for="t in store.stageGroups[stage]"
               :key="t.id"
               class="sa-ticket-card"
-              @click="router.push(`/super-agent/detail/${t.id}`)"
+              @click="router.push(`/super-agent/workbench/detail/${t.id}`)"
             >
               <div class="sa-ticket-card__title">{{ t.title }}</div>
               <div class="sa-ticket-card__meta">
@@ -61,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { createTicket } from '@/api/super-agent'
@@ -92,6 +107,17 @@ function duration(createdAt?: string): string {
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60}m`
 }
 
+/** Dashboard 统计卡：按聚合口径归并 stage 计数。 */
+function stat(kind: 'working' | 'pending' | 'completed' | 'blocked'): number {
+  const g = store.stageGroups
+  switch (kind) {
+    case 'working': return (g.WORKING?.length || 0) + (g.REFLECTING?.length || 0)
+    case 'pending': return (g.PENDING_ASSESS?.length || 0) + (g.ACCEPTED?.length || 0)
+    case 'completed': return g.COMPLETED?.length || 0
+    case 'blocked': return (g.BLOCKED?.length || 0) + (g.WAITING_PERSON?.length || 0)
+  }
+}
+
 function openCreate() {
   createForm.title = ''
   createForm.prompt = ''
@@ -116,13 +142,9 @@ async function doCreate() {
   }
 }
 
+// SSE 由 SuperAgentShell 统一订阅；这里只拉数据，离开看板不再断开全局连接。
 onMounted(() => {
   store.fetchTickets()
-  store.connectEvents()
-})
-
-onUnmounted(() => {
-  store.disconnectEvents()
 })
 </script>
 
@@ -196,8 +218,8 @@ onUnmounted(() => {
 }
 
 .sa-ticket-card {
-  background: #fff;
-  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  background: var(--sa-surface, var(--ant-color-bg-container, #fff));
+  border: 1px solid var(--sa-border, var(--ant-color-border-secondary, #f0f0f0));
   border-radius: 6px;
   padding: 8px 10px;
   cursor: pointer;
@@ -224,5 +246,44 @@ onUnmounted(() => {
     font-size: 11px;
     color: var(--ant-color-text-tertiary, #bfbfbf);
   }
+}
+
+.sa-board__desc {
+  font-size: 13px;
+  color: var(--sa-text-3);
+  margin: -8px 0 6px;
+}
+
+.sa-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.sa-stat {
+  position: relative;
+  overflow: hidden;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-border);
+  border-radius: var(--sa-radius);
+  padding: 16px 18px;
+
+  &::before {
+    content: '';
+    position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--sa-accent), var(--sa-mauve));
+  }
+  &.peach::before { background: linear-gradient(90deg, var(--sa-peach), var(--sa-yellow)); }
+  &.green::before { background: linear-gradient(90deg, var(--sa-green), var(--sa-teal)); }
+  &.red::before { background: linear-gradient(90deg, var(--sa-red), var(--sa-pink)); }
+
+  .lab { font-size: 12px; color: var(--sa-text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+  .val { font-size: 30px; font-weight: 800; color: var(--sa-text-1); font-variant-numeric: tabular-nums; margin: 6px 0; }
+  .delta { font-size: 11px; color: var(--sa-text-3); }
+}
+
+@media (max-width: 1100px) {
+  .sa-stats { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
