@@ -71,8 +71,18 @@ def load_frames(filename: str, content: bytes) -> Dict[str, pd.DataFrame]:
 
 
 def save_original(uploads_root: Path, tenant_id: int, source_id: int, filename: str,
-                  content: bytes) -> str:
-    """原始文件落盘（尽力而为）：失败仅告警，不阻断入库主流程。"""
+                  content: bytes, db=None) -> str:
+    """原始文件落盘（尽力而为）：优先统一存储，失败回退本地；不阻断入库主流程。"""
+    from app.services.file import file_service
+
+    try:
+        record = file_service.create_file(
+            db, content, filename, directory=f"dataops/excel/{source_id}",
+            code="other", tenant_id=tenant_id,
+        )
+        return f"file://{record.id}"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[Excel 落库] 统一存储失败，回退本地落盘: {exc}")
     try:
         target_dir = Path(uploads_root) / "dataops" / "excel" / str(tenant_id) / str(source_id)
         target_dir.mkdir(parents=True, exist_ok=True)

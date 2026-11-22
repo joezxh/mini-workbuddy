@@ -17,7 +17,7 @@ from agentscope.event import (
 )
 from agentscope.message import ToolCallBlock
 
-from app.duplex.voice.providers.agentscope import AgentscopeRealtimeProvider
+from app.framework.duplex.voice.providers.agentscope import AgentscopeRealtimeProvider
 
 
 class FakeModel:
@@ -112,7 +112,7 @@ async def test_audio_single_channel_no_duplicate():
 
     class StubTransport:
         async def send_audio(self, pcm, item_id):
-            from app.duplex.voice.providers.base import ProviderEvent
+            from app.framework.duplex.voice.providers.base import ProviderEvent
             await p._queue.put(ProviderEvent("audio_delta", {"audio": pcm}))
 
         def close_uplink(self):
@@ -177,7 +177,7 @@ def _patch_dashscope(monkeypatch, audio_cls, omni_cls):
 
 
 def test_build_model_routes_qwen_audio_any_version(monkeypatch):
-    from app.duplex.voice.providers import agentscope as mod
+    from app.framework.duplex.voice.providers import agentscope as mod
     captured = {}
 
     class FakeAudioModel:
@@ -199,7 +199,7 @@ def test_build_model_routes_qwen_audio_any_version(monkeypatch):
 
 
 def test_build_model_routes_omni_any_version(monkeypatch):
-    from app.duplex.voice.providers import agentscope as mod
+    from app.framework.duplex.voice.providers import agentscope as mod
     captured = {}
 
     class FakeOmniModel:
@@ -219,7 +219,7 @@ def test_build_model_routes_omni_any_version(monkeypatch):
 
 
 def test_build_model_unknown_still_raises(monkeypatch):
-    from app.duplex.voice.providers import agentscope as mod
+    from app.framework.duplex.voice.providers import agentscope as mod
     _patch_dashscope(monkeypatch, object, object)
     with pytest.raises(ValueError, match="未知实时模型"):
         mod.build_realtime_model("dashscope", "some-random-model", "sk-x")

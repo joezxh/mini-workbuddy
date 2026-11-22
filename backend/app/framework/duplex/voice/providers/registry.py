@@ -6,7 +6,7 @@ from typing import Dict, Optional, Type
 
 from loguru import logger
 
-from app.duplex.voice.providers.base import RealtimeProvider
+from app.framework.duplex.voice.providers.base import RealtimeProvider
 
 
 class ProviderRegistry:
@@ -32,7 +32,7 @@ class ProviderRegistry:
         """
         if "dashscope" not in cls._providers:
             try:
-                from app.duplex.voice.providers.agentscope import (
+                from app.framework.duplex.voice.providers.agentscope import (
                     DashScopeAgentProvider,
                 )
                 cls.register(DashScopeAgentProvider)
@@ -40,7 +40,7 @@ class ProviderRegistry:
                 logger.warning(f"默认 Provider dashscope 注册失败: {e}")
         if "openai" not in cls._providers:
             try:
-                from app.duplex.voice.providers.agentscope import (
+                from app.framework.duplex.voice.providers.agentscope import (
                     OpenAIAgentProvider,
                 )
                 cls.register(OpenAIAgentProvider)
@@ -114,7 +114,7 @@ def _register_defaults() -> None:
 
     延迟到模块尾部导入，避免与 agentscope 的 registry 反向导入形成循环。
     """
-    from app.duplex.voice.providers.agentscope import (
+    from app.framework.duplex.voice.providers.agentscope import (
         DashScopeAgentProvider,
         OpenAIAgentProvider,
     )

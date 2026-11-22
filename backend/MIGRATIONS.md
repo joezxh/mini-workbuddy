@@ -35,3 +35,12 @@ alembic revision -m "描述" --autogenerate
 ```
 `alembic/env.py` 已显式 `import app.db.init_models` 以注册全部 ORM 模型，
 autogenerate 不会漏表。
+
+## 与 create_all 混合库的注意事项
+- 开发库由 `create_all` 建表时，`alembic_version` 往往停在中途，而新表/新列已由 ORM 补
+  不到（`create_all` 只建缺失的表，**不会 ALTER 已存在的表**），于是出现
+  `column xxx does not exist`。遇到时把相关迁移写成幂等（`has_table` / `information_schema` 守卫
+  + `CREATE INDEX IF NOT EXISTS`），再 `alembic upgrade head`，既修正 schema 又不破坏纯 alembic 部署。
+- 历史表（如 `sys_menu`、`sys_infra_file*`）属主可能是 `postgres`，而应用连的是其他账号；
+  `CREATE SEQUENCE ... OWNED BY <table>.id` 会报「sequence must have same owner as table」，
+  需先 `ALTER SEQUENCE ... OWNER TO <表属主>` 再建立归属。

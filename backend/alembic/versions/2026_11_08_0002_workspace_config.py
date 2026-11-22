@@ -18,6 +18,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 开发库由 create_all 建表（AUTO_CREATE_TABLES=True），此迁移需幂等。
+    if sa.inspect(op.get_bind()).has_table("sa_workspace_config"):
+        return
     op.create_table(
         "sa_workspace_config",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),

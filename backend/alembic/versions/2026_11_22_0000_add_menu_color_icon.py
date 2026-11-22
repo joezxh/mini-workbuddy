@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    cols = {c["name"] for c in sa.inspect(op.get_bind()).get_columns("sys_menu")}
+    if "color_icon" in cols:
+        return
     op.add_column(
         "sys_menu",
         sa.Column("color_icon", sa.Text(), nullable=True, comment="菜单彩色图标 data URL（base64）"),
@@ -24,4 +27,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("sys_menu", "color_icon")
+    op.execute("ALTER TABLE sys_menu DROP COLUMN IF EXISTS color_icon")

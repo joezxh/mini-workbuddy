@@ -8,8 +8,8 @@ import json
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
-from app.duplex.voice.providers.registry import register_provider
+from app.framework.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
+from app.framework.duplex.voice.providers.registry import register_provider
 
 
 class EchoProvider(RealtimeProvider):

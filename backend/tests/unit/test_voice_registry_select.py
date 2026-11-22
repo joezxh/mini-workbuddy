@@ -5,7 +5,7 @@ monkeypatch 模拟平台模型行的配置状态，不依赖真实数据库。
 """
 import pytest
 
-from app.duplex.voice.providers.registry import ProviderRegistry
+from app.framework.duplex.voice.providers.registry import ProviderRegistry
 
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def patch_resolve(monkeypatch):
         def fake_resolve(provider_key=None, model_id=None):
             return {"configured": configured_map.get(provider_key, False)}
         monkeypatch.setattr(
-            "app.duplex.voice.voice_config.resolve_voice_config", fake_resolve)
+            "app.framework.duplex.voice.voice_config.resolve_voice_config", fake_resolve)
     return _patch
 
 
@@ -54,7 +54,7 @@ def test_select_unknown_key_returns_default(patch_resolve):
 @pytest.mark.asyncio
 async def test_mcp_resolver_filters_by_tool_bindings(monkeypatch):
     """tool_bindings 非空时按名单过滤 adapter 工具集。"""
-    from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+    from app.framework.duplex import McpSessionResolver
 
     class FakeAdapter:
         def get_tool_schemas(self):
@@ -73,7 +73,7 @@ async def test_mcp_resolver_filters_by_tool_bindings(monkeypatch):
 @pytest.mark.asyncio
 async def test_mcp_resolver_empty_bindings_returns_empty():
     """无任何绑定时零注入（零改动可用）。"""
-    from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+    from app.framework.duplex import McpSessionResolver
 
     r = McpSessionResolver()
     assert await r.resolve_tools() == []

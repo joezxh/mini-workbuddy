@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -384,6 +384,37 @@ async def list_sqlbot_datasources(
         for ds in (raw if isinstance(raw, list) else [])
     ]
     return {"datasources": datasources}
+
+
+# ── AI 会话附件上传（统一文件存储）────────────────────────────────────────────
+
+@router.post("/upload")
+def upload_chat_attachment(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """上传 AI 会话附件，返回 {file_id, db_id, preview}（修复前端 404）。"""
+    from app.services.file import file_service
+
+    content = file.file.read()
+    try:
+        record = file_service.create_file(
+            db, content, file.filename or "unnamed", directory="ai_chat",
+            code="other", mime=file.content_type,
+            creator=getattr(current_user, "username", None),
+            tenant_id=getattr(current_user, "tenant_id", None),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    file_id = str(record.id)
+    return {
+        "code": 0, "message": "success",
+        "data": {
+            "file_id": file_id, "db_id": record.id,
+            "preview": record.url or f"/api/v1/ai/files/{file_id}",
+        },
+    }
 
 
 

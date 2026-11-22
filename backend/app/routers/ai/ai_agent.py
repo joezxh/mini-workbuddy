@@ -682,3 +682,59 @@ async def delete_session(
         raise HTTPException(status_code=404, detail="会话不存在")
     svc.delete_session(session_id)
     return {"message": "会话已删除"}
+
+
+# ── 技能产物（统一文件存储）─────────────────────────────────────────────────
+
+@router.get("/skill-execution/{execution_id}/artifacts")
+def list_skill_artifacts(
+    execution_id: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """列出执行产物（统一存储 + 历史磁盘）。"""
+    from app.ai.skills.artifact_store import scan_artifacts
+
+    items = scan_artifacts(execution_id, db=db)
+    return {
+        "execution_id": execution_id, "total": len(items),
+        "items": [
+            {"file_id": a.file_id, "filename": a.filename, "size_bytes": a.size_bytes,
+             "mime_type": a.mime_type}
+            for a in items
+        ],
+    }
+
+
+@router.get("/skill-artifacts/{file_id:path}/download")
+def download_skill_artifact(
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+):
+    """下载技能产物：file://<id> 走统一存储，历史格式走磁盘。"""
+    from urllib.parse import quote
+    from fastapi.responses import FileResponse, Response
+
+    from app.ai.skills.artifact_store import get_artifact_path
+    from app.services.file import file_service
+
+    prefix = "file://"
+    if file_id.startswith(prefix):
+        record = file_service.get_file(db, int(file_id[len(prefix):]))
+        if not record:
+            raise HTTPException(status_code=404, detail="产物不存在")
+        from app.services.file import file_config_service
+        client = file_config_service.get_client_by_config_id(db, record.config_id)
+        content = client.get_content(record.path, db)
+        if content is None:
+            raise HTTPException(status_code=404, detail="产物内容不存在")
+        name = record.name or record.path.split("/")[-1]
+        return Response(
+            content=content, media_type=record.type or "application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
+        )
+    disk_path = get_artifact_path(file_id)
+    if not disk_path:
+        raise HTTPException(status_code=404, detail="产物不存在")
+    return FileResponse(disk_path, filename=disk_path.name)

@@ -1,4 +1,4 @@
-from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+from app.framework.duplex import McpSessionResolver
 
 def test_empty_returns_no_tools():
     import asyncio

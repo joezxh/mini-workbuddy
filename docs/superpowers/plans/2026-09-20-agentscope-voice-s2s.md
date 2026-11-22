@@ -42,7 +42,7 @@
 import asyncio
 import pytest
 
-from app.duplex.voice.providers.agentscope_transport import BrowserTransport
+from app.framework.duplex.voice.providers.agentscope_transport import BrowserTransport
 
 
 def _make_transport(in_rate=16000, out_rate=24000):
@@ -132,7 +132,7 @@ from agentscope.realtime import (
     AudioFrame, ControlFrame, ControlFrameType, PlayoutPosition, TransportBase,
 )
 
-from app.duplex.voice.providers.base import ProviderEvent
+from app.framework.duplex.voice.providers.base import ProviderEvent
 
 _UPLINK_MAX = 100
 
@@ -282,7 +282,7 @@ from agentscope.event import (
 )
 from agentscope.message import ToolCallBlock
 
-from app.duplex.voice.providers.agentscope import AgentscopeRealtimeProvider
+from app.framework.duplex.voice.providers.agentscope import AgentscopeRealtimeProvider
 
 
 class FakeModel:
@@ -298,6 +298,7 @@ class FakeAgent:
         self._events = list(events)
 
     async def connect(self): ...
+
     async def close(self): ...
 
     async def reply_stream(self, transport):
@@ -408,8 +409,8 @@ from typing import Any, AsyncGenerator, Dict, Optional
 
 from loguru import logger
 
-from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
-from app.duplex.voice.providers.agentscope_transport import BrowserTransport
+from app.framework.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
+from app.framework.duplex.voice.providers.agentscope_transport import BrowserTransport
 
 
 def build_realtime_model(provider_key: str, model_name: str, api_key: str,
@@ -472,7 +473,7 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
                              model=model, toolkit=toolkit)
 
     def _toolkit_factory(self):
-        from app.duplex.voice.toolkit_builder import build_toolkit
+        from app.framework.duplex.voice.toolkit_builder import build_toolkit
         return build_toolkit(self._mcp_tool_schemas)
 
     # ---- RealtimeProvider 接口 ----
@@ -618,14 +619,14 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
             await self._queue.put(None)
 
     def get_capabilities(self):
-        from app.duplex.voice.capabilities import ProviderCapabilities
+        from app.framework.duplex.voice.capabilities import ProviderCapabilities
         return ProviderCapabilities(
             input_sample_rate=16000, output_sample_rate=24000,
             server_vad=True, native_transcription=True,
             barge_in_mode="server")
 
     def is_configured(self) -> bool:
-        from app.duplex.voice.voice_config import resolve_voice_config
+        from app.framework.duplex import resolve_voice_config
         try:
             return bool(resolve_voice_config(self.key).get("configured"))
         except Exception:  # noqa: BLE001
@@ -666,7 +667,7 @@ git commit -m "feat(voice): AgentscopeRealtimeProvider 内核与事件映射"
 
 ```python
 """Registry 更新后：默认注册 dashscope/openai，local/s2s 移除。"""
-from app.duplex.voice.providers.registry import ProviderRegistry
+from app.framework.duplex.voice.providers.registry import ProviderRegistry
 
 
 def test_default_keys_registered():
@@ -693,22 +694,22 @@ Expected: FAIL（local/s2s 仍注册、openai 缺失）
 
 ```python
     @classmethod
-    def _ensure_defaults(cls) -> None:
-        """惰性确保默认 Provider 已注册（幂等）。"""
-        if "dashscope" not in cls._providers:
-            try:
-                from app.duplex.voice.providers.agentscope import (
-                    DashScopeAgentProvider)
-                cls.register(DashScopeAgentProvider)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"默认 Provider dashscope 注册失败: {e}")
-        if "openai" not in cls._providers:
-            try:
-                from app.duplex.voice.providers.agentscope import (
-                    OpenAIAgentProvider)
-                cls.register(OpenAIAgentProvider)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"备选 Provider openai 注册失败: {e}")
+def _ensure_defaults(cls) -> None:
+    """惰性确保默认 Provider 已注册（幂等）。"""
+    if "dashscope" not in cls._providers:
+        try:
+            from app.framework.duplex.voice.providers.agentscope import (
+                DashScopeAgentProvider)
+            cls.register(DashScopeAgentProvider)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"默认 Provider dashscope 注册失败: {e}")
+    if "openai" not in cls._providers:
+        try:
+            from app.framework.duplex.voice.providers.agentscope import (
+                OpenAIAgentProvider)
+            cls.register(OpenAIAgentProvider)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"备选 Provider openai 注册失败: {e}")
 ```
 
 - [ ] **Step 4: registry.py 模块尾 `_register_defaults`（L114-123）替换**
@@ -716,7 +717,7 @@ Expected: FAIL（local/s2s 仍注册、openai 缺失）
 ```python
 def _register_defaults() -> None:
     """默认注册 AgentScope 内核 Provider（导入即生效）。"""
-    from app.duplex.voice.providers.agentscope import (
+    from app.framework.duplex.voice.providers.agentscope import (
         DashScopeAgentProvider, OpenAIAgentProvider)
     ProviderRegistry.register(DashScopeAgentProvider)
     ProviderRegistry.register(OpenAIAgentProvider)
@@ -736,8 +737,8 @@ class ProviderKey(str, Enum):
 
 ```python
 # LocalProvider / S2SProvider 自注册到 ProviderRegistry（import 即生效）
-from app.duplex.voice.providers.local import LocalProvider  # noqa: F401
-from app.duplex.voice.providers.s2s import S2SProvider  # noqa: F401
+from app.framework.duplex.voice.providers import LocalProvider  # noqa: F401
+from app.framework.duplex.voice.providers import S2SProvider  # noqa: F401
 ```
 
 - [ ] **Step 7: 运行新测试 + 记录存量失败清单**
@@ -771,7 +772,7 @@ tool.confirm 上行路由、voice_config 平台匹配。"""
 import json
 import pytest
 
-from app.duplex.voice.voice_config import _platform_matches
+from app.framework.duplex import _platform_matches
 
 
 class StubProvider:
@@ -795,8 +796,8 @@ def test_platform_matches():
 
 @pytest.mark.asyncio
 async def test_ping_replies_to_client():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex import _handle_control_frame
+    from app.framework.duplex import TurnState
 
     provider = StubProvider()
     sent = []
@@ -812,8 +813,8 @@ async def test_ping_replies_to_client():
 
 @pytest.mark.asyncio
 async def test_interrupt_calls_provider():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex import _handle_control_frame
+    from app.framework.duplex import TurnState
 
     provider = StubProvider()
     turn = TurnState()
@@ -826,8 +827,8 @@ async def test_interrupt_calls_provider():
 
 @pytest.mark.asyncio
 async def test_tool_confirm_routed():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex import _handle_control_frame
+    from app.framework.duplex import TurnState
 
     provider = StubProvider()
     await _handle_control_frame(
@@ -915,12 +916,13 @@ def _platform_matches(want: Optional[str], row_platform: str) -> bool:
 
 ```python
     mcp_tool_schemas: list = []
-    if agent_id:
-        try:
-            from app.duplex.voice.mcp_session_resolver import McpSessionResolver
-            mcp_tool_schemas = await McpSessionResolver().resolve_tools()
-        except Exception as e:  # noqa: BLE001 - MCP 注入失败不阻塞语音
-            logger.warning(f"MCP 工具注入失败（忽略）: {e}")
+if agent_id:
+    try:
+        from app.framework.duplex import McpSessionResolver
+
+        mcp_tool_schemas = await McpSessionResolver().resolve_tools()
+    except Exception as e:  # noqa: BLE001 - MCP 注入失败不阻塞语音
+        logger.warning(f"MCP 工具注入失败（忽略）: {e}")
 ```
 
 session_config（L253-260）追加一项 `"mcp_tools": mcp_tool_schemas,`。
@@ -1016,7 +1018,7 @@ git commit -m "feat(voice): 网关增量——interrupt 透传/tool.confirm 上�
 """toolkit_builder：MCPAdapter 工具 schema → AgentScope ToolBase 包装。"""
 import pytest
 
-from app.duplex.voice.toolkit_builder import build_toolkit, McpToolWrapper
+from app.framework.duplex.voice.toolkit_builder import build_toolkit, McpToolWrapper
 
 
 @pytest.mark.asyncio

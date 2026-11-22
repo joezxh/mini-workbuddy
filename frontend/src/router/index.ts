@@ -106,6 +106,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/admin/workflow/WorkflowManagement.vue'),
         meta: { title: '工作流管理', icon: 'ApiOutlined', requiresAdmin: true }
       },
+      // ── 统一文件存储管理（sys_menu /admin/file-management）──
+      {
+        path: 'admin/file-management',
+        name: 'FileManagement',
+        component: () => import('@/views/admin/system/file/index.vue'),
+        meta: { title: '文件存储管理', icon: 'CloudServerOutlined', requiresAdmin: true }
+      },
       // ── 数据资产目录（AF-01~AF-08）：独立路由，等价于 /dashboard?tab=data-asset 的外壳 Tab ──
       {
         path: 'admin/data-asset',

@@ -5,6 +5,8 @@ import type { Component } from 'vue'
 import { markRaw } from 'vue'
 import DashboardPanel from '@/views/Dashboard.vue'
 import SystemManagement from '@/views/admin/system/SystemManagement.vue'
+// 统一文件存储管理（sys_menu /admin/file-management）
+import FileManagement from '@/views/admin/system/file/index.vue'
 import AiSessionPanel from '@/views/assistant/AiSessionPanel.vue'
 import ProfilePanel from '@/views/admin/system/ProfilePanel.vue'
 import DictionaryPanel from '@/views/admin/system/DictionaryPanel.vue'
@@ -54,6 +56,7 @@ export const componentMap: Record<string, Component> = {
   'ai-sessions': markRaw(AiSessionPanel),
   'async-task-manage': markRaw(AsyncTaskManage),
   'system-management': markRaw(SystemManagement),
+  'file-management': markRaw(FileManagement),
   profile: markRaw(ProfilePanel),
   dictionary: markRaw(DictionaryPanel),
   region: markRaw(RegionPanel),

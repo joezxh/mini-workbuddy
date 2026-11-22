@@ -1,7 +1,7 @@
 """RealtimeProvider + ProviderRegistry 单元测试。"""
 import pytest
-from app.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
-from app.duplex.voice.providers.registry import ProviderRegistry
+from app.framework.duplex.voice.providers.base import ProviderEvent, RealtimeProvider
+from app.framework.duplex.voice.providers.registry import ProviderRegistry
 
 
 class TestProviderEvent:

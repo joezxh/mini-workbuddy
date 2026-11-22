@@ -36,6 +36,9 @@ from app.models.dataops.standard_cdm import (
     MetaObjectStandard,
     MetaStandardCatalog,
 )
+# 2026-11-22 统一文件存储迁移：KB 上传/重试链路改查 sys_infra_file，
+# 测试 schema 必须一并建这两张表，否则重试用例报 UndefinedTable
+from app.models.sys.sys_infra_file import SysInfraFile, SysInfraFileContent  # noqa: F401
 
 TENANT_A = 100
 TENANT_B = 200
@@ -69,6 +72,8 @@ KB_TABLES = [
     # CDM 模式层（图谱校验用）：目录 -> 对象标准 -> 关系标准
     MetaStandardCatalog.__table__, MetaObjectStandard.__table__,
     MetaObjectRelation.__table__,
+    # 统一文件存储（重试/下载链路按 file 元数据读取）
+    SysInfraFile.__table__, SysInfraFileContent.__table__,
 ]
 
 
@@ -202,3 +207,17 @@ def db(engine: Engine) -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture(autouse=True)
+def _route_upload_store_to_test_schema(monkeypatch, engine: Engine) -> None:
+    """统一文件存储迁移后，save_upload/load_upload 内部使用生产 SessionLocal，
+    会绕过 get_db 依赖覆盖把 sys_infra_file 写进开发库，导致测试数据污染、
+    且重试用例在测试 schema 中查不到文件记录（400 原始文件已丢失）。
+    这里把 upload_store.SessionLocal 替换为绑定测试引擎的 sessionmaker，
+    使落盘往返都发生在 per-test schema 内（配置表缺失时走本地磁盘兜底，
+    与迁移前行为一致）。"""
+    from app.services.kb import upload_store
+
+    test_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr(upload_store, "SessionLocal", test_factory)

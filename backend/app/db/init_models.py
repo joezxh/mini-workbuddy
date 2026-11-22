@@ -13,6 +13,7 @@ from app.models.sys.sys_user import (                                           
 from app.models.sys.sys_dictionary import SysDictionary, SysDictionaryItem        # noqa: F401
 from app.models.sys.sys_user_notification import SysUserNotification              # noqa: F401
 from app.models.sys.sys_infra_file import SysInfraFile, SysInfraFileContent             # noqa: F401
+from app.models.sys.sys_infra_file_config import SysInfraFileConfig                     # noqa: F401
 
 # --- AI 会话 / Agent (ai_ / agent_) ---
 from app.models.ai.ai_chat import AiChatSession, AiChatMessage               # noqa: F401

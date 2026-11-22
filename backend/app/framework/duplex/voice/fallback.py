@@ -11,8 +11,8 @@ from typing import Any, Awaitable, Callable, List, Optional
 
 from loguru import logger
 
-from app.duplex.voice.constants import ErrorCode
-from app.duplex.voice.reconnect_backoff import ReconnectBackoff, classify_error
+from app.framework.duplex.voice.constants import ErrorCode
+from app.framework.duplex.voice.reconnect_backoff import ReconnectBackoff, classify_error
 
 
 class VoiceFallback:

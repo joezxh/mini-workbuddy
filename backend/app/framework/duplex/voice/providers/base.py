@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, Optional
 
-from app.duplex.voice.capabilities import ProviderCapabilities
+from app.framework.duplex.voice.capabilities import ProviderCapabilities
 
 
 @dataclass

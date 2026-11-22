@@ -239,12 +239,14 @@ def download_document_file(
 ):
     """原文件下载（媒体命中播放/预览用，spec §7）。
 
-    路径由 tenant+uuid_code 重建（upload_store 布局），不信任 meta.file_path，
-    避免目录穿越/越权读取。目录内取唯一文件。
+    统一存储链路：meta.file_path 为 file://<id>，经 file_service 按 id 读取；
+    历史数据仍按 tenant+uuid_code 目录重建路径读取，均不信任任意外部路径。
     """
     from pathlib import Path
 
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, Response
+
+    from app.services.kb.upload_store import load_upload
 
     tenant_id = _tenant_id(current_user)
     doc = db.execute(
@@ -256,8 +258,21 @@ def download_document_file(
     ).scalars().first()
     if doc is None:
         raise HTTPException(status_code=404, detail="文档不存在")
-    from app.config import settings as app_settings
 
+    file_path = (doc.meta or {}).get("file_path") or ""
+    if file_path.startswith("file://"):
+        try:
+            content = load_upload(file_path, db=db)
+        except (FileNotFoundError, ValueError):
+            raise HTTPException(status_code=404, detail="原文件不存在")
+        from urllib.parse import quote
+        return Response(
+            content=content, media_type="application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(doc.name)}"},
+        )
+
+    # 历史数据兼容：按 tenant+uuid 目录读取
+    from app.config import settings as app_settings
     dir_path = Path(app_settings.UPLOAD_DIR) / "kb" / str(tenant_id) / doc.uuid_code
     files = [p for p in dir_path.iterdir() if p.is_file()] if dir_path.is_dir() else []
     if not files:
@@ -303,7 +318,7 @@ def delete_document(
     from app.services.kb.pgvector_store import PGVectorStore
 
     PGVectorStore(db, tenant_id).delete_document(_doc_collection_name(db, doc), doc.uuid_code)
-    drop_upload((doc.meta or {}).get("file_path"))
+    drop_upload((doc.meta or {}).get("file_path"), db=db)
     # 外部导入文档：连带清掉映射。若只靠外键 SET NULL 留孤儿映射，
     # 重新导入会因 content_hash 命中而误判「未变更」并跳过，文档再也拉不回来。
     db.query(KbExternalDocMap).filter(
@@ -730,7 +745,7 @@ def retry_document(
                    "如仅需重新向量化，请改用「重新向量化」",
         )
     try:
-        payload = load_upload(file_path)
+        payload = load_upload(file_path, db=db)
     except FileNotFoundError:
         raise HTTPException(
             status_code=400,
@@ -901,7 +916,7 @@ def rechunk_knowledge(
         try:
             for doc_id, _collection, path in queued:
                 try:
-                    payload = load_upload(path)
+                    payload = load_upload(path, db=s)
                 except OSError:
                     continue
                 doc = s.get(KbDocument, doc_id)

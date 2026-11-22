@@ -12,8 +12,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from app.duplex.voice.channels.registry import BUILTIN_CHANNELS, ChannelConfig
-from app.duplex.voice.plugins import BUILTIN_PLUGINS
+from app.framework.duplex.voice.channels.registry import BUILTIN_CHANNELS, ChannelConfig
+from app.framework.duplex.voice.plugins import BUILTIN_PLUGINS
 
 # 前端展示元数据（图标 / 描述），与前端 AgentOrchestratorManagerPanel 对应
 _AGENT_META: dict[str, dict[str, Any]] = {
@@ -133,7 +133,7 @@ def delete_channel(key: str) -> bool:
 
 def build_channel_registry() -> Any:
     """根据当前配置构造 ChannelRegistry（供网关会话初始化）。"""
-    from app.duplex.voice.channels.registry import ChannelRegistry
+    from app.framework.duplex.voice.channels.registry import ChannelRegistry
     cfgs = [
         ChannelConfig(
             key=c["key"], name=c["name"], active=c.get("active", False),

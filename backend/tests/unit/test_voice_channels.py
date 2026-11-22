@@ -4,12 +4,9 @@
 """
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
-from app.duplex.voice.channels import (
-    ChannelConfig,
+from app.framework.duplex.voice.channels import (
     ChannelOutputDispatcher,
     ChannelRegistry,
 )

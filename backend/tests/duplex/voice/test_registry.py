@@ -1,5 +1,5 @@
 """Registry 更新后：默认注册 dashscope/openai，local/s2s 移除。"""
-from app.duplex.voice.providers.registry import ProviderRegistry
+from app.framework.duplex.voice.providers.registry import ProviderRegistry
 
 
 def test_default_keys_registered():

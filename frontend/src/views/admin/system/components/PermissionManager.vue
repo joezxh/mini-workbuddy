@@ -62,10 +62,14 @@
         <template v-if="column.key === 'name'">
           <div style="display: flex; align-items: center">
             <img
-              v-if="record.colorIcon"
+              v-if="isImageColorIcon(record.colorIcon)"
               :src="record.colorIcon"
               style="margin-right: 6px; width: 16px; height: 16px; object-fit: contain"
             />
+            <span
+              v-else-if="isEmojiColorIcon(record.colorIcon)"
+              class="color-icon-cell"
+            >{{ record.colorIcon }}</span>
             <component
               :is="getIconComponent(record.icon)"
               v-else-if="record.icon"
@@ -230,7 +234,7 @@
           </a-col>
         </a-row>
 
-        <!-- 彩色图标（上传 data URL，优先于 antd 图标名渲染） -->
+        <!-- 彩色图标：支持上传图片，或直接挑选 Emoji 图标（二者均优先于 antd 图标名渲染） -->
         <a-row v-show="formData.type !== 3" :gutter="16">
           <a-col :span="24">
             <a-form-item :label="t('sys.permission.colorIcon')">
@@ -246,8 +250,56 @@
                     {{ t('sys.permission.colorIconUpload') }}
                   </a-button>
                 </a-upload>
+                <a-popover
+                  v-model:open="emojiPickerOpen"
+                  trigger="click"
+                  placement="bottomLeft"
+                  :overlay-style="{ width: '340px' }"
+                >
+                  <template #content>
+                    <div class="emoji-picker">
+                      <a-input
+                        v-model:value="emojiKeyword"
+                        :placeholder="t('sys.permission.colorIconEmojiSearch')"
+                        allow-clear
+                        size="small"
+                      />
+                      <div class="emoji-picker__body">
+                        <div v-for="g in filteredEmojiGroups" :key="g.group" class="emoji-picker__group">
+                          <div class="emoji-picker__group-title">{{ g.group }}</div>
+                          <div class="emoji-picker__grid">
+                            <button
+                              v-for="item in g.items"
+                              :key="item.char"
+                              type="button"
+                              class="emoji-picker__item"
+                              :class="{ 'emoji-picker__item--active': formData.colorIcon === item.char }"
+                              :title="item.name"
+                              @click="pickEmoji(item.char)"
+                            >{{ item.char }}</button>
+                          </div>
+                        </div>
+                        <div v-if="!filteredEmojiGroups.length" class="emoji-picker__empty">
+                          {{ t('sys.permission.colorIconEmojiEmpty') }}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                  <a-button>
+                    <template #icon><SmileOutlined /></template>
+                    {{ t('sys.permission.colorIconEmoji') }}
+                  </a-button>
+                </a-popover>
                 <div v-if="formData.colorIcon" class="color-icon-preview">
-                  <img :src="formData.colorIcon" :alt="t('sys.permission.colorIcon')" />
+                  <img
+                    v-if="isImageColorIcon(formData.colorIcon)"
+                    :src="formData.colorIcon"
+                    :alt="t('sys.permission.colorIcon')"
+                  />
+                  <span
+                    v-else-if="isEmojiColorIcon(formData.colorIcon)"
+                    class="color-icon-preview__emoji"
+                  >{{ formData.colorIcon }}</span>
                   <a-button type="text" size="small" danger @click="clearColorIcon">
                     {{ t('sys.permission.colorIconClear') }}
                   </a-button>
@@ -472,9 +524,11 @@ import {
   AmazonOutlined,
   AntCloudOutlined,
   ZhihuOutlined,
+  SmileOutlined,
 } from '@ant-design/icons-vue'
 import { getMenuList, getMenuSimpleList, getMenuDetail, createMenu, updateMenu, deleteMenu } from '@/api/admin'
 import { setTranslationOverride } from '@/i18n'
+import { filterEmojiIconGroups, isEmojiColorIcon, isImageColorIcon } from '@/constants/emoji-icons'
 import type { MenuItem, MenuForm } from '@/api/admin'
 
 const { t, messages } = useI18n()
@@ -682,6 +736,18 @@ function beforeColorIconUpload(file: File) {
 
 function clearColorIcon() {
   formData.value.colorIcon = ''
+}
+
+// ── Emoji 彩色图标选择器 ────────────────────────────────────────────────────
+const emojiPickerOpen = ref(false)
+const emojiKeyword = ref('')
+const filteredEmojiGroups = computed(() => filterEmojiIconGroups(emojiKeyword.value))
+
+/** 选中一个 Emoji 图标：直接写入表单（存 emoji 字符，由彩色 emoji 字体渲染）。 */
+function pickEmoji(char: string) {
+  formData.value.colorIcon = char
+  emojiPickerOpen.value = false
+  emojiKeyword.value = ''
 }
 
 function createDefaultForm(): MenuForm {
@@ -980,7 +1046,81 @@ onMounted(() => {
   }
 }
 
+/* Emoji 型彩色图标（菜单里以彩色 emoji 字体渲染） */
+.color-icon-preview__emoji {
+  font-size: 20px;
+  line-height: 1;
+  font-family: var(--emoji-font);
+}
+
+/* 表格单元格里的 emoji 图标 */
+.color-icon-cell {
+  margin-right: 6px;
+  font-size: 15px;
+  line-height: 1;
+  font-family: var(--emoji-font);
+}
+
 .color-icon-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+/* ── Emoji 选择器 ─────────────────────────────────────────────────────────── */
+.emoji-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.emoji-picker__body {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.emoji-picker__group + .emoji-picker__group {
+  margin-top: 10px;
+}
+
+.emoji-picker__group-title {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+
+.emoji-picker__item {
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  font-family: var(--emoji-font);
+  cursor: pointer;
+  transition: background-color var(--transition), border-color var(--transition);
+
+  &:hover {
+    background: var(--accent-soft);
+  }
+
+  &--active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+.emoji-picker__empty {
+  padding: 12px 0;
+  text-align: center;
   font-size: 12px;
   color: var(--fg-muted);
 }

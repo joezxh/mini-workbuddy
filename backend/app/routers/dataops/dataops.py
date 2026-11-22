@@ -580,7 +580,7 @@ async def ingest_excel(
     except Exception as exc:  # noqa: BLE001 - 建表/写入失败回给管理员
         raise HTTPException(status_code=500, detail=f"入库失败：{str(exc)[:300]}")
     stored = save_original(Path(settings.UPLOAD_DIR), tenant_id, ds.id,
-                           file.filename or "unnamed", content)
+                           file.filename or "unnamed", content, db=db)
     return {"schema": schema, "tables": summary, "stored_path": stored}
 
 

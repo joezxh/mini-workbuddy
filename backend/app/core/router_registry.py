@@ -95,6 +95,8 @@ ROUTER_SPECS: List[RouterSpec] = [
     # （控制台统计、用户、菜单、角色、审计日志等），并非普通包初始化文件。
     RouterSpec("app.routers.sys", prefix=f"{API_V1_PREFIX}/admin", tags=["管理员"]),
     RouterSpec("app.routers.sys.sys_dictionary", prefix=f"{API_V1_PREFIX}/dictionary", tags=["字典管理"]),
+    RouterSpec("app.routers.sys.file", prefix=API_V1_PREFIX, tags=["文件管理"]),
+    RouterSpec("app.routers.sys.file_config", prefix=API_V1_PREFIX, tags=["文件存储配置"]),
     RouterSpec("app.routers.sys.sys_tenant", prefix=f"{API_V1_PREFIX}/admin/tenant", tags=["租户管理"]),
     RouterSpec(
         "app.routers.sys.sys_tenant_package",
@@ -127,6 +129,7 @@ ROUTER_SPECS: List[RouterSpec] = [
 
     # --- 13~16. 技能 / 密钥 / 工具 ---
     RouterSpec("app.routers.ai.ai_skill", prefix=f"{API_V1_PREFIX}/ai-assistant/skills", tags=["AI技能"]),
+    RouterSpec("app.routers.ai.ai_file", prefix=API_V1_PREFIX, tags=["AI 文件"]),
     # 该模块已在自身声明完整前缀 /api/v1/ai-assistant，此处不叠加，否则路径会重复
     RouterSpec("app.routers.ai.ai_assistant", tags=["AI助手"]),
     RouterSpec("app.routers.ai.ai_skill_hub", prefix=f"{API_V1_PREFIX}/ai-system/skill-hub", tags=["技能仓库"]),
@@ -212,7 +215,7 @@ ROUTER_SPECS: List[RouterSpec] = [
 
     # --- 31~32. 调解语音 RTC（迁移自 risk_control）---
     # voice_gateway 自带 prefix /duplex/voice，此处叠加 /api/v1
-    RouterSpec("app.duplex.voice.websocket_gateway", prefix=API_V1_PREFIX, tags=["调解语音"]),
+    RouterSpec("app.framework.duplex.voice.websocket_gateway", prefix=API_V1_PREFIX, tags=["调解语音"]),
     # admin_voice_config 自带 prefix /duplex/config，此处叠加 /api/v1/admin
     RouterSpec("app.routers.admin_voice_config", prefix=f"{API_V1_PREFIX}/admin", tags=["语音配置"]),
     # orchestration 自带 prefix /duplex，此处叠加 /api/v1 → /api/v1/duplex/*

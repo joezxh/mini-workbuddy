@@ -7,7 +7,7 @@ voice.ready 下行帧，使客户端无需关心具体 Provider 差异。
 from dataclasses import dataclass
 from typing import Dict
 
-from app.duplex.voice.capabilities import ProviderCapabilities
+from app.framework.duplex.voice.capabilities import ProviderCapabilities
 
 
 @dataclass

@@ -7,11 +7,11 @@
 
 TurnState 是这一仲裁的纯状态原语，不依赖任何 I/O。
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from app.duplex.voice.constants import VoiceState
+from app.framework.duplex.voice.constants import VoiceState
 
 
 def _now() -> datetime:

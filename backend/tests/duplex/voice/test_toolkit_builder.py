@@ -1,7 +1,7 @@
 """toolkit_builder：MCPAdapter 工具 schema → AgentScope ToolBase 包装。"""
 import pytest
 
-from app.duplex.voice.toolkit_builder import build_toolkit, McpToolWrapper
+from app.framework.duplex.voice.toolkit_builder import build_toolkit, McpToolWrapper
 
 
 @pytest.mark.asyncio

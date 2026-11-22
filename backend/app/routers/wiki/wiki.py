@@ -333,12 +333,13 @@ def update_article(
 @router.post("/articles/convert-document", response_model=ArticleConvertOut)
 def convert_uploaded_document(
     file: UploadFile = File(...),
+    db=Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ):
     """上传文档 → 转 Markdown + 提取字段（**不写库**，前端确认后再保存）。
 
-    源文件落盘到 ``settings.UPLOAD_DIR/wiki_docs/<tenant>/<date>/`` 以便溯源，
-    落盘路径同时写入 ``resource`` 与 ``sources[].resource``。
+    源文件经统一文件存储落盘（DB/LOCAL/S3 可插拔），resource 为 ``file://<id>``；
+    统一存储不可用时回退本地 wiki_docs 目录（兼容历史读路径）。
     """
     filename = file.filename or ""
     ext = Path(filename).suffix.lower()
@@ -354,14 +355,22 @@ def convert_uploaded_document(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # 落盘：租户 / 日期分目录 + uuid 前缀重命名（防重名与路径穿越）
-    safe_name = re.sub(r"[^\w.\-\u4e00-\u9fa5]", "_", Path(filename).name)[:120] or "doc"
-    rel_dir = Path("wiki_docs") / str(getattr(current_user, "tenant_id", None) or 0) / date.today().isoformat()
-    target_dir: Path = Path(settings.UPLOAD_DIR) / rel_dir
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / f"{uuid.uuid4().hex}_{safe_name}"
-    target.write_bytes(data)
-    resource = str(target)
+    # 统一文件存储落盘；失败回退历史本地目录（租户 / 日期分目录 + uuid 前缀）
+    from app.services.file import file_service
+    try:
+        record = file_service.create_file(
+            db, data, filename, directory="wiki_docs", code="other",
+            tenant_id=getattr(current_user, "tenant_id", None),
+        )
+        resource = f"file://{record.id}"
+    except Exception:  # noqa: BLE001 - 回退历史落盘，不阻断文档转换
+        safe_name = re.sub(r"[^\w.\-\u4e00-\u9fa5]", "_", Path(filename).name)[:120] or "doc"
+        rel_dir = Path("wiki_docs") / str(getattr(current_user, "tenant_id", None) or 0) / date.today().isoformat()
+        target_dir: Path = Path(settings.UPLOAD_DIR) / rel_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{uuid.uuid4().hex}_{safe_name}"
+        target.write_bytes(data)
+        resource = str(target)
 
     return ArticleConvertOut(
         markdown=result.markdown,

@@ -5,8 +5,8 @@ import json
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.duplex.voice.providers.registry import register_provider
-from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
+from app.framework.duplex.voice.providers.registry import register_provider
+from app.framework.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
 
 
 class LoopbackProvider(RealtimeProvider):

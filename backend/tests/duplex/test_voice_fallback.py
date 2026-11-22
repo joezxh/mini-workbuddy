@@ -2,7 +2,7 @@
 import asyncio
 from unittest.mock import MagicMock
 
-from app.duplex.voice.fallback import VoiceFallback
+from app.framework.duplex.voice.fallback import VoiceFallback
 
 
 def test_fallback_to_second_provider():

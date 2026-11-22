@@ -17,6 +17,7 @@
   _mem0         Mem0 长期记忆服务（本地私有化部署）
   _livekit      LiveKit 视频会议（自建 SFU）
   _mcp          MCP Server 端点开关（/mcp 挂载，默认关闭）
+  _file         统一文件存储（缓存 / 上传 / 压缩包解压限额）
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -38,6 +39,7 @@ from ._livekit import LiveKitSettings
 from ._mcp import MCPServerSettings
 from ._semantica import SemanticaSettings
 from ._cross_mode_recorder import CrossModeRecorderSettings
+from ._file import FileStorageSettings
 
 
 class Settings(
@@ -57,6 +59,7 @@ class Settings(
     MCPServerSettings,
     SemanticaSettings,
     CrossModeRecorderSettings,
+    FileStorageSettings,
     BaseSettings,
 ):
     """应用配置 — 组合所有领域 mixin。

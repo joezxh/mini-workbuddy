@@ -1,8 +1,7 @@
 """T13: ProtocolAdapter 能力协商 + build_ready_payload 测试。"""
-import pytest
 
-from app.duplex.voice.capabilities import ProviderCapabilities
-from app.duplex.voice.protocol_adapter import (
+from app.framework.duplex.voice.capabilities import ProviderCapabilities
+from app.framework.duplex import (
     NegotiatedSession,
     ProtocolAdapter,
 )

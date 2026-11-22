@@ -14,7 +14,7 @@ from agentscope.realtime import (
     AudioFrame, ControlFrame, ControlFrameType, PlayoutPosition, TransportBase,
 )
 
-from app.duplex.voice.providers.base import ProviderEvent
+from app.framework.duplex.voice.providers.base import ProviderEvent
 
 _UPLINK_MAX = 100
 

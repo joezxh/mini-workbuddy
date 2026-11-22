@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.duplex.voice import orchestration_store as store
+from app.framework.duplex.voice import orchestration_store as store
 from app.db.database import get_db
 from app.deps import get_current_user
 from app.models.sys.sys_user import SysUser

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from app.duplex.voice.voice_config import _platform_matches
+from app.framework.duplex import _platform_matches
 
 
 class StubProvider:
@@ -28,8 +28,8 @@ def test_platform_matches():
 
 @pytest.mark.asyncio
 async def test_ping_replies_to_client():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex import _handle_control_frame
+    from app.framework.duplex import TurnState
 
     provider = StubProvider()
     sent = []
@@ -45,8 +45,8 @@ async def test_ping_replies_to_client():
 
 @pytest.mark.asyncio
 async def test_interrupt_calls_provider(monkeypatch):
-    from app.duplex.voice import websocket_gateway as gw
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex.voice import websocket_gateway as gw
+    from app.framework.duplex import TurnState
 
     # 轮次持久化走真实 DB，单测中打桩（本用例只验证仲裁与透传）
     monkeypatch.setattr(gw, "mark_interrupted", lambda *a, **k: None)
@@ -63,8 +63,8 @@ async def test_interrupt_calls_provider(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tool_confirm_routed():
-    from app.duplex.voice.websocket_gateway import _handle_control_frame
-    from app.duplex.voice.turn_state import TurnState
+    from app.framework.duplex import _handle_control_frame
+    from app.framework.duplex import TurnState
 
     provider = StubProvider()
     await _handle_control_frame(

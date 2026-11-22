@@ -1,15 +1,11 @@
 """双工编排管理单元测试：Agent 编排 reason、配置存储 CRUD、渠道快照与统计。"""
 from __future__ import annotations
 
-import pytest
-
-from app.duplex.voice import orchestration_store as store
-from app.duplex.voice.channels.registry import (
-    BUILTIN_CHANNELS,
-    ChannelConfig,
+from app.framework.duplex.voice import orchestration_store as store
+from app.framework.duplex.voice.channels.registry import (
     ChannelRegistry,
 )
-from app.duplex.voice.constants import EventType
+from app.framework.duplex.voice.constants import EventType
 
 
 # ── 渠道新增能力 ──

@@ -8,6 +8,7 @@
 import { computed, ref } from 'vue'
 import type { MenuNode } from '@/types/menu'
 import { resolveIcon } from '@/utils/icons'
+import { isEmojiColorIcon, isImageColorIcon } from '@/constants/emoji-icons'
 import { localise } from '@/i18n'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -58,7 +59,8 @@ function onGroupClick() {
   <div v-if="node.children?.length" class="nav-group" :class="{ 'nav-group--open': open }">
     <button class="nav-row nav-row--group" :title="label" @click="onGroupClick">
       <span class="nav-ico">
-        <img v-if="node.colorIcon" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+        <img v-if="isImageColorIcon(node.colorIcon)" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+        <span v-else-if="isEmojiColorIcon(node.colorIcon)" class="nav-ico__emoji" :title="label">{{ node.colorIcon }}</span>
         <component :is="resolveIcon(node.icon)" v-else />
       </span>
       <span v-show="!collapsed" class="nav-label">{{ label }}</span>
@@ -84,7 +86,8 @@ function onGroupClick() {
     @click="onLeafClick(node)"
   >
     <span class="nav-ico">
-      <img v-if="node.colorIcon" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+      <img v-if="isImageColorIcon(node.colorIcon)" :src="node.colorIcon" class="nav-ico__img" :alt="label" />
+      <span v-else-if="isEmojiColorIcon(node.colorIcon)" class="nav-ico__emoji" :title="label">{{ node.colorIcon }}</span>
       <component :is="resolveIcon(node.icon)" v-else />
     </span>
     <span v-show="!collapsed" class="nav-label">{{ label }}</span>
@@ -142,6 +145,14 @@ function onGroupClick() {
     height: 20px;
     object-fit: contain;
     display: block;
+  }
+
+  /* emoji 型彩色图标：由彩色 emoji 字体渲染 */
+  &__emoji {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+    font-family: var(--emoji-font);
   }
 }
 

@@ -12,12 +12,10 @@ import asyncio
 import json
 import time
 from typing import Dict, Any
-from fastapi.testclient import TestClient
 
 import pytest
-from app.main import app
-from app.duplex.voice.providers.registry import register_provider
-from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
+from app.framework.duplex.voice.providers.registry import register_provider
+from app.framework.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
 
 
 # ── Mock Provider（用于所有测试的回路模拟）──────────────────────────────────────

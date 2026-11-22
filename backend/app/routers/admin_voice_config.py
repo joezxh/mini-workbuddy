@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.duplex.voice.voice_config import (
+from app.framework.duplex import (
     list_voice_models,
     resolve_voice_config,
     create_voice_model,

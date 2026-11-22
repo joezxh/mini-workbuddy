@@ -16,6 +16,7 @@ import uuid
 from pathlib import Path
 from typing import Callable, Optional
 
+from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -481,11 +482,23 @@ def save_image_asset(
         document_metadata={"source": "image", "filename": filename},
     )
 
-    storage_dir = Path(storage_dir)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    asset_name = f"{uuid.uuid4().hex}_{filename}"
-    path = storage_dir / asset_name
-    path.write_bytes(data)
+    # 统一文件存储：图片经 file_service 落盘（DB/LOCAL/S3 可插拔），
+    # storage_dir 参数保留兼容旧调用，仅在统一存储不可用时作为兜底。
+    from app.services.file import file_service
+
+    file_id = None
+    file_path = ""
+    try:
+        record = file_service.create_file(db, data, filename, directory="kb_assets", code="ai-image")
+        file_id = record.id
+        file_path = f"file://{record.id}"
+    except Exception as exc:  # noqa: BLE001 - 统一存储失败回退历史本地落盘
+        logger.warning(f"[KB 图片资产] 统一存储失败，回退本地落盘: {exc}")
+        storage_dir = Path(storage_dir)
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        path = storage_dir / f"{uuid.uuid4().hex}_{filename}"
+        path.write_bytes(data)
+        file_path = str(path)
 
     segment = db.execute(
         text("SELECT id FROM kms_segment WHERE collection=:c AND document_id=:d"
@@ -494,8 +507,8 @@ def save_image_asset(
     ).scalar_one()
 
     asset = KbSegmentAsset(
-        tenant_id=tenant_id, segment_id=segment,
-        file_path=str(path), mime_type=mime_type, size=len(data),
+        tenant_id=tenant_id, segment_id=segment, file_path=file_path, file_id=file_id,
+        mime_type=mime_type, size=len(data),
     )
     db.add(asset)
     db.commit()
@@ -507,14 +520,16 @@ def list_assets(db: Session, tenant_id: int, collection: str,
                 limit: int = 100) -> list[dict]:
     """按 collection 列出图片资产（经 kms_segment 反查）。"""
     rows = db.execute(text(
-        "SELECT a.id, a.file_path, a.mime_type, a.size, a.created_at"
+        "SELECT a.id, a.file_path, a.file_id, a.mime_type, a.size, a.created_at"
         " FROM kms_segment_asset a"
         " JOIN kms_segment s ON s.id = a.segment_id"
         " WHERE s.collection = :c AND a.tenant_id = :t"
         " ORDER BY a.id DESC LIMIT :k"
     ), {"c": collection, "t": tenant_id, "k": limit}).all()
     return [
-        {"id": r.id, "file_path": r.file_path, "mime_type": r.mime_type,
-         "size": r.size, "created_at": str(r.created_at) if r.created_at else None}
+        {"id": r.id, "file_path": r.file_path, "file_id": r.file_id,
+         "url": f"/api/v1/system/file/{r.file_id}/download" if r.file_id else r.file_path,
+         "mime_type": r.mime_type, "size": r.size,
+         "created_at": str(r.created_at) if r.created_at else None}
         for r in rows
     ]

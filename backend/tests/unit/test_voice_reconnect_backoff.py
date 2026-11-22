@@ -1,8 +1,7 @@
 """T14: ReconnectBackoff + classify_error 测试。"""
-import pytest
 
-from app.duplex.voice.constants import ErrorCode
-from app.duplex.voice.reconnect_backoff import (
+from app.framework.duplex.voice.constants import ErrorCode
+from app.framework.duplex.voice.reconnect_backoff import (
     ReconnectBackoff,
     classify_error,
 )

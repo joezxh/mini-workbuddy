@@ -4,8 +4,8 @@ from app.db.database import engine, Base
 from app.db.init_models import *  # noqa: F401,F403
 from app.models.duplex.duplex_voice_session import DuplexVoiceSession
 from app.models.duplex.duplex_voice_turn import DuplexVoiceTurn
-from app.duplex.voice.voice_session_service import create_voice_session
-from app.duplex.voice.voice_turn_service import (
+from app.framework.duplex.voice.voice_session_service import create_voice_session
+from app.framework.duplex.voice.voice_turn_service import (
     append_turn, mark_interrupted, bump_generation,
 )
 

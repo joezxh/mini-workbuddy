@@ -16,7 +16,8 @@ class KbSegmentAsset(Base, TenantMixin):
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主键")
     segment_id = Column(BigInteger, ForeignKey("kms_segment.id", ondelete="CASCADE"),
                         nullable=False, index=True, comment="所属切片")
-    file_path = Column(String(500), nullable=False, comment="存储路径/对象 URL")
+    file_path = Column(String(500), nullable=False, comment="存储路径/对象 URL（新数据为 file://<id>）")
+    file_id = Column(BigInteger, nullable=True, index=True, comment="统一文件存储记录 ID（可空兼容历史）")
     mime_type = Column(String(64), nullable=False, comment="图片 MIME")
     size = Column(Integer, nullable=False, comment="字节数")
     width = Column(Integer, nullable=True, comment="宽")

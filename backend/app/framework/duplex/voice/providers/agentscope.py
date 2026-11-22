@@ -18,8 +18,8 @@ from typing import Any, AsyncGenerator, Dict, Optional
 
 from loguru import logger
 
-from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
-from app.duplex.voice.providers.agentscope_transport import BrowserTransport
+from app.framework.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
+from app.framework.duplex.voice.providers.agentscope_transport import BrowserTransport
 
 
 def _dashscope_audio_card(model_name: str):
@@ -117,7 +117,7 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
                              model=model, toolkit=toolkit)
 
     def _toolkit_factory(self):
-        from app.duplex.voice.toolkit_builder import build_toolkit
+        from app.framework.duplex.voice.toolkit_builder import build_toolkit
         return build_toolkit(self._mcp_tool_schemas)
 
     # ---- RealtimeProvider 接口 ----
@@ -320,14 +320,14 @@ class AgentscopeRealtimeProvider(RealtimeProvider):
             await self._queue.put(None)
 
     def get_capabilities(self):
-        from app.duplex.voice.capabilities import ProviderCapabilities
+        from app.framework.duplex.voice.capabilities import ProviderCapabilities
         return ProviderCapabilities(
             input_sample_rate=16000, output_sample_rate=24000,
             server_vad=True, native_transcription=True,
             barge_in_mode="server")
 
     def is_configured(self) -> bool:
-        from app.duplex.voice.voice_config import resolve_voice_config
+        from app.framework.duplex.voice.voice_config import resolve_voice_config
         try:
             return bool(resolve_voice_config(self.key).get("configured"))
         except Exception:  # noqa: BLE001

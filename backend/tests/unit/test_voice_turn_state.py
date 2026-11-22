@@ -1,8 +1,7 @@
 """T12: TurnState 代际仲裁单元测试。"""
-import pytest
 
-from app.duplex.voice.constants import VoiceState
-from app.duplex.voice.turn_state import TurnState
+from app.framework.duplex.voice.constants import VoiceState
+from app.framework.duplex import TurnState
 
 
 def test_initial_state_is_idle():

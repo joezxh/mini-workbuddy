@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal
 from app.models.ai.ai_api_key import AiApiKey, AiChatModel
-from app.duplex.voice.voice_catalog import (
+from app.framework.duplex.voice.voice_catalog import (
     get_provider_catalog,
     is_full_duplex_voice_model,
     normalize_provider_key,

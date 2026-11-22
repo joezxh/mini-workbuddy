@@ -1,4 +1,4 @@
-from app.duplex.voice.constants import VoiceState, EventType, ProviderKey, ErrorCode
+from app.framework.duplex.voice.constants import VoiceState, EventType, ProviderKey, ErrorCode
 
 def test_voice_state_values():
     assert VoiceState.LISTENING == "listening"

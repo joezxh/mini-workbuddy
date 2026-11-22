@@ -5,3 +5,6 @@ dist-ssr
 .DS_Store
 coverage
 *.log
+
+# 彩色 emoji 字体子集的构建缓存（源字体 24MB，不入库；产物 public/fonts/*.woff2 入库）
+scripts/.emoji-font-cache/

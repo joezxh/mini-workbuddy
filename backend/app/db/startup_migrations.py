@@ -329,6 +329,78 @@ def seed_superagent_menus(engine: Engine) -> None:
             logger.info(f"已登记 SuperAgent 菜单: {m['name']} ({m['path']})")
 
 
+# ── 统一文件存储管理菜单播种（幂等）────────────────────────────────────────
+_FILE_MGMT_MENU = {
+    # /admin/file-management：path 末段 file-management 即 componentMap 的 tab key
+    "path": "/admin/file-management", "name": "文件存储管理",
+    "icon": "CloudServerOutlined", "sort": 10,
+    "i18n_key": "sys.menu.file-management",
+    "permission": "system:file:query",
+    "component": "/views/admin/system/file/index.vue",
+}
+# 授权角色：平台超管(9999) + 租户管理员(3002)；运营人员(3003)不含系统管理类菜单
+_FILE_MGMT_ROLE_IDS = (9999, 3002)
+
+
+def seed_file_management_menu(engine: Engine) -> None:
+    """幂等登记「系统管理 → 文件存储管理」入口（重复运行安全）。"""
+    with engine.begin() as conn:
+        exists = conn.execute(
+            text("SELECT id FROM sys_menu WHERE path = :path AND is_deleted = false LIMIT 1"),
+            {"path": _FILE_MGMT_MENU["path"]},
+        ).first()
+        if exists:
+            # 已存在则同步展示字段（幂等更新），迁移目录调整后仍保持正确归属
+            conn.execute(
+                text(
+                    "UPDATE sys_menu SET name = :name, icon = :icon, i18n_key = :i18n_key, "
+                    "component = :component, permission = :permission, sort = :sort, "
+                    "parent_id = 2005 WHERE path = :path AND is_deleted = false"
+                ),
+                {
+                    "name": _FILE_MGMT_MENU["name"], "icon": _FILE_MGMT_MENU["icon"],
+                    "i18n_key": _FILE_MGMT_MENU["i18n_key"],
+                    "component": _FILE_MGMT_MENU["component"],
+                    "permission": _FILE_MGMT_MENU["permission"],
+                    "sort": _FILE_MGMT_MENU["sort"],
+                    "path": _FILE_MGMT_MENU["path"],
+                },
+            )
+            menu_id = exists.id
+        else:
+            menu_id = conn.execute(
+                text(
+                    "INSERT INTO sys_menu "
+                    "(name, permission, path, type, sort, parent_id, icon, component, "
+                    " component_name, status, visible, keep_alive, always_show, "
+                    " i18n_key, is_deleted) "
+                    "VALUES (:name, :permission, :path, 2, :sort, 2005, :icon, :component, "
+                    " '', 0, 1, 1, 0, :i18n_key, false) RETURNING id"
+                ),
+                {
+                    "name": _FILE_MGMT_MENU["name"],
+                    "permission": _FILE_MGMT_MENU["permission"],
+                    "path": _FILE_MGMT_MENU["path"],
+                    "sort": _FILE_MGMT_MENU["sort"],
+                    "icon": _FILE_MGMT_MENU["icon"],
+                    "component": _FILE_MGMT_MENU["component"],
+                    "i18n_key": _FILE_MGMT_MENU["i18n_key"],
+                },
+            ).scalar_one()
+            logger.info(f"已登记文件存储管理菜单: {_FILE_MGMT_MENU['name']} ({_FILE_MGMT_MENU['path']}, id={menu_id})")
+
+        # 幂等授权给管理员角色（角色可能被删过，缺角色则跳过）
+        for role_id in _FILE_MGMT_ROLE_IDS:
+            conn.execute(
+                text(
+                    "INSERT INTO sys_role_menu (role_id, menu_id) "
+                    "SELECT :role_id, :menu_id WHERE NOT EXISTS ("
+                    "  SELECT 1 FROM sys_role_menu WHERE role_id = :role_id AND menu_id = :menu_id)"
+                ),
+                {"role_id": role_id, "menu_id": menu_id},
+            )
+
+
 # ── 索引迁移（幂等；Phase 3 T1）──────────────────────────────────────────
 # 每项依次尝试执行，任一项失败仅告警不阻断启动（索引属性能优化，非正确性依赖）。
 _INDEX_MIGRATIONS: list[str] = [

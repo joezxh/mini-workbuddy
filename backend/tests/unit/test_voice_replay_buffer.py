@@ -1,7 +1,6 @@
 """T16: ReplayBuffer 测试。"""
-import pytest
 
-from app.duplex.voice.replay_buffer import (
+from app.framework.duplex.voice.replay_buffer import (
     ReplayBuffer,
     SESSION_REPLAY_BUFFERS,
 )

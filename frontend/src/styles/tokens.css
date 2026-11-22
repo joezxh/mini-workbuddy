@@ -13,12 +13,28 @@
  * and soft radial glows — a calm, product-grade instrument surface.
  */
 
+/*
+ * 彩色 emoji 字体 —— 菜单彩色图标（emoji 型）专用。
+ *
+ * `MinWorkBuddy Emoji` 是 Noto Color Emoji 的子集（OFL-1.1，允许再分发），
+ * 由 scripts/build-emoji-font.py 生成，只包含 src/constants/emoji-icons.ts
+ * 里实际用到的码点，体积约几十 KB。放在 public/fonts/ 下，构建时原样拷贝。
+ * 字体缺失或某个码点未覆盖时，自动回落到各平台系统彩色 emoji 字体。
+ */
+@font-face {
+  font-family: 'MinWorkBuddy Emoji';
+  src: url('/fonts/mbw-emoji.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Typography
-   * Orbitron     — geometric HUD face for display titles / numerals (latin)
-   * Chakra Petch — industrial tech face for labels and data readouts (latin)
-   * Both have no CJK coverage, so Chinese/Japanese glyphs fall through to the
-   * system stack below. Order matters: latin face first, CJK fallbacks last. */
+  * Orbitron     — geometric HUD face for display titles / numerals (latin)
+  * Chakra Petch — industrial tech face for labels and data readouts (latin)
+  * Both have no CJK coverage, so Chinese/Japanese glyphs fall through to the
+  * system stack below. Order matters: latin face first, CJK fallbacks last. */
   --font-sans: 'IBM Plex Sans', 'Space Grotesk', 'HarmonyOS Sans SC',
     'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI',
     Roboto, 'Helvetica Neue', sans-serif;
@@ -27,6 +43,12 @@
   --font-tech: 'Chakra Petch', 'IBM Plex Sans', 'HarmonyOS Sans SC',
     'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* 彩色 emoji 字体栈 —— 菜单彩色图标（emoji 型）用。
+   * 首选项目自托管的彩色字体子集，其后是各平台系统彩色 emoji 字体。 */
+  --emoji-font: 'MinWorkBuddy Emoji', 'Noto Color Emoji', 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Twemoji Mozilla', sans-serif;
+
 
   /* Geometry — generous radii for the frosted, rounded explorer look */
   --radius-sm: 10px;

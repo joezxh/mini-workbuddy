@@ -112,6 +112,15 @@ async def lifespan(app: FastAPI):
         except Exception as _col_err:
             logger.warning(f"补齐新列失败(忽略): {_col_err}")
 
+        # 统一文件存储：幂等播种默认主存储（无配置时创建 LOCAL 配置）
+        try:
+            from app.db.database import SessionLocal as _SessionLocal
+            from app.services.file.file_config_service import ensure_default_config
+            with _SessionLocal() as _s:
+                ensure_default_config(_s)
+        except Exception as _file_err:
+            logger.warning(f"文件存储默认配置播种失败(忽略): {_file_err}")
+
         # 默认集合行补齐 + 历史文档归属回填（按 collection_id 关联，幂等）
         try:
             from app.db.startup_migrations import ensure_default_collections
@@ -148,10 +157,12 @@ async def lifespan(app: FastAPI):
                 seed_agent_impl_type_dictionary,
                 seed_superagent_menus,
                 seed_default_voice_model,
+                seed_file_management_menu,
             )
             seed_agent_impl_type_dictionary(engine)
             seed_superagent_menus(engine)
             seed_default_voice_model(engine)
+            seed_file_management_menu(engine)
         except Exception as _seed_err:
             logger.warning(f"字典/菜单播种失败(忽略): {_seed_err}")
 

@@ -2,7 +2,7 @@
 import asyncio
 import pytest
 
-from app.duplex.voice.providers.agentscope_transport import BrowserTransport
+from app.framework.duplex.voice.providers.agentscope_transport import BrowserTransport
 
 
 def _make_transport(in_rate=16000, out_rate=24000):

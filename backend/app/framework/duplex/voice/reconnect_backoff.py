@@ -7,7 +7,7 @@ import asyncio
 from typing import Optional
 
 from app.config import settings
-from app.duplex.voice.constants import ErrorCode
+from app.framework.duplex.voice.constants import ErrorCode
 
 
 class ReconnectBackoff:

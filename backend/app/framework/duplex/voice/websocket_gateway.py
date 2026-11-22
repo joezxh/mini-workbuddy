@@ -14,35 +14,33 @@ import asyncio
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from app.config import settings
-from app.duplex.voice.constants import (
-    VoiceState, EventType, ProviderKey, ErrorCode,
+from app.framework.duplex.voice.constants import (
+    VoiceState, EventType, ErrorCode,
 )
-from app.duplex.voice.providers.registry import get_provider, register_provider
-from app.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
-from app.duplex.voice.turn_state import TurnState
-from app.duplex.voice.metrics import voice_provider_errors, voice_ws_connections
-from app.duplex.voice.protocol_adapter import ProtocolAdapter
-from app.duplex.voice.replay_buffer import (
+from app.framework.duplex.voice.providers.registry import get_provider
+from app.framework.duplex.voice.providers.base import RealtimeProvider, ProviderEvent
+from app.framework.duplex.voice.turn_state import TurnState
+from app.framework.duplex.voice.metrics import voice_provider_errors, voice_ws_connections
+from app.framework.duplex.voice.protocol_adapter import ProtocolAdapter
+from app.framework.duplex.voice.replay_buffer import (
     ReplayBuffer,
     SESSION_REPLAY_BUFFERS,
 )
-from app.duplex.voice.voice_session_service import (
+from app.framework.duplex.voice.voice_session_service import (
     create_voice_session, update_voice_session_status,
 )
-from app.duplex.voice.voice_config import resolve_voice_config
-from app.duplex.voice.voice_turn_service import (
-    append_turn, mark_interrupted, bump_generation, record_latency,
-)
-from app.duplex.voice.orchestrator import VoiceAgentOrchestrator
-from app.duplex.voice.plugins import BUILTIN_PLUGINS, PluginRegistry
-from app.duplex.voice.channels import (
+from app.framework.duplex.voice.voice_config import resolve_voice_config
+from app.framework.duplex.voice.voice_turn_service import (
+    append_turn, mark_interrupted, bump_generation, )
+from app.framework.duplex.voice.orchestrator import VoiceAgentOrchestrator
+from app.framework.duplex.voice.plugins import BUILTIN_PLUGINS, PluginRegistry
+from app.framework.duplex.voice.channels import (
     ChannelOutputDispatcher,
     ChannelRegistry,
 )
@@ -253,7 +251,7 @@ async def voice_metrics():
     """Prometheus 指标导出（语音层，差距分析 §12）。"""
     from fastapi import Response
 
-    from app.duplex.voice.metrics import render_metrics
+    from app.framework.duplex.voice.metrics import render_metrics
 
     return Response(content=render_metrics(), media_type="text/plain; version=0.0.4")
 
@@ -330,7 +328,7 @@ async def voice_websocket(
         mcp_tool_schemas: list = []
         if agent_id:
             try:
-                from app.duplex.voice.mcp_session_resolver import McpSessionResolver
+                from app.framework.duplex.voice.mcp_session_resolver import McpSessionResolver
                 mcp_tool_schemas = await McpSessionResolver(
                     mcp_service_ids=[],
                     tool_bindings=[],
@@ -354,7 +352,7 @@ async def voice_websocket(
         })
 
         # 创建编排器并按 REST 配置注册启用的 Agent 插件（默认与内置一致）
-        from app.duplex.voice import orchestration_store as orch_store
+        from app.framework.duplex.voice import orchestration_store as orch_store
 
         registry = PluginRegistry()
         enabled_agent_cfg = {a["key"]: a for a in orch_store.enabled_agents()}

@@ -34,7 +34,16 @@ def _client(db, perms=(), is_admin=True, tenant_id=TENANT_A):
 
 
 @pytest.fixture(autouse=True)
-def _clean_locks():
+def _clean_locks(monkeypatch, engine):
+    # 提交/重抽路由用生产 SessionLocal 取 PG advisory 锁（键 ns,kb_id）。
+    # advisory 锁是实例级的（跨 schema/库），测试里每个新 schema 的 kb.id 恒为 1，
+    # 且本文件把后台任务 stub 成 no-op → 若锁落在开发库连接上则永不释放，
+    # 后续同 kb_id 用例会随连接池分配间歇性 409。
+    # 把 SessionLocal 路由到测试引擎，锁随 per-test 引擎 dispose 自动释放。
+    from sqlalchemy.orm import sessionmaker
+
+    test_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr("app.db.database.SessionLocal", test_factory)
     kg_build_service.reset_locks()
     yield
     kg_build_service.reset_locks()
