@@ -120,6 +120,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/data-source/DataAssetPanel.vue'),
         meta: { title: '数据资产', icon: 'DatabaseOutlined', requiresAdmin: true }
       },
+      // ── 本体领域管理（sys_menu 2409） ──
+      {
+        path: 'admin/ontology-domain',
+        name: 'OntologyDomain',
+        component: () => import('@/views/data-source/ontology/DomainManagement.vue'),
+        meta: { title: '本体领域', icon: 'AppstoreOutlined', requiresAdmin: true }
+      },
       // ── 推演沙盘（沙箱域 S1–S21）：独立路由，等价于 /dashboard?tab=simulation 的外壳 Tab ──
       {
         path: 'admin/simulation',

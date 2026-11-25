@@ -65,8 +65,8 @@ export function scanSource(id: number, database: string, withProfile = false, co
   return request.post(`${BASE}/sources/${id}/scan`,
     { database, with_profile: withProfile, connect_database: connectDatabase })
 }
-export function listTables(id: number, database?: string, dbName?: string) {
-  return request.get(`${BASE}/sources/${id}/tables`, { params: { database, db_name: dbName } })
+export function listTables(id: number, database?: string, dbName?: string, domainId?: number) {
+  return request.get(`${BASE}/sources/${id}/tables`, { params: { database, db_name: dbName, domain_id: domainId } })
 }
 /** 已入库的列快照（按表 ID） */
 export function listMetaColumns(id: number, tableId: number) {
@@ -201,7 +201,7 @@ export function nlQuery(question: string, catalogId?: number) {
 
 // ── E1-E3 本体注册 CRUD ──────────────────────────────────────────
 /** 本体列表：status/keyword/sort 均为可选查询参数（AF-09） */
-export function listOntologies(params?: { status?: string; keyword?: string; sort?: string }) {
+export function listOntologies(params?: { status?: string; keyword?: string; sort?: string; domain_id?: number }) {
   return request.get(`${BASE}/ontologies`, { params })
 }
 export function createOntology(data: Record<string, any>) {
@@ -225,9 +225,30 @@ export function assetsTree() {
 /** 表/字段/注释检索（AF-02/05）：返回表卡片含 column_digest/pii_max_level/tags/score */
 export function assetsSearch(params: {
   kw?: string; source_id?: number; tag_ids?: number[]; kind?: 'table' | 'column'; page?: number; size?: number
-  table_type?: string; sort?: string
+  table_type?: string; sort?: string; domain_id?: number
 }) {
   return request.get(`${BASE}/assets/search`, { params })
+}
+
+// ── 本体领域字典（分组维度） ────────────────────────────────────────
+export function listDomains(params?: { status?: string; keyword?: string }) {
+  return request.get(`${BASE}/domains`, { params })
+}
+export function createDomain(body: {
+  code: string; name: string; description?: string; sort_order?: number; status?: string
+}) {
+  return request.post(`${BASE}/domains`, body)
+}
+export function updateDomain(id: number, body: {
+  code?: string; name?: string; description?: string; sort_order?: number; status?: string
+}) {
+  return request.put(`${BASE}/domains/${id}`, body)
+}
+export function toggleDomain(id: number, status: 'active' | 'disabled') {
+  return request.put(`${BASE}/domains/${id}/toggle`, { status })
+}
+export function deleteDomain(id: number) {
+  return request.delete(`${BASE}/domains/${id}`)
 }
 
 // ── 表级探活 / 元数据编辑（AF-03/06/07，Task 8/9 端点） ───────────────
@@ -244,7 +265,7 @@ export function updateTableMeta(
   sourceId: number,
   tableId: number,
   body: {
-    table_comment?: string; biz_name?: string; biz_description?: string
+    table_comment?: string; biz_name?: string; biz_description?: string; domain_id?: number | null
     columns?: { column_name: string; column_comment?: string; biz_name?: string }[]
   },
 ) {
