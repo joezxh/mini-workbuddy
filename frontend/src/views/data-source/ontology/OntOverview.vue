@@ -7,6 +7,9 @@
         <a-tag :color="statusColor(ontology?.status)">{{ ontology?.status }}</a-tag>
       </a-descriptions-item>
       <a-descriptions-item :label="t2('当前版本')">v{{ ontology?.current_version ?? 0 }}</a-descriptions-item>
+      <a-descriptions-item :label="t2('所属领域')">
+        {{ ontology?.domain_name || t2('未分类') }}
+      </a-descriptions-item>
       <a-descriptions-item :label="t2('命名空间')" :span="2">{{ ontology?.namespace_uri || '-' }}</a-descriptions-item>
       <a-descriptions-item :label="t2('描述')" :span="2">{{ ontology?.description || '-' }}</a-descriptions-item>
     </a-descriptions>

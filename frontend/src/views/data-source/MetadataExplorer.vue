@@ -22,6 +22,14 @@
       <a-select v-if="isPgFamily" v-model:value="schema" :placeholder="t('kbMgmt.meta.selectSchema')" style="width: 160px" @change="loadTables" :loading="loadingSchemas" :disabled="!database">
         <a-select-option v-for="s in schemas" :key="s" :value="s">{{ s }}</a-select-option>
       </a-select>
+      <a-select
+        v-model:value="filterDomainId"
+        :placeholder="t2('全部领域')"
+        style="width: 150px"
+        :options="domainOptions"
+        allow-clear
+        @change="loadTables"
+      />
       <a-button type="primary" :disabled="!sourceId || !database || (isPgFamily && !schema)" @click="doScan">
         <ScanOutlined /> {{ t('kbMgmt.meta.scanMetadata') }}
       </a-button>
@@ -40,6 +48,7 @@
           <a-descriptions-item :label="t('kbMgmt.meta.rowCount')">{{ selected.row_count ?? '—' }}</a-descriptions-item>
           <a-descriptions-item :label="t('kbMgmt.meta.columnCount')">{{ selected.column_count ?? '—' }}</a-descriptions-item>
           <a-descriptions-item :label="t('kbMgmt.meta.domain')">{{ selected.domain || '—' }}</a-descriptions-item>
+          <a-descriptions-item :label="t2('所属领域')">{{ selected.domain_name || t2('未分类') }}</a-descriptions-item>
         </a-descriptions>
         <a-divider>{{ t('kbMgmt.meta.columnInfo') }}</a-divider>
         <a-table
@@ -97,6 +106,9 @@ const loadingSchemas = ref(false)
 const withProfile = ref(false)
 const tables = ref<any[]>([])
 const selected = ref<any>(null)
+const filterDomainId = ref<number | null>(null)
+const domains = ref<any[]>([])
+const domainOptions = computed(() => domains.value.map((d) => ({ label: d.name || d.code, value: d.id })))
 const columns = ref<any[]>([])
 const loadingColumns = ref(false)
 
@@ -188,7 +200,7 @@ async function loadTables() {
   // 其余族 database=db_name（同一库名），仅按 database 过滤即可。
   const scopeDb = isPgFamily.value ? schema.value : database.value
   const physicalDb = isPgFamily.value ? database.value : undefined
-  const r: any = await api.listTables(sourceId.value, scopeDb, physicalDb)
+  const r: any = await api.listTables(sourceId.value, scopeDb, physicalDb, filterDomainId.value ?? undefined)
   tables.value = r.data || r || []
   treeData.value = [{
     key: `db-${isPgFamily.value ? `${database.value}.${schema.value}` : database.value}`,
@@ -280,6 +292,12 @@ async function applyFocus() {
 }
 
 onMounted(async () => {
+  try {
+    const resp: any = await api.listDomains({ status: 'active' })
+    domains.value = Array.isArray(resp) ? resp : (resp?.items || [])
+  } catch {
+    domains.value = []
+  }
   await loadSources()
   await applyFocus()
 })

@@ -29,6 +29,7 @@ import WorkflowManagement from '@/views/admin/workflow/WorkflowManagement.vue'
 import DataSourcePanel from '@/views/data-source/DataSourcePanel.vue'
 import DataAssetPanel from '@/views/data-source/DataAssetPanel.vue'
 import OntologyWorkspace from '@/views/data-source/ontology/OntologyWorkspace.vue'
+import DomainManagement from '@/views/data-source/ontology/DomainManagement.vue'
 // 推演沙盘（沙箱域 S1–S21）：sys_menu 2408 (/admin/simulation)，与真实路由 /admin/simulation 共用同一组件
 import SimulationSandbox from '@/views/sandbox/SimulationSandbox.vue'
 // 孪生应用（Plan 2）：sys_menu 2407 (/admin/digital-twin)，与真实路由 /admin/digital-twin 共用同一组件
@@ -79,6 +80,8 @@ export const componentMap: Record<string, Component> = {
   // 本体工作台：sys_menu 2405 (/admin/kg-ontology)。与 DataSourcePanel 的「本体工作台」页签共用同一组件，
   // 菜单直达时以独立 Tab 全量渲染（OntologyWorkspace 自带选择器与内部页签，不依赖外层壳）。
   'kg-ontology': markRaw(OntologyWorkspace),
+  // 本体领域管理：sys_menu 2409 (/admin/ontology-domain)
+  'ontology-domain': markRaw(DomainManagement),
   // 推演沙盘：忠实移植 ontology-simulation-sandbox-preview.html 原型，接沙箱域真实 API
   'simulation': markRaw(SimulationSandbox),
   'kg-kb': markRaw(KnowledgeBasePanel),

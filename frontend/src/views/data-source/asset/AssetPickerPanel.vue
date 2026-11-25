@@ -54,14 +54,32 @@
         show-search option-filter-prop="label" :options="tagOptions" />
     </a-modal>
 
-    <!-- 编辑弹窗：表注释 + 列注释局部可编辑 -->
-    <a-modal v-model:open="editOpen" :title="t2('编辑元数据')" :confirm-loading="saving" width="640px" @ok="doEdit">
+    <!-- 编辑弹窗：表注释 + 列注释局部可编辑；内容区高度封顶视口，超高时内部滚动 -->
+    <a-modal
+      v-model:open="editOpen"
+      class="asset-edit-modal"
+      :title="t2('编辑元数据')"
+      :confirm-loading="saving"
+      width="640px"
+      centered
+      :body-style="EDIT_MODAL_BODY_STYLE"
+      @ok="doEdit"
+    >
       <a-form layout="vertical">
         <a-form-item :label="t2('表说明')">
           <a-textarea v-model:value="editForm.table_comment" :rows="2" />
         </a-form-item>
         <a-form-item :label="t2('业务名')">
           <a-input v-model:value="editForm.biz_name" />
+        </a-form-item>
+        <a-form-item :label="t2('所属领域')">
+          <a-select
+            v-model:value="editForm.domain_id"
+            style="width: 100%"
+            :placeholder="t2('未分类')"
+            :options="domainOptions"
+            allow-clear
+          />
         </a-form-item>
         <a-spin :spinning="loadingCols">
           <a-table :data-source="editColumns" :columns="colEditCols" :pagination="false" size="small" row-key="column_name">
@@ -87,14 +105,14 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  assetsSearch, bindAssetTag, getDraftScope, listAssetTags, listMetaColumns, listOntologies,
+  assetsSearch, bindAssetTag, getDraftScope, listAssetTags, listDomains, listMetaColumns, listOntologies,
   putDraftScope, reclassifyTags, testTable, testTables, updateTableMeta,
 } from '@/api/dataops'
 import { t2 } from '../ontology/ontologyText'
 import AssetTypeTree from './AssetTypeTree.vue'
 import AssetSearchBar from './AssetSearchBar.vue'
 import AssetCardList from './AssetCardList.vue'
-import { buildBindTagPayload, checkBatchProbeLimit } from './assetOps'
+import { EDIT_MODAL_BODY_STYLE, buildBindTagPayload, checkBatchProbeLimit } from './assetOps'
 import { restoreSelection, staleNotice } from './assetSend'
 
 const treeRef = ref<any>(null)
@@ -109,8 +127,8 @@ const probe = ref<Record<number, { ok: boolean; code?: string | null }>>({})
 
 const sourceId = ref<number | null>(null)
 const lastQuery = reactive<{
-  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number
-}>({ kw: '', tag_ids: [], kind: 'table', table_type: undefined, sort: 'score', size: 50 })
+  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number; domain_id?: number
+}>({ kw: '', tag_ids: [], kind: 'table', table_type: undefined, sort: 'score', size: 50, domain_id: undefined })
 
 const ontologies = ref<any[]>([])
 const loadingOnt = ref(false)
@@ -158,6 +176,7 @@ async function runSearch() {
       kind: lastQuery.kind as any,
       table_type: lastQuery.table_type,
       sort: lastQuery.sort,
+      domain_id: lastQuery.domain_id,
       page: page.value,
       size: size.value,
     })
@@ -176,7 +195,7 @@ function onSource(id: number | null) {
 }
 
 function onSearch(payload: {
-  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number
+  kw: string; tag_ids: number[]; kind: string; table_type?: string; sort: string; size: number; domain_id?: number
 }) {
   Object.assign(lastQuery, payload)
   if (payload.size) size.value = payload.size
@@ -298,8 +317,12 @@ const editOpen = ref(false)
 const saving = ref(false)
 const loadingCols = ref(false)
 const editRow = ref<any>(null)
-const editForm = reactive<{ table_comment: string; biz_name: string }>({ table_comment: '', biz_name: '' })
+const editForm = reactive<{ table_comment: string; biz_name: string; domain_id: number | null }>({
+  table_comment: '', biz_name: '', domain_id: null,
+})
 const editColumns = ref<any[]>([])
+const domains = ref<any[]>([])
+const domainOptions = computed(() => domains.value.map((d) => ({ label: d.name || d.code, value: d.id })))
 const colEditCols = [
   { title: t2('列名'), dataIndex: 'column_name', key: 'column_name', width: 160 },
   { title: t2('列说明'), key: 'column_comment', dataIndex: 'column_comment' },
@@ -309,6 +332,7 @@ async function openEdit(row: any) {
   editRow.value = row
   editForm.table_comment = row.table_comment || ''
   editForm.biz_name = row.biz_name || ''
+  editForm.domain_id = row.domain_id ?? null
   editColumns.value = []
   editOpen.value = true
   loadingCols.value = true
@@ -331,6 +355,7 @@ async function doEdit() {
     await updateTableMeta(row.source_id, row.table_id, {
       table_comment: editForm.table_comment,
       biz_name: editForm.biz_name || undefined,
+      domain_id: editForm.domain_id,
       columns: editColumns.value.map((c) => ({ column_name: c.column_name, column_comment: c.column_comment })),
     })
     message.success(t2('已保存'))
@@ -377,14 +402,25 @@ async function doSend() {
   }
 }
 
+async function loadDomains() {
+  try {
+    const resp: any = await listDomains({ status: 'active' })
+    domains.value = Array.isArray(resp) ? resp : (resp?.items || [])
+  } catch {
+    domains.value = []
+  }
+}
+
 function activate() {
   loadOntologies()
+  loadDomains()
   treeRef.value?.reload?.()
   if (!items.value.length) runSearch()
   syncDraftScope()
 }
 
 runSearch()
+loadDomains()
 defineExpose({ activate })
 </script>
 
@@ -427,6 +463,12 @@ defineExpose({ activate })
   &__count {
     font-size: 13px;
     color: var(--fg-mute, #666);
+  }
+}
+// 编辑弹窗：纵向滚动只发生在内容区，预留滚动条槽位避免显隐时宽度跳动
+.asset-edit-modal {
+  :deep(.ant-modal-body) {
+    scrollbar-gutter: stable;
   }
 }
 </style>

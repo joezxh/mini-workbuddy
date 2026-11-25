@@ -4,6 +4,14 @@
     <div class="ont-workspace__bar">
       <a-space>
         <a-select
+          v-model:value="filterDomainId"
+          style="width: 160px"
+          :placeholder="t2('全部领域')"
+          :options="domainOptions"
+          allow-clear
+          @change="onDomainFilter"
+        />
+        <a-select
           v-model:value="currentId"
           style="min-width: 260px"
           :loading="loadingList"
@@ -14,10 +22,12 @@
         >
           <a-select-option v-for="o in ontologies" :key="o.id" :value="o.id" :label="`${o.name} (${o.code})`">
             <span>{{ o.name }}</span>
+            <span v-if="o.domain_name" class="ont-workspace__domain">{{ o.domain_name }}</span>
             <a-tag :color="statusColor(o.status)" style="margin-left: 8px">{{ o.status }}</a-tag>
             <span class="ont-workspace__ver">v{{ o.current_version }}</span>
           </a-select-option>
         </a-select>
+        <a-button v-if="current" @click="openEdit">{{ t2('编辑') }}</a-button>
         <a-button type="primary" @click="openCreate">{{ t2('新建本体') }}</a-button>
       </a-space>
     </div>
@@ -57,7 +67,7 @@
     </template>
 
     <!-- 新建本体弹窗 -->
-    <a-modal v-model:open="createOpen" :title="t2('新建本体')" :confirm-loading="creating" @ok="doCreate">
+    <a-modal v-model:open="createOpen" :title="t2(editingId ? '编辑本体' : '新建本体')" :confirm-loading="creating" @ok="doCreate">
       <a-form layout="vertical">
         <a-form-item :label="t2('编码 code')" required>
           <a-input v-model:value="createForm.code" :placeholder="t2('租户内唯一，如 sales_ontology')" />
@@ -67,6 +77,15 @@
         </a-form-item>
         <a-form-item :label="t2('描述')">
           <a-textarea v-model:value="createForm.description" :rows="2" />
+        </a-form-item>
+        <a-form-item :label="t2('所属领域')">
+          <a-select
+            v-model:value="createForm.domain_id"
+            style="width: 100%"
+            :placeholder="t2('未分类')"
+            :options="domainOptions"
+            allow-clear
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -82,7 +101,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  listOntologies, createOntology,
+  listOntologies, createOntology, updateOntology, listDomains,
 } from '@/api/dataops'
 import { t2 } from './ontologyText'
 import OntPipelineBar from './OntPipelineBar.vue'
@@ -100,7 +119,16 @@ const currentId = ref<number | null>(null)
 const loadingList = ref(false)
 const creating = ref(false)
 const createOpen = ref(false)
-const createForm = reactive({ code: '', name: '', description: '' })
+const createForm = reactive<{ code: string; name: string; description: string; domain_id: number | null }>({
+  code: '', name: '', description: '', domain_id: null,
+})
+const editingId = ref<number | null>(null)
+const domains = ref<any[]>([])
+const filterDomainId = ref<number | null>(null)
+const domainOptions = computed(() => [
+  { label: t2('未分类'), value: null },
+  ...domains.value.map((d) => ({ label: d.name, value: d.id })),
+])
 const tab = ref('overview')
 const pipelineRef = ref<any>(null)
 const inspectorRef = ref<any>(null)
@@ -118,7 +146,10 @@ function statusColor(s: string) {
 async function loadList(selectFirst = false) {
   loadingList.value = true
   try {
-    const resp: any = await listOntologies({ sort: 'updated_at_desc' })
+    const resp: any = await listOntologies({
+      sort: 'updated_at_desc',
+      domain_id: filterDomainId.value ?? undefined,
+    })
     ontologies.value = Array.isArray(resp) ? resp : (resp?.items || [])
     if (selectFirst && !currentId.value && ontologies.value.length) {
       currentId.value = ontologies.value[0].id
@@ -133,6 +164,20 @@ function onSwitch() {
   refreshPipeline()
 }
 
+async function onDomainFilter() {
+  currentId.value = null
+  await loadList()
+}
+
+async function loadDomains() {
+  try {
+    const resp: any = await listDomains({ status: 'active' })
+    domains.value = Array.isArray(resp) ? resp : (resp?.items || [])
+  } catch {
+    domains.value = []
+  }
+}
+
 function refreshPipeline() {
   pipelineRef.value?.reload?.()
 }
@@ -143,9 +188,21 @@ async function reloadAll() {
 }
 
 function openCreate() {
+  editingId.value = null
   createForm.code = ''
   createForm.name = ''
   createForm.description = ''
+  createForm.domain_id = null
+  createOpen.value = true
+}
+
+function openEdit() {
+  if (!current.value) return
+  editingId.value = current.value.id
+  createForm.code = current.value.code || ''
+  createForm.name = current.value.name || ''
+  createForm.description = current.value.description || ''
+  createForm.domain_id = current.value.domain_id ?? null
   createOpen.value = true
 }
 
@@ -156,8 +213,11 @@ async function doCreate() {
   }
   creating.value = true
   try {
-    const obj: any = await createOntology({ ...createForm })
-    message.success(t2('本体已创建'))
+    const payload = { ...createForm, domain_id: createForm.domain_id ?? null }
+    const obj: any = editingId.value
+      ? await updateOntology(editingId.value, payload)
+      : await createOntology(payload)
+    message.success(t2(editingId.value ? '本体已更新' : '本体已创建'))
     createOpen.value = false
     await loadList()
     currentId.value = obj.id
@@ -172,7 +232,10 @@ function onNodeClick(payload: { kind: string; code: string }) {
   tab.value = 'inspector'
 }
 
-onMounted(() => loadList(true))
+onMounted(async () => {
+  await loadDomains()
+  await loadList(true)
+})
 </script>
 
 <style lang="less" scoped>
@@ -189,6 +252,11 @@ onMounted(() => loadList(true))
     padding-bottom: 12px;
     margin-bottom: 8px;
     border-bottom: 1px solid var(--border);
+  }
+  &__domain {
+    margin-left: 8px;
+    color: var(--primary-color, #1677ff);
+    font-size: 12px;
   }
   &__ver {
     margin-left: 8px;

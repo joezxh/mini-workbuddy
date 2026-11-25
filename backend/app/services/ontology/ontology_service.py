@@ -25,6 +25,7 @@ from app.models.dataops.standard_cdm import (
     MetaObjectRelation, MetaObjectStandard, MetaStandardCatalog,
 )
 from app.services.dataops import source_types as st
+from app.services.ontology.domain_service import OntologyDomainService
 
 
 def _bucket_code(external_type: Optional[str]) -> str:
@@ -69,10 +70,13 @@ class OntologyService:
         status: Optional[str] = None,
         keyword: Optional[str] = None,
         sort: str = "updated_at_desc",
+        domain_id: Optional[int] = None,
     ) -> List[dict]:
         stmt = select(MetaOntology).where(MetaOntology.tenant_id == self.tenant_id)
         if status:
             stmt = stmt.where(MetaOntology.status == status)
+        if domain_id is not None:
+            stmt = stmt.where(MetaOntology.domain_id == domain_id)
         if keyword:
             like = f"%{keyword}%"
             stmt = stmt.where(or_(MetaOntology.code.ilike(like), MetaOntology.name.ilike(like)))
@@ -82,7 +86,13 @@ class OntologyService:
             stmt = stmt.order_by(MetaOntology.updated_at.desc(), MetaOntology.id.desc())
         ontologies = list(self.db.execute(stmt).scalars().all())
         stats = self._stats_for([o.id for o in ontologies])
-        return [self.serialize(o, stats.get(o.id)) for o in ontologies]
+        name_map = OntologyDomainService(self.db, self.tenant_id).domain_names(
+            [o.domain_id for o in ontologies]
+        )
+        return [
+            self.serialize(o, stats.get(o.id), domain_name=name_map.get(o.domain_id))
+            for o in ontologies
+        ]
 
     def _stats_for(self, ontology_ids: List[int]) -> dict:
         """按本体聚合：版本数 / 对象数 / 关系数（对象、关系经目录归属统计）。"""
@@ -144,6 +154,7 @@ class OntologyService:
         description: Optional[str] = None,
         namespace_uri: Optional[str] = None,
         root_catalog_id: Optional[int] = None,
+        domain_id: Optional[int] = None,
         creator_id: Optional[int] = None,
     ) -> MetaOntology:
         code = (code or "").strip()
@@ -151,6 +162,7 @@ class OntologyService:
             raise ApiError(ONTOLOGY_CODE_DUPLICATED, "本体编码不能为空")
         if self._by_code(code) is not None:
             raise ApiError(ONTOLOGY_CODE_DUPLICATED, f"本体编码已存在: {code}", detail={"code": code})
+        domain = OntologyDomainService(self.db, self.tenant_id).resolve(domain_id)
         obj = MetaOntology(
             tenant_id=self.tenant_id,
             code=code,
@@ -160,6 +172,7 @@ class OntologyService:
             status="draft",
             current_version=0,
             root_catalog_id=root_catalog_id,
+            domain_id=domain.id if domain else None,
             creator_id=creator_id,
         )
         self.db.add(obj)
@@ -177,6 +190,10 @@ class OntologyService:
         for key in editable:
             if key in fields and fields[key] is not None:
                 setattr(obj, key, fields[key])
+        if "domain_id" in fields:
+            # 显式传 None 表示取消归类，故不套用"非 None 才覆盖"的通用口径
+            domain = OntologyDomainService(self.db, self.tenant_id).resolve(fields["domain_id"])
+            obj.domain_id = domain.id if domain else None
         obj.updater_id = updater_id
         self.db.flush()
         return obj
@@ -243,7 +260,8 @@ class OntologyService:
     # ---------------------------------------------------------------- 序列化
 
     @staticmethod
-    def serialize(o: MetaOntology, stats: Optional[dict] = None) -> dict:
+    def serialize(o: MetaOntology, stats: Optional[dict] = None,
+                  domain_name: Optional[str] = None) -> dict:
         data = {
             "id": o.id,
             "code": o.code,
@@ -253,6 +271,8 @@ class OntologyService:
             "status": o.status,
             "current_version": o.current_version,
             "root_catalog_id": o.root_catalog_id,
+            "domain_id": o.domain_id,
+            "domain_name": domain_name,
             "has_draft_scope": bool(o.draft_scope_json),
             "created_at": o.created_at.isoformat() if o.created_at else None,
             "updated_at": o.updated_at.isoformat() if o.updated_at else None,

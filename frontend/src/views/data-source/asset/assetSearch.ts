@@ -38,6 +38,7 @@ export interface SearchPayload {
   table_type?: string
   sort: string
   size: number
+  domain_id?: number
 }
 
 export function buildSearchPayload(s: {
@@ -47,6 +48,7 @@ export function buildSearchPayload(s: {
   table_type?: string
   sort?: string
   size?: number
+  domain_id?: number | null
 }): SearchPayload {
   return {
     kw: (s.kw || '').trim(),
@@ -56,6 +58,7 @@ export function buildSearchPayload(s: {
     table_type: s.table_type && s.table_type !== 'all' ? s.table_type : undefined,
     sort: s.sort && SORTS.includes(s.sort) ? s.sort : 'score',
     size: s.size || 50,
+    domain_id: s.domain_id ?? undefined,
   }
 }
 

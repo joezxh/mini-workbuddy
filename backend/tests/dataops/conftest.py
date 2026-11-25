@@ -52,6 +52,7 @@ def dispose_all_engines() -> None:
 def _tables() -> List:
     from app.models.dataops.data_source import DataSource
     from app.models.dataops.meta import MetaColumn, MetaScanJob, MetaTable
+    from app.models.ontology.domain import OntoDomain
     from app.models.dataops.standard import (
         MetaColumnStandard, MetaColumnStandardHistory, MetaStandard, MetaStandardVersion,
     )
@@ -66,6 +67,7 @@ def _tables() -> List:
     return [
         SysUser.__table__,
         DataSource.__table__,
+        OntoDomain.__table__,
         MetaScanJob.__table__,
         MetaTable.__table__,
         MetaColumn.__table__,

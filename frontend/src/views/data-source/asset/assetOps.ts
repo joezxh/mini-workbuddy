@@ -8,6 +8,20 @@
 /** 与后端 `PROBE_BATCH_LIMIT` 对齐的单次批量探活上限 */
 export const PROBE_BATCH_LIMIT = 20
 
+/**
+ * 数据表编辑弹窗内容区样式（弹窗整体不超出可视区域）：
+ * - maxHeight 以视口高度为基准，扣除标题栏/底部按钮/内容内边距的预留高度；
+ * - 内容（列很多时长表格）超出后只在内容区纵向滚动，表头与底部操作按钮保持可见；
+ * - 禁止横向溢出与滚动链穿透到背景页，右侧留白避免输入控件贴住滚动条。
+ */
+export const EDIT_MODAL_BODY_STYLE: Readonly<Record<string, string>> = {
+  maxHeight: 'calc(100vh - 220px)',
+  overflowY: 'auto',
+  overflowX: 'hidden',
+  overscrollBehavior: 'contain',
+  paddingRight: '8px',
+}
+
 /** 批量探活前置校验：超限或空勾选都不应发请求 */
 export function checkBatchProbeLimit(ids: number[]): { ok: boolean; count: number; message?: string } {
   const count = ids.length

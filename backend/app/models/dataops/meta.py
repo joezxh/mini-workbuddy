@@ -70,6 +70,10 @@ class MetaTable(Base, TenantMixin):
     biz_name = Column(String(200), nullable=True, comment="业务名称（人工/规则补充）")
     biz_description = Column(Text, nullable=True, comment="业务描述")
     domain = Column(String(64), nullable=True, comment="数仓分层/主题域（ods/dwd/...）")
+    domain_id = Column(
+        BigInteger, ForeignKey("onto_domain.id", ondelete="SET NULL"), nullable=True,
+        comment="所属本体领域 ID（空=未分类）",
+    )
     profiled_at = Column(TIMESTAMP, nullable=True, comment="最近画像时间")
 
     # 审计
@@ -81,6 +85,7 @@ class MetaTable(Base, TenantMixin):
     __table_args__ = (
         UniqueConstraint("source_id", "db_name", "database", "table_name", name="uq_meta_table"),
         Index("idx_meta_table_domain", "domain"),
+        Index("idx_meta_table_domain_id", "domain_id"),
     )
 
 

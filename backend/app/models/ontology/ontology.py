@@ -39,6 +39,10 @@ class MetaOntology(Base, TenantMixin):
         BigInteger, ForeignKey("meta_standard_catalog.id", ondelete="SET NULL"), nullable=True,
         comment="本体的目录根（归属锚点，可空）",
     )
+    domain_id = Column(
+        BigInteger, ForeignKey("onto_domain.id", ondelete="SET NULL"), nullable=True,
+        comment="所属本体领域 ID（空=未分类）",
+    )
     # AF-08：资产送数后的作用域草稿（形状同 build_job.scope_json），使“勾选→离开→回来仍能构建”成立
     draft_scope_json = Column(JSONB, nullable=True, comment="AF-08 作用域草稿")
     # P2 预留，本期降为兼容缓存（发布登记已拆至 onto_ontology_publish）
@@ -53,6 +57,7 @@ class MetaOntology(Base, TenantMixin):
         UniqueConstraint("tenant_id", "code", name="uq_onto_ontology_code"),
         CheckConstraint("status IN ('draft','published','archived','stopped')", name="ck_onto_ontology_status"),
         Index("idx_onto_ontology_tenant_status", "tenant_id", "status"),
+        Index("idx_onto_ontology_tenant_domain", "tenant_id", "domain_id"),
     )
 
 

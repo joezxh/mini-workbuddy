@@ -30,6 +30,7 @@ from app.services.ontology.ontology_agent_service import OntologyAgentService
 from app.services.ontology.ontology_apppublish_service import OntologyAppPublishService
 from app.services.ontology.ontology_asset_service import OntologyAssetService
 from app.services.ontology.ontology_assistant_service import OntologyAssistantService
+from app.services.ontology.domain_service import OntologyDomainService
 from app.services.ontology.ontology_graph_service import OntologyGraphService
 from app.services.ontology.ontology_publish_service import OntologyPublishService
 from app.services.ontology.ontology_review_service import OntologyReviewService
@@ -59,6 +60,7 @@ class OntologyCreate(BaseModel):
     description: Optional[str] = None
     namespace_uri: Optional[str] = Field(default=None, description="缺省按 urn:mwb:ontology:{code} 生成")
     root_catalog_id: Optional[int] = None
+    domain_id: Optional[int] = Field(default=None, description="所属本体领域 ID（空=未分类）")
 
 
 class OntologyUpdate(BaseModel):
@@ -68,6 +70,7 @@ class OntologyUpdate(BaseModel):
     namespace_uri: Optional[str] = None
     status: Optional[str] = Field(default=None, description="draft|published|archived|stopped")
     root_catalog_id: Optional[int] = None
+    domain_id: Optional[int] = Field(default=None, description="所属本体领域 ID；显式传 null 取消归类")
 
 
 # ------------------------------------------------------------------ E1 列表
@@ -76,12 +79,13 @@ class OntologyUpdate(BaseModel):
 def list_ontologies(
     status: Optional[str] = Query(default=None, description="按状态过滤"),
     keyword: Optional[str] = Query(default=None, description="code/name 模糊"),
+    domain_id: Optional[int] = Query(default=None, description="按所属领域过滤"),
     sort: str = Query(default="updated_at_desc", pattern="^(updated_at_desc|name_asc)$"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ) -> list:
     svc = _get_service(db, current_user)
-    return svc.list_ontologies(status=status, keyword=keyword, sort=sort)
+    return svc.list_ontologies(status=status, keyword=keyword, sort=sort, domain_id=domain_id)
 
 
 # ------------------------------------------------------------------ E2 新建
@@ -99,10 +103,14 @@ def create_ontology(
         description=body.description,
         namespace_uri=body.namespace_uri,
         root_catalog_id=body.root_catalog_id,
+        domain_id=body.domain_id,
         creator_id=getattr(current_user, "user_id", None),
     )
     db.commit()
-    return OntologyService.serialize(obj)
+    return OntologyService.serialize(obj, domain_name=(
+        OntologyDomainService(db, obj.tenant_id).domain_names([obj.domain_id]).get(obj.domain_id)
+        if obj.domain_id else None
+    ))
 
 
 # --------------------------------------------------------- E40 资产目录树（须在 {id} 之前无冲突，路径不同）
@@ -125,6 +133,7 @@ def assets_search(
     tag_ids: Optional[List[int]] = Query(default=None, description="按标签过滤（可多个）"),
     kind: str = Query(default="table", pattern="^(table|column)$"),
     table_type: Optional[str] = Query(default=None, pattern="^(BASE TABLE|VIEW)$", description="对象类型过滤（AF-07；BASE TABLE 含历史 NULL 行）"),
+    domain_id: Optional[int] = Query(default=None, description="按本体领域过滤"),
     sort: str = Query(default="score", pattern="^(score|updated|rows)$", description="排序：相关度/更新时间/行数"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=50, ge=1, le=200),
@@ -134,7 +143,7 @@ def assets_search(
     """表/字段/注释全文检索（AF-02）：返回表卡片含 ``column_digest``/``pii_max_level``/``tags``/``score``。"""
     svc = OntologyAssetService(db, _require_tenant_id(current_user))
     return svc.search(kw=kw, source_id=source_id, tag_ids=tag_ids, kind=kind,
-                      page=page, size=size, table_type=table_type, sort=sort)
+                      page=page, size=size, table_type=table_type, sort=sort, domain_id=domain_id)
 
 
 # ------------------------------------------- E-探活 表级可读性（AF-06，单+批量限20）
@@ -200,6 +209,7 @@ class TableMetaUpdate(BaseModel):
     table_comment: Optional[str] = None
     biz_name: Optional[str] = Field(default=None, max_length=200)
     biz_description: Optional[str] = None
+    domain_id: Optional[int] = Field(default=None, description="所属本体领域 ID；显式传 null 取消归类")
     columns: Optional[List[ColumnMetaItem]] = None
 
 
@@ -217,6 +227,7 @@ def update_table_meta(
         table_id, source_id=source_id,
         table_comment=body.table_comment, biz_name=body.biz_name,
         biz_description=body.biz_description,
+        domain_id=body.domain_id if "domain_id" in body.model_fields_set else ...,
         columns=[c.model_dump(exclude_none=True) for c in body.columns] if body.columns else None,
     )
     db.commit()
@@ -234,7 +245,8 @@ def get_ontology(
     svc = _get_service(db, current_user)
     obj = svc.get_or_404(ontology_id)
     stats = svc._stats_for([ontology_id]).get(ontology_id)
-    return OntologyService.serialize(obj, stats)
+    name_map = OntologyDomainService(db, obj.tenant_id).domain_names([obj.domain_id])
+    return OntologyService.serialize(obj, stats, domain_name=name_map.get(obj.domain_id))
 
 
 @router.put("/ontologies/{ontology_id}")
@@ -252,7 +264,8 @@ def update_ontology(
     )
     db.commit()
     stats = svc._stats_for([ontology_id]).get(ontology_id)
-    return OntologyService.serialize(obj, stats)
+    name_map = OntologyDomainService(db, obj.tenant_id).domain_names([obj.domain_id])
+    return OntologyService.serialize(obj, stats, domain_name=name_map.get(obj.domain_id))
 
 
 @router.delete("/ontologies/{ontology_id}", status_code=204, response_class=Response)
@@ -661,6 +674,101 @@ def delete_draft_scope(
     result = svc.delete_draft_scope(ontology_id)
     db.commit()
     return result
+
+
+# ==================================================== 本体领域字典（分组维度）
+
+
+class DomainCreate(BaseModel):
+    code: str = Field(..., min_length=1, max_length=64, description="租户内唯一领域编码")
+    name: str = Field(..., min_length=1, max_length=200, description="领域名称")
+    description: Optional[str] = None
+    sort_order: int = Field(default=0, description="排序权重")
+    status: str = Field(default="active", pattern="^(active|disabled)$")
+
+
+class DomainUpdate(BaseModel):
+    code: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    sort_order: Optional[int] = None
+    status: Optional[str] = Field(default=None, pattern="^(active|disabled)$")
+
+
+class DomainToggle(BaseModel):
+    status: str = Field(..., pattern="^(active|disabled)$")
+
+
+@router.get("/domains")
+def list_domains(
+    status: Optional[str] = Query(default=None, description="按状态过滤"),
+    keyword: Optional[str] = Query(default=None, description="code/name 模糊"),
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> list:
+    """领域字典列表（含引用计数；status=active 供前端下拉使用）。"""
+    svc = OntologyDomainService(db, _require_tenant_id(current_user))
+    return svc.list_domains(status=status, keyword=keyword)
+
+
+@router.post("/domains", status_code=201)
+def create_domain(
+    body: DomainCreate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = OntologyDomainService(db, _require_tenant_id(current_user))
+    result = svc.create_domain(
+        code=body.code, name=body.name, description=body.description,
+        sort_order=body.sort_order, status=body.status,
+        creator_id=getattr(current_user, "user_id", None),
+    )
+    db.commit()
+    return result
+
+
+@router.put("/domains/{domain_id}")
+def update_domain(
+    domain_id: int,
+    body: DomainUpdate,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = OntologyDomainService(db, _require_tenant_id(current_user))
+    result = svc.update_domain(
+        domain_id, updater_id=getattr(current_user, "user_id", None),
+        **body.model_dump(exclude_unset=True),
+    )
+    db.commit()
+    return result
+
+
+@router.put("/domains/{domain_id}/toggle")
+def toggle_domain(
+    domain_id: int,
+    body: DomainToggle,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> dict:
+    svc = OntologyDomainService(db, _require_tenant_id(current_user))
+    result = svc.toggle_domain(
+        domain_id, status=body.status, updater_id=getattr(current_user, "user_id", None),
+    )
+    db.commit()
+    return result
+
+
+@router.delete("/domains/{domain_id}", status_code=204, response_class=Response)
+def delete_domain(
+    domain_id: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+) -> Response:
+    """删除领域：关联的表/本体由 FK ON DELETE SET NULL 自动解除分组。"""
+    svc = OntologyDomainService(db, _require_tenant_id(current_user))
+    svc.delete_domain(domain_id)
+    db.commit()
+    return Response(status_code=204)
 
 
 # ==================================================== E29-E32 资产标签体系（P0-10）

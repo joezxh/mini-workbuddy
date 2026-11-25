@@ -18,6 +18,7 @@
             <span class="asset-cards__name" :title="it.table_name" v-html="hl(it.table_name, kw || '')" />
             <span v-if="it.score" class="score" :class="'s' + it.score">{{ it.score }}</span>
             <span v-if="it.bound_object_code" class="badge b-ok">{{ t2('已映射') + ' ' + it.bound_object_code }}</span>
+            <span v-if="it.domain_name" class="badge b-domain">{{ it.domain_name }}</span>
             <span
               v-if="it.pii_max_level && it.pii_max_level !== 'L0'"
               class="badge"
@@ -276,6 +277,11 @@ function toggleExp(id: number) {
     background: #f6ffed;
     border-color: #b7eb8f;
     color: #389e0d;
+  }
+  &.b-domain {
+    background: #e6f4ff;
+    border-color: #91caff;
+    color: #0958d9;
   }
   &.b-warn {
     background: #fffbe6;

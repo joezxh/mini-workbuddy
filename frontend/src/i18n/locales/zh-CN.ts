@@ -3154,6 +3154,7 @@ export default {
       kb: '知识库',
       externalKb: '外部知识库',
       ontology: '本体',
+      ontologyDomain: '本体领域',
       unified: '工作台',
       dataAsset: '数据资产',
       simulation: '推演沙盘',

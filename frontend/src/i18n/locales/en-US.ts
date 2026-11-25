@@ -3097,6 +3097,7 @@ export default {
       kb: 'Knowledge Base',
       externalKb: 'External Knowledge Base',
       ontology: 'Ontology',
+      ontologyDomain: 'Ontology Domains',
       unified: 'Workbench',
       dataAsset: 'Data Assets',
       simulation: 'Simulation Sandbox',

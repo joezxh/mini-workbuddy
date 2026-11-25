@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  EDIT_MODAL_BODY_STYLE,
   PROBE_BATCH_LIMIT,
   checkBatchProbeLimit,
   buildBindTagPayload,
@@ -39,6 +40,20 @@ describe('buildBindTagPayload（打标载荷）', () => {
 
   it('asset_kind 可覆盖（column）', () => {
     expect(buildBindTagPayload(7, [1, 2], 'column').asset_kind).toBe('column')
+  })
+})
+
+describe('EDIT_MODAL_BODY_STYLE（数据表编辑弹窗视口适配）', () => {
+  it('高度以视口为基准且预留标题/底部操作区', () => {
+    const m = EDIT_MODAL_BODY_STYLE.maxHeight.match(/^calc\(100vh - (\d+)px\)$/)
+    expect(m).not.toBeNull()
+    expect(Number(m![1])).toBeGreaterThanOrEqual(120)
+  })
+
+  it('内容超高时纵向滚动、不横向溢出、滚动不穿透背景', () => {
+    expect(EDIT_MODAL_BODY_STYLE.overflowY).toBe('auto')
+    expect(EDIT_MODAL_BODY_STYLE.overflowX).toBe('hidden')
+    expect(EDIT_MODAL_BODY_STYLE.overscrollBehavior).toBe('contain')
   })
 })
 

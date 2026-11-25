@@ -57,7 +57,7 @@ def dispose_all_engines() -> None:
 
 
 def _tables() -> List:
-    # 本体层模型 import 即注册元数据（asset_tag 与 ontology 覆盖全部 onto_* 表）
+    # 本体层模型 import 即注册元数据（asset_tag / domain / ontology 覆盖全部 onto_* 表）
     import app.models.dataops.data_source  # noqa: F401
     import app.models.dataops.meta  # noqa: F401
     import app.models.dataops.standard  # noqa: F401
@@ -65,10 +65,12 @@ def _tables() -> List:
     import app.models.dataops.meta_relation  # noqa: F401
     import app.models.dataops.write_request  # noqa: F401
     import app.models.ontology.asset_tag  # noqa: F401
+    import app.models.ontology.domain  # noqa: F401
     import app.models.ontology.ontology  # noqa: F401
     import app.models.ontology.query  # noqa: F401  ← onto_ontology_query
     import app.models.twin  # noqa: F401            ← twin_* 六表（bound_widget 夹具需要）
     import app.models.sys.sys_dictionary  # noqa: F401
+    import app.models.ai.ai_workspace  # noqa: F401  ← sa_assignment.workspace_id 外键目标
 
     # 与 main.py 同一纪律：检索三表由迁移 006 独占（pg_trgm/HNSW 索引），不进 create_all
     kb_retrieval = {"kms_collection", "kms_segment", "kms_ref"}

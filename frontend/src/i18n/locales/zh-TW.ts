@@ -2973,6 +2973,7 @@ export default {
       kb: '知識庫',
       externalKb: '外部知識庫',
       ontology: '本體',
+      ontologyDomain: '本體領域',
       unified: '工作台',
       dataAsset: '資料資產',
       simulation: '推演沙盤',

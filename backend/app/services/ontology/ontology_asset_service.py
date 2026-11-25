@@ -25,6 +25,7 @@ from app.models.ontology.asset_tag import MetaAssetTag, MetaAssetTagBinding
 from app.models.dataops.meta import MetaColumn, MetaTable
 from app.models.ontology.ontology import MetaOntology
 from app.models.dataops.standard_cdm import MetaObjectStandard, MetaTableStandard
+from app.services.ontology.domain_service import OntologyDomainService
 
 _COLUMN_DIGEST_LIMIT = 6
 _EPOCH_MIN = datetime(1970, 1, 1)  # updated_at 缺失行在 sort=updated 时恒落尾部
@@ -54,11 +55,14 @@ class OntologyAssetService:
         size: int = 50,
         table_type: Optional[str] = None,
         sort: str = "score",
+        domain_id: Optional[int] = None,
     ) -> dict:
         q = (kw or "").strip()
         stmt = self._base(select(MetaTable))
         if source_id:
             stmt = stmt.where(MetaTable.source_id == source_id)
+        if domain_id is not None:
+            stmt = stmt.where(MetaTable.domain_id == domain_id)
         if table_type == "BASE TABLE":
             # 扫描器历史行可能未落 table_type，NULL 视同基表（AF-07）
             stmt = stmt.where(or_(MetaTable.table_type == table_type,
@@ -107,7 +111,10 @@ class OntologyAssetService:
         total = len(scored)
         window = scored[(page - 1) * size: (page - 1) * size + size]
 
-        items = [self._card(t, sc, q) for sc, t in window]
+        domain_names = OntologyDomainService(self.db, self.tenant_id).domain_names(
+            [t.domain_id for _, t in window]
+        )
+        items = [self._card(t, sc, q, domain_name=domain_names.get(t.domain_id)) for sc, t in window]
         return {"total": total, "page": page, "size": size, "items": items}
 
     @staticmethod
@@ -143,7 +150,7 @@ class OntologyAssetService:
         ).all()
         return {r.table_id: (bool(r.nh), bool(r.ch)) for r in rows}
 
-    def _card(self, t: MetaTable, score: int, q: str) -> dict:
+    def _card(self, t: MetaTable, score: int, q: str, *, domain_name: Optional[str] = None) -> dict:
         cols = list(self.db.execute(
             select(MetaColumn).where(
                 MetaColumn.tenant_id == self.tenant_id, MetaColumn.table_id == t.id
@@ -180,6 +187,9 @@ class OntologyAssetService:
             "database": t.database,
             "table_name": t.table_name,
             "table_comment": t.table_comment,
+            "domain": t.domain,
+            "domain_id": t.domain_id,
+            "domain_name": domain_name,
             "column_digest": digest,
             "columns": columns,
             "column_count": t.column_count,
@@ -210,6 +220,7 @@ class OntologyAssetService:
         table_comment: Optional[str] = None,
         biz_name: Optional[str] = None,
         biz_description: Optional[str] = None,
+        domain_id=...,
         columns: Optional[List[dict]] = None,
     ) -> dict:
         """编辑扫描元数据（表/列说明、业务名称/描述）：仅写 ``meta_table``/``meta_column``，非结构变更。
@@ -232,6 +243,9 @@ class OntologyAssetService:
             t.biz_name = biz_name
         if biz_description is not None:
             t.biz_description = biz_description
+        if domain_id is not ...:
+            domain = OntologyDomainService(self.db, self.tenant_id).resolve(domain_id)
+            t.domain_id = domain.id if domain else None
 
         updated = 0
         skipped: List[str] = []
@@ -260,6 +274,7 @@ class OntologyAssetService:
             "table_comment": t.table_comment,
             "biz_name": t.biz_name,
             "biz_description": t.biz_description,
+            "domain_id": t.domain_id,
             "columns_updated": updated,
             "skipped": skipped,
         }

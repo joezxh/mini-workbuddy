@@ -348,10 +348,11 @@ def list_tables(
     source_id: int,
     database: Optional[str] = None,
     db_name: Optional[str] = None,
+    domain_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
 ) -> list:
-    """已入库表快照查询：可按 database (schema) + db_name (物理库) 过滤。"""
+    """已入库表快照查询：可按 database (schema) + db_name (物理库) + 本体领域过滤。"""
     tenant_id = _require_tenant_id(current_user)
     _get_service(db, current_user).get_or_404(source_id)  # 租户隔离校验
     stmt = select(MetaTable).where(
@@ -361,7 +362,11 @@ def list_tables(
         stmt = stmt.where(MetaTable.database == database)
     if db_name:
         stmt = stmt.where(MetaTable.db_name == db_name)
+    if domain_id is not None:
+        stmt = stmt.where(MetaTable.domain_id == domain_id)
     rows = db.execute(stmt.order_by(MetaTable.table_name)).scalars().all()
+    from app.services.ontology.domain_service import OntologyDomainService
+    name_map = OntologyDomainService(db, tenant_id).domain_names([r.domain_id for r in rows])
     return [
         {
             "id": r.id,
@@ -373,6 +378,8 @@ def list_tables(
             "row_count": r.row_count,
             "column_count": r.column_count,
             "domain": r.domain,
+            "domain_id": r.domain_id,
+            "domain_name": name_map.get(r.domain_id),
             "profiled_at": r.profiled_at.isoformat() if r.profiled_at else None,
         }
         for r in rows

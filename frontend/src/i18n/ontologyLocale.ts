@@ -135,6 +135,27 @@ const UI_EN: Record<string, string> = {
   '元素': 'Element',
   '已提交': 'Committed',
   '无候选': 'No candidates',
+  // 本体领域（分组维度）
+  '本体领域': 'Ontology domains',
+  '全部领域': 'All domains',
+  '未分类': 'Uncategorized',
+  '所属领域': 'Domain',
+  '新建领域': 'New domain',
+  '编辑领域': 'Edit domain',
+  '本体与数据资产可按领域归类与筛选': 'Group and filter ontologies and data assets by domain',
+  '维护业务领域分组': 'Maintain business domain groups',
+  '编码与名称必填': 'Code and name are required',
+  '编码与名称不能为空': 'Code and name are required',
+  '已删除': 'Deleted',
+  '状态已更新': 'Status updated',
+  '本体已更新': 'Ontology updated',
+  '编辑本体': 'Edit ontology',
+  '确认删除该领域？关联本体与表将变为未分类': 'Delete this domain? Linked ontologies/tables become uncategorized',
+  '排序': 'Order',
+  '引用数': 'References',
+  '启用': 'Active',
+  '停用': 'Disabled',
+  '删除': 'Delete',
 }
 
 /** 中文原文 → ja-JP 译文（核心导航，其余回落 en/中文） */
@@ -155,6 +176,18 @@ const UI_JA: Record<string, string> = {
   '取消': 'キャンセル',
   '名称': '名称',
   '描述': '説明',
+  // 本体领域
+  '本体领域': 'オントロジー領域',
+  '全部领域': 'すべての領域',
+  '未分类': '未分類',
+  '所属领域': '領域',
+  '新建领域': '新規領域',
+  '编辑领域': '領域を編集',
+  '排序': '並び順',
+  '引用数': '参照数',
+  '启用': '有効',
+  '停用': '無効',
+  '删除': '削除',
 }
 
 /** code → en-US 文案（与后端 app/core/api_error.py 常量严格一致，21 项全覆盖） */
@@ -176,6 +209,8 @@ const ERR_EN: Record<string, string> = {
   'DRAFT_SCOPE_EMPTY': 'Scope is empty',
   'ASSET_TAG_IN_USE': 'Tag is still bound to assets and cannot be deleted',
   'TAG_CODE_DUPLICATED': 'Tag code already exists',
+  'DOMAIN_NOT_FOUND': 'Ontology domain not found or disabled',
+  'DOMAIN_CODE_DUPLICATED': 'Domain code already exists',
   'PUBLISH_TARGET_NOT_FOUND': 'Publish target not found or invalid',
   'ASSISTANT_INTENT_UNSUPPORTED': 'Assistant does not support this intent',
   'ASSISTANT_BUILD_PREVIEW_STALE': 'Preview expired or fingerprint mismatch; re-preview then commit',

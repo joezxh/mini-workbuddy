@@ -18,6 +18,14 @@
       allow-clear
       @change="emitSearch"
     />
+    <a-select
+      v-model:value="domainId"
+      style="width: 140px"
+      :placeholder="t2('全部领域')"
+      :options="domainOptions"
+      allow-clear
+      @change="emitSearch"
+    />
     <a-select v-model:value="kind" style="width: 100px" @change="emitSearch">
       <a-select-option value="table">{{ t2('表') }}</a-select-option>
       <a-select-option value="column">{{ t2('字段') }}</a-select-option>
@@ -73,14 +81,14 @@
  */
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { createAssetTag, listAssetTags } from '@/api/dataops'
+import { createAssetTag, listAssetTags, listDomains } from '@/api/dataops'
 import { t2 } from '../ontology/ontologyText'
 import { COLORS, TAG_KINDS, buildSearchPayload, buildTagPayload } from './assetSearch'
 
 const emit = defineEmits<{
   (e: 'search', payload: {
     kw: string; tag_ids: number[]; kind: string
-    table_type?: string; sort: string; size: number
+    table_type?: string; sort: string; size: number; domain_id?: number
   }): void
 }>()
 
@@ -93,6 +101,8 @@ const sort = ref('score')
 const tagIds = ref<number[]>([])
 const tagOptions = ref<{ label: string; value: number }[]>([])
 const loadingTags = ref(false)
+const domainId = ref<number | null>(null)
+const domainOptions = ref<{ label: string; value: number }[]>([])
 
 const tagOpen = ref(false)
 const creating = ref(false)
@@ -105,6 +115,7 @@ function kindLabel(k: string) {
 function emitSearch() {
   emit('search', buildSearchPayload({
     kw: kw.value, tag_ids: tagIds.value, kind: kind.value, table_type: tableType.value, sort: sort.value,
+    domain_id: domainId.value,
   }))
 }
 
@@ -114,6 +125,7 @@ function onReset() {
   kind.value = 'table'
   tableType.value = 'all'
   sort.value = 'score'
+  domainId.value = null
   emitSearch()
 }
 
@@ -155,7 +167,20 @@ async function doCreateTag() {
   }
 }
 
-onMounted(loadTags)
+async function loadDomains() {
+  try {
+    const resp: any = await listDomains({ status: 'active' })
+    const arr = Array.isArray(resp) ? resp : (resp?.items || [])
+    domainOptions.value = arr.map((d: any) => ({ label: d.name || d.code, value: d.id }))
+  } catch {
+    domainOptions.value = []
+  }
+}
+
+onMounted(() => {
+  loadTags()
+  loadDomains()
+})
 defineExpose({ reloadTags: loadTags })
 </script>
 

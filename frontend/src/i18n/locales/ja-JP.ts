@@ -2956,6 +2956,7 @@ export default {
       kb: 'ナレッジベース',
       externalKb: '外部ナレッジベース',
       ontology: 'オントロジー',
+      ontologyDomain: 'オントロジー領域',
       unified: 'ワークベンチ',
       dataAsset: 'データ資産',
       simulation: 'シミュレーション',

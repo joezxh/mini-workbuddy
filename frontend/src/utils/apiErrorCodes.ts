@@ -28,6 +28,8 @@ export const ONTOLOGY_ERROR_TEXTS: Record<string, string> = {
   DRAFT_SCOPE_EMPTY: '作用域为空',
   ASSET_TAG_IN_USE: '标签仍被资产绑定，不可删除',
   TAG_CODE_DUPLICATED: '标签编码已存在',
+  DOMAIN_NOT_FOUND: '本体领域不存在或已停用',
+  DOMAIN_CODE_DUPLICATED: '领域编码已存在',
   PUBLISH_TARGET_NOT_FOUND: '发布登记目标不存在或参数非法',
   ASSISTANT_INTENT_UNSUPPORTED: '助手不支持该 intent',
   ASSISTANT_BUILD_PREVIEW_STALE: '预览已过期或指纹不符，请重新预览后提交',
