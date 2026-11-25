@@ -76,6 +76,15 @@
                 :placeholder="t('kbMgmt.kg.cfgSchemaTextPlaceholder')"
               />
               <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgSchemaFreeTip') }}</div>
+              <div class="kg-frm__ops">
+                <a-button
+                  size="small"
+                  :disabled="form.schema_source !== 'free_text'"
+                  @click="onFillSupplyChainTemplate"
+                >
+                  {{ t('kbMgmt.kg.cfgFillSupplyChain') }}
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
@@ -108,6 +117,83 @@
                 class="kg-frm__inp"
               />
               <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgTimeoutTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgMaxOutputTokens') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-input-number
+                v-model:value="form.max_output_tokens"
+                :min="64"
+                :max="32000"
+                :step="256"
+                size="small"
+                class="kg-frm__inp"
+              />
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgMaxOutputTokensTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgMaxTextChars') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-input-number
+                v-model:value="form.max_text_chars"
+                :min="500"
+                :max="50000"
+                :step="1000"
+                size="small"
+                class="kg-frm__inp"
+              />
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgMaxTextCharsTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgEntityLimit') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-input-number
+                v-model:value="form.max_entities"
+                :min="5"
+                :max="500"
+                size="small"
+                class="kg-frm__inp"
+              />
+              <div class="kg-frm__hint">max_entities / max_relations</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgRelationLimit') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-input-number
+                v-model:value="form.max_relations"
+                :min="5"
+                :max="1000"
+                size="small"
+                class="kg-frm__inp"
+              />
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgRelationLimitTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgContinuationRounds') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-input-number
+                v-model:value="form.max_continuation_rounds"
+                :min="1"
+                :max="10"
+                size="small"
+                class="kg-frm__inp"
+              />
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgContinuationRoundsTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">{{ t('kbMgmt.kg.cfgRelationReview') }}</label>
+            <div class="kg-frm__ctrl">
+              <a-checkbox v-model:checked="form.relation_review_enabled">
+                {{ t('kbMgmt.kg.cfgRelationReview') }}
+              </a-checkbox>
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgRelationReviewTip') }}</div>
+            </div>
+
+            <label class="kg-frm__label">
+              <a @click="openPromptPreview">{{ t('kbMgmt.kg.cfgPromptPreview') }}</a>
+            </label>
+            <div class="kg-frm__ctrl">
+              <div class="kg-frm__hint">{{ t('kbMgmt.kg.cfgPromptPreviewTip') }}</div>
             </div>
           </div>
         </div>
@@ -216,6 +302,28 @@
         </div>
       </section>
     </a-spin>
+
+    <!-- 生效提示词预览：按当前配置拼装的最终提示词（与构建服务同一份 build_prompt） -->
+    <a-drawer
+      v-model:open="promptOpen"
+      :title="t('kbMgmt.kg.cfgPromptPreview')"
+      width="640"
+      placement="right"
+    >
+      <a-spin :spinning="promptLoading">
+        <div class="kg-prompt-meta">
+          <a-tag v-if="promptMeta.schema_source" color="purple">
+            {{ promptMeta.schema_source }}
+          </a-tag>
+          <span
+            v-for="(v, k) in promptMeta.config"
+            :key="k"
+            class="kg-muted kg-prompt-meta__item"
+          >{{ k }}={{ v }}</span>
+        </div>
+        <pre class="kg-prompt-pre">{{ promptText }}</pre>
+      </a-spin>
+    </a-drawer>
   </div>
 </template>
 
@@ -258,6 +366,14 @@ const DEFAULTS: KgGraphConfig = {
   schema: '',
   concurrency_count: 8,
   timeout_seconds: 60,
+  max_output_tokens: 4096,
+  max_text_chars: 12000,
+  max_entities: 60,
+  max_relations: 120,
+  max_continuation_rounds: 3,
+  relation_review_enabled: true,
+  review_batch_size: 200,
+  review_concurrency: 4,
   use_graph_retrieval: true,
   graph_entity_top_k: 10,
   graph_triple_top_k: 10,
@@ -331,6 +447,75 @@ function onRestoreDefault() {
   message.info(t('kbMgmt.kg.restoreDefault'))
 }
 
+// ── 供应链约束模板一键填充 ───────────────────────────────────────────────
+/** 与 docs/prototypes/supply-chain-kg/free-text-schema-constraint.md 同源（10 实体类型 + 15 关系类型 + 抽取纪律） */
+const SUPPLY_CHAIN_TEMPLATE = `实体类型约束（只能取以下 10 类，不要自造类型）：
+供应商：提供原材料/部件/产品或服务的企业（含制造商）。
+产品：具备名称与用途的产出物（含型号系列）。
+客户：采购或委托方（企业/机构）。
+物流服务：运输、仓储、报关等物流服务商。
+仓库：库房/仓区（含类型属性，如冷链仓、电商仓）。
+采购订单：有订单号或明确的单次采购行为。
+供应合同：有合同要素的协议（框架协议、采购协议）。
+交付计划：有时间要素的排程或计划。
+风险项：供应链风险（断供、合规、质量、汇率等）。
+认证/资质：体系认证、资质证书。
+
+关系类型约束（只能取以下 15 类）：
+供应：供应商 → 产品（生产/供货）。
+供应给：供应商/产品 → 客户。
+采购：客户/采购方 → 产品。
+采购自：客户/采购方 → 供应商。
+物流承运：物流服务 → 产品。
+仓储于：产品 → 仓库。
+包含：订单/合同/计划 → 产品。
+签约方：合同/订单 → 供应商 或 客户。
+排期：交付计划 → 产品。
+管控风险：风险项 → 产品/供应商/仓库。
+持有认证：供应商/产品 → 认证/资质。
+位于：供应商/仓库 → 地点。
+影响：风险项 → 供应/采购/交付。
+替代：产品 → 产品。
+依赖：供应商 → 供应商。
+
+抽取纪律：
+1. 类型必须取自上述集合，不要自造类型；无法归类的实体标 OTHER。
+2. 属性写入 properties（数量、金额、日期、型号、温度、地址等取值不要建成实体）。
+3. 关系宁多勿漏：文本中明确成立的关系都要输出（包括低置信的），不要输出自环。
+4. 实体名用原文表述；别名补充简称/英文缩写。`
+
+function onFillSupplyChainTemplate() {
+  form.schema = SUPPLY_CHAIN_TEMPLATE
+  message.success(t('kbMgmt.kg.cfgTemplateFilled'))
+}
+
+// ── 生效提示词预览抽屉 ───────────────────────────────────────────────────
+const promptOpen = ref(false)
+const promptLoading = ref(false)
+const promptText = ref('')
+const promptMeta = ref<{ schema_source: string; config: Record<string, number> }>({
+  schema_source: '',
+  config: {},
+})
+
+async function openPromptPreview() {
+  promptOpen.value = true
+  promptLoading.value = true
+  try {
+    const res = await api.getPromptPreview(props.knowledgeId)
+    promptText.value = res?.prompt || ''
+    promptMeta.value = {
+      schema_source: res?.schema_source || '',
+      config: res?.config || {},
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.loadFailed'))
+    promptText.value = ''
+  } finally {
+    promptLoading.value = false
+  }
+}
+
 onMounted(async () => {
   await Promise.all([load(), loadOptions()])
 })
@@ -375,5 +560,32 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   margin-top: 14px;
+}
+.kg-frm__ops {
+  margin-top: 6px;
+}
+/* 提示词预览 */
+.kg-prompt-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.kg-prompt-meta__item {
+  font-size: 11.5px;
+}
+.kg-prompt-pre {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-sm);
+  background: var(--kg-subtle);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.6;
+  max-height: 70vh;
+  overflow: auto;
 }
 </style>

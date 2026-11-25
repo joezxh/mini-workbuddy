@@ -45,21 +45,30 @@ from app.services.kb.kg.kg_failure import (
     TruncatedResponseError,
 )
 
-# 单切片实体/关系上限：本地小模型一旦放开就会自造一堆无关实体
-MAX_ENTITIES = 40
-MAX_RELATIONS = 60
-# 送进 prompt 的正文上限（字符）：留出输出与指令空间
-MAX_TEXT_CHARS = 6000
+# 单切片实体/关系上限：小模型放开会自造实体，但过低的上限会把关系挤掉——
+# 实体排在 relations 之前，预算固定时实体越多留给关系的空间越小。60/120 按
+# 供应链语料实测调优（原 40/60 是 1024 输出预算时代的口径），可经 pipeline_config
+# 的 max_entities / max_relations 下调。
+MAX_ENTITIES = 60
+MAX_RELATIONS = 120
+# 送进 prompt 的正文上限（字符）：留出输出与指令空间。
+# 6000 是小上下文引擎（8192 窗口）时代的口径——供应链库 274 个切片里 246 个
+# 触发了 input_truncated（90%），尾部实体/关系根本没进模型。大窗口模型
+# （qwen3-32b 等 32k+）上 12000 字符 + 4096 输出预算才放得下完整切片；
+# 小窗口引擎可经 pipeline_config 的 max_text_chars 下调。
+MAX_TEXT_CHARS = 12000
 # 单次抽取的输出 token 预算：抽取通道的**上限**（模型行 max_tokens 比它小则照用更小值）。
 # 为什么必须设上限而不是「照抄模型行配置」：小上下文自托管引擎的窗口是并发请求
 # 共享的，声明的输出越大等于向引擎预订越多窗口。实测 LM Studio
 # （context_length=8192、parallel=4）上，4 路并发时 max_tokens=4096 有 3/4 直接
-# 400「Context size has been exceeded」，而 ≤1024 全部通过——这就是 45 段抽取
-# 失败 40 段的成因（模型行 max_tokens=8192 + 默认 concurrency_count=8）。
-# 抽取响应本身有上限（MAX_ENTITIES/MAX_RELATIONS），预算撞顶被拦腰截断的部分由
-# parse_response 的截断修复保住；窗口更小的引擎可经 pipeline_config.graph
-# 的 max_output_tokens 继续下调（如 512）。
-DEFAULT_MAX_OUTPUT_TOKENS = 1024
+# 400「Context size has been exceeded」——这类部署应经 pipeline_config.graph
+# 的 max_output_tokens 下调（如 1024/512）。
+# 默认值按大窗口模型（GPUStack qwen3-32b）调优：1024 时实体输出占满预算、
+# 关系全在截断点之后被裁掉（修复前供应链库 274 切片仅抽出 91 条关系）。
+DEFAULT_MAX_OUTPUT_TOKENS = 4096
+# 截断续抽的轮数上限：只续一轮时第二轮续抽自身常又撞顶，遗漏关系就此丢失；
+# 默认 3 轮（每轮带已抽取清单，只补遗漏项），到轮数或无新增即停。
+DEFAULT_MAX_CONTINUATION_ROUNDS = 3
 # 退避重试的下限与次数：引擎按窗口容量拒绝属可退避问题（并发争用是概率性的），
 # 每次把输出预算减半，让单段在窗口紧张时仍能拿到部分结果而不是直接判死。
 MIN_OUTPUT_TOKENS = 128
@@ -178,27 +187,37 @@ def resolve_llm_config(db, model_spec: Any = None) -> Optional[dict]:
 
 
 # ── prompt 与响应解析 ────────────────────────────────────────────────────
+_PROMPT_SCHEMA_LINE = (
+    '{"entities": [{"name": "实体名", "label": "类型", '
+    '"aliases": ["别名"], "properties": {"属性名": "属性值"}}], '
+    '"relations": [{"source": "起点实体名", "target": "终点实体名", '
+    '"relation_type": "关系", "text": "支撑该关系的原文片段"}]}'
+)
+
+
 def build_prompt(
     text: str,
     *,
     schema_hint: str = "",
     max_entities: int = MAX_ENTITIES,
     max_relations: int = MAX_RELATIONS,
+    max_text_chars: int = MAX_TEXT_CHARS,
 ) -> str:
     """组装抽取指令。
 
     三条硬约束来自实测踩坑：只输出 JSON（否则解析失败）、
     ``name`` 必须原文出现（否则模型改写出的实体会让关系端点对不上）、
     关系端点必须来自实体表（否则落库时整条被丢弃，白花钱）。
+
+    关系召回导向（供应链库实测教训）：类型约束保持严格，但**不抑制关系数量**——
+    旧措辞「宁可不标」+ 1024 输出预算让 274 个切片只抽出 91 条关系；
+    质量把关交给关系复核环节（LLM 二次证据复核），不靠提示词自断数量。
     """
     parts = [
         "你是知识图谱抽取器。阅读文本，抽取其中的实体与关系，只输出一个 JSON 对象。",
         "",
         "输出结构：",
-        '{"entities": [{"name": "实体名", "label": "类型", '
-        '"aliases": ["别名"], "properties": {}}], '
-        '"relations": [{"source": "起点实体名", "target": "终点实体名", '
-        '"relation_type": "关系", "text": "支撑该关系的原文片段"}]}',
+        _PROMPT_SCHEMA_LINE,
         "",
         "硬性要求：",
         f"1. 实体不超过 {max_entities} 个，关系不超过 {max_relations} 个；",
@@ -208,13 +227,23 @@ def build_prompt(
         # 才能让固定预算装下更多关系（截断丢尾丢的几乎全是关系）
         "4. relations 的 text 只保留支撑该关系的原文片段（不超过 60 字）；"
         "aliases 与 properties 没有内容时省略；",
-        "5. 无法确定的字段填空字符串或空对象，不要编造；",
-        "6. 只输出 JSON，不要输出解释、前后缀或代码块围栏。",
+        "5. 数字、日期、金额、型号、单位等取值一律写入对应实体的 properties，"
+        "不要单独建成实体；",
+        # 关系宁多勿漏：低置信关系仍输出，由复核环节判定真伪
+        "6. 关系宁多勿漏：文本中明确成立的关系都要输出（包括低置信的）；"
+        "不要输出 source == target 的自环关系；",
+        "7. 无法确定的字段填空字符串或空对象，不要编造；",
+        "8. 只输出 JSON，不要输出解释、前后缀或代码块围栏。",
     ]
     hint = (schema_hint or "").strip()
     if hint:
-        parts += ["", "类型约束（优先遵守，不在集合内的类型宁可不标）：", hint]
-    body = (text or "")[:MAX_TEXT_CHARS]
+        parts += [
+            "",
+            "类型约束（实体与关系的类型只能取以下集合，不要自造类型；"
+            "类型受约束但关系宁多勿漏，文本中明确成立的关系一条都不要漏）：",
+            hint,
+        ]
+    body = (text or "")[: max(1, int(max_text_chars or MAX_TEXT_CHARS))]
     parts += ["", "文本：", '"""', body, '"""']
     return "\n".join(parts)
 
@@ -227,6 +256,7 @@ def build_continuation_prompt(
     known_relations: list,
     max_entities: int = MAX_ENTITIES,
     max_relations: int = MAX_RELATIONS,
+    max_text_chars: int = MAX_TEXT_CHARS,
 ) -> str:
     """续抽指令：首轮输出撞预算被截断后，让模型只补遗漏项。
 
@@ -239,10 +269,7 @@ def build_continuation_prompt(
         "请继续阅读文本，只输出**上一轮遗漏**的实体与关系（已抽取的不要重复），只输出一个 JSON 对象。",
         "",
         "输出结构（与上一轮相同）：",
-        '{"entities": [{"name": "实体名", "label": "类型", '
-        '"aliases": ["别名"], "properties": {}}], '
-        '"relations": [{"source": "起点实体名", "target": "终点实体名", '
-        '"relation_type": "关系", "text": "支撑该关系的原文片段"}]}',
+        _PROMPT_SCHEMA_LINE,
         "",
         f"已抽取的实体名（不要重复输出）：{json.dumps(known_entities, ensure_ascii=False)}",
         f"已抽取的关系（起点|关系|终点，不要重复输出）：{json.dumps(known_relations, ensure_ascii=False)}",
@@ -253,12 +280,18 @@ def build_continuation_prompt(
         "3. relations 的 source 与 target 必须出现在实体 name 中；",
         "4. relations 的 text 只保留支撑该关系的原文片段（不超过 60 字）；"
         "aliases 与 properties 没有内容时省略；",
-        "5. 只输出 JSON，不要输出解释或代码块围栏。",
+        "5. 数字、日期、金额、型号等取值写入 properties，不要建成实体；不要输出自环关系；",
+        "6. 只输出 JSON，不要输出解释或代码块围栏。",
     ]
     hint = (schema_hint or "").strip()
     if hint:
-        parts += ["", "类型约束（优先遵守，不在集合内的类型宁可不标）：", hint]
-    body = (text or "")[:MAX_TEXT_CHARS]
+        parts += [
+            "",
+            "类型约束（实体与关系的类型只能取以下集合，不要自造类型；"
+            "类型受约束但关系宁多勿漏）：",
+            hint,
+        ]
+    body = (text or "")[: max(1, int(max_text_chars or MAX_TEXT_CHARS))]
     parts += ["", "文本：", '"""', body, '"""']
     return "\n".join(parts)
 
@@ -692,6 +725,8 @@ class LLMExtractor:
         disable_thinking: bool = True,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         ctx_retry_limit: int = CTX_RETRY_LIMIT,
+        max_text_chars: int = MAX_TEXT_CHARS,
+        max_continuation_rounds: int = DEFAULT_MAX_CONTINUATION_ROUNDS,
     ) -> None:
         self.cfg = cfg or {}
         self._complete = complete
@@ -701,6 +736,8 @@ class LLMExtractor:
         self.disable_thinking = bool(disable_thinking)
         self.max_output_tokens = max(0, int(max_output_tokens or 0))
         self.ctx_retry_limit = max(0, int(ctx_retry_limit or 0))
+        self.max_text_chars = max(1, int(max_text_chars or MAX_TEXT_CHARS))
+        self.max_continuation_rounds = max(1, int(max_continuation_rounds or 1))
 
     def _output_budget(self) -> int:
         """本次抽取的输出预算 = min(模型行 max_tokens, 本通道上限)。
@@ -840,6 +877,7 @@ class LLMExtractor:
             schema_hint=schema_hint,
             max_entities=self.max_entities,
             max_relations=self.max_relations,
+            max_text_chars=self.max_text_chars,
         )
         raw, evidence = self.complete_meta(prompt)
         try:
@@ -847,13 +885,13 @@ class LLMExtractor:
             # 合起来才判得出来，缺一侧就只能盲猜
             out = parse_response(raw, truncation=evidence)
             out = self._continue_if_truncated(text, schema_hint=schema_hint, out=out)
-            if out.notice is None and len(text or "") > MAX_TEXT_CHARS:
-                # 输入超限是**静默截断**（prompt 里硬切 6000 字符）：尾部实体/关系
+            if out.notice is None and len(text or "") > self.max_text_chars:
+                # 输入超限是**静默截断**（prompt 里硬切上限字符）：尾部实体/关系
                 # 根本没进模型。留痕让「这段抽少了」可归因，别和模型抽不动混淆。
                 out.notice = {
                     "type": "input_truncated",
                     "text_chars": len(text),
-                    "kept_chars": MAX_TEXT_CHARS,
+                    "kept_chars": self.max_text_chars,
                 }
             return out
         except KgExtractionError as exc:
@@ -866,44 +904,60 @@ class LLMExtractor:
     def _continue_if_truncated(
         self, text: str, *, schema_hint: str, out: ParsedOutput
     ) -> ParsedOutput:
-        """首轮输出被截断修复丢弃了字符时做**一轮有界续抽**，把丢掉的尾部关系补回来。
+        """首轮输出被截断修复丢弃了字符时做**有界多轮续抽**，把丢掉的尾部关系补回来。
 
         触发条件用 ``dropped_chars`` 而非 ``budget_hit``：注入 ``complete=`` 的
         通道拿不到用量证据（budget=0），按双证据判定会让续抽在这些链路上永远
-        不触发；而「修复时丢了字符」本身已说明尾部有内容被裁。只续一轮——
-        续抽自己又撞顶时 budget_hit 如实上报，靠「调大 max_output_tokens /
-        缩短切片」处理，不做无限续抽（成本失控且收益递减）。续抽任何失败都
-        不影响首轮已拿到的部分结果。
+        不触发；而「修复时丢了字符」本身已说明尾部有内容被裁。
+
+        供应链库实测教训：只续一轮时第二轮续抽自身常又撞顶，遗漏关系就此丢失
+        （274 切片仅 91 条关系）。故改为有界多轮：续抽的响应自己又被截断
+        （``extra.notice.dropped_chars`` 非空）且还有新增产出时继续下一轮，
+        至 ``max_continuation_rounds`` 上限或无新增为止——不做无限续抽
+        （成本失控且收益递减）。任何一轮失败都不影响已拿到的部分结果。
         """
-        notice = out.notice or {}
-        if not notice.get("dropped_chars"):
-            return out
-        try:
-            prompt = build_continuation_prompt(
-                text,
-                schema_hint=schema_hint,
-                known_entities=[
-                    str(e.get("name") or "")
-                    for e in out[0] if isinstance(e, dict) and e.get("name")
-                ],
-                known_relations=[
-                    "|".join(_relation_key(r))
-                    for r in out[1] if isinstance(r, dict)
-                ],
-                max_entities=self.max_entities,
-                max_relations=self.max_relations,
+        for _round in range(self.max_continuation_rounds):
+            notice = out.notice or {}
+            if not notice.get("dropped_chars"):
+                return out
+            try:
+                prompt = build_continuation_prompt(
+                    text,
+                    schema_hint=schema_hint,
+                    known_entities=[
+                        str(e.get("name") or "")
+                        for e in out[0] if isinstance(e, dict) and e.get("name")
+                    ],
+                    known_relations=[
+                        "|".join(_relation_key(r))
+                        for r in out[1] if isinstance(r, dict)
+                    ],
+                    max_entities=self.max_entities,
+                    max_relations=self.max_relations,
+                    max_text_chars=self.max_text_chars,
+                )
+                raw, evidence = self.complete_meta(prompt)
+                extra = parse_response(raw, truncation=evidence)
+            except Exception as exc:  # noqa: BLE001 - 续抽失败保留已拿到的部分结果
+                logger.warning(f"[kg] 截断续抽失败，保留已有部分结果: {exc}")
+                return out
+            before = (len(out[0]), len(out[1]))
+            merged = merge_outputs(out, extra)
+            logger.info(
+                f"[kg] 截断续抽第 {_round + 1} 轮：entity={before[0]}"
+                f" relation={before[1]}"
+                f" → 合并后 entity={len(merged[0])}"
+                f" relation={len(merged[1])}"
             )
-            raw, evidence = self.complete_meta(prompt)
-            extra = parse_response(raw, truncation=evidence)
-        except Exception as exc:  # noqa: BLE001 - 续抽失败保留首轮部分结果
-            logger.warning(f"[kg] 截断续抽失败，保留首轮部分结果: {exc}")
-            return out
-        merged = merge_outputs(out, extra)
-        logger.info(
-            f"[kg] 截断续抽完成：首轮 entity={len(out[0])} relation={len(out[1])}"
-            f" → 合并后 entity={len(merged[0])} relation={len(merged[1])}"
-        )
-        return merged
+            extra_notice = extra.notice or {}
+            if (len(merged[0]), len(merged[1])) == before:
+                # 无新增（续抽全被去重/为空）：再续也补不出东西，停
+                return merged
+            if not extra_notice.get("dropped_chars"):
+                # 续抽响应完整返回：仍有遗漏的话 budget_hit 已如实上报
+                return merged
+            out = merged
+        return out
 
 
 def build_llm_extractor(db, graph_cfg: dict, *, complete=None) -> Tuple[
@@ -930,6 +984,11 @@ def build_llm_extractor(db, graph_cfg: dict, *, complete=None) -> Tuple[
             disable_thinking=bool(graph_cfg.get("disable_thinking", True)),
             max_output_tokens=int(
                 graph_cfg.get("max_output_tokens") or DEFAULT_MAX_OUTPUT_TOKENS
+            ),
+            max_text_chars=int(graph_cfg.get("max_text_chars") or MAX_TEXT_CHARS),
+            max_continuation_rounds=int(
+                graph_cfg.get("max_continuation_rounds")
+                or DEFAULT_MAX_CONTINUATION_ROUNDS
             ),
         ),
         (cfg or {}).get("model", ""),

@@ -4,16 +4,25 @@
       <span>
         {{ selection?.kind === 'edge' ? t('kbMgmt.kg.relationDetail') : t('kbMgmt.kg.inspectorTitle') }}
       </span>
-      <span v-if="relation && relation.status === 'suggested'" class="kg-insp__hd-ops">
-        <a-button size="small" :loading="reviewing" @click="onReview('accepted')">
+      <span
+        v-if="relation && relation.status === 'suggested'
+          || entity && entity.status === 'suggested'"
+        class="kg-insp__hd-ops"
+      >
+        <a-button size="small" :loading="reviewing" @click="onAcceptSelected">
           {{ t('kbMgmt.kg.accept') }}
         </a-button>
         <a-popconfirm
-          :title="t('kbMgmt.kg.confirmRejectRelation')"
-          @confirm="onReview('rejected')"
+          :title="relation ? t('kbMgmt.kg.confirmRejectRelation') : t('kbMgmt.kg.confirmDeleteEntity')"
+          @confirm="onRejectOrDeleteSelected"
         >
-          <a-button size="small" danger :disabled="reviewing">{{ t('kbMgmt.kg.reject') }}</a-button>
+          <a-button size="small" danger :disabled="reviewing">
+            {{ relation ? t('kbMgmt.kg.reject') : t('common.delete') }}
+          </a-button>
         </a-popconfirm>
+      </span>
+      <span v-if="entity" class="kg-insp__hd-ops">
+        <a-button size="small" @click="openEdit">{{ t('common.edit') }}</a-button>
       </span>
     </header>
 
@@ -150,6 +159,14 @@
               <span class="kg-badge" :class="statusBadgeClass(relation.status)">
                 {{ statusText(relation.status) }}
               </span>
+              <span
+                v-if="relation.review_verdict"
+                class="kg-review-badge"
+                :class="`kg-review-badge--${relation.review_verdict}`"
+                :title="relation.review_note || ''"
+              >
+                {{ reviewBadgeText(relation.review_verdict) }}
+              </span>
             </dd>
             <dt>{{ t('kbMgmt.kg.colExtractor') }}</dt>
             <dd><code class="kg-code">{{ relation.extractor || '—' }}</code></dd>
@@ -164,17 +181,29 @@
           <div class="kg-sec-t">
             {{ t('kbMgmt.kg.provenanceSegments', { count: relation.mention_count ?? 0 }) }}
           </div>
-          <div v-if="!relation.mention_count" class="kg-muted">
-            {{ t('kbMgmt.kg.noFailedSegments') }}
+          <!-- 关系自身的溯源切片内联列出（旧实现用 from_entity_id 近似，已修正） -->
+          <div class="kg-kvlist kg-insp__mentions">
+            <div v-if="!relationMentions.length" class="kg-muted">
+              {{ t('kbMgmt.kg.noFailedSegments') }}
+            </div>
+            <div
+              v-for="(m, idx) in relationMentions"
+              :key="`rm-${m.segment_id}-${idx}`"
+              class="kg-kvrow kg-kvrow--link"
+              @click="openSegments(m.document_id)"
+            >
+              <span class="kg-kvrow__k">#{{ m.chunk_index }}</span>
+              <span class="kg-kvrow__v">{{ mentionExcerpt(m.content) }}</span>
+            </div>
           </div>
-          <div v-else class="kg-muted">{{ t('kbMgmt.kg.provSegTip') }}</div>
+          <div class="kg-note">{{ t('kbMgmt.kg.provSegTip') }}</div>
 
           <div class="kg-sec-t">{{ t('kbMgmt.kg.actionTitle') }}</div>
           <div class="kg-insp__ops">
-            <a-button size="small" @click="emit('provenance', relation.from_entity_id)">
+            <a-button size="small" @click="emit('provenance-edge', relation.id)">
               {{ t('kbMgmt.kg.provDrill') }}
             </a-button>
-            <a-button size="small" @click="emit('locate', relation.from_entity_id)">
+            <a-button size="small" @click="emit('locate-edge', relation.id)">
               {{ t('kbMgmt.kg.locateInGraph') }}
             </a-button>
           </div>
@@ -185,6 +214,48 @@
         </div>
       </a-spin>
     </div>
+
+    <!-- 实体编辑（名称/类型/别名/属性键值；归一 key 派生自名称，随保存更新） -->
+    <a-modal
+      v-model:open="editOpen"
+      :title="t('kbMgmt.kg.editEntity')"
+      :confirm-loading="saving"
+      @ok="onSaveEntity"
+    >
+      <a-form layout="vertical">
+        <a-form-item :label="t('kbMgmt.kg.entityName')" required>
+          <a-input v-model:value="editForm.name" />
+        </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.entityType')">
+          <a-auto-complete
+            v-model:value="editForm.type_code"
+            :options="typeCodeOptions"
+            :placeholder="t('kbMgmt.kg.entityTypePlaceholder')"
+          />
+        </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.aliases')">
+          <a-select v-model:value="editForm.aliases" mode="tags" />
+        </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.properties')">
+          <div class="kg-props-editor">
+            <div v-for="(p, i) in editForm.propsList" :key="i" class="kg-props-editor__row">
+              <a-input v-model:value="p.key" :placeholder="t('kbMgmt.kg.propKey')" style="width: 40%" />
+              <a-input v-model:value="p.value" :placeholder="t('kbMgmt.kg.propValue')" />
+              <a-button size="small" type="text" danger @click="editForm.propsList.splice(i, 1)">
+                <template #icon><DeleteOutlined /></template>
+              </a-button>
+            </div>
+            <a-button size="small" type="dashed" block @click="editForm.propsList.push({ key: '', value: '' })">
+              <template #icon><PlusOutlined /></template>
+              {{ t('kbMgmt.kg.addProp') }}
+            </a-button>
+          </div>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- 分段详情抽屉（零改动复用） -->
+    <SegmentDetail v-model:open="segmentOpen" :document-id="segmentDocId" />
   </section>
 </template>
 
@@ -200,9 +271,11 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import * as api from '@/api/kg'
-import type { KgEntity, KgRelation } from '@/api/kg'
+import type { KgEntity, KgMentionSlice, KgRelation } from '@/api/kg'
 import { formatWeight, typeLabel, typeTone, weightColor } from '@/components/common/graph/graphTheme'
+import SegmentDetail from '@/views/kms/kb/SegmentDetail.vue'
 import { SHELL_PATH } from '@/utils/shellTab'
 
 const props = defineProps<{
@@ -214,7 +287,9 @@ const emit = defineEmits<{
   (e: 'inspect-entity', entityId: number): void
   (e: 'inspect-relation', relationId: number): void
   (e: 'locate', entityId: number): void
+  (e: 'locate-edge', relationId: number): void
   (e: 'provenance', entityId: number): void
+  (e: 'provenance-edge', relationId: number): void
   (e: 'reviewed'): void
 }>()
 
@@ -225,6 +300,126 @@ const entity = ref<KgEntity | null>(null)
 const relation = ref<KgRelation | null>(null)
 const loading = ref(false)
 const reviewing = ref(false)
+
+/** 关系自身的溯源切片（内联展示，替代旧的 from_entity_id 近似） */
+const relationMentions = ref<KgMentionSlice[]>([])
+
+const segmentOpen = ref(false)
+const segmentDocId = ref<string | null>(null)
+
+function openSegments(docId: string) {
+  segmentDocId.value = docId
+  segmentOpen.value = true
+}
+
+function mentionExcerpt(content: string) {
+  return !content || content.length <= 90 ? content || '' : `${content.slice(0, 90)}…`
+}
+
+/** 复核徽标文案 */
+function reviewBadgeText(verdict: string) {
+  if (verdict === 'supported') return t('kbMgmt.kg.reviewSupported')
+  if (verdict === 'weak') return t('kbMgmt.kg.reviewWeak')
+  if (verdict === 'unsupported') return t('kbMgmt.kg.reviewUnsupported')
+  return t('kbMgmt.kg.reviewFailed')
+}
+
+// ── 实体编辑弹窗 ─────────────────────────────────────────────────────────
+const editOpen = ref(false)
+const saving = ref(false)
+const editForm = ref({
+  name: '',
+  type_code: undefined as string | undefined,
+  aliases: [] as string[],
+  propsList: [] as { key: string; value: string }[],
+})
+const typeCodeOptions = computed(() =>
+  entity.value?.type_code ? [{ value: entity.value.type_code }] : [],
+)
+
+function openEdit() {
+  const ent = entity.value
+  if (!ent) return
+  editForm.value = {
+    name: ent.name,
+    type_code: ent.type_code || undefined,
+    aliases: [...(ent.aliases || [])],
+    propsList: Object.entries(ent.properties || {}).map(([key, value]) => ({
+      key,
+      value: value == null ? '' : String(value),
+    })),
+  }
+  editOpen.value = true
+}
+
+async function onSaveEntity() {
+  const ent = entity.value
+  if (!ent) return
+  if (!editForm.value.name.trim()) {
+    message.warning(t('kbMgmt.kg.entityNameRequired'))
+    return
+  }
+  saving.value = true
+  try {
+    const properties: Record<string, string> = {}
+    for (const p of editForm.value.propsList) {
+      const k = p.key.trim()
+      if (k) properties[k] = p.value
+    }
+    await api.updateEntity(props.knowledgeId, ent.id, {
+      name: editForm.value.name.trim(),
+      type_code: editForm.value.type_code || undefined,
+      aliases: editForm.value.aliases || [],
+      properties,
+    })
+    message.success(t('common.saved'))
+    editOpen.value = false
+    await load()
+    emit('reviewed')
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+/** 头部「接受」：实体 suggested→active，关系 suggested→accepted */
+async function onAcceptSelected() {
+  reviewing.value = true
+  try {
+    if (relation.value) {
+      await api.reviewRelation(props.knowledgeId, relation.value.id, 'accepted')
+    } else if (entity.value) {
+      await api.acceptEntity(props.knowledgeId, entity.value.id)
+    }
+    message.success(t('kbMgmt.kg.reviewDone'))
+    await load()
+    emit('reviewed')
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  } finally {
+    reviewing.value = false
+  }
+}
+
+/** 头部「驳回/删除」：关系驳回、实体删除（后端实体无 reject 态，删除即清理） */
+async function onRejectOrDeleteSelected() {
+  reviewing.value = true
+  try {
+    if (relation.value) {
+      await api.reviewRelation(props.knowledgeId, relation.value.id, 'rejected')
+    } else if (entity.value) {
+      await api.deleteEntity(props.knowledgeId, entity.value.id)
+    }
+    message.success(t('kbMgmt.kg.reviewDone'))
+    await load()
+    emit('reviewed')
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  } finally {
+    reviewing.value = false
+  }
+}
 
 const propertyRows = computed(() =>
   Object.entries(entity.value?.properties || {}).map(([key, value]) => ({
@@ -308,31 +503,24 @@ async function load() {
   try {
     if (sel.kind === 'node') {
       relation.value = null
+      relationMentions.value = []
       entity.value = await api.getEntity(props.knowledgeId, sel.id)
     } else {
       entity.value = null
       relation.value = await api.getRelation(props.knowledgeId, sel.id)
+      try {
+        const res = await api.getRelationMentions(props.knowledgeId, sel.id)
+        relationMentions.value = res?.items || []
+      } catch {
+        relationMentions.value = []
+      }
     }
   } catch {
     entity.value = null
     relation.value = null
+    relationMentions.value = []
   } finally {
     loading.value = false
-  }
-}
-
-async function onReview(verdict: 'accepted' | 'rejected') {
-  if (!relation.value) return
-  reviewing.value = true
-  try {
-    await api.reviewRelation(props.knowledgeId, relation.value.id, verdict)
-    message.success(t('kbMgmt.kg.reviewDone'))
-    await load()
-    emit('reviewed')
-  } catch (e: any) {
-    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
-  } finally {
-    reviewing.value = false
   }
 }
 
@@ -342,3 +530,54 @@ watch(
   { immediate: true },
 )
 </script>
+
+<style scoped>
+/* LLM 二次复核徽标（与关系表同款） */
+.kg-review-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-xs);
+  font-size: 11px;
+  line-height: 1;
+}
+.kg-review-badge--supported {
+  border-color: var(--kg-ok-border);
+  background: var(--kg-ok-bg);
+  color: var(--kg-ok-fg);
+}
+.kg-review-badge--weak {
+  border-color: var(--kg-warn-border);
+  background: var(--kg-warn-bg);
+  color: var(--kg-warn-fg);
+}
+.kg-review-badge--unsupported {
+  border-color: var(--kg-danger-border, #cf1322);
+  background: var(--kg-danger-bg, #fff1f0);
+  color: var(--kg-danger-fg, #cf1322);
+}
+.kg-review-badge--review_failed {
+  color: var(--kg-text-3);
+}
+/* 关系溯源切片内联列表 */
+.kg-insp__mentions {
+  max-height: 220px;
+  overflow: auto;
+}
+.kg-insp__mentions .kg-kvrow__v {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 属性键值编辑器 */
+.kg-props-editor__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+</style>

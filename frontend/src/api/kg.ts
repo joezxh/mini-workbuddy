@@ -46,12 +46,18 @@ export interface KgRelation {
   /** 抽取置信度 0~1 */
   weight: number | null
   status: KgRelationStatus
+  /** LLM 二次复核结论：supported|weak|unsupported|review_failed；未复核为 null */
+  review_verdict: string | null
+  review_note: string | null
+  reviewed_at: string | null
   properties: Record<string, unknown>
   evidence: Record<string, unknown> | null
   /** 提及数（kg_triple_mention 聚合，列表接口批量回填） */
   mention_count?: number
   /** 抽取器：llm | manual（evidence/properties 推断） */
   extractor?: string
+  /** 溯源：抽取自哪些文档（uuid_code 列表），供按文档过滤 */
+  source_document_ids?: string[]
   created_at: string | null
   updated_at: string | null
 }
@@ -105,6 +111,8 @@ export interface KgRelationPayload {
   relation_code?: string
   predicate?: string
   weight?: number
+  /** 证据原文 {"text": "..."} */
+  evidence?: Record<string, unknown>
   properties?: Record<string, unknown>
 }
 
@@ -135,6 +143,98 @@ export function acceptEntity(kid: number, entityId: number) {
 
 export function listRelations(kid: number, params?: KgRelationQuery) {
   return request.get<KgListResult<KgRelation>>(`${BASE}/${kid}/graph/relations`, { params })
+}
+
+export interface KgDocumentGraph {
+  document_id: string
+  /** 本文档实体 ∪ 本文档关系的端点实体（端点桩可能在其他文档首次创建） */
+  entities: KgEntity[]
+  /** source_document_ids 含本文档的关系（与文档列表计数同口径，无截断） */
+  relations: KgRelation[]
+}
+
+/** 单文档实体与关系（文档弹窗专用，jsonb 精确查询，无条数截断） */
+export function getDocumentGraph(kid: number, documentUuid: string) {
+  return request.get<KgDocumentGraph>(`${BASE}/${kid}/graph/documents/${documentUuid}`)
+}
+
+export interface KgRelationUpdatePayload {
+  relation_code?: string
+  predicate?: string
+  weight?: number
+  evidence?: Record<string, unknown>
+  properties?: Record<string, unknown>
+}
+
+/** 编辑关系（类型/谓词/权重/证据/边属性；端点实体不可变） */
+export function updateRelation(
+  kid: number,
+  relationId: number,
+  body: KgRelationUpdatePayload,
+) {
+  return request.patch<KgRelation>(
+    `${BASE}/${kid}/graph/relations/${relationId}`, body)
+}
+
+// ── 批量操作（原型「批量接受/批量改类型/批量删除」）────────────────────────
+export interface KgBatchResult {
+  results: { id: number; ok: boolean; error?: string }[]
+  ok_count: number
+  failed_count: number
+}
+
+export function batchAcceptEntities(kid: number, ids: number[]) {
+  return request.post<KgBatchResult>(
+    `${BASE}/${kid}/graph/entities/batch-review`, { ids })
+}
+
+export function batchSetEntityType(kid: number, ids: number[], typeCode: string) {
+  return request.post<KgBatchResult>(
+    `${BASE}/${kid}/graph/entities/batch-set-type`, { ids, type_code: typeCode })
+}
+
+export function batchDeleteEntities(kid: number, ids: number[]) {
+  return request.post<KgBatchResult>(
+    `${BASE}/${kid}/graph/entities/batch-delete`, { ids })
+}
+
+export function batchReviewRelations(
+  kid: number, ids: number[], verdict: 'accepted' | 'rejected') {
+  return request.post<KgBatchResult>(
+    `${BASE}/${kid}/graph/relations/batch-review`, { ids, verdict })
+}
+
+export function batchDeleteRelations(kid: number, ids: number[]) {
+  return request.post<KgBatchResult>(
+    `${BASE}/${kid}/graph/relations/batch-delete`, { ids })
+}
+
+// ── 关系 LLM 二次复核（证据复核 pass）────────────────────────────────────
+export interface KgReviewSummary {
+  selected: number
+  reviewed: number
+  supported: number
+  weak: number
+  unsupported: number
+  review_failed: number
+}
+
+/** 手动触发关系复核（构建后会自动跑一轮；本端点用于补跑/换模型后重跑） */
+export function runRelationReviewBatch(
+  kid: number,
+  body?: { relation_ids?: number[]; status?: string; limit?: number },
+) {
+  return request.post<KgReviewSummary>(
+    `${BASE}/${kid}/graph/relations/review-batch`, body || {})
+}
+
+/** 按当前配置拼装的最终生效抽取提示词（配置页「查看生效提示词」） */
+export function getPromptPreview(kid: number) {
+  return request.get<{
+    prompt: string
+    schema_source: string
+    config: Record<string, number>
+  }>(`${BASE}/${kid}/graph/prompt-preview`)
 }
 
 export function createRelation(kid: number, body: KgRelationPayload) {
@@ -205,6 +305,14 @@ export interface KgGraphConfig {
   schema: string
   concurrency_count: number
   timeout_seconds: number
+  max_output_tokens: number
+  max_text_chars: number
+  max_entities: number
+  max_relations: number
+  max_continuation_rounds: number
+  relation_review_enabled: boolean
+  review_batch_size: number
+  review_concurrency: number
   use_graph_retrieval: boolean
   graph_entity_top_k: number
   graph_triple_top_k: number
@@ -395,7 +503,7 @@ export function getCdmCheck(kid: number) {
 }
 
 // ── 导出（P6）───────────────────────────────────────────────────────────
-export function exportGraph(kid: number, fmt: 'json' | 'csv' = 'json') {
+export function exportGraph(kid: number, fmt: 'json' | 'csv' | 'graphml' = 'json') {
   return request.get<Record<string, unknown>>(`${BASE}/${kid}/graph/export`, {
     params: { fmt },
   })

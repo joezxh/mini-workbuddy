@@ -35,6 +35,20 @@ DEFAULTS: dict[str, Any] = {
     # 的窗口由并发请求共享，声明得越大越容易被整条拒绝（400 Context size
     # has been exceeded），窗口小的部署要能把它调小。
     "max_output_tokens": DEFAULT_MAX_OUTPUT_TOKENS,
+    # 送进 prompt 的正文上限（字符）：过大撑爆小引擎窗口，过小静默丢尾
+    # （供应链库实测 6000 时 90% 切片触发 input_truncated）
+    "max_text_chars": 12000,
+    # 单切片实体/关系上限：过低会把关系挤出预算（实体在 JSON 前部）
+    "max_entities": 60,
+    "max_relations": 120,
+    # 截断续抽轮数：1 = 旧行为（只补一轮）；默认 3 轮补齐尾部遗漏关系
+    "max_continuation_rounds": 3,
+    # ── 关系 LLM 二次复核（证据复核 pass）──
+    # 构建完成后自动跑一轮（O(关系数) 次 LLM 调用）；手动触发走
+    # POST /graph/relations/review-batch
+    "relation_review_enabled": True,
+    "review_batch_size": 200,
+    "review_concurrency": 4,
     # ── 检索 ──
     "use_graph_retrieval": True,
     "graph_entity_top_k": 10,
@@ -50,6 +64,12 @@ _BOUNDS: dict[str, tuple[float, float]] = {
     "concurrency_count": (1, 1000),
     "timeout_seconds": (0, 600),
     "max_output_tokens": (64, 32000),
+    "max_text_chars": (500, 50000),
+    "max_entities": (5, 500),
+    "max_relations": (5, 1000),
+    "max_continuation_rounds": (1, 10),
+    "review_batch_size": (1, 2000),
+    "review_concurrency": (1, 32),
     "graph_entity_top_k": (1, 200),
     "graph_triple_top_k": (1, 200),
     "graph_max_nodes": (100, 100000),
@@ -58,9 +78,11 @@ _BOUNDS: dict[str, tuple[float, float]] = {
     "ppr_damping": (0.1, 0.99),      # networkx pagerank 要求 <1
 }
 
-_BOOL_KEYS = ("use_graph_retrieval",)
+_BOOL_KEYS = ("use_graph_retrieval", "relation_review_enabled")
 _INT_KEYS = (
     "concurrency_count", "timeout_seconds", "max_output_tokens",
+    "max_text_chars", "max_entities", "max_relations", "max_continuation_rounds",
+    "review_batch_size", "review_concurrency",
     "graph_entity_top_k", "graph_triple_top_k", "graph_max_nodes",
     "graph_top_k", "catalog_id",
 )

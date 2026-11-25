@@ -12,7 +12,7 @@
 ``suggested``（待评审） → ``accepted``（已采纳） / ``rejected``（已驳回）。
 """
 from sqlalchemy import (
-    BigInteger, Column, Float, ForeignKey, Index, String, TIMESTAMP, UniqueConstraint, func,
+    BigInteger, Column, Float, ForeignKey, Index, String, Text, TIMESTAMP, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -74,6 +74,20 @@ class KgTriple(Base, TenantMixin):
     status = Column(
         String(16), nullable=False, server_default="suggested",
         comment="状态: suggested|accepted|rejected",
+    )
+    # ── LLM 二次复核（证据复核 pass，2026-11-24）──────────────────────────
+    # supported=证据直接支撑 / weak=间接或方向存疑 / unsupported=证据不支撑 /
+    # review_failed=复核调用本身失败（可重试）。评审状态机不变——复核只做
+    # 标记与降级提示，最终采纳与否仍走人工评审。
+    review_verdict = Column(
+        String(16), nullable=True,
+        comment="复核结论: supported|weak|unsupported|review_failed",
+    )
+    review_note = Column(
+        Text, nullable=True, comment="复核理由（一句话）",
+    )
+    reviewed_at = Column(
+        TIMESTAMP, nullable=True, comment="最近一次复核时间",
     )
     created_at = Column(
         TIMESTAMP, nullable=False, server_default=func.now(), comment="创建时间"

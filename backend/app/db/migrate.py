@@ -45,8 +45,13 @@ def ensure_kb_schema(engine) -> None:
     from alembic.config import Config
     from alembic import command
 
-    ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    # backend/app/db/migrate.py → parents[2] = backend/，alembic.ini 在 backend/ 下
+    backend_dir = Path(__file__).resolve().parents[2]
+    ini_path = backend_dir / "alembic.ini"
     cfg = Config(str(ini_path))
+    # script_location 在 ini 里是相对 CWD 的 "alembic"，程序化调用时 CWD 不一定是
+    # backend/，这里显式钉成绝对路径，避免从其他目录启动服务时找不到迁移脚本。
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
 
     _repair_half_installed_pg_trgm(engine)
 
@@ -61,12 +66,11 @@ def ensure_kb_schema(engine) -> None:
             ).first()
             current = row[0] if row else None
 
-    # 若 alembic 版本缺失或停在非基础态，先把基线钉到 005（基础表已存在），
-    # 让 upgrade head 只跑 006，避免 001-005 与 create_all 重复建表冲突。
-    if current is None or current not in (
-        "005_add_ontology_modeling_tables",
-        "006_kb_tables",
-    ):
+    # 仅当 alembic 版本缺失（纯 create_all 库从未迁移过）才把基线钉到 005
+    #（基础表已存在），让 upgrade head 只跑 006 及之后；
+    # 已有任何版本记录则从当前位置推进到 head。绝不回退 stamp（否则迁移会
+    # 对已存在的表重放 CREATE TABLE → DuplicateTable）。
+    if current is None:
         command.stamp(cfg, "005_add_ontology_modeling_tables")
 
     command.upgrade(cfg, "head")

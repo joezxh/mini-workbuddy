@@ -1,8 +1,11 @@
 <template>
-  <div ref="canvasRef" class="kg-canvas">
+  <div ref="canvasRef" class="kg-canvas" :class="{ 'kg-canvas--spread': spread }">
+    <div class="kg-canvas__scroll">
     <svg
+      ref="svgRef"
       class="kg-canvas__svg"
-      :viewBox="`0 0 ${VB_W} ${VB_H}`"
+      :viewBox="`0 0 ${vbW} ${vbH}`"
+      :style="svgSizeStyle"
       @wheel.prevent="onWheel"
       @pointerdown="onCanvasDown"
       @pointermove="onPointerMove"
@@ -73,6 +76,7 @@
         </g>
       </g>
     </svg>
+    </div>
 
     <div v-if="loading" class="kg-canvas__mask"><a-spin size="small" /></div>
 
@@ -85,6 +89,12 @@
     </div>
 
     <div class="kg-canvas__hint">{{ hintText }}</div>
+    <!-- 视口控制：＋/− 缩放（围绕视口中心，与滚轮同一数学）、复位 -->
+    <div class="kg-canvas__zoom">
+      <button type="button" :title="zoomLabels.in" @click="zoomBy(1.2)">＋</button>
+      <button type="button" :title="zoomLabels.out" @click="zoomBy(1 / 1.2)">−</button>
+      <button type="button" :title="zoomLabels.reset" @click="resetViewport()">⟲</button>
+    </div>
     <div v-if="legend.length" class="kg-canvas__legend">
       <span v-for="item in legend" :key="item.code"><i :style="{ background: item.color }" />{{ item.label }}</span>
       <span class="kg-muted">{{ legendSizeText }}</span>
@@ -101,6 +111,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import type { CanvasEdge, CanvasNode, CanvasSelection } from './graphTypes'
+import { sugiyamaLayout } from './sugiyamaLayout'
 
 const props = withDefaults(
   defineProps<{
@@ -115,8 +126,20 @@ const props = withDefaults(
     emptyTitle: string
     emptyDesc: string
     emptyActionText?: string
+    /** 铺开模式：节点不互相覆盖地铺开；内容超出画布时不缩小适配，
+     *  由容器出现滚动条浏览（原型交互语义）。默认关闭保持既有适配行为。 */
+    spread?: boolean
+    /** 布局算法：'force' Fruchterman-Reingold 力导向（默认，StdGraphView 不变）；
+     *  'layered' Sugiyama 定向分层（自上而下流程图风格，见 sugiyamaLayout.ts） */
+    layout?: 'force' | 'layered'
+    /** 缩放按钮 title 文案（由宿主传 i18n；组件本身不依赖 i18n 注入，SSR 可裸跑） */
+    zoomLabels?: { in: string; out: string; reset: string }
   }>(),
-  { focusNodeCodes: () => [], focusEdgeCodes: () => [], loading: false, emptyActionText: '' },
+  {
+    focusNodeCodes: () => [], focusEdgeCodes: () => [], loading: false,
+    emptyActionText: '', spread: false, layout: 'force',
+    zoomLabels: () => ({ in: '放大', out: '缩小', reset: '复位视口' }),
+  },
 )
 
 const emit = defineEmits<{
@@ -124,9 +147,15 @@ const emit = defineEmits<{
   (e: 'empty-action'): void
 }>()
 
-/** 画布坐标系（与原型 790×490 一致，实际按容器宽度等比缩放） */
-const VB_W = 790
-const VB_H = 490
+/** 画布设计坐标系（与原型 790×490 一致）；spread 模式下按内容外扩（滚动条浏览） */
+const DESIGN_W = 790
+const DESIGN_H = 490
+const vbW = ref(DESIGN_W)
+const vbH = ref(DESIGN_H)
+/** spread 模式：SVG 用显式像素尺寸撑开滚动区；普通模式跟随容器宽度 */
+const svgSizeStyle = computed(() =>
+  props.spread ? { width: `${vbW.value}px`, height: `${vbH.value}px` } : undefined,
+)
 const MIN_SCALE = 0.6
 const MAX_SCALE = 3.2
 /** 超过该节点数时只给枢纽/选中/邻居画标签，避免文字糊成一团 */
@@ -137,6 +166,11 @@ const EDGE_LABEL_MAX = 120
 const ZOOM_REVEAL = 1.6
 /** 箭头尖端离节点边缘的留白（用户单位，与缩放同步） */
 const ARROW_GAP = 3
+
+/** 节点半径（2026-11-25 调小：大图节点圆盘互相覆盖，半径随度数缓增保留枢纽语义） */
+function nodeRadius(deg: number) {
+  return Math.min(34, 12 + deg * 2.2)
+}
 
 interface VisNode {
   id: number
@@ -170,6 +204,7 @@ const degrees = ref<Record<number, number>>({})
 const hoverId = ref<number | null>(null)
 const view = ref({ scale: 1, tx: 0, ty: 0 })
 const canvasRef = ref<HTMLElement | null>(null)
+const svgRef = ref<SVGElement | null>(null)
 
 const visNodes = computed<VisNode[]>(() => {
   const out: VisNode[] = []
@@ -185,7 +220,7 @@ const visNodes = computed<VisNode[]>(() => {
       color: node.color,
       x: pos.x,
       y: pos.y,
-      r: Math.min(52, 15 + deg * 4.2),
+      r: nodeRadius(deg),
       deg,
     })
   })
@@ -349,12 +384,31 @@ function runLayout(nodes: CanvasNode[], edges: CanvasEdge[]) {
     return
   }
 
-  const cx = VB_W / 2
-  const cy = VB_H / 2
+  // 分层布局（Sugiyama，自上而下流程图风格）：纯函数四阶段流水线
+  //（环消除→最长路分层→重心法交叉优化→槽位坐标），零随机、同输入可复现；
+  // 输出 x 以 0 为中轴、y 自 0 起，由 finishLayout 统一接管画布尺寸与居中
+  if (props.layout === 'layered') {
+    const radii: Record<number, number> = {}
+    nodes.forEach((nd) => {
+      radii[nd.id] = nodeRadius(deg[nd.id] || 0)
+    })
+    const raw = sugiyamaLayout(nodes, edges, (id) => radii[id] || 15)
+    const next: Record<number, Pt> = {}
+    for (const key of Object.keys(raw)) {
+      next[Number(key)] = { ...raw[Number(key)] }
+    }
+    // 兜底碰撞消解：槽位坐标理论无重叠（槽宽 ≥ 半径和 + 间距），空转一轮即退出
+    resolveOverlaps(next, radii, null)
+    finishLayout(next, radii)
+    return
+  }
+
+  const cx = DESIGN_W / 2
+  const cy = DESIGN_H / 2
   // 黄金角螺旋撒点：确定性初值，避免对称初始位形导致的不动点
   const pts = nodes.map((node, i) => {
     const angle = i * 2.399963229728653
-    const rad = Math.min(VB_W, VB_H) * 0.4 * Math.sqrt((i + 0.5) / n)
+    const rad = Math.min(DESIGN_W, DESIGN_H) * 0.4 * Math.sqrt((i + 0.5) / n)
     return {
       id: node.id,
       x: cx + Math.cos(angle) * rad,
@@ -366,7 +420,9 @@ function runLayout(nodes: CanvasNode[], edges: CanvasEdge[]) {
   const index = new Map<number, number>()
   pts.forEach((p, i) => index.set(p.id, i))
 
-  const k = Math.sqrt((VB_W * VB_H * 0.55) / n)
+  // 理想边距 k：spread 模式整体拉长 1.6x——关系线段更长、节点更分散
+  //（配合小半径 + 碰撞消解，全库图不再挤成一团）
+  const k = Math.sqrt((DESIGN_W * DESIGN_H * 0.55) / n) * (props.spread ? 1.6 : 1)
   const iters = n <= 60 ? 300 : n <= 140 ? 220 : 150
 
   for (let iter = 0; iter < iters; iter += 1) {
@@ -445,18 +501,121 @@ function runLayout(nodes: CanvasNode[], edges: CanvasEdge[]) {
   })
   const spanX = Math.max(1, maxX - minX)
   const spanY = Math.max(1, maxY - minY)
-  const scale = Math.min((VB_W - 112) / spanX, (VB_H - 96) / spanY, n > 1 ? 3 : 1)
+  const fitScale = Math.min((DESIGN_W - 112) / spanX, (DESIGN_H - 96) / spanY, n > 1 ? 3 : 1)
+  // spread 模式不缩小适配（scale 下限 1）：图比视口大时保持 1:1，
+  // 由容器滚动条呈现超出部分；普通模式维持「压缩塞进视口」的既有行为
+  const scale = props.spread ? Math.max(1, fitScale) : fitScale
   const midX = (minX + maxX) / 2
   const midY = (minY + maxY) / 2
 
   const next: Record<number, Pt> = {}
   pts.forEach((p) => {
     next[p.id] = {
-      x: VB_W / 2 + (p.x - midX) * scale,
-      y: VB_H / 2 + (p.y - midY) * scale,
+      x: DESIGN_W / 2 + (p.x - midX) * scale,
+      y: DESIGN_H / 2 + (p.y - midY) * scale,
     }
   })
+
+  // 碰撞消解（2026-11-25）：FR 收敛后相邻节点仍可能重叠（半径随度数增大，
+  // 大图还被归一化压缩）。按最终渲染半径把重叠对推开，保证实体不互相覆盖。
+  const radii: Record<number, number> = {}
+  nodes.forEach((nd) => {
+    radii[nd.id] = nodeRadius(deg[nd.id] || 0)
+  })
+  finishLayout(next, radii)
+}
+
+/**
+ * 布局收尾（force / layered 两条路径共用）：碰撞消解 + 画布尺寸 + 内容居中。
+ * spread：按内容外扩 viewBox（含半径 + 节点下方两行标签高度），超出部分滚动条；
+ * 非 spread：内容收在视口内，边界作墙参与碰撞消解。
+ */
+function finishLayout(next: Record<number, Pt>, radii: Record<number, number>) {
+  if (props.spread) {
+    resolveOverlaps(next, radii, null)
+    let cMinX = Infinity
+    let cMaxX = -Infinity
+    let cMinY = Infinity
+    let cMaxY = -Infinity
+    Object.entries(next).forEach(([idStr, p]) => {
+      const r = radii[Number(idStr)] || 15
+      cMinX = Math.min(cMinX, p.x - r - 6)
+      cMaxX = Math.max(cMaxX, p.x + r + 6)
+      cMinY = Math.min(cMinY, p.y - r - 6)
+      cMaxY = Math.max(cMaxY, p.y + r + 44)
+    })
+    const pad = 40
+    vbW.value = Math.max(DESIGN_W, Math.ceil(cMaxX - cMinX + pad * 2))
+    vbH.value = Math.max(DESIGN_H, Math.ceil(cMaxY - cMinY + pad * 2))
+    const shiftX = vbW.value / 2 - (cMinX + cMaxX) / 2
+    const shiftY = vbH.value / 2 - (cMinY + cMaxY) / 2
+    Object.values(next).forEach((p) => {
+      p.x += shiftX
+      p.y += shiftY
+    })
+  } else {
+    // 适配模式：内容收在视口内，边界作墙参与碰撞消解
+    resolveOverlaps(
+      next, radii,
+      { minX: 60, maxX: DESIGN_W - 60, minY: 60, maxY: DESIGN_H - 44 },
+    )
+    vbW.value = DESIGN_W
+    vbH.value = DESIGN_H
+  }
   positions.value = next
+}
+
+/**
+ * 成对推开重叠节点（确定性：固定遍历序 + 相同迭代轮数语义）。
+ * bounds 非空时每轮把越界节点拉回（视口边界当墙）；null = 无边界自由铺开。
+ */
+function resolveOverlaps(
+  pts: Record<number, Pt>,
+  radii: Record<number, number>,
+  bounds: { minX: number; maxX: number; minY: number; maxY: number } | null,
+) {
+  const ids = Object.keys(pts).map(Number)
+  const passes = ids.length <= 120 ? 60 : 20
+  for (let pass = 0; pass < passes; pass += 1) {
+    let moved = false
+    for (let a = 0; a < ids.length; a += 1) {
+      const pa = pts[ids[a]]
+      const ra = radii[ids[a]] || 15
+      for (let b = a + 1; b < ids.length; b += 1) {
+        const pb = pts[ids[b]]
+        const rb = radii[ids[b]] || 15
+        let vx = pb.x - pa.x
+        let vy = pb.y - pa.y
+        let d = Math.sqrt(vx * vx + vy * vy)
+        const minD = ra + rb + 8
+        if (d >= minD) continue
+        if (d < 0.01) {
+          // 完全重合给确定性伪随机方向，保证可复现
+          vx = ((ids[a] * 37 + ids[b] * 11) % 100) / 100 - 0.5
+          vy = ((ids[a] * 17 + ids[b] * 29) % 100) / 100 - 0.5
+          d = Math.sqrt(vx * vx + vy * vy) || 1
+        }
+        const push = (minD - d) / 2
+        const ux = vx / d
+        const uy = vy / d
+        pa.x -= ux * push
+        pa.y -= uy * push
+        pb.x += ux * push
+        pb.y += uy * push
+        moved = true
+      }
+    }
+    if (bounds) {
+      Object.values(pts).forEach((p) => {
+        const nx = Math.max(bounds.minX, Math.min(bounds.maxX, p.x))
+        const ny = Math.max(bounds.minY, Math.min(bounds.maxY, p.y))
+        if (nx !== p.x || ny !== p.y) moved = true
+        p.x = nx
+        p.y = ny
+      })
+    }
+    if (!moved) break
+  }
 }
 
 // ── 指针交互：缩放 / 平移 / 拖节点 / 选中 ──────────────────────────────
@@ -469,12 +628,12 @@ type DragState =
 let drag: DragState = null
 
 function toViewBox(clientX: number, clientY: number): Pt {
-  const el = canvasRef.value
+  const el = svgRef.value
   if (!el) return { x: 0, y: 0 }
   const rect = el.getBoundingClientRect()
   return {
-    x: ((clientX - rect.left) / Math.max(1, rect.width)) * VB_W,
-    y: ((clientY - rect.top) / Math.max(1, rect.height)) * VB_H,
+    x: ((clientX - rect.left) / Math.max(1, rect.width)) * vbW.value,
+    y: ((clientY - rect.top) / Math.max(1, rect.height)) * vbH.value,
   }
 }
 
@@ -580,17 +739,87 @@ function locate(id: number) {
   if (!pos) return
   view.value = {
     ...view.value,
-    tx: VB_W / 2 - pos.x * view.value.scale,
-    ty: VB_H / 2 - pos.y * view.value.scale,
+    tx: vbW.value / 2 - pos.x * view.value.scale,
+    ty: vbH.value / 2 - pos.y * view.value.scale,
   }
 }
 
-defineExpose({ locate })
+/** 按钮缩放：围绕视口中心（与 onWheel 围绕光标同一套数学） */
+function zoomBy(factor: number) {
+  const current = view.value.scale
+  const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, current * factor))
+  if (Math.abs(next - current) < 0.0001) return
+  const cx = vbW.value / 2
+  const cy = vbH.value / 2
+  view.value = {
+    scale: next,
+    tx: cx - ((cx - view.value.tx) * next) / current,
+    ty: cy - ((cy - view.value.ty) * next) / current,
+  }
+}
 
-// 布局：props 的节点/边集合变化即重算（immediate → setup 期内完成，SSR 首屏有坐标）
+/** 复位视口：scale=1、平移归零 */
+function resetViewport() {
+  view.value = { scale: 1, tx: 0, ty: 0 }
+}
+
+defineExpose({ locate, zoomBy, resetViewport })
+
+// 布局：props 的节点/边集合/布局算法变化即重算（immediate → setup 期内完成，SSR 首屏有坐标）
 watch(
-  () => [props.nodes, props.edges],
+  () => [props.nodes, props.edges, props.layout],
   () => runLayout(props.nodes, props.edges),
   { immediate: true },
 )
 </script>
+
+<style scoped>
+/* 画布基础样式（graph-tokens.css 里同名规则作用于 .kb-graph-pane 作用域，
+   此处自带一份等价定义，使弹窗等无该作用域的宿主也正确呈现） */
+.kg-canvas {
+  position: relative;
+  overflow: hidden;
+}
+.kg-canvas__scroll {
+  width: 100%;
+  height: 100%;
+}
+.kg-canvas--spread .kg-canvas__scroll {
+  overflow: auto;
+}
+/* 铺开模式：画布本体是固定视口，内部滚动区随内容外扩（超出出滚动条） */
+.kg-canvas--spread {
+  height: 560px;
+}
+.kg-canvas__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+/* 视口控制按钮组：右上角覆盖，与 hint 胶囊同风格的小型描边按钮 */
+.kg-canvas__zoom {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  z-index: 3;
+}
+.kg-canvas__zoom button {
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-xs);
+  background: #fff;
+  color: var(--kg-text-2);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.kg-canvas__zoom button:hover {
+  color: var(--kg-text);
+  background: var(--kg-subtle);
+}
+</style>

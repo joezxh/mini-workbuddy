@@ -105,7 +105,16 @@ async def lifespan(app: FastAPI):
         except Exception as _kb_err:
             logger.error(f"确保 kb 表失败（迁移 006 未执行或 pg_trgm 异常？）: {_kb_err}")
 
-        # 轻量列迁移：补齐后加列
+        # 库级防僵尸会话守卫（2026-11-25 启动卡死复盘）：idle in transaction
+        # 会话曾长期持有表锁，把后续 ALTER TABLE 全部堵死在锁队列里。
+        # 空闲事务 5 分钟由 PG 自动终止，从源头消除锁堆积。
+        try:
+            from app.db.startup_migrations import set_db_safety_guards
+            set_db_safety_guards(engine)
+        except Exception as _guard_err:
+            logger.warning(f"设置库级安全守卫失败(忽略): {_guard_err}")
+
+        # 轻量列迁移：补齐后加列（列已存在零锁跳过；被锁阻塞 5s 快速失败不拖死启动）
         try:
             from app.db.startup_migrations import add_new_columns
             add_new_columns(engine)

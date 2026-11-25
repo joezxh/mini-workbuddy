@@ -154,6 +154,30 @@
             :placeholder="t('kbMgmt.kg.aliasesPlaceholder')"
           />
         </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.properties')">
+          <div class="kg-props-editor">
+            <div v-for="(p, i) in form.propsList" :key="i" class="kg-props-editor__row">
+              <a-input
+                v-model:value="p.key"
+                :placeholder="t('kbMgmt.kg.propKey')"
+                style="width: 40%"
+              />
+              <a-input v-model:value="p.value" :placeholder="t('kbMgmt.kg.propValue')" />
+              <a-button
+                size="small"
+                type="text"
+                danger
+                @click="form.propsList.splice(i, 1)"
+              >
+                <template #icon><DeleteOutlined /></template>
+              </a-button>
+            </div>
+            <a-button size="small" type="dashed" block @click="addPropRow">
+              <template #icon><PlusOutlined /></template>
+              {{ t('kbMgmt.kg.addProp') }}
+            </a-button>
+          </div>
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -186,12 +210,16 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import * as api from '@/api/kg'
 import type { KgEntity, KgEntityStatus } from '@/api/kg'
 import { propertySummary, typeLabel, typeTone } from '@/components/common/graph/graphTheme'
 
-const props = defineProps<{ knowledgeId: number }>()
+const props = defineProps<{
+  knowledgeId: number
+  /** 概览分布图下钻预置的类型筛选（初始值，随 key 重建生效） */
+  initialTypeFilter?: string
+}>()
 const emit = defineEmits<{
   (e: 'inspect-entity', id: number): void
   (e: 'provenance', id: number): void
@@ -210,13 +238,37 @@ const pendingOnly = ref(false)
 const selectedKeys = ref<number[]>([])
 const retypeCode = ref<string | undefined>(undefined)
 
-const query = reactive<{ keyword?: string; type_code?: string; status?: string }>({})
+const query = reactive<{ keyword?: string; type_code?: string; status?: string }>({
+  type_code: props.initialTypeFilter || undefined,
+})
 
 const form = reactive({
   name: '',
   type_code: undefined as string | undefined,
   aliases: [] as string[],
+  propsList: [] as { key: string; value: string }[],
 })
+
+function addPropRow() {
+  form.propsList.push({ key: '', value: '' })
+}
+
+/** 表单键值对 → properties 对象（空键跳过；值原样保留字符串） */
+function propsFromForm(): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const p of form.propsList) {
+    const k = p.key.trim()
+    if (k) out[k] = p.value
+  }
+  return out
+}
+
+function propsToForm(props: Record<string, unknown> | null | undefined) {
+  return Object.entries(props || {}).map(([key, value]) => ({
+    key,
+    value: value == null ? '' : String(value),
+  }))
+}
 
 const typeCodes = computed(() => knownTypes.value)
 const typeCodeOptions = computed(() => knownTypes.value.map((c) => ({ value: c })))
@@ -293,6 +345,7 @@ function openCreate() {
   form.name = ''
   form.type_code = undefined
   form.aliases = []
+  form.propsList = []
   modalOpen.value = true
 }
 
@@ -301,6 +354,7 @@ function openEdit(row: KgEntity) {
   form.name = row.name
   form.type_code = row.type_code || undefined
   form.aliases = [...(row.aliases || [])]
+  form.propsList = propsToForm(row.properties)
   modalOpen.value = true
 }
 
@@ -315,6 +369,7 @@ async function onSave() {
       name: form.name.trim(),
       type_code: form.type_code || undefined,
       aliases: form.aliases || [],
+      properties: propsFromForm(),
     }
     if (editing.value) {
       await api.updateEntity(props.knowledgeId, editing.value.id, payload)
@@ -351,18 +406,22 @@ async function onDelete(row: KgEntity) {
   }
 }
 
-/** 批量接受：仅对 suggested 行调 accept，逐个容错 */
+/** 批量接受：走后端批量端点（单事务逐条容错），替换旧的逐条循环 */
 async function onBatchAccept() {
   const targets = rows.value.filter(
     (r) => selectedKeys.value.includes(r.id) && r.status === 'suggested',
   )
   if (!targets.length) return
-  const results = await Promise.allSettled(
-    targets.map((r) => api.acceptEntity(props.knowledgeId, r.id)),
-  )
-  const ok = results.filter((r) => r.status === 'fulfilled').length
-  if (ok) message.success(t('kbMgmt.kg.accepted'))
-  if (ok < results.length) message.warning(t('kbMgmt.kg.actionFailed'))
+  try {
+    const res = await api.batchAcceptEntities(
+      props.knowledgeId, targets.map((r) => r.id))
+    if (res?.ok_count) message.success(t('kbMgmt.kg.accepted'))
+    if (res?.failed_count) {
+      message.warning(t('kbMgmt.kg.batchPartial', { ok: res.ok_count, failed: res.failed_count }))
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  }
   selectedKeys.value = []
   await reload()
 }
@@ -372,22 +431,23 @@ function openBatchRetype() {
   retypeOpen.value = true
 }
 
-/** 批量改类型：逐条 PUT type_code，null 表示清空类型 */
+/** 批量改类型：批量端点一次提交；空类型 = 清空类型 */
 async function onBatchRetype() {
   const ids = [...selectedKeys.value]
   if (!ids.length) return
   saving.value = true
   try {
-    const code = retypeCode.value?.trim() || undefined
-    const results = await Promise.allSettled(
-      ids.map((id) => api.updateEntity(props.knowledgeId, id, { type_code: code })),
-    )
-    const ok = results.filter((r) => r.status === 'fulfilled').length
-    if (ok) message.success(t('common.saved'))
-    if (ok < results.length) message.warning(t('kbMgmt.kg.saveFailed'))
+    const res = await api.batchSetEntityType(
+      props.knowledgeId, ids, retypeCode.value?.trim() || '')
+    if (res?.ok_count) message.success(t('common.saved'))
+    if (res?.failed_count) {
+      message.warning(t('kbMgmt.kg.batchPartial', { ok: res.ok_count, failed: res.failed_count }))
+    }
     retypeOpen.value = false
     selectedKeys.value = []
     await reload()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -396,10 +456,15 @@ async function onBatchRetype() {
 async function onBatchDelete() {
   const ids = [...selectedKeys.value]
   if (!ids.length) return
-  const results = await Promise.allSettled(ids.map((id) => api.deleteEntity(props.knowledgeId, id)))
-  const ok = results.filter((r) => r.status === 'fulfilled').length
-  if (ok) message.success(t('kbMgmt.kg.deleted'))
-  if (ok < results.length) message.warning(t('kbMgmt.kg.actionFailed'))
+  try {
+    const res = await api.batchDeleteEntities(props.knowledgeId, ids)
+    if (res?.ok_count) message.success(t('kbMgmt.kg.deleted'))
+    if (res?.failed_count) {
+      message.warning(t('kbMgmt.kg.batchPartial', { ok: res.ok_count, failed: res.failed_count }))
+    }
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  }
   selectedKeys.value = []
   await reload()
 }
@@ -408,6 +473,13 @@ watch(() => props.knowledgeId, reload, { immediate: true })
 </script>
 
 <style scoped>
+/* 属性键值编辑器（编辑弹窗） */
+.kg-props-editor__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
 .kg-entity-table__toolbar {
   display: flex;
   align-items: center;

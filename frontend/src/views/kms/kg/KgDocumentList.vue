@@ -20,14 +20,25 @@
       <span class="kg-muted">{{ t('kbMgmt.kg.totalCount', { count: docs.length }) }}</span>
     </div>
 
+
+    <div class="kg-doc-list__filters">
+      <a-input
+        v-model:value="keyword"
+        size="small"
+        allow-clear
+        :placeholder="t('kbMgmt.kg.docSearchPh')"
+        style="width: 240px"
+      />
+    </div>
+
     <a-table
       :columns="columns"
-      :data-source="docs"
+      :data-source="pagedDocs"
       :loading="loading"
       row-key="document_id"
       size="small"
-      :pagination="false"
-      :scroll="{ x: 1100 }"
+      :pagination="pagination"
+      :scroll="{ x: 1310 }"
       :locale="{ emptyText: t('kbMgmt.kg.noDocuments') }"
     >
       <template #bodyCell="{ column, record }">
@@ -47,11 +58,22 @@
             <span class="kg-stage-tag" :class="`kg-stage-tag--${graphTone(record)}`">
               {{ graphToneText(record) }}
             </span>
-            <span class="kg-muted kg-graph-stage__num">
+            <span class="kg-muted kg-graph-stage__num kg-nowrap">
               {{ t('kbMgmt.kg.stageStructure') }} {{ record.graph?.structure || 0 }}/{{ record.graph?.segments || 0 }}
               · {{ t('kbMgmt.kg.stageVector') }} {{ record.graph?.vector || 0 }}/{{ record.graph?.segments || 0 }}
             </span>
           </div>
+        </template>
+        <template v-else-if="column.key === 'graph_counts'">
+          <span class="kg-doc-counts kg-nowrap">
+            <span :class="{ 'kg-zero': !(record.graph?.entities || 0) }">
+              {{ t('kbMgmt.kg.docCountsCell', { entities: record.graph?.entities ?? 0 }) }}
+            </span>
+            <span class="kg-muted"> · </span>
+            <span :class="{ 'kg-zero': !(record.graph?.relations || 0) }">
+              {{ t('kbMgmt.kg.docCountsCellRel', { relations: record.graph?.relations ?? 0 }) }}
+            </span>
+          </span>
         </template>
         <template v-else-if="column.key === 'updated_at'">
           <span class="kg-muted">{{ formatTime(record.updated_at || record.created_at) }}</span>
@@ -60,6 +82,9 @@
           <a-space :size="2">
             <a-button size="small" type="link" @click="openSegments(record)">
               {{ t('kbMgmt.kg.actionSegments') }}
+            </a-button>
+            <a-button size="small" type="link" @click="openDocGraph(record)">
+              {{ t('kbMgmt.kg.actionEntities') }}
             </a-button>
             <a-button size="small" type="link" @click="openFlow(record)">
               {{ t('kbMgmt.kg.actionFlow') }}
@@ -137,6 +162,14 @@
 
     <!-- 分段详情：复用 kb 模块的 SegmentDetail（零改动） -->
     <SegmentDetail v-model:open="segmentOpen" :document-id="segmentDocId" @changed="reload" />
+
+    <!-- 单文档实体与关系弹窗：图谱可视化 + 实体清单/关系明细两个 Tab -->
+    <KgDocumentGraphModal
+      v-model:open="docGraphOpen"
+      :knowledge-id="props.knowledgeId"
+      :document-id="docGraphDocId"
+      :document-name="docGraphDocName"
+    />
   </div>
 </template>
 
@@ -154,12 +187,17 @@ import { UploadOutlined } from '@ant-design/icons-vue'
 import * as kbApi from '@/api/kb'
 import * as kgApi from '@/api/kg'
 import SegmentDetail from '@/views/kms/kb/SegmentDetail.vue'
+import KgDocumentGraphModal from './KgDocumentGraphModal.vue'
 
 const props = defineProps<{ knowledgeId: number }>()
 
 const { t } = useI18n()
 
 const docs = ref<any[]>([])
+/** 客户端搜索（按文档名）+ 分页（文档量大时列表不可用） */
+const keyword = ref('')
+const page = ref(1)
+const pageSize = 10
 const loading = ref(false)
 const rebuilding = ref('')
 const retrying = ref('')
@@ -174,13 +212,47 @@ const flowError = ref('')
 const segmentOpen = ref(false)
 const segmentDocId = ref<string | null>(null)
 
+/** 单文档实体与关系弹窗 */
+const docGraphOpen = ref(false)
+const docGraphDocId = ref('')
+const docGraphDocName = ref('')
+
+function openDocGraph(record: any) {
+  docGraphDocId.value = record.document_id
+  docGraphDocName.value = record.name || ''
+  docGraphOpen.value = true
+}
+
+const filteredDocs = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return docs.value
+  return docs.value.filter((d) => (d?.name || '').toLowerCase().includes(kw))
+})
+
+const pagedDocs = computed(() => {
+  const start = (page.value - 1) * pageSize
+  return filteredDocs.value.slice(start, start + pageSize)
+})
+
+const pagination = computed(() => ({
+  total: filteredDocs.value.length,
+  current: page.value,
+  pageSize,
+  size: 'small' as const,
+  showSizeChanger: false,
+  onChange: (p: number) => {
+    page.value = p
+  },
+}))
+
 const columns = computed(() => [
   { title: t('kbMgmt.kg.docName'), key: 'name', width: 260, ellipsis: true },
   { title: t('kbMgmt.common.status'), key: 'status', width: 100 },
   { title: t('kbMgmt.kg.graphStage'), key: 'graph', width: 260 },
+  { title: t('kbMgmt.kg.docCountsHeader'), key: 'graph_counts', width: 150 },
   { title: t('kbMgmt.kg.segmentCount'), dataIndex: 'segment_count', key: 'segment_count', width: 80 },
   { title: t('kbMgmt.kg.updatedAt'), key: 'updated_at', width: 150 },
-  { title: t('kbMgmt.colActions'), key: 'actions', width: 300, fixed: 'right' },
+  { title: t('kbMgmt.colActions'), key: 'actions', width: 360, fixed: 'right' },
 ])
 
 /** 流程节点：固定序列 + 图谱抽取（图谱库特有） */
@@ -477,6 +549,12 @@ onMounted(reload)
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+.kg-doc-list__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .kg-doc-list__spacer {
   flex: 1;
 }
@@ -501,6 +579,19 @@ onMounted(reload)
 .kg-graph-stage__num {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+/* 单元格禁止换行：计数与进度在一行内完整呈现（列宽已按最长内容预留） */
+.kg-nowrap {
+  white-space: nowrap;
+}
+/* 单文档实体/关系计数：等宽数字；零值灰显弱化 */
+.kg-doc-counts {
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  color: var(--kg-text);
+}
+.kg-doc-counts .kg-zero {
+  color: var(--kg-text-3);
 }
 /* 图谱阶段标签：✓ 已抽取 / ◐ 部分完成 / — 未抽取 / ✕ 失败 */
 .kg-stage-tag {

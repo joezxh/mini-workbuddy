@@ -8,9 +8,12 @@ lifespan 只负责按序编排各初始化阶段，具体 SQL 细节集中在此
 from __future__ import annotations
 
 import logging
+import re
+import time
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 
 logger = logging.getLogger(__name__)
 
@@ -155,11 +158,104 @@ _COLUMN_MIGRATIONS: list[str] = [
 ]
 
 
-def add_new_columns(engine: Engine) -> None:
-    """补齐后加列（幂等）。"""
+# ── 启动迁移防阻塞守卫（2026-11-25 启动卡死复盘）────────────────────────────
+# 现象：「kb 表（迁移 006）已确保存在」之后 add_new_columns 的 ALTER TABLE 长期
+# 卡死。根因：请求侧事务泄漏产生的 idle in transaction 会话长期持有表级锁，
+# 而 ALTER TABLE ADD COLUMN（含 IF NOT EXISTS 命中时的 no-op）也要取
+# ACCESS EXCLUSIVE 锁，PG 锁队列无限排队；每次 reload 再叠加新 ALTER。
+# 三层防线：
+#   1) 库级 idle_in_transaction_session_timeout=5min（set_db_safety_guards），
+#      僵尸会话由 PG 自动终止，锁不再无限累积；
+#   2) 列已存在时根本不下发 ALTER（information_schema 预检）——
+#      IF NOT EXISTS 也要先取锁，跳过才真正零锁，热启动不再碰表锁；
+#   3) 真要执行的 DDL 用独立事务 + lock_timeout=5s，被阻塞时快速失败告警
+#      跳过，绝不拖死启动；本次失败的列下次启动（阻塞解除后）自动补齐。
+_IDLE_TX_TIMEOUT = "5min"
+_LOCK_TIMEOUT = "5s"
+
+# 从 _COLUMN_MIGRATIONS 中识别「ALTER TABLE <t> ADD COLUMN IF NOT EXISTS <c>」
+_ADD_COLUMN_RE = re.compile(
+    r"^ALTER\s+TABLE\s+(?P<table>[\w.\"$]+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+(?P<column>[\w\"]+)",
+    re.IGNORECASE,
+)
+
+
+def set_db_safety_guards(engine: Engine) -> None:
+    """库级防僵尸会话守卫（幂等）：空闲事务超时自动终止。
+
+    只改库级默认值（新连接生效），不动会话级 lock_timeout——后者仅在
+    迁移语句的事务内用 SET LOCAL 临时收紧，避免影响运行期合法长事务。
+    """
+    db_name = engine.url.database
+    if not db_name:
+        return
+    ident = db_name.replace('"', '""')
     with engine.begin() as conn:
+        conn.execute(text(
+            f'ALTER DATABASE "{ident}" '
+            f"SET idle_in_transaction_session_timeout = '{_IDLE_TX_TIMEOUT}'"
+        ))
+    logger.info(
+        f"已设置库级守卫: idle_in_transaction_session_timeout={_IDLE_TX_TIMEOUT} (db={db_name})"
+    )
+
+
+def _existing_columns(conn, table: str) -> set[str]:
+    """当前 schema 下该表已存在的列名（小写集合）。"""
+    rows = conn.execute(
+        text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND lower(table_name) = lower(:t)"
+        ),
+        {"t": table},
+    )
+    return {str(r[0]).lower() for r in rows}
+
+
+def add_new_columns(engine: Engine) -> None:
+    """补齐后加列（幂等，带防阻塞守卫，见文件头「防阻塞守卫」注释）。"""
+    started = time.perf_counter()
+    applied = skipped = failed = 0
+    with engine.connect() as conn:
         for sql in _COLUMN_MIGRATIONS:
-            conn.execute(text(sql))
+            # 防线 2：列已存在则跳过，不产生任何 DDL/锁请求
+            m = _ADD_COLUMN_RE.match(sql)
+            if m:
+                table = m.group("table").strip('"')
+                column = m.group("column").strip('"').lower()
+                try:
+                    with conn.begin():
+                        cols = _existing_columns(conn, table)
+                    if column in cols:
+                        skipped += 1
+                        continue
+                except Exception:  # noqa: BLE001  表不存在等交由 ALTER 自行报错
+                    pass
+            # 防线 3：独立事务 + lock_timeout，被阻塞时快速失败不拖死启动
+            try:
+                with conn.begin():
+                    conn.execute(text(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT}'"))
+                    conn.execute(text(sql))
+                applied += 1
+            except OperationalError as exc:
+                code = getattr(getattr(exc, "orig", None), "pgcode", None)
+                if code == "55P03":  # lock_not_available
+                    failed += 1
+                    logger.warning(
+                        f"启动迁移被锁阻塞已跳过（lock_timeout={_LOCK_TIMEOUT}，"
+                        f"疑似存在长事务/僵尸会话，解除后下次启动自动补齐）: {sql}"
+                    )
+                else:
+                    failed += 1
+                    logger.warning(f"启动迁移失败(忽略): {sql} -> {exc}")
+            except Exception as exc:  # noqa: BLE001
+                failed += 1
+                logger.warning(f"启动迁移失败(忽略): {sql} -> {exc}")
+    elapsed = time.perf_counter() - started
+    logger.info(
+        f"启动列迁移完成: 执行 {applied} · 列已存在跳过 {skipped} · 失败跳过 {failed}"
+        f"（{elapsed:.2f}s）"
+    )
 
 
 # ── 默认集合行补齐 + 历史文档归属回填（幂等）──────────────────────────────

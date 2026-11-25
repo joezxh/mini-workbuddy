@@ -10,10 +10,12 @@ Spec: docs/superpowers/specs/2026-10-30-kg-knowledge-base-design.md 5.3
 """
 from __future__ import annotations
 
+import json
+
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
@@ -73,10 +75,15 @@ def _relation_out(
         "to_entity_name": names.get(t.to_entity_id),
         "weight": t.weight,
         "status": t.status,
+        "review_verdict": t.review_verdict,
+        "review_note": t.review_note,
+        "reviewed_at": t.reviewed_at.isoformat() if t.reviewed_at else None,
         "properties": t.properties or {},
         "evidence": t.evidence,
         "mention_count": mention_count,
         "extractor": extractor,
+        # 溯源文档（uuid_code 列表）：供前端按文档过滤关系（只读展示）
+        "source_document_ids": t.source_document_ids or [],
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
     }
@@ -100,12 +107,15 @@ def _triple_mention_counts(db: Session, triples: List[KgTriple]) -> Dict[int, in
 
 
 def _entity_names(svc: KgService, triples: List[KgTriple]) -> Dict[int, str]:
-    """批量取关系两端实体名（避免逐条查询）。"""
+    """批量取关系两端实体名（只查涉及的 id，两列精确查询）。
+
+    性能：旧实现 ``list_entities(limit=100000)`` 整表加载全部实体
+    （含 embedding 向量列），实体详情/关系列表每次请求都白载全库向量。
+    """
     ids = {t.from_entity_id for t in triples} | {t.to_entity_id for t in triples}
     if not ids:
         return {}
-    entities = svc.list_entities(limit=100000)
-    return {e.id: e.name for e in entities if e.id in ids}
+    return svc.list_entity_names(list(ids))
 
 
 # ── 请求体 ────────────────────────────────────────────────────────────────
@@ -348,6 +358,134 @@ def delete_relation(
     return {"ok": True, "id": relation_id}
 
 
+class RelationUpdateBody(BaseModel):
+    relation_code: Optional[str] = None
+    predicate: Optional[str] = None
+    weight: Optional[float] = None
+    evidence: Optional[Dict[str, Any]] = None
+    properties: Optional[Dict[str, Any]] = None
+
+
+@router.patch("/{kid}/graph/relations/{relation_id}")
+def update_relation(
+    kid: int,
+    relation_id: int,
+    body: RelationUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """编辑关系（类型/谓词/权重/证据/边属性；端点实体不可变）。"""
+    svc = _svc(db, current_user, kid)
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    triple = svc.update_triple(relation_id, **fields)
+    return _relation_out(triple, _entity_names(svc, [triple]))
+
+
+# ── 批量操作（原型「批量接受/批量改类型/批量删除」的后端支撑）──────────────
+
+def _batch_apply(apply, ids: List[int]) -> dict:
+    """逐条容错执行：单条失败不毁整批，返回逐条明细供前端提示。"""
+    results = []
+    for raw_id in ids:
+        try:
+            iid = int(raw_id)
+        except (TypeError, ValueError):
+            results.append({"id": raw_id, "ok": False, "error": "非法 ID"})
+            continue
+        try:
+            apply(iid)
+            results.append({"id": iid, "ok": True})
+        except HTTPException as exc:
+            results.append({"id": iid, "ok": False, "error": exc.detail})
+        except Exception as exc:  # noqa: BLE001
+            results.append({"id": iid, "ok": False, "error": str(exc)})
+    ok_count = sum(1 for r in results if r["ok"])
+    return {
+        "results": results,
+        "ok_count": ok_count,
+        "failed_count": len(results) - ok_count,
+    }
+
+
+class BatchIdsBody(BaseModel):
+    ids: List[int]
+    verdict: Optional[str] = None  # batch-review 用: accepted|rejected
+    type_code: Optional[str] = None  # batch-set-type 用
+
+
+@router.post("/{kid}/graph/entities/batch-review")
+def batch_review_entities(
+    kid: int,
+    body: BatchIdsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """批量接受实体（suggested → active；逐条容错）。"""
+    svc = _svc(db, current_user, kid)
+    return _batch_apply(svc.accept_entity, body.ids)
+
+
+@router.post("/{kid}/graph/entities/batch-set-type")
+def batch_set_entity_type(
+    kid: int,
+    body: BatchIdsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """批量修改实体类型。"""
+    svc = _svc(db, current_user, kid)
+    type_code = (body.type_code or "").strip() or None
+    return _batch_apply(
+        lambda iid: svc.update_entity(iid, type_code=type_code), body.ids
+    )
+
+
+@router.post("/{kid}/graph/entities/batch-delete")
+def batch_delete_entities(
+    kid: int,
+    body: BatchIdsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """批量删除实体（级联清理其关系；逐条容错）。"""
+    svc = _svc(db, current_user, kid)
+    return _batch_apply(svc.delete_entity, body.ids)
+
+
+@router.post("/{kid}/graph/relations/batch-review")
+def batch_review_relations(
+    kid: int,
+    body: BatchIdsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """批量评审关系（suggested → accepted|rejected；逐条容错）。"""
+    svc = _svc(db, current_user, kid)
+    if body.verdict not in ("accepted", "rejected"):
+        raise HTTPException(status_code=422, detail="verdict 应为 accepted/rejected")
+    return _batch_apply(
+        lambda iid: svc.review_triple(iid, body.verdict), body.ids
+    )
+
+
+@router.post("/{kid}/graph/relations/batch-delete")
+def batch_delete_relations(
+    kid: int,
+    body: BatchIdsBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """批量删除关系（逐条容错）。"""
+    svc = _svc(db, current_user, kid)
+    return _batch_apply(svc.delete_triple, body.ids)
+
+
 @router.patch("/{kid}/graph/relations/{relation_id}/review")
 def review_relation(
     kid: int,
@@ -361,6 +499,49 @@ def review_relation(
     svc = _svc(db, current_user, kid)
     triple = svc.review_triple(relation_id, body.verdict)
     return _relation_out(triple, _entity_names(svc, [triple]))
+
+
+class ReviewBatchBody(BaseModel):
+    relation_ids: Optional[List[int]] = None   # 指定条目；空 = 按 status 取
+    status: str = "suggested"                  # suggested|accepted|rejected|all
+    limit: Optional[int] = None                # 默认 review_batch_size
+
+
+@router.post("/{kid}/graph/relations/review-batch")
+def review_relations_batch(
+    kid: int,
+    body: ReviewBatchBody,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_ADMIN)),
+):
+    """手动触发关系 LLM 二次复核（证据复核 pass）。
+
+    构建完成后会自动跑一轮；本端点用于补跑/重跑（如换了更好的模型后）。
+    ``status=all`` 覆盖全部状态（含 accepted——换模型后全量重评）。
+    """
+    from app.services.kb.kg import kg_config, kg_relation_reviewer
+    from app.services.kb.kg.kg_llm_extractor import build_llm_extractor
+
+    cfg = kg_config.get_graph_config(db, kid)
+    llm, note = build_llm_extractor(db, cfg)
+    if llm is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"复核通道不可用（模型管理无可用对话模型）: {note}",
+        )
+    status = body.status if body.status in ("suggested", "accepted", "rejected") else None
+    summary = kg_relation_reviewer.run_review(
+        db,
+        tenant_id=current_user.tenant_id,
+        knowledge_id=kid,
+        complete=llm.complete,
+        relation_ids=body.relation_ids or None,
+        status=status,  # None = 全部状态（body.status="all"）
+        limit=int(body.limit or cfg.get("review_batch_size") or 200),
+        concurrency=int(cfg.get("review_concurrency") or 4),
+    )
+    return summary
 
 
 # ── 概览统计 ─────────────────────────────────────────────────────────────
@@ -495,13 +676,27 @@ def rebuild_document_graph(
 # ── KB 级图谱配置（存 pipeline_config["graph"]，不新增列）────────────────
 
 class GraphConfigPatch(BaseModel):
+    # 「schema」与 BaseModel.schema() 方法重名（Pydantic v2 UserWarning），
+    # 字段改名 schema_text + 别名兼容：入参仍收 "schema"（前端契约不变），
+    # model_dump(by_alias=True) 仍产出 "schema" 键（kg_config 存储键不变）。
+    model_config = ConfigDict(populate_by_name=True)
+
     extractor_type: Optional[str] = None
     model_spec: Optional[Dict[str, Any]] = None
     schema_source: Optional[str] = None
     catalog_id: Optional[int] = None
-    schema: Optional[str] = None
+    schema_text: Optional[str] = Field(
+        None,
+        validation_alias=AliasChoices("schema", "schema_text"),
+        serialization_alias="schema",
+    )
     concurrency_count: Optional[int] = None
     timeout_seconds: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    max_text_chars: Optional[int] = None
+    max_entities: Optional[int] = None
+    max_relations: Optional[int] = None
+    max_continuation_rounds: Optional[int] = None
     use_graph_retrieval: Optional[bool] = None
     graph_entity_top_k: Optional[int] = None
     graph_triple_top_k: Optional[int] = None
@@ -524,6 +719,55 @@ def get_config(
     return get_graph_config(db, kid)
 
 
+@router.get("/{kid}/graph/prompt-preview")
+def prompt_preview(
+    kid: int,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """按当前配置拼装的**最终生效抽取提示词**（「输出当前抽取所用的提示词」）。
+
+    正文用占位符：真实提示词 = 本返回值把占位符换成切片正文（截到
+    ``max_text_chars``）。构建服务实际调用的是同一份 ``build_prompt``，
+    不存在「预览与生效不一致」的第二口径。
+    """
+    from app.services.kb.kg.kg_extractor import build_schema_hint
+    from app.services.kb.kg.kg_llm_extractor import build_prompt
+    from app.services.kb.kg.kg_config import get_graph_config
+
+    cfg = get_graph_config(db, kid)
+    hint = build_schema_hint(
+        db,
+        schema_source=cfg.get("schema_source", "free_text"),
+        catalog_id=cfg.get("catalog_id"),
+        free_text=cfg.get("schema", "") or "",
+        tenant_id=current_user.tenant_id,
+    )
+    max_text = int(cfg.get("max_text_chars") or 0)
+    placeholder = f"（此处为切片正文占位：真实构建时替换为切片原文，最多 {max_text} 字）"
+    prompt = build_prompt(
+        placeholder,
+        schema_hint=hint,
+        max_entities=int(cfg.get("max_entities") or 0),
+        max_relations=int(cfg.get("max_relations") or 0),
+        max_text_chars=max_text,
+    )
+    return {
+        "prompt": prompt,
+        "schema_source": cfg.get("schema_source"),
+        "config": {
+            "max_output_tokens": cfg.get("max_output_tokens"),
+            "max_text_chars": max_text,
+            "max_entities": cfg.get("max_entities"),
+            "max_relations": cfg.get("max_relations"),
+            "max_continuation_rounds": cfg.get("max_continuation_rounds"),
+            "concurrency_count": cfg.get("concurrency_count"),
+            "timeout_seconds": cfg.get("timeout_seconds"),
+        },
+    }
+
+
 @router.put("/{kid}/graph/config")
 def save_config(
     kid: int,
@@ -535,11 +779,88 @@ def save_config(
     """保存图谱配置（只更新提交的键，其余保持既有值）。"""
     from app.services.kb.kg.kg_config import save_graph_config
 
-    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    # by_alias=True：schema_text 字段以别名 "schema" 落键（kg_config 存储键契约）
+    patch = {k: v for k, v in body.model_dump(by_alias=True).items() if v is not None}
     return save_graph_config(db, kid, patch)
 
 
 # ── 图查询：子图 / 路径 / 邻接 / 类型分布（spec §6.3）────────────────────
+
+@router.get("/{kid}/graph/documents/{uuid_code}")
+def graph_document(
+    kid: int,
+    uuid_code: str,
+    db: Session = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user),
+    _perm=Depends(require_kb_permission(KB_VIEW)),
+):
+    """单文档实体与关系（文档弹窗专用，无条数截断）。
+
+    * ``entities``：source_document_ids 含本文档的实体 **∪** 本文档关系的端点
+      实体（端点实体可能在其他文档中首次创建——没有它图谱连线会被丢弃）；
+    * ``relations``：source_document_ids 含本文档的关系。
+
+    与文档列表页的 graph.entities/relations 计数（jsonb 聚合）口径一致。
+    非 PG 后端（单测 SQLite）退化为全量加载后 Python 过滤。
+    """
+    from sqlalchemy import select, text
+
+    from app.models.kb.kb_document import KbDocument
+
+    svc = _svc(db, current_user, kid)
+    doc_stmt = select(KbDocument).where(
+        KbDocument.uuid_code == uuid_code,
+        KbDocument.knowledge_id == svc.knowledge_id,
+    )
+    if svc.tenant_id is not None:
+        doc_stmt = doc_stmt.where(KbDocument.tenant_id == svc.tenant_id)
+    if db.execute(doc_stmt).scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="document_not_found")
+
+    needle = json.dumps([uuid_code])
+    ent_stmt = select(KgEntity).where(KgEntity.knowledge_id == svc.knowledge_id)
+    rel_stmt = select(KgTriple).where(KgTriple.knowledge_id == svc.knowledge_id)
+    if svc.tenant_id is not None:
+        ent_stmt = ent_stmt.where(KgEntity.tenant_id == svc.tenant_id)
+        rel_stmt = rel_stmt.where(KgTriple.tenant_id == svc.tenant_id)
+
+    if db.get_bind().dialect.name == "postgresql":
+        ents = list(db.execute(
+            ent_stmt.where(text("source_document_ids @> CAST(:doc_needle AS jsonb)")),
+            {"doc_needle": needle},
+        ).scalars())
+        rels = list(db.execute(
+            rel_stmt.where(text("source_document_ids @> CAST(:doc_needle2 AS jsonb)")),
+            {"doc_needle2": needle},
+        ).scalars())
+    else:  # SQLite 等：退化为加载后 Python 过滤（测试规模内无碍）
+        ents = [e for e in db.execute(ent_stmt).scalars()
+                if uuid_code in (e.source_document_ids or [])]
+        rels = [t for t in db.execute(rel_stmt).scalars()
+                if uuid_code in (t.source_document_ids or [])]
+
+    # 关系端点实体补桩（跨文档共享实体）：图谱连线两端必须有节点
+    ent_ids = {e.id for e in ents}
+    endpoint_ids = {t.from_entity_id for t in rels} | {t.to_entity_id for t in rels}
+    missing = endpoint_ids - ent_ids
+    if missing:
+        stub_stmt = select(KgEntity).where(
+            KgEntity.knowledge_id == svc.knowledge_id,
+            KgEntity.id.in_(list(missing)),
+        )
+        if svc.tenant_id is not None:
+            stub_stmt = stub_stmt.where(KgEntity.tenant_id == svc.tenant_id)
+        ents.extend(db.execute(stub_stmt).scalars().all())
+
+    names = _entity_names(svc, rels)
+    ents.sort(key=lambda e: e.id)
+    rels.sort(key=lambda t: t.id)
+    return {
+        "document_id": uuid_code,
+        "entities": [_entity_out(e) for e in ents],
+        "relations": [_relation_out(t, names) for t in rels],
+    }
+
 
 @router.get("/{kid}/graph/subgraph")
 def graph_subgraph(
@@ -686,12 +1007,12 @@ def graph_cdm_check(
 @router.get("/{kid}/graph/export")
 def graph_export(
     kid: int,
-    fmt: str = Query("json", description="json|csv"),
+    fmt: str = Query("json", description="json|csv|graphml"),
     db: Session = Depends(get_db),
     current_user: SysUser = Depends(get_current_user),
     _perm=Depends(require_kb_permission(KB_VIEW)),
 ):
-    """导出图谱实例（JSON 三元组 / CSV 边列表），供外部消费。"""
+    """导出图谱实例（JSON 三元组 / CSV 边列表 / GraphML），供外部消费。"""
     svc = _svc(db, current_user, kid)
     entities = svc.list_entities(limit=10000)
     triples = svc.list_triples(limit=10000)
@@ -712,6 +1033,42 @@ def graph_export(
                 )
             )
         return {"format": "csv", "content": "\n".join(lines)}
+
+    if fmt == "graphml":
+        from xml.sax.saxutils import escape
+
+        types = {
+            e.id: (e.type_code or "") for e in entities
+        }
+        lines = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<graphml xmlns="http://graphml.graphdrawing.org/xmlns"'
+            ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            '<key id="d0" for="node" attr.name="label" attr.type="string"/>'
+            '<key id="d1" for="node" attr.name="type" attr.type="string"/>'
+            '<key id="d2" for="node" attr.name="status" attr.type="string"/>'
+            '<key id="d3" for="edge" attr.name="relation" attr.type="string"/>'
+            '<key id="d4" for="edge" attr.name="weight" attr.type="double"/>',
+            '<graph edgedefault="directed">',
+        ]
+        for e in entities:
+            lines.append(
+                f'<node id="n{e.id}">'
+                f'<data key="d0">{escape(e.name)}</data>'
+                f'<data key="d1">{escape(types.get(e.id, ""))}</data>'
+                f'<data key="d2">{escape(e.status)}</data>'
+                "</node>"
+            )
+        for t in triples:
+            weight = "" if t.weight is None else f"{t.weight:.4f}"
+            lines.append(
+                f'<edge source="n{t.from_entity_id}" target="n{t.to_entity_id}">'
+                f'<data key="d3">{escape(t.relation_code or "")}</data>'
+                f'<data key="d4">{weight}</data>'
+                "</edge>"
+            )
+        lines.append("</graph></graphml>")
+        return {"format": "graphml", "content": "\n".join(lines)}
 
     return {
         "format": "json",

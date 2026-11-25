@@ -130,6 +130,71 @@ def test_config_roundtrip_and_preserves_other_pipeline_keys(db, kb):
     assert kg_config.get_graph_config(db, kb.id)["graph_top_k"] == 33
 
 
+def test_config_extraction_defaults_tuned_for_large_window_models(db, kb):
+    """新抽取键的默认值按 qwen3-32b 大窗口调优（关系过少修复的一部分）。"""
+    cfg = kg_config.get_graph_config(db, kb.id)
+    assert cfg["max_text_chars"] == 12000, "6000 硬切让 90% 切片静默丢尾"
+    assert cfg["max_entities"] == 60
+    assert cfg["max_relations"] == 120
+    assert cfg["max_continuation_rounds"] == 3
+
+
+def test_config_clamps_new_extraction_keys(db, kb):
+    kg_config.save_graph_config(db, kb.id, {
+        "max_text_chars": 1, "max_entities": 0, "max_relations": 99999,
+        "max_continuation_rounds": 0,
+    })
+    cfg = kg_config.get_graph_config(db, kb.id)
+    assert cfg["max_text_chars"] == 500
+    assert cfg["max_entities"] == 5
+    assert cfg["max_relations"] == 1000
+    assert cfg["max_continuation_rounds"] == 1
+
+
+# ── 悬空边别名匹配（关系过少修复之一）────────────────────────────────────
+def test_relation_endpoint_resolved_via_segment_alias(db, kb, doc):
+    """片段实体给出别名、关系端点用别名表述 → 片段级别名匹配救回悬空边。
+
+    供应链库实测：模型常用简称（华创/启明/京仓）输出关系端点，
+    旧实现只按 name 精确匹配，整条关系被丢弃。
+    """
+    make_segment(db, kb, doc, "华创制造（简称华创）")
+    client = FakeClient(
+        entities=[{"name": "华创制造", "label": "供应商", "aliases": ["华创"]},
+                  {"name": "天枢服务器", "label": "产品"}],
+        triplets=[{"subject": "华创", "predicate": "生产", "object": "天枢服务器"}],
+    )
+    svc = builder(db, kb, extractor=fake_extractor(client), embed_fn=vec_fn())
+    report = svc.run("build")
+    assert report.relations == 1, "别名端点必须救回，不得按悬空边丢弃"
+    tri = db.query(KgTriple).one()
+    ents = {e.id: e.name for e in db.query(KgEntity).filter(
+        KgEntity.knowledge_id == kb.id).all()}
+    assert ents[tri.from_entity_id] == "华创制造"
+
+
+def test_relation_endpoint_resolved_via_kb_alias_index(db, kb, doc):
+    """端点实体在上一片段已入库（含别名），本片段只用别名 → 库级别名索引解析。"""
+    make_segment(db, kb, doc, "片段一：华创制造，简称华创", index=0)
+    make_segment(db, kb, doc, "片段二：产品信息", index=1)
+
+    def extract(text, *, schema_hint="", tenant_id=None):
+        if "片段一" in text:
+            client = FakeClient(entities=[
+                {"name": "华创制造", "label": "供应商", "aliases": ["华创"]}])
+        else:
+            client = FakeClient(
+                entities=[{"name": "天枢服务器", "label": "产品"}],
+                triplets=[{"subject": "华创", "predicate": "生产",
+                           "object": "天枢服务器"}],
+            )
+        return kg_extractor.extract(text, client=client, schema_hint=schema_hint)
+
+    svc = builder(db, kb, extractor=extract, embed_fn=vec_fn())
+    report = svc.run("build")
+    assert report.relations == 1, "库内实体的别名必须参与端点解析"
+
+
 # ── 抽取器 ───────────────────────────────────────────────────────────────
 def test_normalize_entity_name():
     assert kg_extractor.normalize_entity_name("  星海   科技 ") == "星海 科技"

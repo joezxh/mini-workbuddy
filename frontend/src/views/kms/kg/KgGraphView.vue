@@ -14,6 +14,17 @@
             {{ t(m.label) }}
           </span>
         </div>
+        <div class="kg-seg">
+          <span
+            v-for="l in LAYOUTS"
+            :key="l.value"
+            class="kg-seg__item"
+            :class="{ 'kg-seg__item--on': layout === l.value }"
+            @click="layout = l.value"
+          >
+            {{ t(l.label) }}
+          </span>
+        </div>
         <a-select
           v-model:value="typeFilter"
           size="small"
@@ -60,6 +71,7 @@
             <a-menu @click="onExport">
               <a-menu-item key="json">JSON</a-menu-item>
               <a-menu-item key="csv">CSV</a-menu-item>
+              <a-menu-item key="graphml">GraphML</a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
@@ -73,6 +85,9 @@
         :edges="canvasEdges"
         :selection="selection"
         :loading="loading"
+        spread
+        :layout="layout"
+        :zoom-labels="{ in: t('kbMgmt.kg.zoomIn'), out: t('kbMgmt.kg.zoomOut'), reset: t('kbMgmt.kg.zoomReset') }"
         :hint-text="t('kbMgmt.kg.graphHint')"
         :legend-size-text="t('kbMgmt.kg.legendNodeSize')"
         :empty-title="mode === 'seed' ? t('kbMgmt.kg.noSelectionAny') : t('kbMgmt.kg.noData')"
@@ -90,6 +105,7 @@
         @inspect-relation="selectEdge"
         @locate="selectEntity"
         @provenance="onProvenance"
+        @provenance-edge="onProvenanceEdge"
         @reviewed="reload"
       />
     </div>
@@ -114,7 +130,10 @@ import type { CanvasEdge, CanvasNode, CanvasSelection } from '@/components/commo
 import KgInspector from './KgInspector.vue'
 
 const props = defineProps<{ knowledgeId: number }>()
-const emit = defineEmits<{ (e: 'provenance', entityId: number): void }>()
+const emit = defineEmits<{
+  (e: 'provenance', entityId: number): void
+  (e: 'provenance-edge', relationId: number): void
+}>()
 
 const { t } = useI18n()
 
@@ -132,6 +151,12 @@ const exporting = ref(false)
 const selection = ref<CanvasSelection | null>(null)
 
 const mode = ref<Mode>('full')
+/** 布局算法：默认 Sugiyama 定向分层（流程图风格），可切回力导向 */
+const layout = ref<'layered' | 'force'>('layered')
+const LAYOUTS: { value: 'layered' | 'force'; label: string }[] = [
+  { value: 'layered', label: 'kbMgmt.kg.layoutLayered' },
+  { value: 'force', label: 'kbMgmt.kg.layoutForce' },
+]
 const typeFilter = ref<string>('')
 const relationFilter = ref<string>('')
 const depth = ref(2)
@@ -193,6 +218,11 @@ const selectedNodeId = computed(() =>
 
 function onProvenance(entityId: number) {
   emit('provenance', entityId)
+}
+
+/** 关系的溯源下钻：带关系 id 给溯源页（旧实现用 from_entity_id 近似） */
+function onProvenanceEdge(relationId: number) {
+  emit('provenance-edge', relationId)
 }
 
 async function reload() {
@@ -265,8 +295,22 @@ function switchMode(next: Mode) {
   void reload()
 }
 
-function selectEdge(id: number) {
+/** 检视/溯源「定位关系」：选中该边；当前视图没有这条边时改用起点实体作种子子图 */
+async function selectEdge(id: number) {
   selection.value = { kind: 'edge', id }
+  if (!rawEdges.value.some((e) => e.id === id)) {
+    try {
+      const rel = await api.getRelation(props.knowledgeId, id)
+      if (rel) {
+        seeds.value = [rel.from_entity_id]
+        mode.value = 'seed'
+        await reload()
+        selection.value = { kind: 'edge', id }
+      }
+    } catch {
+      /* 画布保持现状，检视面板仍显示关系详情 */
+    }
+  }
 }
 
 /** 供父组件调用：在图谱中定位并选中实体（不在当前视图则改用种子子图） */
@@ -300,15 +344,20 @@ function expandFromSeed() {
 }
 
 async function onExport(info: { key: string }) {
-  const fmt = info.key === 'csv' ? 'csv' : 'json'
+  const fmt = info.key === 'csv' ? 'csv' : info.key === 'graphml' ? 'graphml' : 'json'
   exporting.value = true
   try {
     const payload: any = await api.exportGraph(props.knowledgeId, fmt)
     const content =
-      fmt === 'csv' ? String(payload?.content || '') : JSON.stringify(payload ?? {}, null, 2)
+      fmt === 'json' ? JSON.stringify(payload ?? {}, null, 2) : String(payload?.content || '')
     const name = `kb-${props.knowledgeId}-graph.${fmt}`
     const blob = new Blob([content], {
-      type: fmt === 'csv' ? 'text/csv;charset=utf-8' : 'application/json;charset=utf-8',
+      type:
+        fmt === 'csv'
+          ? 'text/csv;charset=utf-8'
+          : fmt === 'graphml'
+            ? 'application/xml;charset=utf-8'
+            : 'application/json;charset=utf-8',
     })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')

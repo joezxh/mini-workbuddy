@@ -54,6 +54,31 @@
       >
         {{ t('kbMgmt.kg.batchAccept') }}
       </a-button>
+      <a-button
+        size="small"
+        :loading="batchLoading"
+        :disabled="!pendingSelectedCount"
+        @click="onBatchReject"
+      >
+        {{ t('kbMgmt.kg.batchReject') }}
+      </a-button>
+      <a-popconfirm
+        :title="t('kbMgmt.kg.confirmDeleteRelation')"
+        :disabled="!selectedRowKeys.length"
+        @confirm="onBatchDelete"
+      >
+        <a-button size="small" danger :disabled="!selectedRowKeys.length">
+          {{ t('kbMgmt.kg.batchDelete') }}
+        </a-button>
+      </a-popconfirm>
+      <a-button
+        size="small"
+        :loading="reviewBatchLoading"
+        :title="t('kbMgmt.kg.reviewBatchTip')"
+        @click="onRunReviewBatch"
+      >
+        {{ t('kbMgmt.kg.reviewBatch') }}
+      </a-button>
       <a-button size="small" type="primary" :disabled="!entities.length" @click="openCreate">
         ＋ {{ t('kbMgmt.kg.createRelation') }}
       </a-button>
@@ -116,6 +141,14 @@
           <span class="kg-status" :class="`kg-status--${record.status}`">
             {{ statusText(record.status) }}
           </span>
+          <span
+            v-if="record.review_verdict"
+            class="kg-review-badge"
+            :class="`kg-review-badge--${record.review_verdict}`"
+            :title="record.review_note || ''"
+          >
+            {{ reviewBadgeText(record.review_verdict) }}
+          </span>
         </template>
         <template v-else-if="column.key === 'extractor'">
           <span class="kg-code">{{ record.extractor || 'llm' }}</span>
@@ -127,6 +160,9 @@
           <a-space :size="2">
             <a-button size="small" type="link" @click="onInspectEdge(record)">
               {{ t('kbMgmt.kg.actionInspect') }}
+            </a-button>
+            <a-button size="small" type="link" @click="openEdit(record)">
+              {{ t('common.edit') }}
             </a-button>
             <a-button
               v-if="record.status === 'suggested'"
@@ -153,7 +189,7 @@
 
     <a-modal
       v-model:open="modalOpen"
-      :title="t('kbMgmt.kg.createRelation')"
+      :title="editing ? t('kbMgmt.kg.editRelation') : t('kbMgmt.kg.createRelation')"
       :confirm-loading="saving"
       @ok="onSave"
     >
@@ -163,6 +199,7 @@
             v-model:value="form.from_entity_id"
             :options="entityOptions"
             show-search
+            :disabled="!!editing"
             :placeholder="t('kbMgmt.kg.fromEntityPlaceholder')"
           />
         </a-form-item>
@@ -181,7 +218,25 @@
             v-model:value="form.to_entity_id"
             :options="entityOptions"
             show-search
+            :disabled="!!editing"
             :placeholder="t('kbMgmt.kg.toEntityPlaceholder')"
+          />
+        </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.colWeight')">
+          <a-input-number
+            v-model:value="form.weight"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            style="width: 160px"
+            :placeholder="t('kbMgmt.kg.weightPlaceholder')"
+          />
+        </a-form-item>
+        <a-form-item :label="t('kbMgmt.kg.evidenceText')">
+          <a-textarea
+            v-model:value="form.evidence"
+            :rows="3"
+            :placeholder="t('kbMgmt.kg.evidencePlaceholder')"
           />
         </a-form-item>
       </a-form>
@@ -197,7 +252,11 @@ import * as api from '@/api/kg'
 import type { KgEntity, KgRelation, KgRelationQuery, KgRelationStatus } from '@/api/kg'
 import { formatWeight, typeLabel, weightColor } from '@/components/common/graph/graphTheme'
 
-const props = defineProps<{ knowledgeId: number }>()
+const props = defineProps<{
+  knowledgeId: number
+  /** 概览关系分布下钻预置的关系类型筛选 */
+  initialRelationFilter?: string
+}>()
 const emit = defineEmits<{
   (e: 'inspect-entity', entityId: number): void
   (e: 'inspect-edge', relationId: number): void
@@ -220,12 +279,17 @@ const weightTier = ref<'all' | 'high' | 'mid' | 'low'>('all')
 /** 当前在画布/检视面板中选中的关系（行高亮，与原型选中态一致） */
 const selectedEdgeId = ref<number | null>(null)
 
-const query = reactive<{ relation_code?: string; status?: string }>({})
+const query = reactive<{ relation_code?: string; status?: string }>({
+  relation_code: props.initialRelationFilter || undefined,
+})
+const editing = ref<KgRelation | null>(null)
 const form = reactive({
   from_entity_id: undefined as number | undefined,
   to_entity_id: undefined as number | undefined,
   relation_code: undefined as string | undefined,
   predicate: '',
+  weight: null as number | null,
+  evidence: '',
 })
 
 /** 「仅看待评审」已由状态筛选承载，避免两套状态互相打架 */
@@ -339,10 +403,26 @@ async function reload() {
 }
 
 function openCreate() {
+  editing.value = null
   form.from_entity_id = undefined
   form.to_entity_id = undefined
   form.relation_code = undefined
   form.predicate = ''
+  form.weight = null
+  form.evidence = ''
+  modalOpen.value = true
+}
+
+/** 编辑：端点锁定（后端约定：改端点=删了重建），类型/谓词/权重/证据可改 */
+function openEdit(row: KgRelation) {
+  editing.value = row
+  form.from_entity_id = row.from_entity_id
+  form.to_entity_id = row.to_entity_id
+  form.relation_code = row.relation_code || undefined
+  form.predicate = row.predicate || ''
+  form.weight = row.weight == null ? null : Number(row.weight)
+  const ev = row.evidence as Record<string, unknown> | null
+  form.evidence = typeof ev?.text === 'string' ? ev.text : ''
   modalOpen.value = true
 }
 
@@ -353,13 +433,25 @@ async function onSave() {
   }
   saving.value = true
   try {
-    await api.createRelation(props.knowledgeId, {
-      from_entity_id: form.from_entity_id,
-      to_entity_id: form.to_entity_id,
-      relation_code: form.relation_code || undefined,
-      predicate: form.predicate || undefined,
-    })
-    message.success(t('kbMgmt.kg.created'))
+    if (editing.value) {
+      await api.updateRelation(props.knowledgeId, editing.value.id, {
+        relation_code: form.relation_code || undefined,
+        predicate: form.predicate || undefined,
+        weight: form.weight ?? undefined,
+        evidence: form.evidence.trim() ? { text: form.evidence.trim() } : undefined,
+      })
+      message.success(t('common.saved'))
+    } else {
+      await api.createRelation(props.knowledgeId, {
+        from_entity_id: form.from_entity_id,
+        to_entity_id: form.to_entity_id,
+        relation_code: form.relation_code || undefined,
+        predicate: form.predicate || undefined,
+        weight: form.weight ?? undefined,
+        evidence: form.evidence.trim() ? { text: form.evidence.trim() } : undefined,
+      })
+      message.success(t('kbMgmt.kg.created'))
+    }
     modalOpen.value = false
     await reload()
   } catch (e: any) {
@@ -379,24 +471,87 @@ async function onReview(row: KgRelation, verdict: 'accepted' | 'rejected') {
   }
 }
 
-/** 批量接受：只对待评审关系生效，逐条容错（部分失败不影响其余） */
-async function onBatchAccept() {
+/** 复核徽标文案（LLM 二次证据复核结论） */
+function reviewBadgeText(verdict: string) {
+  if (verdict === 'supported') return t('kbMgmt.kg.reviewSupported')
+  if (verdict === 'weak') return t('kbMgmt.kg.reviewWeak')
+  if (verdict === 'unsupported') return t('kbMgmt.kg.reviewUnsupported')
+  return t('kbMgmt.kg.reviewFailed')
+}
+
+/** 批量评审（接受/驳回）：走后端批量端点，逐条容错 */
+async function batchReview(verdict: 'accepted' | 'rejected') {
   const targets = rows.value.filter(
     (r) => selectedRowKeys.value.includes(r.id) && r.status === 'suggested',
   )
   if (!targets.length) return
   batchLoading.value = true
   try {
-    const results = await Promise.allSettled(
-      targets.map((row) => api.reviewRelation(props.knowledgeId, row.id, 'accepted')),
-    )
-    const failed = results.filter((r) => r.status === 'rejected').length
-    if (failed) message.warning(`${failed} / ${targets.length} ${t('kbMgmt.kg.actionFailed')}`)
-    else message.success(t('kbMgmt.kg.reviewDone'))
+    const res = await api.batchReviewRelations(
+      props.knowledgeId, targets.map((r) => r.id), verdict)
+    if (res?.failed_count) {
+      message.warning(t('kbMgmt.kg.batchPartial', { ok: res.ok_count, failed: res.failed_count }))
+    } else {
+      message.success(t('kbMgmt.kg.reviewDone'))
+    }
     selectedRowKeys.value = []
     await reload()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
   } finally {
     batchLoading.value = false
+  }
+}
+
+async function onBatchAccept() {
+  await batchReview('accepted')
+}
+
+async function onBatchReject() {
+  await batchReview('rejected')
+}
+
+/** 批量删除：走后端批量端点 */
+async function onBatchDelete() {
+  const ids = [...selectedRowKeys.value]
+  if (!ids.length) return
+  batchLoading.value = true
+  try {
+    const res = await api.batchDeleteRelations(props.knowledgeId, ids)
+    if (res?.ok_count) message.success(t('kbMgmt.kg.deleted'))
+    if (res?.failed_count) {
+      message.warning(t('kbMgmt.kg.batchPartial', { ok: res.ok_count, failed: res.failed_count }))
+    }
+    selectedRowKeys.value = []
+    await reload()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+// ── 手动触发关系 LLM 二次复核（构建后会自动跑一轮；此处补跑/重跑）────────
+const reviewBatchLoading = ref(false)
+
+async function onRunReviewBatch() {
+  reviewBatchLoading.value = true
+  try {
+    const res = await api.runRelationReviewBatch(props.knowledgeId)
+    message.success(
+      t('kbMgmt.kg.reviewBatchDone', {
+        reviewed: res?.reviewed ?? 0,
+        supported: res?.supported ?? 0,
+        weak: res?.weak ?? 0,
+        unsupported: res?.unsupported ?? 0,
+        failed: res?.review_failed ?? 0,
+      }),
+    )
+    await reload()
+  } catch (e: any) {
+    message.error(e?.response?.data?.detail || t('kbMgmt.kg.actionFailed'))
+  } finally {
+    reviewBatchLoading.value = false
   }
 }
 
@@ -465,6 +620,36 @@ watch(() => props.knowledgeId, reload, { immediate: true })
   color: var(--kg-text-2);
   font-size: 11px;
   line-height: 1;
+}
+/* LLM 二次复核徽标（绿=支撑 / 黄=存疑 / 红=不支撑 / 灰=复核失败） */
+.kg-review-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--kg-border);
+  border-radius: var(--kg-r-xs);
+  font-size: 11px;
+  line-height: 1;
+}
+.kg-review-badge--supported {
+  border-color: var(--kg-ok-border);
+  background: var(--kg-ok-bg);
+  color: var(--kg-ok-fg);
+}
+.kg-review-badge--weak {
+  border-color: var(--kg-warn-border);
+  background: var(--kg-warn-bg);
+  color: var(--kg-warn-fg);
+}
+.kg-review-badge--unsupported {
+  border-color: var(--kg-danger-border, #cf1322);
+  background: var(--kg-danger-bg, #fff1f0);
+  color: var(--kg-danger-fg, #cf1322);
+}
+.kg-review-badge--review_failed {
+  color: var(--kg-text-3);
 }
 .kg-status--suggested {
   border-color: var(--kg-warn-border);

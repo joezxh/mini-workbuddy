@@ -267,6 +267,26 @@ class KgService:
             self._entity_stmt().where(KgEntity.id == entity_id)
         ).scalar_one_or_none()
 
+    def list_entity_names(self, ids: list[int]) -> dict[int, str]:
+        """按 id 批量取实体名（只查 id+name 两列）。
+
+        供关系端点名称回填：绝不走 ``list_entities``——那会把全部实体行
+        （含 2048 维 embedding / halfvec 生成列）整体加载，是实体详情接口
+        慢的直接原因（检视面板每次点击都触发）。
+        """
+        wanted = {int(x) for x in ids if x is not None}
+        if not wanted:
+            return {}
+        self._guard()
+        stmt = select(KgEntity.id, KgEntity.name).where(
+            KgEntity.knowledge_id == self.knowledge_id,
+            KgEntity.id.in_(wanted),
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(KgEntity.tenant_id == self.tenant_id)
+        rows = self.db.execute(stmt).all()
+        return {int(r[0]): r[1] for r in rows}
+
     def update_entity(self, entity_id: int, **fields: Any) -> KgEntity:
         """编辑实体（名称 / 类型 / 别名 / 属性）。
 
@@ -484,6 +504,47 @@ class KgService:
         triple.status = verdict
         self.db.commit()
         self.db.refresh(triple)
+        return triple
+
+    def update_triple(self, triple_id: int, **fields: Any) -> KgTriple:
+        """编辑关系（类型/谓词/权重/证据/边属性）。
+
+        端点实体**不可变**——改端点等价于删了重建，且会让既有提及/溯源失效；
+        前端要改端点时应走「删除 + 新建」。``relation_code`` 变更会重建
+        Neo4j 投影（边标签随类型变化）。
+        """
+        self._guard()
+        triple = self.get_triple(triple_id)
+        if triple is None:
+            raise HTTPException(status_code=404, detail="关系不存在")
+        if "relation_code" in fields and fields["relation_code"] is not None:
+            code = str(fields["relation_code"]).strip()
+            if not code:
+                raise HTTPException(status_code=422, detail="关系类型不能为空")
+            if len(code) > 64:
+                # 与列宽对齐（String(64)）：超长落库必炸，提前给出人话错误
+                raise HTTPException(status_code=422, detail="关系类型最长 64 字符")
+            triple.relation_code = code
+        if "predicate" in fields:
+            triple.predicate = fields["predicate"] or None
+        if "weight" in fields and fields["weight"] is not None:
+            try:
+                w = float(fields["weight"])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="权重必须是 0~1 的数值")
+            if not 0.0 <= w <= 1.0:
+                raise HTTPException(
+                    status_code=422, detail=f"权重超出范围 0~1: {w}"
+                )
+            triple.weight = w
+        if "evidence" in fields and fields["evidence"] is not None:
+            triple.evidence = fields["evidence"]
+        if "properties" in fields and fields["properties"] is not None:
+            triple.properties = fields["properties"]
+        self.db.commit()
+        self.db.refresh(triple)
+        self._unproject_triple(triple)
+        self._project_triple(triple)
         return triple
 
     def delete_triple(self, triple_id: int) -> None:

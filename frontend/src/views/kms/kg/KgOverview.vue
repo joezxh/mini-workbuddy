@@ -26,7 +26,13 @@
           </header>
           <div class="kg-card__bd">
             <div v-if="!typeRows.length" class="kg-muted">{{ t('kbMgmt.kg.noData') }}</div>
-            <div v-for="row in typeRows" :key="row.key" class="kg-distrow">
+            <div
+              v-for="row in typeRows"
+              :key="row.key"
+              class="kg-distrow kg-distrow--link"
+              :title="t('kbMgmt.kg.drillToEntityTable')"
+              @click="emit('drill', { kind: 'entity', code: row.key })"
+            >
               <span
                 class="kg-swatch"
                 :style="{ background: typeTone(row.key).color }"
@@ -52,7 +58,13 @@
           </header>
           <div class="kg-card__bd">
             <div v-if="!relationRows.length" class="kg-muted">{{ t('kbMgmt.kg.noData') }}</div>
-            <div v-for="row in relationRows" :key="row.key" class="kg-distrow">
+            <div
+              v-for="row in relationRows"
+              :key="row.key"
+              class="kg-distrow kg-distrow--link"
+              :title="t('kbMgmt.kg.drillToRelationTable')"
+              @click="emit('drill', { kind: 'relation', code: row.key })"
+            >
               <span class="kg-swatch" :style="{ background: 'var(--kg-primary)' }" />
               <span class="kg-distrow__label" :title="row.key">
                 {{ row.key || t('kbMgmt.kg.freePredicate') }}
@@ -154,6 +166,12 @@
             </li>
           </ul>
           <div v-else class="kg-muted">{{ t('kbMgmt.kg.noData') }}</div>
+          <!-- CDM 明细默认前 6 条，展开全部 / 收起（原型行为） -->
+          <div v-if="(cdm.items || []).length > 6" class="kg-cdm__toggle">
+            <a-button size="small" type="link" @click="showAllCdm = !showAllCdm">
+              {{ showAllCdm ? t('kbMgmt.kg.collapse') : t('kbMgmt.kg.showAllCdm', { count: (cdm.items || []).length }) }}
+            </a-button>
+          </div>
 
           <div class="kg-note kg-cdm__foot">
             <span>{{ t('kbMgmt.kg.cdmConflictNote') }}</span>
@@ -179,8 +197,16 @@ import { SHELL_PATH } from '@/utils/shellTab'
 
 const props = defineProps<{ knowledgeId: number }>()
 
+const emit = defineEmits<{
+  /** 分布图条目点击下钻：实体分布 → 实体表预置类型筛选；关系分布 → 关系表预置类型 */
+  (e: 'drill', payload: { kind: 'entity' | 'relation'; code: string }): void
+}>()
+
 const { t } = useI18n()
 const router = useRouter()
+
+/** CDM 明细展开全部（默认前 6 条） */
+const showAllCdm = ref(false)
 
 const loading = ref(false)
 const stats = ref<KgStats>({ entities: 0, relations: 0, by_type: {}, by_relation: {} })
@@ -312,7 +338,10 @@ const lastBuildText = computed(() => {
   })
 })
 
-const cdmItems = computed(() => (cdm.value.items || []).slice(0, 6))
+const cdmItems = computed(() => {
+  const all = cdm.value.items || []
+  return showAllCdm.value ? all : all.slice(0, 6)
+})
 
 function pct(value: number, total: number) {
   if (!total) return 0
@@ -398,6 +427,16 @@ onMounted(load)
   height: 7px;
   flex: none;
   border-radius: 50%;
+}
+/* 分布行可点击下钻（悬停提示） */
+.kg-distrow--link {
+  cursor: pointer;
+}
+.kg-distrow--link:hover {
+  background: var(--kg-subtle);
+}
+.kg-cdm__toggle {
+  margin-top: 4px;
 }
 
 /* 双阶段进度 */

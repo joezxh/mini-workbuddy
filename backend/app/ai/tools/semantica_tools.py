@@ -121,19 +121,40 @@ def build_semantic_tool_definitions() -> List["Any"]:
     """构造 3 个 Semantica Agent 工具的持久化定义（供 seed 注册）。"""
     from app.models.ai.ai_tool_definition import AiToolDefinition
 
-    definitions = []
-    for key, desc in [
-        ("semantic_query", "查询语义实体抽取与图谱构建摘要"),
-        ("semantic_build", "基于文本构建语义图谱（抽取/冲突/去重/建图/向量）"),
-        ("semantic_search", "基于查询向量检索语义实体/关系"),
-    ]:
-        definitions.append(
+    display_names = {
+        "semantic_query": "语义查询",
+        "semantic_build": "语义图谱构建",
+        "semantic_search": "语义检索",
+    }
+    classes = {
+        "semantic_query": SemanticQueryTool,
+        "semantic_build": SemanticBuildTool,
+        "semantic_search": SemanticSearchTool,
+    }
+    descs = {
+        "semantic_query": "查询语义实体抽取与图谱构建摘要",
+        "semantic_build": "基于文本构建语义图谱（抽取/冲突/去重/建图/向量）",
+        "semantic_search": "基于查询向量检索语义实体/关系",
+    }
+    defs: list = []
+    for key in ("semantic_query", "semantic_build", "semantic_search"):
+        cls = classes[key]
+        defs.append(
             AiToolDefinition(
                 tool_key=key,
-                name=key,
+                display_name=display_names[key],
+                category="知识管理",
                 tool_type=SEMANTIC_TOOL_TYPE,
-                description=desc,
+                class_name=f"app.ai.tools.semantica_tools.{cls.__name__}",
+                method_name="call",
+                description=descs[key],
+                config_schema=None,
+                config_value=None,
+                input_schema=None,
+                output_schema=None,
+                status="enabled",
                 is_system=True,
+                sort=1100,
             )
         )
-    return definitions
+    return defs

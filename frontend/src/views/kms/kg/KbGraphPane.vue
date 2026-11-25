@@ -51,7 +51,11 @@
     <a-tabs v-model:activeKey="activeTab" class="kb-graph-pane__tabs">
       <a-tab-pane key="overview">
         <template #tab>{{ t('kbMgmt.kg.tabOverview') }}</template>
-        <KgOverview :key="`ov-${reloadKey}`" :knowledge-id="knowledgeId" />
+        <KgOverview
+          :key="`ov-${reloadKey}`"
+          :knowledge-id="knowledgeId"
+          @drill="onDrill"
+        />
       </a-tab-pane>
 
       <a-tab-pane key="documents">
@@ -82,6 +86,7 @@
           ref="graphViewRef"
           :knowledge-id="knowledgeId"
           @provenance="onProvenance"
+          @provenance-edge="onProvenanceEdge"
         />
       </a-tab-pane>
 
@@ -91,8 +96,9 @@
           <span class="kg-tab-count">{{ overview.entities }}</span>
         </template>
         <KgEntityTable
-          :key="`ent-${reloadKey}`"
+          :key="`ent-${reloadKey}-${entityPresetType}`"
           :knowledge-id="knowledgeId"
+          :initial-type-filter="entityPresetType"
           @inspect-entity="onInspectEntity"
           @provenance="onProvenance"
         />
@@ -104,8 +110,9 @@
           <span class="kg-tab-count">{{ overview.relations }}</span>
         </template>
         <KgTripleTable
-          :key="`rel-${reloadKey}`"
+          :key="`rel-${reloadKey}-${relationPresetCode}`"
           :knowledge-id="knowledgeId"
+          :initial-relation-filter="relationPresetCode"
           @inspect-entity="onInspectEntity"
           @inspect-edge="onInspectEdge"
           @provenance="onProvenance"
@@ -114,7 +121,12 @@
 
       <a-tab-pane key="provenance">
         <template #tab>{{ t('kbMgmt.kg.tabProvenance') }}</template>
-        <KgProvenance :knowledge-id="knowledgeId" />
+        <KgProvenance
+          :key="`prov-${reloadKey}-${provSelection?.kind ?? ''}-${provSelection?.id ?? ''}`"
+          :knowledge-id="knowledgeId"
+          :initial-selection="provSelection"
+          @locate-graph="onLocateFromProvenance"
+        />
       </a-tab-pane>
 
       <a-tab-pane key="search">
@@ -161,6 +173,11 @@ const activeTab = ref('graph')
 /** 当前提交中的构建动作（同时用于按钮 loading 与防重复提交） */
 const submitting = ref<KgBuildAction | null>(null)
 const graphViewRef = ref<InstanceType<typeof KgGraphView> | null>(null)
+/** 溯源页的初始选中对象（关系溯源下钻携带；实体下钻不指定，溯源页自行加载） */
+const provSelection = ref<{ kind: 'node' | 'edge'; id: number } | null>(null)
+/** 概览分布图下钻的预置筛选（实体类型 / 关系类型） */
+const entityPresetType = ref('')
+const relationPresetCode = ref('')
 /** 递增以强制子组件重建（子组件 watch(immediate) 随之重载数据） */
 const reloadKey = ref(0)
 const status = ref<KgBuildStatus | null>(null)
@@ -300,7 +317,31 @@ async function onInspectEdge(relationId: number) {
 
 /** 跳到溯源 Tab（实体 id 由溯源页自行加载） */
 function onProvenance(_entityId: number) {
+  provSelection.value = null
   activeTab.value = 'provenance'
+}
+
+/** 关系溯源下钻：带关系 id 切到溯源页并自动选中该关系（旧实现用 from_entity_id 近似） */
+function onProvenanceEdge(relationId: number) {
+  provSelection.value = { kind: 'edge', id: relationId }
+  activeTab.value = 'provenance'
+}
+
+/** 溯源页「在图谱中定位」：切到图谱 Tab 并选中该实体/关系 */
+async function onLocateFromProvenance(payload: { kind: 'node' | 'edge'; id: number }) {
+  if (payload.kind === 'node') await onInspectEntity(payload.id)
+  else await onInspectEdge(payload.id)
+}
+
+/** 概览分布图下钻：实体/关系表预置类型筛选 */
+function onDrill(payload: { kind: 'entity' | 'relation'; code: string }) {
+  if (payload.kind === 'entity') {
+    entityPresetType.value = payload.code
+    activeTab.value = 'entities'
+  } else {
+    relationPresetCode.value = payload.code
+    activeTab.value = 'relations'
+  }
 }
 
 watch(

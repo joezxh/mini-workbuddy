@@ -43,8 +43,16 @@
             </button>
           </div>
 
-          <div class="kg-sec-t">
-            {{ t('kbMgmt.kg.provSourceSegments', { name: pickedName || '—' }) }}
+          <div class="kg-sec-t kg-prov-sec-head">
+            <span>{{ t('kbMgmt.kg.provSourceSegments', { name: pickedName || '—' }) }}</span>
+            <a-button
+              v-if="picked"
+              size="small"
+              type="link"
+              @click="emit('locate-graph', { kind: picked.kind, id: picked.id })"
+            >
+              {{ t('kbMgmt.kg.provLocateGraph') }}
+            </a-button>
           </div>
           <div class="kg-kvlist">
             <div v-if="!mentions.length" class="kg-muted">{{ t('kbMgmt.kg.noData') }}</div>
@@ -57,6 +65,18 @@
             >
               <span class="kg-kvrow__k">#{{ item.chunk_index }}</span>
               <span class="kg-kvrow__v">{{ item.document_id }}</span>
+              <!-- 切片正文摘录与抽取依据（后端已返回 content/evidence，此处展示） -->
+              <div class="kg-kvrow__excerpt">{{ mentionExcerpt(item, idx) }}</div>
+              <div v-if="expandedRows.has(idx)" class="kg-kvrow__evidence">
+                <template v-if="mentionEvidence(item)">
+                  {{ t('kbMgmt.kg.provEvidence') }}「{{ mentionEvidence(item) }}」
+                </template>
+                <template v-else>{{ item.content }}</template>
+              </div>
+              <a
+                class="kg-kvrow__toggle"
+                @click.stop="toggleRow(idx)"
+              >{{ expandedRows.has(idx) ? t('kbMgmt.kg.collapse') : t('kbMgmt.kg.expand') }}</a>
             </div>
           </div>
           <div class="kg-note">{{ t('kbMgmt.kg.provSegTip') }}</div>
@@ -174,8 +194,16 @@ import { typeLabel, typeTone } from '@/components/common/graph/graphTheme'
 import SegmentDetail from '@/views/kms/kb/SegmentDetail.vue'
 import { resolveKgFailure } from '@/utils/kgFailureReason'
 
-const props = defineProps<{ knowledgeId: number }>()
-defineEmits<{ (e: 'inspect-entity', entityId: number): void }>()
+const props = defineProps<{
+  knowledgeId: number
+  /** 初始选中对象（关系溯源下钻携带）；变化时自动选中并加载提及 */
+  initialSelection?: { kind: 'node' | 'edge'; id: number } | null
+}>()
+const emit = defineEmits<{
+  (e: 'inspect-entity', entityId: number): void
+  /** 「在图谱中定位」：切到图谱 Tab 并在画布/检视面板中选中该实体或关系 */
+  (e: 'locate-graph', payload: { kind: 'node' | 'edge'; id: number }): void
+}>()
 
 const { t } = useI18n()
 
@@ -207,7 +235,40 @@ const segmentDocId = ref<string | null>(null)
 
 const entityNameMap = computed(() => new Map(entities.value.map((e) => [e.id, e.name])))
 
-/** 候选：实体按提及数降序 + 关系按提及数降序，关键词过滤 */
+/**
+ * 切片行展开态（记录行号）：默认收起只显示摘录，展开后看全量正文与抽取依据。
+ * 后端 content 最多 500 字，摘录取前 80 字。
+ */
+const expandedRows = ref(new Set<number>())
+
+function toggleRow(idx: number) {
+  const next = new Set(expandedRows.value)
+  if (next.has(idx)) next.delete(idx)
+  else next.add(idx)
+  expandedRows.value = next
+}
+
+function mentionExcerpt(item: KgMentionSlice, idx: number) {
+  const text = item.content || ''
+  return expandedRows.value.has(idx) || text.length <= 80
+    ? text
+    : `${text.slice(0, 80)}…`
+}
+
+/** evidence JSONB → 纯文本（{text|quote|sentence|content} 或字符串） */
+function mentionEvidence(item: KgMentionSlice): string {
+  const ev: any = item.evidence
+  if (!ev) return ''
+  if (typeof ev === 'string') return ev
+  if (typeof ev === 'object') {
+    for (const key of ['text', 'quote', 'sentence', 'content']) {
+      if (typeof ev[key] === 'string' && ev[key].trim()) return ev[key]
+    }
+  }
+  return ''
+}
+
+/** 候选：实体按提及数降序 + 关系按提及数降序，关键词过滤（搜索全量，不截断） */
 const pickerItems = computed<PickerItem[]>(() => {
   const kw = keyword.value.trim().toLowerCase()
   const hit = (text: string) => !kw || text.toLowerCase().includes(kw)
@@ -215,7 +276,6 @@ const pickerItems = computed<PickerItem[]>(() => {
   const nodes: PickerItem[] = entities.value
     .filter((e) => hit(e.name))
     .sort((a, b) => (b.mention_count ?? 0) - (a.mention_count ?? 0))
-    .slice(0, 12)
     .map((e) => ({
       kind: 'node' as const,
       id: e.id,
@@ -231,7 +291,6 @@ const pickerItems = computed<PickerItem[]>(() => {
       return hit(label)
     })
     .sort((a, b) => (b.mention_count ?? 0) - (a.mention_count ?? 0))
-    .slice(0, 8)
     .map((r) => ({
       kind: 'edge' as const,
       id: r.id,
@@ -287,7 +346,7 @@ function isPicked(item: PickerItem) {
   return picked.value?.kind === item.kind && picked.value?.id === item.id
 }
 
-async function pick(item: PickerItem) {
+async function pick(item: { kind: 'node' | 'edge'; id: number }) {
   picked.value = { kind: item.kind, id: item.id }
   await loadMentions()
 }
@@ -382,6 +441,10 @@ async function onRetryFailed() {
 
 onMounted(async () => {
   await Promise.all([loadEntities(), loadFailed()])
+  // 关系溯源下钻：按父级携带的初始选中自动定位
+  if (props.initialSelection) {
+    await pick({ kind: props.initialSelection.kind, id: props.initialSelection.id })
+  }
 })
 </script>
 
@@ -396,6 +459,38 @@ onMounted(async () => {
   .kg-provenance__grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+/* 切片行：正文摘录 / 证据 / 展开开关 */
+.kg-prov-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kg-kvrow__excerpt {
+  margin-top: 2px;
+  color: var(--kg-text-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.kg-kvrow__evidence {
+  margin-top: 2px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--kg-primary);
+  background: var(--kg-subtle);
+  border-radius: var(--kg-r-xs);
+  color: var(--kg-text-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.kg-kvrow__toggle {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--kg-primary);
 }
 /* 候选列表：实体/关系小行 */
 .kg-prov-picker {

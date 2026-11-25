@@ -96,14 +96,16 @@ def _serialize(doc: KbDocument) -> dict:
 
 
 def _serialize_graph_stages(db: Session, docs: list) -> dict:
-    """按文档汇总图谱两阶段状态（仅 type=4 图谱库有意义）。
+    """按文档汇总图谱两阶段状态与实体/关系计数（仅 type=4 图谱库有意义）。
 
     返回 ``{document_id: {structure, vector, failed, entities, relations}}``：
     * ``structure`` 该文档切片的阶段 1 完成数
     * ``vector``    阶段 2 完成数
     * ``failed``    抽取失败（阶段 1 显式失败）的切片数
+    * ``entities``  source_document_ids 含本文档的实体数
+    * ``relations`` source_document_ids 含本文档的关系数
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import func, select, text
 
     from app.models.kb.kb_segment import KbSegment
 
@@ -129,6 +131,41 @@ def _serialize_graph_stages(db: Session, docs: list) -> dict:
             "vector": int(row[3] or 0),
             "failed": int(row[4] or 0),
         }
+
+    # 实体/关系计数：kg_entity/kg_triple 的溯源列是 JSONB uuid 数组，
+    # 按数组元素展开后按文档聚合（一次查询各取齐，避免 N+1）。
+    # 仅 PG 支持 jsonb_array_elements_text；其余后端（单测 SQLite）跳过计数。
+    try:
+        if db.get_bind().dialect.name == "postgresql":
+            kid = docs[0].knowledge_id
+            tid = docs[0].tenant_id
+            ent_rows = db.execute(text(
+                "SELECT doc_id, count(*) FROM kg_entity, "
+                "jsonb_array_elements_text(source_document_ids) AS doc_id "
+                "WHERE knowledge_id = :kid AND tenant_id = :tid "
+                "AND source_document_ids IS NOT NULL "
+                "GROUP BY doc_id"
+            ), {"kid": kid, "tid": tid}).all()
+            rel_rows = db.execute(text(
+                "SELECT doc_id, count(*) FROM kg_triple, "
+                "jsonb_array_elements_text(source_document_ids) AS doc_id "
+                "WHERE knowledge_id = :kid AND tenant_id = :tid "
+                "AND source_document_ids IS NOT NULL "
+                "GROUP BY doc_id"
+            ), {"kid": kid, "tid": tid}).all()
+            for doc_id, cnt in ent_rows:
+                out.setdefault(doc_id, {"segments": 0, "structure": 0,
+                                        "vector": 0, "failed": 0})
+                out[doc_id]["entities"] = int(cnt or 0)
+            for doc_id, cnt in rel_rows:
+                out.setdefault(doc_id, {"segments": 0, "structure": 0,
+                                        "vector": 0, "failed": 0})
+                out[doc_id]["relations"] = int(cnt or 0)
+    except Exception:  # noqa: BLE001 - 计数失败不拖垮文档列表
+        pass
+    for doc_id in out:
+        out[doc_id].setdefault("entities", 0)
+        out[doc_id].setdefault("relations", 0)
     return out
 
 
@@ -302,6 +339,7 @@ def list_documents(
         for item in items:
             item["graph"] = stages.get(item["document_id"], {
                 "segments": 0, "structure": 0, "vector": 0, "failed": 0,
+                "entities": 0, "relations": 0,
             })
     return items
 

@@ -183,4 +183,33 @@ describe('GraphCanvas', () => {
     expect(html).toContain('实体2')
     expect(html).toContain('实体40')
   })
+
+  // ── 分层布局（Sugiyama，layout=layered）────────────────────────────────
+  it('分层布局：边方向自上而下（被指向的实体层级更低、y 更大）', async () => {
+    // EDGES：2→1、3→1 → 节点 1 在下层（y 更大）
+    const html = await ssr({ nodes: NODES, edges: EDGES, layout: 'layered' })
+    const cs = circles(html)
+    expect(cs.length).toBe(3)
+    expect(cs[0].y).toBeGreaterThan(cs[1].y)
+    expect(cs[0].y).toBeGreaterThan(cs[2].y)
+  })
+
+  it('分层布局确定性：同输入两次 SSR 坐标逐字节一致', async () => {
+    const a = await ssr({ nodes: NODES, edges: EDGES, layout: 'layered' })
+    const b = await ssr({ nodes: NODES, edges: EDGES, layout: 'layered' })
+    const cx = (html: string) => (html.match(/cx="([\d.]+)"/g) || []).join(',')
+    expect(cx(a)).toBe(cx(b))
+    expect(cx(a)).not.toBe('')
+  })
+
+  it('分层布局真实规模：65 节点 / 46 边全部有坐标（无 NaN 圆盘）', async () => {
+    const html = await ssr({ ...bigGraph(65, 46), layout: 'layered' })
+    expect(circles(html).length).toBe(65)
+  })
+
+  it('缩放按钮组：＋/−/复位三个按钮渲染', async () => {
+    const html = await ssr({ nodes: NODES, edges: EDGES })
+    expect(html).toContain('kg-canvas__zoom')
+    expect((html.match(/kg-canvas__zoom[\s\S]*?<\/div>/) || [''])[0].split('<button').length - 1).toBe(3)
+  })
 })

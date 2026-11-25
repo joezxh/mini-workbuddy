@@ -594,7 +594,12 @@ def test_call_model_gives_up_after_retry_limit(monkeypatch):
         llm._call_model("抽取吧")
     assert "Context size has been exceeded" in str(exc.value)
     assert len(captured["cfgs"]) == kg_llm_extractor.CTX_RETRY_LIMIT + 1
-    assert captured["cfgs"][-1]["max_tokens"] == kg_llm_extractor.MIN_OUTPUT_TOKENS
+    # 默认预算变了（1024→4096）：退避终值 = 默认预算按上限连除三次再钳下限
+    assert captured["cfgs"][-1]["max_tokens"] == max(
+        kg_llm_extractor.MIN_OUTPUT_TOKENS,
+        kg_llm_extractor.DEFAULT_MAX_OUTPUT_TOKENS
+        // 2 ** kg_llm_extractor.CTX_RETRY_LIMIT,
+    )
 
 
 def test_call_model_does_not_retry_on_non_context_error(monkeypatch):
@@ -1320,3 +1325,118 @@ def test_build_records_truncation_and_warns(db, kb, monkeypatch):
 
 def vec_fn(texts):
     return [[0.1] * 8 for _ in texts]
+
+
+# ── 抽取预算与提示词强化（关系抽取数量过少修复）─────────────────────────
+def test_default_budget_suits_large_window_models():
+    """默认输出预算须覆盖大窗口模型（qwen3-32b）：
+
+    1024 是为 LM Studio 8192 共享窗口定的小引擎口径，在大窗口模型上
+    撞顶截断丢的几乎全是排在 JSON 尾部的关系——供应链库 274 个切片
+    只抽出 91 条关系的第一根因。
+    """
+    assert kg_llm_extractor.DEFAULT_MAX_OUTPUT_TOKENS >= 4096
+
+
+def test_build_prompt_encourages_relation_recall_and_properties():
+    """提示词强化：关系宁多勿漏、属性值写入 properties 不建成实体、禁止自环。"""
+    p = kg_llm_extractor.build_prompt("正文")
+    assert "宁多勿漏" in p, "关系召回导向的措辞必须进提示词"
+    assert "properties" in p and "建成实体" in p, "属性抽取要求必须进提示词"
+    assert "自环" in p, "自环（source==target）是实测出现过的脏数据"
+
+
+def test_build_prompt_schema_hint_no_longer_suppresses_relations():
+    """类型约束保留严格性，但去掉「宁可不标」的关系抑制措辞。"""
+    p = kg_llm_extractor.build_prompt("正文", schema_hint="只抽客户与订单")
+    assert "只抽客户与订单" in p
+    assert "宁可不标" not in p
+
+
+def test_build_prompt_max_text_chars_override():
+    """正文上限可按配置收紧：长切片不必喂满默认上限。"""
+    p = kg_llm_extractor.build_prompt("x" * 20000, max_text_chars=1000)
+    assert len(p) < 3000
+
+
+def test_extractor_multi_round_continuation_recovers_all_relations():
+    """首轮与续抽连续撞顶 → 有界多轮续抽（默认 3 轮）直至无新增。
+
+    供应链库实测：只续一轮时第二轮续抽自身又被截断，遗漏关系就此丢失。
+    """
+    calls: list[str] = []
+    r1 = (
+        '{"entities": [{"name": "A", "label": "T"}, {"name": "B", "label": "T"}], '
+        '"relations": [{"source": "A", "relation_type": "r1", "target": "B"}, '
+        '{"source": "C", "relation_type": "r2", "target":'
+    )
+    r2 = (
+        '{"entities": [{"name": "C", "label": "T"}], '
+        '"relations": [{"source": "C", "relation_type": "r2", "target": "A"}, '
+        '{"source": "B", "relation_type": "r3", "target":'
+    )
+    r3 = json.dumps(
+        {"entities": [], "relations": [
+            {"source": "B", "relation_type": "r3", "target": "C"}]},
+        ensure_ascii=False,
+    )
+
+    def fake_complete(prompt):
+        calls.append(prompt)
+        return [r1, r2, r3][len(calls) - 1]
+
+    llm = kg_llm_extractor.LLMExtractor({"model": "m"}, complete=fake_complete)
+    out = llm("正文")
+    ents, rels = out
+    assert len(calls) == 3, "续抽自身又撞顶时应继续下一轮，第三轮返回完整 JSON 才停"
+    rel_keys = {
+        (r.get("source"), r.get("relation_type"), r.get("target")) for r in rels
+    }
+    assert {("A", "r1", "B"), ("C", "r2", "A"), ("B", "r3", "C")} <= rel_keys
+
+
+def test_extractor_continuation_rounds_cap():
+    """``max_continuation_rounds=1`` 收紧为旧行为（只续一轮），成本可控。"""
+    calls: list[str] = []
+    r1 = (
+        '{"entities": [{"name": "A", "label": "T"}, {"name": "B", "label": "T"}], '
+        '"relations": [{"source": "A", "relation_type": "r1", "target": "B"}, '
+        '{"source": "C", "relation_type": "r2", "target":'
+    )
+    r2 = (
+        '{"entities": [{"name": "C", "label": "T"}], '
+        '"relations": [{"source": "C", "relation_type": "r2", "target": "A"}, '
+        '{"source": "B", "relation_type": "r3", "target":'
+    )
+
+    def fake_complete(prompt):
+        calls.append(prompt)
+        return r1 if len(calls) == 1 else r2
+
+    llm = kg_llm_extractor.LLMExtractor(
+        {"model": "m"}, complete=fake_complete, max_continuation_rounds=1
+    )
+    out = llm("正文")
+    assert len(calls) == 2, "上限 1 轮 = 首轮 + 一轮续抽"
+    assert any(r.get("relation_type") == "r2" for r in out[1])
+    # r2 的截断修复会留下一条缺 target 的 r3 残项（规整层负责丢弃），
+    # 这里判定的是「没有完整的 r3 关系」
+    assert not any(r.get("relation_type") == "r3" and r.get("target")
+                   for r in out[1]), "第二轮续抽超出上限不得执行"
+
+
+def test_graph_config_new_keys_reach_extractor(db, kb):
+    """max_text_chars / max_continuation_rounds / max_entities / max_relations
+    必须从 graph 配置一路接到抽取通道（DEFAULTS 没登记的键会被静默丢掉）。"""
+    from app.services.kb.kg import kg_config
+
+    kg_config.save_graph_config(db, kb.id, {
+        "max_text_chars": 9000, "max_continuation_rounds": 2,
+        "max_entities": 50, "max_relations": 100,
+    })
+    cfg = kg_config.get_graph_config(db, kb.id)
+    llm, _note = kg_llm_extractor.build_llm_extractor(db, cfg, complete=lambda p: "{}")
+    assert llm is not None
+    assert llm.max_text_chars == 9000
+    assert llm.max_continuation_rounds == 2
+    assert llm.max_entities == 50 and llm.max_relations == 100

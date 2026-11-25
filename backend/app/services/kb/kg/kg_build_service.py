@@ -136,9 +136,11 @@ class BuildReport:
     entities: int = 0
     relations: int = 0
     errors: list[str] = field(default_factory=list)
+    #: 关系 LLM 二次复核摘要（None = 未跑：无通道 / 配置关闭）
+    review: Optional[dict] = None
 
     def as_dict(self) -> dict:
-        return {
+        out = {
             "action": self.action,
             "segments_scanned": self.segments_scanned,
             "structure_done": self.structure_done,
@@ -149,6 +151,9 @@ class BuildReport:
             "relations": self.relations,
             "errors": self.errors[:10],
         }
+        if self.review is not None:
+            out["review"] = self.review
+        return out
 
 
 def _embed(texts: list[str], embed_fn: Optional[Callable]) -> list[list[float]]:
@@ -160,6 +165,7 @@ def _embed(texts: list[str], embed_fn: Optional[Callable]) -> list[list[float]]:
     if embed_fn is not None:
         return embed_fn(texts)
     import asyncio
+    import time
 
     from app.services.kb.rag.embedding_factory import build_embedding_model
 
@@ -169,7 +175,20 @@ def _embed(texts: list[str], embed_fn: Optional[Callable]) -> list[list[float]]:
         resp = await model(batch)
         return list(resp.embeddings)
 
-    return asyncio.run(_run(texts))
+    # 分批 + 短重试：GPUStack 等代理型嵌入服务对大请求体/瞬时抖动会回
+    # 502/Connection error（供应链库实测），整批一次性发 500 条必炸
+    out: list[list[float]] = []
+    for i in range(0, len(texts), 64):
+        batch = texts[i:i + 64]
+        for attempt in range(3):
+            try:
+                out.extend(asyncio.run(_run(batch)))
+                break
+            except Exception:
+                if attempt == 2:
+                    raise
+                time.sleep(2 * (attempt + 1))
+    return out
 
 
 class KgBuildService:
@@ -197,6 +216,10 @@ class KgBuildService:
         self._llm_degraded = False
         # 降级原因原文（写进单切片详情，让失败清单直接说出「模型不可用」）
         self._llm_degraded_reason = ""
+        # 库内实体别名索引（懒构建缓存，见 _kb_alias_index）
+        self._kb_alias_cache: Optional[dict[str, int]] = None
+        # 本轮构建可用的 LLM 通道（_run_structure 置位；关系复核复用它）
+        self._llm_channel = None
 
     # ── 服务与配置 ──────────────────────────────────────────────────────
     def _svc(self):
@@ -220,6 +243,31 @@ class KgBuildService:
             free_text=cfg.get("schema", "") or "",
             tenant_id=self.tenant_id,
         )
+
+    def _kb_alias_index(self) -> dict[str, int]:
+        """库内实体的「归一名/别名 → id」索引（懒构建，一次构建运行内缓存）。
+
+        为什么需要别名索引（供应链库实测）：模型常用简称输出关系端点
+        （华创/启明/京仓），实体表里存的是全名（华创制造/启明电子/北京仓），
+        aliases 才是简称。旧实现只按 name 精确匹配，这类端点全部悬空丢弃。
+        一次全量加载（上限 20000 行）建 dict，端点解析 O(1)，避免逐端点查库 N+1。
+        """
+        if self._kb_alias_cache is None:
+            idx: dict[str, int] = {}
+            rows = self.db.execute(
+                select(KgEntity.id, KgEntity.name, KgEntity.aliases).where(
+                    KgEntity.knowledge_id == self.knowledge_id,
+                    *([KgEntity.tenant_id == self.tenant_id]
+                      if self.tenant_id is not None else []),
+                ).limit(20000)
+            ).all()
+            for eid, name, aliases in rows:
+                for key in [name, *(aliases or [])]:
+                    k = _norm(str(key or ""))
+                    if k and k not in idx:
+                        idx[k] = eid
+            self._kb_alias_cache = idx
+        return self._kb_alias_cache
 
     def _segment_query(self, document_uuid: Optional[str] = None):
         """切片查询条件（构建扫描与前置校验共用，避免两处口径漂移）。"""
@@ -355,6 +403,7 @@ class KgBuildService:
         hint = self._schema_hint(cfg)
         extract = self._extractor or kg_extractor.extract
         llm = None if self._extractor is not None else self._build_llm(cfg, report)
+        self._llm_channel = llm
 
         pending = [s for s in segments if s.graph_structure_indexed is not True]
         for seg, result, exc, elapsed_ms in self._extract_concurrently(
@@ -412,6 +461,7 @@ class KgBuildService:
                 continue
 
             entity_ids: dict[str, int] = {}
+            seg_alias_ids: dict[str, int] = {}
             for ent in result.entities:
                 try:
                     row = svc.create_entity(
@@ -431,13 +481,21 @@ class KgBuildService:
                     report.errors.append(f"实体落库失败 {ent.get('name')}: {exc}")
                     continue
                 entity_ids[ent["normalized"]] = row.id
+                # 片段级别名表：本片段实体自己的 name/aliases 也可作端点表述
+                # （模型给端点用简称、给实体名用全名是供应链语料的常态）
+                for alias in [ent.get("name"), *(ent.get("aliases") or [])]:
+                    ak = _norm(str(alias or ""))
+                    if ak and ak not in seg_alias_ids:
+                        seg_alias_ids[ak] = row.id
                 self._add_mention(KgEntityMention, "kg_entity_id", row.id, seg)
 
-            # 端点解析：本片段实体 → 库内既有实体 → 丢弃。
+            # 端点解析：本片段实体（name）→ 本片段别名 → 库内既有实体（name）
+            # → 库内别名索引 → 丢弃。
             # 抽取器不再做悬空边判定（实体清单可能被输出预算裁剪，而实体本身
-            # 或已在库内——前一片段/其他文档创建过），跨片段关系在这里补回：
+            # 或已在库内——前一片段/其他文档创建过），跨片段关系在这里补回；
+            # 别名匹配救回「端点用简称」的关系（旧实现这类关系全部悬空丢弃）。
             # 命中库内实体时给本片段补写提及与 Chunk→Entity 投影，PPR 才能从
-            # 当前片段检索到这条边。两处都解析不到才丢弃（悬空边仍不入库）。
+            # 当前片段检索到这条边。四处都解析不到才丢弃（悬空边仍不入库）。
             unresolved = 0
 
             def _resolve_endpoint(raw_name: str) -> Optional[int]:
@@ -445,6 +503,11 @@ class KgBuildService:
                 key = _norm(raw_name)
                 if key in entity_ids:
                     return entity_ids[key]
+                if key in seg_alias_ids:
+                    eid = seg_alias_ids[key]
+                    entity_ids[key] = eid
+                    self._add_mention(KgEntityMention, "kg_entity_id", eid, seg)
+                    return eid
                 candidates = {(raw_name or "").strip(), key} - {""}
                 row = self.db.execute(
                     select(KgEntity).where(
@@ -454,12 +517,17 @@ class KgBuildService:
                           if self.tenant_id is not None else []),
                     ).order_by(KgEntity.id)
                 ).scalars().first()
-                if row is None:
-                    unresolved += 1
-                    return None
-                entity_ids[key] = row.id
-                self._add_mention(KgEntityMention, "kg_entity_id", row.id, seg)
-                return row.id
+                if row is not None:
+                    entity_ids[key] = row.id
+                    self._add_mention(KgEntityMention, "kg_entity_id", row.id, seg)
+                    return row.id
+                eid = self._kb_alias_index().get(key)
+                if eid is not None:
+                    entity_ids[key] = eid
+                    self._add_mention(KgEntityMention, "kg_entity_id", eid, seg)
+                    return eid
+                unresolved += 1
+                return None
 
             for rel in result.relations:
                 src = _resolve_endpoint(rel["source"])
@@ -559,6 +627,37 @@ class KgBuildService:
             )
             self.db.rollback()
 
+    # ── 阶段 3：关系 LLM 二次复核（只标记，不流转评审状态）────────────────
+    def _run_relation_review(self, cfg: dict, report: BuildReport) -> None:
+        """构建完成后对（默认 suggested 的）关系跑一轮证据复核。
+
+        无 LLM 通道（注入抽取器 / 规则模式 / 模型不可用）时跳过——手动端点
+        ``POST /graph/relations/review-batch`` 可随时补跑。复核失败不影响
+        构建结果（降级但显式，写日志）。
+        """
+        if not bool(cfg.get("relation_review_enabled", True)):
+            return
+        channel = self._llm_channel
+        if channel is None:
+            return
+        try:
+            from app.services.kb.kg import kg_relation_reviewer
+
+            summary = kg_relation_reviewer.run_review(
+                self.db,
+                tenant_id=self.tenant_id,
+                knowledge_id=self.knowledge_id,
+                complete=channel.complete,
+                limit=int(cfg.get("review_batch_size") or 200),
+                concurrency=int(cfg.get("review_concurrency") or 4),
+                skip_reviewed=True,  # 增量：只复核新关系，不覆盖已有复核结论
+            )
+            report.review = summary
+        except Exception as exc:  # noqa: BLE001 - 复核失败不推翻构建结果
+            logger.opt(exception=True).warning(
+                f"[kg] kb={self.knowledge_id} 关系复核失败（不影响构建结果）: {exc}"
+            )
+
     # ── 阶段 2：向量索引 ─────────────────────────────────────────────────
     def _run_vectors(self, segments, report: BuildReport) -> None:
         from app.services.kb.vector_utils import fit_vector_dimension
@@ -591,6 +690,9 @@ class KgBuildService:
                         ).strip("｜")
                         for e in ents
                     ]
+                    # 嵌入是外部调用（可达分钟级）：先结束读事务再调，
+                    # 不让 kms_segment/kg_entity 的 ACCESS SHARE 锁跨调用持有
+                    self.db.commit()
                     vecs = _embed(texts, self._embed_fn)
                     for e, v in zip(ents, vecs):
                         e.embedding = fit_vector_dimension(v, dim)
@@ -610,6 +712,7 @@ class KgBuildService:
                         )
                         for t in tris
                     ]
+                    self.db.commit()  # 同上：嵌入调用前结束读事务
                     vecs = _embed(texts, self._embed_fn)
                     for t, v in zip(tris, vecs):
                         t.embedding = fit_vector_dimension(v, dim)
@@ -668,8 +771,22 @@ class KgBuildService:
 
             segments = self._segments(document_uuid=document_uuid, limit=limit)
             report.segments_scanned = len(segments)
-            self._run_structure(segments, cfg, report)
-            self._run_vectors(segments, report)
+            # 读事务到此结束（2026-11-25 复盘）：结构抽取/向量化/复核是分钟级
+            # 外部调用，旧实现把整段夹在 _segments() 开启的读事务里——
+            # kms_segment 的 ACCESS SHARE 锁全程不放，足以把启动迁移的
+            # ALTER TABLE 堵死在 PG 锁队列（启动卡死根因之一）。
+            # expire_on_commit=False：commit 后 segments 等已加载对象保持属性
+            # 可用，避免并发线程访问过期属性触发 refresh SELECT（那既会重新
+            # 打开事务，也是跨线程使用 Session）。advisory lock 是会话级，
+            # 不受 commit 影响。
+            self.db.expire_on_commit = False
+            self.db.commit()
+            try:
+                self._run_structure(segments, cfg, report)
+                self._run_vectors(segments, report)
+                self._run_relation_review(cfg, report)
+            finally:
+                self.db.expire_on_commit = True
 
             # 失败可观测：写文档的 error_detail（形如 [graph_extract] …），
             # 但**不改文档状态**（切片已可用，仅图谱未就绪）
